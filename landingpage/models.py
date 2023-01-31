@@ -136,3 +136,9 @@ class Footer(models.Model):
 
     def __str__(self):
         return self.copyright
+
+
+class Image(models.Model):
+    image = models.ImageField(upload_to="images/")
+    name = models.CharField(max_length=100)
+    description = models.TextField()
