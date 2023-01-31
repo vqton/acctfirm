@@ -16,11 +16,11 @@
 
 <body>
     {% include 'landingpage/components/_nav.html' %}
-
-    <div class="container mt-4">
-        {% block content %}{% endblock %}
-    </div>
-
+    <main>
+        <div class="container mt-4">
+            {% block content %}{% endblock %}
+        </div>
+    </main>
     <!-- Optional JavaScript -->
     <!-- jQuery first, then Popper.js, then Bootstrap JS -->
     {% include 'landingpage/components/_footer.html' %}
