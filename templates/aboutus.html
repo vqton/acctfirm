@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block content %}
+{% for about_u in about_us %}
+<h2>{{ about_u.title }}</h2>
+<p>{{ about_u.description |safe}}</p>
+<p>Created by {{ about_u.user.username }}</p>
+<p>Created: {{ about_u.created_at |timesince}} ago</p>
+
+{% endfor %}
+{% endblock %}

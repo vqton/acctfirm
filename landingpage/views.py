@@ -1,6 +1,7 @@
 from django.shortcuts import render
 from django.shortcuts import render, redirect
-from .forms import ImageForm
+from .forms import ImageForm, AboutUsForm
+from .models import AboutUs
 
 # Create your views here.
 
@@ -18,3 +19,8 @@ def upload_image(request):
     else:
         form = ImageForm()
     return render(request, "upload.html", {"form": form})
+
+
+def about_us(request):
+    about_us = AboutUs.objects.all()
+    return render(request, "aboutus.html", {"about_us": about_us})
