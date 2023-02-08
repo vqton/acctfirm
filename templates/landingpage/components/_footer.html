@@ -1,33 +1,42 @@
-<footer class="bg-light py-3 mt-5">
-    <div class="container">
-        <div class="row">
-            <div class="col-md-4">
-                <h5>About</h5>
-                <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed auctor euismod sem, id mollis lectus
-                    tincidunt at. Aliquam consectetur porta lacus, sit amet posuere nulla mollis id.</p>
-            </div>
-            <div class="col-md-4">
-                <h5>Contact</h5>
-                <ul class="list-unstyled">
+{% load tz %}
+<div class="container">
+    <div class="row">
+        <div class="col-md-4">
+            <h5>About</h5>
+            <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed auctor euismod sem, id mollis lectus
+                tincidunt at. Aliquam consectetur porta lacus, sit amet posuere nulla mollis id.</p>
+        </div>
+        <div class="col-md-4">
+            <h5>Contact</h5>
+            <ul class="list-unstyled">
+
+                <li>Phone: {{rows_footer.company_phone}}</li>
+                <li>Address: {{rows_footer.company_address}}</li>
+                <li>Email: <a href="mailto:{{ rows_footer.company_email|safe }}">{{ rows_footer.company_email|safe}}
+                    </a>
+                </li>
+
+            </ul>
+            <!-- <ul class="list-unstyled">
                     <li>Phone: 123-456-7890</li>
                     <li>Email: info@accountingfirm.com</li>
                     <li>Address: 123 Main Street, Anytown, USA</li>
-                </ul>
-            </div>
-            <div class="col-md-4">
-                <h5>Links</h5>
-                <ul class="list-unstyled">
-                    <li><a href="#">Home</a></li>
-                    <li><a href="#">About</a></li>
-                    <li><a href="#">Services</a></li>
-                    <li><a href="#">Contact</a></li>
-                </ul>
-            </div>
+                </ul> -->
         </div>
-        <div class="row mt-3">
-            <div class="col text-center">
-                <p>Copyright &copy; 2021 Accounting Firm</p>
-            </div>
+        <div class="col-md-4">
+            <h5>Links</h5>
+            <ul class="list-unstyled">
+                <li><a href="/">Home</a></li>
+                <li><a href="{% url 'about_us' %}">About</a></li>
+                <li><a href="{% url 'services' %}">Services</a></li>
+                <li><a href="{% url 'contact' %}">Contact</a></li>
+            </ul>
         </div>
     </div>
-</footer>
+    <div class="row mt-3">
+        <div class="col text-center">
+            <p>{{ rows_footer.copyright|safe }}</p>
+
+        </div>
+    </div>
+</div>

@@ -36,6 +36,7 @@ ALLOWED_HOSTS = []
 INSTALLED_APPS = [
     "bulma",
     "ckeditor",
+    "crispy_forms",
     "landingpage",
     "django.contrib.admin",
     "django.contrib.auth",
@@ -158,3 +159,4 @@ CKEDITOR_CONFIGS = {
         "width": "100%",
     },
 }
+CRISPY_TEMPLATE_PACK = "bootstrap4"
