@@ -1,10 +1,21 @@
-from django.shortcuts import render
+from django.shortcuts import render, HttpResponse
+from .mailerlite import send_email
 import datetime
 from django.shortcuts import render, redirect
 from .forms import ImageForm, AboutUsForm, ContactForm
 from .models import AboutUs, Footer, Service
+from django.core.mail import send_mail
 
 # Create your views here.
+
+
+def send_email(request):
+    subject = "Subject of the email"
+    message = "Message body of the email"
+    from_email = "vuquangton@zohomail.com"
+    recipient_list = ["vuquangton@outlook.com"]
+    send_mail(subject, message, from_email, recipient_list)
+    return HttpResponse("Email sent successfully")
 
 
 def home(request):
@@ -61,7 +72,8 @@ def contact_view(request):
             contact = form.save(commit=False)
             contact.processed_by = request.user
             contact.save()
-            return redirect("success")
+            send_email(request)
+        return redirect("success")
     else:
         form = ContactForm()
     return render(request, "contact.html", {"form": form})
