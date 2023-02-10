@@ -160,3 +160,11 @@ CKEDITOR_CONFIGS = {
     },
 }
 CRISPY_TEMPLATE_PACK = "bootstrap4"
+
+EMAIL_BACKEND = "django_smtp_ssl.SSLEmailBackend"
+EMAIL_HOST = "smtp.zoho.com"
+EMAIL_PORT = 465
+EMAIL_HOST_USER = "vuquangton"
+EMAIL_HOST_PASSWORD = "fc4ff69_ZH"
+EMAIL_USE_TLS = False
+EMAIL_USE_SSL = True
