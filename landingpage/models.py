@@ -2,6 +2,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils.text import slugify
+from ckeditor.fields import RichTextField
 
 
 class Carousel(models.Model):
@@ -62,15 +63,17 @@ class Feature(models.Model):
 class Service(models.Model):
     name = models.CharField(max_length=255)
     description = models.TextField()
-    slug = models.SlugField(unique=True, blank=True)
+    slug = models.SlugField(max_length=100, unique=True, blank=True)
     created_by = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, related_name="services_created"
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
     updated_by = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, related_name="services_updated"
     )
-    updated_at = models.DateTimeField(auto_now=True)
+
     is_published = models.BooleanField(default=False)
 
     def save(self, *args, **kwargs):
@@ -142,3 +145,22 @@ class Image(models.Model):
     image = models.ImageField(upload_to="images/")
     name = models.CharField(max_length=100)
     description = models.TextField()
+
+
+class AboutUs(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    title = models.CharField(max_length=100)
+    description = RichTextField(blank=True)
+    slug = models.SlugField(max_length=100, unique=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.title
+
+    def save(self, *args, **kwargs):
+        self.slug = slugify(self.title)
+        super().save(*args, **kwargs)
+
+    class Meta:
+        verbose_name_plural = "About Us"

@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block content %}
+<!-- services.html -->
+<h1 class="text-center mt-5">Không gian tài chính tốt nhất cho doanh nghiệp - Đảm bảo sự thành công</h1>
+<div class="container">
+    <div class="row">
+        {% for service in services %}
+        <div class="col-md-4 mb-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">{{ service.name }}</h5>
+                    <p class="card-text">{{ service.description }}</p>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
