@@ -1,7 +1,8 @@
 from django.contrib import admin
 from .models import Image, AboutUs, Footer, Service, Contact
 from .forms import AboutUsForm
-
+from django.core.exceptions import ValidationError
+import os
 
 # Register your models here.
 from django.utils.html import format_html
@@ -9,6 +10,16 @@ from django.utils.html import format_html
 
 class ImageAdmin(admin.ModelAdmin):
     list_display = ("name", "thumbnail")
+
+    def save_image(self, request, obj, form, change):
+        super.save_image(request, obj, form, change)
+
+        # Check if the image file already exists
+        file_path = obj.image.path
+        if os.path.exists(file_path):
+            # If the file exists, delete the object and raise a validation error
+            obj.delete()
+            raise ValidationError("This image already exists")
 
     def thumbnail(self, obj):
         print(obj.image.url)
