@@ -1,6 +1,4 @@
 <?php
-// src/Accounting/Infrastructure/Repository/PDOAccountRepository.php
-
 namespace Accounting\Infrastructure\Repository;
 
 use Accounting\Domain\Model\Account;
@@ -11,70 +9,58 @@ class PDOAccountRepository implements AccountRepositoryInterface
 {
     private PDO $pdo;
 
-    public function __construct(PDO $pdo)
-    {
-        $this->pdo = $pdo;
-    }
+    public function __construct(PDO $pdo) { $this->pdo = $pdo; }
 
     public function findById(string $id): ?Account
     {
-        $stmt = $this->pdo->prepare('SELECT id, name, type, balance, created_at FROM accounts WHERE id = ?');
+        $stmt = $this->pdo->prepare('SELECT * FROM accounts WHERE id = ?');
         $stmt->execute([$id]);
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if (!$row) {
-            return null;
-        }
-
-        $account = new Account($row['id'], $row['name'], $row['type']);
-        $account->balance = (float) $row['balance'];
-        return $account;
+        return ($row = $stmt->fetch(PDO::FETCH_ASSOC)) ? $this->hydrate($row) : null;
     }
 
-    public function findByNumber(string $number): ?Account
+    public function findByCode(string $code): ?Account
     {
-        $stmt = $this->pdo->prepare('SELECT id, name, type, balance, created_at FROM accounts WHERE id = ?');
-        $stmt->execute([$number]);
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        if (!$row) {
-            return null;
-        }
-
-        $account = new Account($row['id'], $row['name'], $row['type']);
-        $account->balance = (float) $row['balance'];
-        return $account;
+        $stmt = $this->pdo->prepare('SELECT * FROM accounts WHERE code = ?');
+        $stmt->execute([$code]);
+        return ($row = $stmt->fetch(PDO::FETCH_ASSOC)) ? $this->hydrate($row) : null;
     }
 
-    public function save(Account $account): void
+    public function findAll(): array
     {
-        $stmt = $this->pdo->prepare(
-            'INSERT INTO accounts (id, name, type, balance, created_at) VALUES (?, ?, ?, ?, ?) ' .
-            'ON DUPLICATE KEY UPDATE name = ?, type = ?, balance = ?'
+        $stmt = $this->pdo->query('SELECT * FROM accounts ORDER BY code');
+        $items = [];
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) { $items[] = $this->hydrate($row); }
+        return $items;
+    }
+
+    public function save(Account $a): void
+    {
+        $s = $this->pdo->prepare(
+            'INSERT INTO accounts (id, code, name, type, parent_id, normal_balance, account_class, balance, description, status, is_control, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE code=VALUES(code), name=VALUES(name), type=VALUES(type),
+             parent_id=VALUES(parent_id), normal_balance=VALUES(normal_balance), account_class=VALUES(account_class),
+             balance=VALUES(balance), description=VALUES(description), status=VALUES(status), is_control=VALUES(is_control)'
         );
-        $stmt->execute([
-            $account->getId(),
-            $account->getName(),
-            $account->getType(),
-            $account->getBalance(),
-            $account->getCreatedAt()->format('Y-m-d H:i:s'),
-            $account->getName(),
-            $account->getType(),
-            $account->getBalance()
-        ]);
+        $s->execute([$a->getId(), $a->getCode(), $a->getName(), $a->getType(),
+            $a->getParentId(), $a->getNormalBalance(), $a->getAccountClass(),
+            $a->getBalance(), $a->getDescription(), $a->isStatus() ? 1 : 0,
+            $a->isControl() ? 1 : 0,
+            $a->getCreatedAt()->format('Y-m-d H:i:s')]);
     }
 
-    public function getAll(): array
+    public function delete(string $id): void
     {
-        $stmt = $this->pdo->query('SELECT id, name, type, balance, created_at FROM accounts ORDER BY id');
-        $accounts = [];
+        $this->pdo->prepare('DELETE FROM accounts WHERE id = ?')->execute([$id]);
+    }
 
-        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-            $account = new Account($row['id'], $row['name'], $row['type']);
-            $account->balance = (float) $row['balance'];
-            $accounts[] = $account;
-        }
-
-        return $accounts;
+    private function hydrate(array $r): Account
+    {
+        $a = new Account($r['id'], $r['code'], $r['name'], $r['type'],
+            $r['parent_id'], $r['normal_balance'], $r['account_class'], $r['description']);
+        $a->setStatus((bool)$r['status']);
+        $a->setControl((bool)($r['is_control'] ?? 0));
+        $a->setBalance((float)$r['balance']);
+        return $a;
     }
 }

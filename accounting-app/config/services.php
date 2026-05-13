@@ -20,6 +20,8 @@ use Accounting\Infrastructure\Repository\PDOProjectRepository;
 use Accounting\Infrastructure\Repository\PDODepreciationPolicyRepository;
 use Accounting\Domain\Service\AccountingService;
 use Accounting\Domain\Service\JournalService;
+use Accounting\Domain\Service\InventoryService;
+use Accounting\Domain\Service\CashService;
 
 function createContainer(): array
 {
@@ -49,7 +51,9 @@ function createContainer(): array
     $depreciationPolicyRepository = new PDODepreciationPolicyRepository($pdo);
 
     $accountingService = new AccountingService($accountRepository, $transactionRepository);
-    $journalService = new JournalService($accountingService);
+    $journalService = new JournalService($accountRepository, $transactionRepository);
+    $inventoryService = new InventoryService($accountRepository, $transactionRepository, $itemRepository, $warehouseRepository);
+    $cashService = new CashService($accountRepository, $transactionRepository);
 
     return [
         'pdo' => $pdo, 'accountRepository' => $accountRepository,
@@ -64,7 +68,9 @@ function createContainer(): array
         'valuationMethodRepository' => $valuationMethodRepository,
         'contractRepository' => $contractRepository, 'projectRepository' => $projectRepository,
         'depreciationPolicyRepository' => $depreciationPolicyRepository,
-        'accountingService' => $accountingService, 'journalService' => $journalService
+        'accountingService' => $accountingService, 'journalService' => $journalService,
+        'inventoryService' => $inventoryService,
+        'cashService' => $cashService
     ];
 }
 

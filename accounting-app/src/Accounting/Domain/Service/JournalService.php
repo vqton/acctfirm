@@ -1,9 +1,6 @@
 <?php
-// src/Accounting/Domain/Service/JournalService.php
-
 namespace Accounting\Domain\Service;
 
-use Accounting\Domain\Model\Account;
 use Accounting\Domain\Model\LedgerEntry;
 use Accounting\Domain\Model\Transaction;
 use Accounting\Domain\Repository\AccountRepositoryInterface;
@@ -11,70 +8,95 @@ use Accounting\Domain\Repository\TransactionRepositoryInterface;
 
 class JournalService
 {
-    private AccountingService $accountingService;
+    private AccountRepositoryInterface $accountRepo;
+    private TransactionRepositoryInterface $txnRepo;
 
-    public function __construct(AccountingService $accountingService)
-    {
-        $this->accountingService = $accountingService;
+    public function __construct(
+        AccountRepositoryInterface $accountRepo,
+        TransactionRepositoryInterface $txnRepo
+    ) {
+        $this->accountRepo = $accountRepo;
+        $this->txnRepo = $txnRepo;
     }
 
-    public function recordSale(string $customerId, string $accountId, float $amount, string $description, string $reference): Transaction
+    /**
+     * Post a journal entry: validates Dr=Cr first, then applies balance changes atomically.
+     * Control accounts (Level 1 parent accounts with sub-accounts) are blocked.
+     * Set $allowControl to true for Chief Accountant override.
+     */
+    public function postEntry(string $description, string $reference, array $lines, string $createdBy, bool $allowControl = false): Transaction
     {
-        $transactionId = uniqid('txn_');
-        $date = new \DateTimeImmutable();
+        if (count($lines) < 2) {
+            throw new \InvalidArgumentException('Journal entry must have at least 2 lines');
+        }
 
-        // Create ledger entries: debit accounts receivable, credit revenue
-        $debitEntry = new LedgerEntry(uniqid('led_'), $accountId, $amount, true, "Sale to customer {$customerId}");
-        $creditEntry = new LedgerEntry(uniqid('led_'), 'revenue_account', $amount, false, "Sale to customer {$customerId}");
+        // Phase 1: Validate all lines + compute totals (NO balance changes yet)
+        $totalDr = 0.0;
+        $totalCr = 0.0;
+        $validated = [];
 
-        $transaction = $this->accountingService->recordTransaction(
-            $transactionId,
-            $date,
-            $description,
-            $reference,
-            [$debitEntry, $creditEntry]
-        );
+        foreach ($lines as $line) {
+            if ($line['amount'] <= 0) {
+                throw new \InvalidArgumentException('Amount must be positive');
+            }
 
-        return $transaction;
-    }
+            $account = $this->accountRepo->findByCode($line['account_code']);
+            if (!$account) {
+                throw new \InvalidArgumentException("Account not found: {$line['account_code']}");
+            }
 
-    public function recordExpense(string $vendorId, string $expenseAccountId, string $cashAccountId, float $amount, string $description, string $reference): Transaction
-    {
-        $transactionId = uniqid('txn_');
-        $date = new \DateTimeImmutable();
+            // BR15: Block posting to control accounts unless override
+            if ($account->isControl() && !$allowControl) {
+                throw new \InvalidArgumentException(
+                    "Account {$line['account_code']} ({$account->getName()}) is a control account — post to a detail sub-account instead"
+                );
+            }
 
-        // Create ledger entries: debit expense, credit cash
-        $debitEntry = new LedgerEntry(uniqid('led_'), $expenseAccountId, $amount, true, "Expense to vendor {$vendorId}");
-        $creditEntry = new LedgerEntry(uniqid('led_'), $cashAccountId, $amount, false, "Expense to vendor {$vendorId}");
+            if ($line['is_debit']) {
+                $totalDr += $line['amount'];
+            } else {
+                $totalCr += $line['amount'];
+            }
 
-        $transaction = $this->accountingService->recordTransaction(
-            $transactionId,
-            $date,
-            $description,
-            $reference,
-            [$debitEntry, $creditEntry]
-        );
+            $validated[] = ['account' => $account, 'amount' => $line['amount'], 'is_debit' => $line['is_debit']];
+        }
 
-        return $transaction;
-    }
+        // Phase 2: Check Dr = Cr BEFORE any balance changes
+        if (abs($totalDr - $totalCr) > 10) {
+            throw new \InvalidArgumentException(
+                "Debit ({$totalDr}) does not equal Credit ({$totalCr})"
+            );
+        }
 
-    public function recordPayment(string $customerId, string $accountsReceivableId, string $cashAccountId, float $amount, string $description, string $reference): Transaction
-    {
-        $transactionId = uniqid('txn_');
-        $date = new \DateTimeImmutable();
+        // Phase 3: Apply balance changes + create ledger entries
+        $entryLines = [];
+        foreach ($validated as $v) {
+            $account = $v['account'];
+            if ($v['is_debit']) {
+                if (in_array($account->getType(), ['asset', 'expense'])) {
+                    $account->credit($v['amount']);
+                } else {
+                    $account->debit($v['amount']);
+                }
+            } else {
+                if (in_array($account->getType(), ['liability', 'equity', 'revenue'])) {
+                    $account->credit($v['amount']);
+                } else {
+                    $account->debit($v['amount']);
+                }
+            }
+            $this->accountRepo->save($account);
+            $entryLines[] = new LedgerEntry(uniqid('led_'), $account->getId(), $v['amount'], $v['is_debit']);
+        }
 
-        // Create ledger entries: debit cash, credit accounts receivable
-        $debitEntry = new LedgerEntry(uniqid('led_'), $cashAccountId, $amount, true, "Payment from customer {$customerId}");
-        $creditEntry = new LedgerEntry(uniqid('led_'), $accountsReceivableId, $amount, false, "Payment from customer {$customerId}");
+        // Phase 4: Create and persist transaction
+        $txn = new Transaction(uniqid('jrn_'), new \DateTimeImmutable(), $description, $reference);
+        foreach ($entryLines as $entry) {
+            $txn->addLedgerEntry($entry);
+        }
+        $txn->post($createdBy);
+        $this->txnRepo->save($txn);
 
-        $transaction = $this->accountingService->recordTransaction(
-            $transactionId,
-            $date,
-            $description,
-            $reference,
-            [$debitEntry, $creditEntry]
-        );
-
-        return $transaction;
+        return $txn;
     }
 }

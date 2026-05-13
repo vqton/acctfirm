@@ -39,7 +39,7 @@ class ItemController
             $data['item_type'] ?? 'material', $data['unit'] ?? 'cai',
             (float)($data['purchase_price'] ?? 0), (float)($data['sale_price'] ?? 0),
             (float)($data['stock_qty'] ?? 0), (float)($data['min_stock'] ?? 0),
-            $data['description'] ?? null
+            $data['description'] ?? null, $data['valuation_method_id'] ?? null
         );
         $this->repo->save($item);
         http_response_code(201);

@@ -23,7 +23,7 @@ ob_start();
             <tr>
                 <th>Mã</th><th>Tên vật tư</th><th>Loại</th><th>ĐVT</th>
                 <th class="text-end">Giá mua</th><th class="text-end">Giá bán</th><th class="text-end">Tồn</th><th>Trạng thái</th>
-                <th class="text-center" style="width:90px"></th>
+                <th class="text-center" style="width:90px">Thao tác</th>
             </tr>
         </thead>
         <tbody id="dataBody"></tbody>
@@ -79,7 +79,9 @@ ob_start();
 var API = '/api/items';
 var editId = null;
 
+function loadMethods(){fetch('/api/valuation-methods').then(function(r){return r.json();}).then(function(data){var opts='<option value="">-- Mặc định --</option>';data.forEach(function(m){opts+='<option value="'+m.id+'">'+esc(m.name)+'</option>';});document.getElementById('f_valuation_method_id').innerHTML=opts;});}
 function loadData() {
+function loadMethods(){fetch("/api/valuation-methods").then(function(r){return r.json();}).then(function(data){var opts="<option value=\"\">-- Mặc định --<\/option>";data.forEach(function(m){opts+="<option value=\""+m.id+"\">"+esc(m.name)+"<\/option>";});document.getElementById("f_valuation_method_id").innerHTML=opts;});}
     fetch(API).then(function(r){return r.json();}).then(function(data){
         var q = (document.getElementById('searchInput').value||'').toLowerCase();
         var filtered = data.filter(function(i){return !q||i.name.toLowerCase().includes(q)||i.code.toLowerCase().includes(q);});
@@ -112,6 +114,7 @@ function openEdit(id){
         document.getElementById('f_item_type').value=i.item_type;document.getElementById('f_unit').value=i.unit;
         document.getElementById('f_purchase_price').value=i.purchase_price;document.getElementById('f_sale_price').value=i.sale_price;
         document.getElementById('f_min_stock').value=i.min_stock;document.getElementById('f_description').value=i.description||'';
+        document.getElementById('f_valuation_method_id').value=i.valuation_method_id||'';
         document.getElementById('modalTitle').textContent='Sửa vật tư';$('#dataModal').modal('show');
     }).catch(function(){showToast('Lỗi tải thông tin','error');});
 }
@@ -121,10 +124,10 @@ $('#dataForm').on('submit',function(e){
     var url=editId?API+'/'+editId:API;var method=editId?'PUT':'POST';
     fetch(url,{method:method,headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})
     .then(function(r){if(!r.ok)return r.json().then(function(j){throw new Error(j.error);});
-        $('#dataModal').modal('hide');loadData();showToast(editId?'Đã cập nhật':'Đã thêm mới','success');
+        $('#dataModal').modal('hide');loadMethods();loadData();showToast(editId?'Đã cập nhật':'Đã thêm mới','success');
     }).catch(function(e){showToast(e.message||'Lỗi','error');});
 });
 $('#searchInput').on('keyup',loadData);
-loadData();
+loadMethods();loadMethods();loadData();
 </script>
 <?php $content = ob_get_clean(); require __DIR__ . '/layout.php'; ?>

@@ -24,7 +24,7 @@ ob_start();
                 <th>Mã</th><th>Tên</th><th>MST</th>
                 <th>Điện thoại</th><th>Email</th>
                 <th class="text-end">Hạn mức</th><th class="text-end">Dư nợ</th><th>Trạng thái</th>
-                <th class="text-center" style="width:90px"></th>
+                <th class="text-center" style="width:90px">Thao tác</th>
             </tr>
         </thead>
         <tbody id="dataBody"></tbody>

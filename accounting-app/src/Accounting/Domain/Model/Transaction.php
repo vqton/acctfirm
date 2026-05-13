@@ -58,6 +58,9 @@ class Transaction
         return $this->createdBy;
     }
 
+    public function setStatus(string $v): void { $this->status = $v; }
+    public function setCreatedBy(?string $v): void { $this->createdBy = $v; }
+
     public function addLedgerEntry(LedgerEntry $entry): void
     {
         $this->ledgerEntries[] = $entry;

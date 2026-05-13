@@ -40,16 +40,17 @@ class PDOItemRepository implements ItemRepositoryInterface
     public function save(Item $item): void
     {
         $stmt = $this->pdo->prepare(
-            'INSERT INTO items (id, code, name, item_type, unit, purchase_price, sale_price, stock_qty, min_stock, description, status, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            'INSERT INTO items (id, code, name, item_type, unit, purchase_price, sale_price, stock_qty, min_stock, valuation_method_id, description, status, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON DUPLICATE KEY UPDATE code=VALUES(code), name=VALUES(name), item_type=VALUES(item_type),
              unit=VALUES(unit), purchase_price=VALUES(purchase_price), sale_price=VALUES(sale_price),
-             stock_qty=VALUES(stock_qty), min_stock=VALUES(min_stock), description=VALUES(description), status=VALUES(status)'
+             stock_qty=VALUES(stock_qty), min_stock=VALUES(min_stock), valuation_method_id=VALUES(valuation_method_id), description=VALUES(description), status=VALUES(status)'
         );
         $stmt->execute([
             $item->getId(), $item->getCode(), $item->getName(), $item->getItemType(),
             $item->getUnit(), $item->getPurchasePrice(), $item->getSalePrice(),
-            $item->getStockQty(), $item->getMinStock(), $item->getDescription(),
+            $item->getStockQty(), $item->getMinStock(), $item->getValuationMethodId(),
+            $item->getDescription(),
             $item->isStatus() ? 1 : 0, $item->getCreatedAt()->format('Y-m-d H:i:s'),
         ]);
     }
@@ -65,7 +66,8 @@ class PDOItemRepository implements ItemRepositoryInterface
         $item = new Item(
             $row['id'], $row['code'], $row['name'], $row['item_type'],
             $row['unit'], (float)$row['purchase_price'], (float)$row['sale_price'],
-            (float)$row['stock_qty'], (float)$row['min_stock'], $row['description']
+            (float)$row['stock_qty'], (float)$row['min_stock'], $row['description'],
+            $row['valuation_method_id']
         );
         $item->setStatus((bool)$row['status']);
         return $item;

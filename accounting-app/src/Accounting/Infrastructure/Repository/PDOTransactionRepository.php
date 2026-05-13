@@ -34,8 +34,8 @@ class PDOTransactionRepository implements TransactionRepositoryInterface
             $row['reference']
         );
         
-        $transaction->status = $row['status'];
-        $transaction->createdBy = $row['created_by'];
+         $transaction->setStatus($row['status']);
+         $transaction->setCreatedBy($row['created_by']);
 
         // Load ledger entries
         $stmt = $this->pdo->prepare('SELECT id, account_id, amount, is_debit, note FROM ledger_entries WHERE transaction_id = ? ORDER BY id');
@@ -72,8 +72,8 @@ class PDOTransactionRepository implements TransactionRepositoryInterface
             $row['reference']
         );
         
-        $transaction->status = $row['status'];
-        $transaction->createdBy = $row['created_by'];
+         $transaction->setStatus($row['status']);
+         $transaction->setCreatedBy($row['created_by']);
 
         // Load ledger entries
         $stmt = $this->pdo->prepare('SELECT id, account_id, amount, is_debit, note FROM ledger_entries WHERE transaction_id = ? ORDER BY id');
@@ -157,8 +157,8 @@ class PDOTransactionRepository implements TransactionRepositoryInterface
                 $row['reference']
             );
             
-            $transaction->status = $row['status'];
-            $transaction->createdBy = $row['created_by'];
+             $transaction->setStatus($row['status']);
+             $transaction->setCreatedBy($row['created_by']);
 
             // Load ledger entries
             $stmtEntries = $this->pdo->prepare('SELECT id, account_id, amount, is_debit, note FROM ledger_entries WHERE transaction_id = ? ORDER BY id');
@@ -202,8 +202,8 @@ class PDOTransactionRepository implements TransactionRepositoryInterface
                 $row['reference']
             );
             
-            $transaction->status = $row['status'];
-            $transaction->createdBy = $row['created_by'];
+             $transaction->setStatus($row['status']);
+             $transaction->setCreatedBy($row['created_by']);
 
             // Load ledger entries
             $stmtEntries = $this->pdo->prepare('SELECT id, account_id, amount, is_debit, note FROM ledger_entries WHERE transaction_id = ? ORDER BY id');

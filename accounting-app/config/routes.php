@@ -136,6 +136,121 @@ function defineRoutes(Router $router): void
     $router->post('/api/depreciation-policies', function() { (new \Accounting\Interfaces\HTTP\DepreciationPolicyController($GLOBALS['container']['depreciationPolicyRepository']))->create(); });
     $router->put('/api/depreciation-policies/{id}', function($id) { (new \Accounting\Interfaces\HTTP\DepreciationPolicyController($GLOBALS['container']['depreciationPolicyRepository']))->update($id); });
     $router->delete('/api/depreciation-policies/{id}', function($id) { (new \Accounting\Interfaces\HTTP\DepreciationPolicyController($GLOBALS['container']['depreciationPolicyRepository']))->delete($id); });
+
+    // COA
+    $router->get('/danh-muc/he-thong-tai-khoan', function() { require __DIR__ . '/../public/views/accounts.php'; });
+    $router->get('/api/coa', function() { (new \Accounting\Interfaces\HTTP\AccountController($GLOBALS['container']['accountRepository']))->list(); });
+    $router->get('/api/coa/{id}', function($id) { (new \Accounting\Interfaces\HTTP\AccountController($GLOBALS['container']['accountRepository']))->get($id); });
+    $router->post('/api/coa', function() { (new \Accounting\Interfaces\HTTP\AccountController($GLOBALS['container']['accountRepository']))->create(); });
+    $router->put('/api/coa/{id}', function($id) { (new \Accounting\Interfaces\HTTP\AccountController($GLOBALS['container']['accountRepository']))->update($id); });
+    $router->delete('/api/coa/{id}', function($id) { (new \Accounting\Interfaces\HTTP\AccountController($GLOBALS['container']['accountRepository']))->delete($id); });
+    $router->post('/api/coa/seed', function() { (new \Accounting\Interfaces\HTTP\AccountController($GLOBALS['container']['accountRepository']))->seed(); });
+
+    // Journal entries
+    $router->post('/api/journal', function() { (new \Accounting\Interfaces\HTTP\JournalController($GLOBALS['container']['journalService'], $GLOBALS['container']['accountRepository']))->postEntry(); });
+    $router->get('/api/trial-balance', function() { (new \Accounting\Interfaces\HTTP\JournalController($GLOBALS['container']['journalService'], $GLOBALS['container']['accountRepository']))->trialBalance(); });
+
+    // Transfer
+    $router->get('/kho/dieu-chuyen', function() { require __DIR__ . '/../public/views/transfers.php'; });
+
+    // Consignment
+    $router->get('/kho/hang-gui-ban', function() { require __DIR__ . '/../public/views/consignment.php'; });
+    $router->get('/api/consignments', function() { (new \Accounting\Interfaces\HTTP\ConsignmentController(
+        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository']
+    ))->list(); });
+    $router->post('/api/consignments', function() { (new \Accounting\Interfaces\HTTP\ConsignmentController(
+        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository']
+    ))->consign(); });
+    $router->post('/api/consignments/sell', function() { (new \Accounting\Interfaces\HTTP\ConsignmentController(
+        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository']
+    ))->sell(); });
+    $router->post('/api/consignments/return', function() { (new \Accounting\Interfaces\HTTP\ConsignmentController(
+        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository']
+    ))->returnConsignment(); });
+
+    // Cash & Bank
+    $router->get('/thu/quy-tien-mat', function() { require __DIR__ . '/../public/views/cash_receipts.php'; });
+    $router->get('/chi/quy-tien-mat', function() { require __DIR__ . '/../public/views/cash_payments.php'; });
+    $router->get('/api/cash/receipts', function() { (new \Accounting\Interfaces\HTTP\CashController(
+        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
+    ))->receipts(); });
+    $router->get('/api/cash/payments', function() { (new \Accounting\Interfaces\HTTP\CashController(
+        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
+    ))->payments(); });
+    $router->post('/api/cash/receipts', function() { (new \Accounting\Interfaces\HTTP\CashController(
+        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
+    ))->createReceipt(); });
+    $router->post('/api/cash/payments', function() { (new \Accounting\Interfaces\HTTP\CashController(
+        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
+    ))->createPayment(); });
+    $router->get('/api/cash/accounts', function() { (new \Accounting\Interfaces\HTTP\CashController(
+        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
+    ))->accounts(); });
+
+    // Physical Count
+    $router->get('/kho/kiem-ke', function() { require __DIR__ . '/../public/views/physical_count.php'; });
+    $router->get('/api/physical-count/sessions', function() { (new \Accounting\Interfaces\HTTP\PhysicalCountController(
+        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository']
+    ))->sessions(); });
+    $router->get('/api/physical-count/lines/{id}', function($id) { (new \Accounting\Interfaces\HTTP\PhysicalCountController(
+        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository']
+    ))->lines($id); });
+    $router->post('/api/physical-count/sessions', function() { (new \Accounting\Interfaces\HTTP\PhysicalCountController(
+        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository']
+    ))->createSession(); });
+    $router->post('/api/physical-count/adjust', function() { (new \Accounting\Interfaces\HTTP\PhysicalCountController(
+        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository']
+    ))->adjust(); });
+
+    // Impairment
+    $router->get('/kho/du-phong-giam-gia', function() { require __DIR__ . '/../public/views/impairment.php'; });
+    $router->get('/api/impairments', function() { (new \Accounting\Interfaces\HTTP\ImpairmentController(
+        $GLOBALS['container']['inventoryService']
+    ))->list(); });
+    $router->post('/api/impairments', function() { (new \Accounting\Interfaces\HTTP\ImpairmentController(
+        $GLOBALS['container']['inventoryService']
+    ))->record(); });
+    $router->post('/api/impairments/reverse', function() { (new \Accounting\Interfaces\HTTP\ImpairmentController(
+        $GLOBALS['container']['inventoryService']
+    ))->reverse(); });
+
+    // Promotional
+    $router->post('/api/promotional/issue', function() { (new \Accounting\Interfaces\HTTP\PromotionalController(
+        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository']
+    ))->issue(); });
+
+    // Periodic Inventory
+    $router->get('/kho/kiem-ke-dinh-ky', function() { require __DIR__ . '/../public/views/periodic.php'; });
+    $router->get('/api/periodic', function() { (new \Accounting\Interfaces\HTTP\PeriodicController(
+        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository']
+    ))->list(); });
+    $router->post('/api/periodic/close', function() { (new \Accounting\Interfaces\HTTP\PeriodicController(
+        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository']
+    ))->close(); });
+
+    // In Transit
+    $router->get('/kho/hang-dang-di-duong', function() { require __DIR__ . '/../public/views/transit.php'; });
+    $router->get('/api/inventory-transit', function() { (new \Accounting\Interfaces\HTTP\InventoryTransitController(
+        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository']
+    ))->list(); });
+    $router->post('/api/inventory-transit', function() { (new \Accounting\Interfaces\HTTP\InventoryTransitController(
+        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository']
+    ))->record(); });
+    $router->post('/api/inventory-transit/receive', function() { (new \Accounting\Interfaces\HTTP\InventoryTransitController(
+        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository']
+    ))->receive(); });
+    $router->get('/api/transfers', function() { (new \Accounting\Interfaces\HTTP\TransferController(
+        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository'], $GLOBALS['container']['warehouseRepository']
+    ))->list(); });
+    $router->post('/api/transfers', function() { (new \Accounting\Interfaces\HTTP\TransferController(
+        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository'], $GLOBALS['container']['warehouseRepository']
+    ))->transfer(); });
+    $router->get('/api/transfers/items', function() { (new \Accounting\Interfaces\HTTP\TransferController(
+        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository'], $GLOBALS['container']['warehouseRepository']
+    ))->items(); });
+    $router->get('/api/transfers/warehouses', function() { (new \Accounting\Interfaces\HTTP\TransferController(
+        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository'], $GLOBALS['container']['warehouseRepository']
+    ))->warehouses(); });
 }
 
 $GLOBALS['router'] = new Router();
