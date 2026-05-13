@@ -53,7 +53,7 @@ function createContainer(): array
     $accountingService = new AccountingService($accountRepository, $transactionRepository);
     $journalService = new JournalService($accountRepository, $transactionRepository);
     $inventoryService = new InventoryService($accountRepository, $transactionRepository, $itemRepository, $warehouseRepository);
-    $cashService = new CashService($accountRepository, $transactionRepository);
+    $cashService = new CashService($accountRepository, $transactionRepository, $pdo);
 
     return [
         'pdo' => $pdo, 'accountRepository' => $accountRepository,

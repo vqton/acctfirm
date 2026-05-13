@@ -171,6 +171,9 @@ function defineRoutes(Router $router): void
     // Cash & Bank
     $router->get('/thu/quy-tien-mat', function() { require __DIR__ . '/../public/views/cash_receipts.php'; });
     $router->get('/chi/quy-tien-mat', function() { require __DIR__ . '/../public/views/cash_payments.php'; });
+    $router->get('/thu/giao-bao-co', function() { require __DIR__ . '/../public/views/bank_credit.php'; });
+    $router->get('/chi/giao-bao-no', function() { require __DIR__ . '/../public/views/bank_debit.php'; });
+    $router->get('/thu/tien-dang-chuyen', function() { require __DIR__ . '/../public/views/cash_transit.php'; });
     $router->get('/api/cash/receipts', function() { (new \Accounting\Interfaces\HTTP\CashController(
         $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
     ))->receipts(); });
@@ -186,6 +189,39 @@ function defineRoutes(Router $router): void
     $router->get('/api/cash/accounts', function() { (new \Accounting\Interfaces\HTTP\CashController(
         $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
     ))->accounts(); });
+    $router->get('/api/bank-transactions', function() { (new \Accounting\Interfaces\HTTP\CashController(
+        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
+    ))->bankTransactions(); });
+    $router->post('/api/bank/deposit', function() { (new \Accounting\Interfaces\HTTP\CashController(
+        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
+    ))->createDeposit(); });
+    $router->post('/api/bank/withdrawal', function() { (new \Accounting\Interfaces\HTTP\CashController(
+        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
+    ))->createWithdrawal(); });
+    $router->post('/api/bank/receipt', function() { (new \Accounting\Interfaces\HTTP\CashController(
+        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
+    ))->createBankReceipt(); });
+    $router->post('/api/bank/payment', function() { (new \Accounting\Interfaces\HTTP\CashController(
+        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
+    ))->createBankPayment(); });
+    $router->post('/api/bank/interest', function() { (new \Accounting\Interfaces\HTTP\CashController(
+        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
+    ))->createInterest(); });
+    $router->post('/api/bank/charge', function() { (new \Accounting\Interfaces\HTTP\CashController(
+        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
+    ))->createCharge(); });
+    $router->get('/api/cash/transit', function() { (new \Accounting\Interfaces\HTTP\CashController(
+        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
+    ))->transitRecords(); });
+    $router->post('/api/cash/transit', function() { (new \Accounting\Interfaces\HTTP\CashController(
+        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
+    ))->createTransit(); });
+    $router->post('/api/cash/transit/confirm', function() { (new \Accounting\Interfaces\HTTP\CashController(
+        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
+    ))->confirmTransit(); });
+    $router->post('/api/cash/transit/reverse', function() { (new \Accounting\Interfaces\HTTP\CashController(
+        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
+    ))->reverseTransit(); });
 
     // Physical Count
     $router->get('/kho/kiem-ke', function() { require __DIR__ . '/../public/views/physical_count.php'; });

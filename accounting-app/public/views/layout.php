@@ -52,6 +52,8 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
 .badge-status { display:inline-block; padding:2px 10px; border-radius:10px; font-size:11px; font-weight:500; }
 .badge-active { background:#d1fae5; color:#065f46; }
 .badge-inactive { background:#f3f4f6; color:#6b7280; }
+.badge-warning { background:#fef3c7; color:#92400e; }
+.badge-danger { background:#fee2e2; color:#991b1b; }
 .badge-type { background:#eef2ff; color:#4338ca; }
 .btn-action { padding:2px 8px; font-size:12px; border-radius:4px; border:1px solid #d0d5dd; background:#fff; color:#1a2a3a; cursor:pointer; text-decoration:none; }
 .btn-action:hover { background:#f3f4f6; border-color:#9ca3af; }
@@ -93,12 +95,13 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
         <div class="nav-section">Vốn bằng tiền</div>
         <div class="nav-item">
             <a class="nav-link-s" data-bs-toggle="collapse" href="#menuCash"><i class="bi bi-cash"></i> Vốn bằng tiền <i class="bi bi-chevron-right ms-auto" style="width:auto;font-size:10px;"></i></a>
-            <div class="collapse sub-menu<?= isActive(['bank_accounts','cash_receipts','cash_payments'],$activeMenu)?' show':'' ?>" id="menuCash">
+            <div class="collapse sub-menu<?= isActive(['bank_accounts','cash_receipts','cash_payments','bank_credit','bank_debit','cash_transit'],$activeMenu)?' show':'' ?>" id="menuCash">
                 <a href="/danh-muc/tai-khoan-ngan-hang" class="nav-link-s<?= isActive('bank_accounts',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> TK ngân hàng</a>
                 <a href="/thu/quy-tien-mat" class="nav-link-s<?= isActive('cash_receipts',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Phiếu thu</a>
                 <a href="/chi/quy-tien-mat" class="nav-link-s<?= isActive('cash_payments',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Phiếu chi</a>
-                <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Giấy báo Có</a>
-                <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Giấy báo Nợ</a>
+                <a href="/thu/giao-bao-co" class="nav-link-s<?= isActive('bank_credit',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Giấy báo Có</a>
+                <a href="/chi/giao-bao-no" class="nav-link-s<?= isActive('bank_debit',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Giấy báo Nợ</a>
+                <a href="/thu/tien-dang-chuyen" class="nav-link-s<?= isActive('cash_transit',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Tiền đang chuyển</a>
                 <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Chuyển tiền nội bộ</a>
                 <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Tạm ứng</a>
                 <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Đối chiếu NH</a>
