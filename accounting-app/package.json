@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "vanilla-framework": "^4.51.0"
+  },
+  "devDependencies": {
+    "sass": "^1.99.0"
+  }
+}
