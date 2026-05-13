@@ -222,6 +222,29 @@ function defineRoutes(Router $router): void
     $router->post('/api/cash/transit/reverse', function() { (new \Accounting\Interfaces\HTTP\CashController(
         $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
     ))->reverseTransit(); });
+    $router->get('/thu/so-quy-tien-mat', function() { require __DIR__ . '/../public/views/cash_book.php'; });
+    $router->get('/api/cash-book', function() { (new \Accounting\Interfaces\HTTP\CashController(
+        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
+    ))->cashBook(); });
+    $router->get('/thu/tam-ung', function() { require __DIR__ . '/../public/views/petty_cash.php'; });
+    $router->get('/api/petty-cash/funds', function() { (new \Accounting\Interfaces\HTTP\CashController(
+        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
+    ))->pettyFunds(); });
+    $router->post('/api/petty-cash/funds', function() { (new \Accounting\Interfaces\HTTP\CashController(
+        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
+    ))->createPettyFund(); });
+    $router->post('/api/petty-cash/disburse', function() { (new \Accounting\Interfaces\HTTP\CashController(
+        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
+    ))->disbursePetty(); });
+    $router->post('/api/petty-cash/replenish', function() { (new \Accounting\Interfaces\HTTP\CashController(
+        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
+    ))->replenishPetty(); });
+    $router->post('/api/petty-cash/close', function() { (new \Accounting\Interfaces\HTTP\CashController(
+        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
+    ))->closePettyFund(); });
+    $router->get('/api/petty-cash/{id}/transactions', function($id) { (new \Accounting\Interfaces\HTTP\CashController(
+        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
+    ))->pettyTransactions($id); });
 
     // Physical Count
     $router->get('/kho/kiem-ke', function() { require __DIR__ . '/../public/views/physical_count.php'; });

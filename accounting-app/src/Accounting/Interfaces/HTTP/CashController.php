@@ -312,6 +312,118 @@ class CashController
         }
     }
 
+    // ── Cash Book ──
+
+    public function cashBook(): void
+    {
+        try {
+            $from = $_GET['from'] ?? null;
+            $to = $_GET['to'] ?? null;
+            echo json_encode($this->cash->getCashBook($from, $to));
+        } catch (\RuntimeException $e) {
+            http_response_code(500);
+            echo json_encode(['error' => $e->getMessage()]);
+        }
+    }
+
+    // ── Petty Cash ──
+
+    public function pettyFunds(): void
+    {
+        echo json_encode($this->cash->getPettyCashFunds());
+    }
+
+    public function createPettyFund(): void
+    {
+        $data = json_decode(file_get_contents('php://input'), true);
+        if (!$data || !isset($data['fund_name'], $data['imprest_amount'])) {
+            http_response_code(400);
+            echo json_encode(['error' => 'fund_name, imprest_amount required']);
+            return;
+        }
+        try {
+            $result = $this->cash->establishPettyCash(
+                $data['fund_name'], (float)$data['imprest_amount'],
+                $data['created_by'] ?? 'system'
+            );
+            http_response_code(201);
+            echo json_encode($result);
+        } catch (\InvalidArgumentException $e) {
+            http_response_code(400);
+            echo json_encode(['error' => $e->getMessage()]);
+        }
+    }
+
+    public function disbursePetty(): void
+    {
+        $data = json_decode(file_get_contents('php://input'), true);
+        if (!$data || !isset($data['fund_id'], $data['amount'])) {
+            http_response_code(400);
+            echo json_encode(['error' => 'fund_id, amount required']);
+            return;
+        }
+        try {
+            $result = $this->cash->disbursePettyCash(
+                $data['fund_id'], (float)$data['amount'],
+                $data['description'] ?? 'Petty cash disbursement',
+                $data['reference'] ?? uniqid('pc_'),
+                $data['created_by'] ?? 'system'
+            );
+            http_response_code(201);
+            echo json_encode($result);
+        } catch (\InvalidArgumentException $e) {
+            http_response_code(400);
+            echo json_encode(['error' => $e->getMessage()]);
+        }
+    }
+
+    public function replenishPetty(): void
+    {
+        $data = json_decode(file_get_contents('php://input'), true);
+        if (!$data || !isset($data['fund_id'], $data['expense_account'], $data['total_amount'])) {
+            http_response_code(400);
+            echo json_encode(['error' => 'fund_id, expense_account, total_amount required']);
+            return;
+        }
+        try {
+            $result = $this->cash->replenishPettyCash(
+                $data['fund_id'], $data['expense_account'], (float)$data['total_amount'],
+                $data['description'] ?? 'Petty cash replenishment',
+                $data['reference'] ?? uniqid('pc_'),
+                $data['created_by'] ?? 'system'
+            );
+            echo json_encode($result);
+        } catch (\InvalidArgumentException $e) {
+            http_response_code(400);
+            echo json_encode(['error' => $e->getMessage()]);
+        }
+    }
+
+    public function closePettyFund(): void
+    {
+        $data = json_decode(file_get_contents('php://input'), true);
+        if (!$data || !isset($data['fund_id'])) {
+            http_response_code(400);
+            echo json_encode(['error' => 'fund_id required']);
+            return;
+        }
+        try {
+            $result = $this->cash->closePettyCash(
+                $data['fund_id'], (float)($data['return_amount'] ?? 0),
+                $data['created_by'] ?? 'system'
+            );
+            echo json_encode($result);
+        } catch (\InvalidArgumentException $e) {
+            http_response_code(400);
+            echo json_encode(['error' => $e->getMessage()]);
+        }
+    }
+
+    public function pettyTransactions(string $fundId): void
+    {
+        echo json_encode($this->cash->getPettyCashTransactions($fundId));
+    }
+
     // ── Account picker ──
 
     public function accounts(): void

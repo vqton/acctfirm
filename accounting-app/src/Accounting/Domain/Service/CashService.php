@@ -259,4 +259,177 @@ class CashService
 
         throw new \RuntimeException('PDO not available for transit tracking');
     }
+
+    // ── Cash Book (computed view of TK 111 ledger entries with running balance) ──
+
+    public function getCashBook(string $fromDate = null, string $toDate = null): array
+    {
+        if (!$this->pdo) {
+            throw new \RuntimeException('PDO not available for cash book');
+        }
+
+        $where = "a.code = '111'";
+        if ($fromDate) $where .= " AND t.created_at >= " . $this->pdo->quote($fromDate);
+        if ($toDate) $where .= " AND t.created_at <= " . $this->pdo->quote($toDate . ' 23:59:59');
+
+        $rows = $this->pdo->query(
+            "SELECT t.id, t.description, t.reference, t.created_at, le.amount, le.is_debit
+             FROM ledger_entries le
+             JOIN transactions t ON t.id = le.transaction_id
+             JOIN accounts a ON a.id = le.account_id
+             WHERE {$where}
+             ORDER BY t.created_at ASC, t.id ASC"
+        )->fetchAll(\PDO::FETCH_ASSOC);
+
+        $running = 0.0;
+        $entries = [];
+        foreach ($rows as $r) {
+            $amt = (float)$r['amount'];
+            if ($r['is_debit']) {
+                $running += $amt;
+            } else {
+                $running -= $amt;
+            }
+            $entries[] = [
+                'date' => $r['created_at'],
+                'reference' => $r['reference'],
+                'description' => $r['description'],
+                'receipt_amount' => $r['is_debit'] ? $amt : 0,
+                'payment_amount' => $r['is_debit'] ? 0 : $amt,
+                'balance' => round($running, 2),
+            ];
+        }
+
+        return $entries;
+    }
+
+    // ── Petty Cash ──
+
+    public function establishPettyCash(string $fundName, float $imprestAmount, string $createdBy): array
+    {
+        if ($imprestAmount <= 0) throw new \InvalidArgumentException('Imprest amount must be positive');
+
+        $fundId = uniqid('pc_');
+        if ($this->pdo) {
+            $this->pdo->prepare(
+                'INSERT INTO petty_cash_funds (id, fund_name, imprest_amount, current_balance, status, created_by)
+                 VALUES (?, ?, ?, ?, ?, ?)'
+            )->execute([$fundId, $fundName, $imprestAmount, $imprestAmount, 'active', $createdBy]);
+        }
+
+        return ['fund_id' => $fundId, 'fund_name' => $fundName, 'imprest_amount' => $imprestAmount, 'current_balance' => $imprestAmount];
+    }
+
+    public function disbursePettyCash(string $fundId, float $amount, string $description, string $reference, string $createdBy): array
+    {
+        if ($amount <= 0) throw new \InvalidArgumentException('Amount must be positive');
+
+        $fund = $this->getPettyCashFundById($fundId);
+        if (!$fund) throw new \InvalidArgumentException("Petty cash fund not found: {$fundId}");
+        if ($fund['status'] !== 'active') throw new \InvalidArgumentException('Fund is not active');
+        if ($fund['current_balance'] < $amount) {
+            throw new \InvalidArgumentException("Insufficient fund balance: have {$fund['current_balance']}, need {$amount}");
+        }
+
+        $txId = uniqid('pctx_');
+        if ($this->pdo) {
+            $this->pdo->prepare(
+                'INSERT INTO petty_cash_transactions (id, fund_id, amount, type, description, reference, created_by)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)'
+            )->execute([$txId, $fundId, $amount, 'disbursement', $description, $reference, $createdBy]);
+
+            $this->pdo->prepare(
+                'UPDATE petty_cash_funds SET current_balance = current_balance - ? WHERE id = ?'
+            )->execute([$amount, $fundId]);
+        }
+
+        return ['transaction_id' => $txId, 'amount' => $amount, 'type' => 'disbursement'];
+    }
+
+    public function replenishPettyCash(string $fundId, string $expenseAccount, float $totalAmount, string $description, string $reference, string $createdBy): array
+    {
+        $fund = $this->getPettyCashFundById($fundId);
+        if (!$fund) throw new \InvalidArgumentException("Petty cash fund not found: {$fundId}");
+        if ($fund['status'] !== 'active') throw new \InvalidArgumentException('Fund is not active');
+
+        $disbursed = $fund['imprest_amount'] - $fund['current_balance'];
+        if ($totalAmount <= 0) throw new \InvalidArgumentException('Amount must be positive');
+
+        $journal = new JournalService($this->accountRepo, $this->txnRepo);
+        $txn = $journal->postEntry("Petty cash replenishment: {$description}", $reference, [
+            ['account_code' => $expenseAccount, 'amount' => $totalAmount, 'is_debit' => true],
+            ['account_code' => '111', 'amount' => $totalAmount, 'is_debit' => false],
+        ], $createdBy);
+
+        if ($this->pdo) {
+            $txId = uniqid('pctx_');
+            $this->pdo->prepare(
+                'INSERT INTO petty_cash_transactions (id, fund_id, amount, type, description, reference, expense_account, created_by)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+            )->execute([$txId, $fundId, $totalAmount, 'replenishment', $description, $reference, $expenseAccount, $createdBy]);
+
+            $this->pdo->prepare(
+                'UPDATE petty_cash_funds SET current_balance = imprest_amount WHERE id = ?'
+            )->execute([$fundId]);
+        }
+
+        return ['transaction_id' => $txn->getId(), 'amount' => $totalAmount, 'type' => 'replenishment'];
+    }
+
+    public function closePettyCash(string $fundId, float $returnAmount, string $createdBy): array
+    {
+        $fund = $this->getPettyCashFundById($fundId);
+        if (!$fund) throw new \InvalidArgumentException("Petty cash fund not found: {$fundId}");
+        if ($fund['status'] !== 'active') throw new \InvalidArgumentException('Fund is not active');
+
+        $journal = new JournalService($this->accountRepo, $this->txnRepo);
+        $txn = $journal->postEntry("Petty cash fund closure: {$fund['fund_name']}", "CLOSE-{$fundId}", [
+            ['account_code' => '111', 'amount' => $returnAmount, 'is_debit' => true],
+            ['account_code' => '111', 'amount' => $returnAmount, 'is_debit' => false],
+        ], $createdBy);
+
+        if ($this->pdo) {
+            $txId = uniqid('pctx_');
+            $this->pdo->prepare(
+                'INSERT INTO petty_cash_transactions (id, fund_id, amount, type, description, created_by)
+                 VALUES (?, ?, ?, ?, ?, ?)'
+            )->execute([$txId, $fundId, $returnAmount, 'closure', 'Fund closed, cash returned', $createdBy]);
+
+            $this->pdo->prepare(
+                'UPDATE petty_cash_funds SET current_balance = 0, status = ? WHERE id = ?'
+            )->execute(['closed', $fundId]);
+        }
+
+        return ['transaction_id' => $txn->getId(), 'fund_id' => $fundId, 'type' => 'closure'];
+    }
+
+    public function getPettyCashFunds(): array
+    {
+        if (!$this->pdo) return [];
+        $rows = $this->pdo->query('SELECT * FROM petty_cash_funds ORDER BY created_at DESC')->fetchAll(\PDO::FETCH_ASSOC);
+        return array_map(fn($r) => [
+            'id' => $r['id'], 'fund_name' => $r['fund_name'],
+            'imprest_amount' => (float)$r['imprest_amount'],
+            'current_balance' => (float)$r['current_balance'],
+            'status' => $r['status'], 'created_by' => $r['created_by'],
+            'created_at' => $r['created_at'],
+        ], $rows);
+    }
+
+    public function getPettyCashTransactions(string $fundId): array
+    {
+        if (!$this->pdo) return [];
+        $stmt = $this->pdo->prepare('SELECT * FROM petty_cash_transactions WHERE fund_id = ? ORDER BY created_at DESC');
+        $stmt->execute([$fundId]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC);
+    }
+
+    private function getPettyCashFundById(string $id): ?array
+    {
+        if (!$this->pdo) return null;
+        $stmt = $this->pdo->prepare('SELECT * FROM petty_cash_funds WHERE id = ?');
+        $stmt->execute([$id]);
+        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+        return $row ? $row : null;
+    }
 }

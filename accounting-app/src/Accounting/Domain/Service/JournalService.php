@@ -71,7 +71,7 @@ class JournalService
         // Phase 3: Apply balance changes + create ledger entries
         $entryLines = [];
         foreach ($validated as $v) {
-            $account = $v['account'];
+            $account = $this->accountRepo->findByCode($v['account']->getCode());
             if ($v['is_debit']) {
                 if (in_array($account->getType(), ['asset', 'expense'])) {
                     $account->credit($v['amount']);

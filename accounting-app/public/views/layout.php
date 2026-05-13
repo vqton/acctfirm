@@ -95,15 +95,16 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
         <div class="nav-section">Vốn bằng tiền</div>
         <div class="nav-item">
             <a class="nav-link-s" data-bs-toggle="collapse" href="#menuCash"><i class="bi bi-cash"></i> Vốn bằng tiền <i class="bi bi-chevron-right ms-auto" style="width:auto;font-size:10px;"></i></a>
-            <div class="collapse sub-menu<?= isActive(['bank_accounts','cash_receipts','cash_payments','bank_credit','bank_debit','cash_transit'],$activeMenu)?' show':'' ?>" id="menuCash">
+            <div class="collapse sub-menu<?= isActive(['bank_accounts','cash_receipts','cash_payments','bank_credit','bank_debit','cash_transit','cash_book','petty_cash'],$activeMenu)?' show':'' ?>" id="menuCash">
                 <a href="/danh-muc/tai-khoan-ngan-hang" class="nav-link-s<?= isActive('bank_accounts',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> TK ngân hàng</a>
                 <a href="/thu/quy-tien-mat" class="nav-link-s<?= isActive('cash_receipts',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Phiếu thu</a>
                 <a href="/chi/quy-tien-mat" class="nav-link-s<?= isActive('cash_payments',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Phiếu chi</a>
                 <a href="/thu/giao-bao-co" class="nav-link-s<?= isActive('bank_credit',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Giấy báo Có</a>
                 <a href="/chi/giao-bao-no" class="nav-link-s<?= isActive('bank_debit',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Giấy báo Nợ</a>
                 <a href="/thu/tien-dang-chuyen" class="nav-link-s<?= isActive('cash_transit',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Tiền đang chuyển</a>
+                <a href="/thu/so-quy-tien-mat" class="nav-link-s<?= isActive('cash_book',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Sổ quỹ tiền mặt</a>
                 <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Chuyển tiền nội bộ</a>
-                <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Tạm ứng</a>
+                <a href="/thu/tam-ung" class="nav-link-s<?= isActive('petty_cash',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Tạm ứng</a>
                 <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Đối chiếu NH</a>
             </div>
         </div>
