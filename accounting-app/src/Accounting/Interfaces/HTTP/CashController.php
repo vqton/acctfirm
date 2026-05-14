@@ -3,6 +3,7 @@ namespace Accounting\Interfaces\HTTP;
 
 use Accounting\Domain\Service\CashService;
 use Accounting\Domain\Repository\AccountRepositoryInterface;
+use Accounting\Infrastructure\Helpers;
 
 class CashController
 {
@@ -30,22 +31,19 @@ class CashController
     {
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['amount'], $data['credit_account_code'])) {
-            http_response_code(400);
-            echo json_encode(['error' => 'amount, credit_account_code required']);
+            Helpers::jsonError('amount, credit_account_code required');
             return;
         }
         try {
             $result = $this->cash->recordReceipt(
                 (float)$data['amount'], $data['credit_account_code'],
                 $data['description'] ?? 'Cash receipt',
-                $data['reference'] ?? uniqid('pt_'),
+                $data['reference'] ?? Helpers::nextVoucherNo('PT'),
                 $data['created_by'] ?? 'system'
             );
-            http_response_code(201);
-            echo json_encode($result);
+            Helpers::jsonOk($result, 201);
         } catch (\InvalidArgumentException $e) {
-            http_response_code(400);
-            echo json_encode(['error' => $e->getMessage()]);
+            Helpers::jsonError($e->getMessage());
         }
     }
 
@@ -64,22 +62,19 @@ class CashController
     {
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['amount'], $data['debit_account_code'])) {
-            http_response_code(400);
-            echo json_encode(['error' => 'amount, debit_account_code required']);
+            Helpers::jsonError('amount, debit_account_code required');
             return;
         }
         try {
             $result = $this->cash->recordPayment(
                 (float)$data['amount'], $data['debit_account_code'],
                 $data['description'] ?? 'Cash payment',
-                $data['reference'] ?? uniqid('pc_'),
+                $data['reference'] ?? Helpers::nextVoucherNo('PC'),
                 $data['created_by'] ?? 'system'
             );
-            http_response_code(201);
-            echo json_encode($result);
+            Helpers::jsonOk($result, 201);
         } catch (\InvalidArgumentException $e) {
-            http_response_code(400);
-            echo json_encode(['error' => $e->getMessage()]);
+            Helpers::jsonError($e->getMessage());
         }
     }
 

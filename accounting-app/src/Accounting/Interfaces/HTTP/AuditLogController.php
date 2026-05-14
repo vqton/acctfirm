@@ -1,6 +1,8 @@
 <?php
 namespace Accounting\Interfaces\HTTP;
 
+use Accounting\Infrastructure\Helpers;
+
 class AuditLogController
 {
     private \PDO $pdo;
@@ -18,8 +20,6 @@ class AuditLogController
         $from = $_GET['from'] ?? '';
         $to = $_GET['to'] ?? '';
         $page = max(1, (int)($_GET['page'] ?? 1));
-        $perPage = 50;
-        $offset = ($page - 1) * $perPage;
 
         $where = [];
         $params = [];
@@ -31,22 +31,15 @@ class AuditLogController
 
         $whereClause = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
-        $countStmt = $this->pdo->prepare("SELECT COUNT(*) FROM audit_log {$whereClause}");
-        $countStmt->execute($params);
-        $total = (int)$countStmt->fetchColumn();
-
-        $stmt = $this->pdo->prepare(
-            "SELECT * FROM audit_log {$whereClause} ORDER BY id DESC LIMIT {$perPage} OFFSET {$offset}"
+        $result = Helpers::paginate(
+            $this->pdo,
+            "SELECT COUNT(*) FROM audit_log {$whereClause}",
+            "SELECT * FROM audit_log {$whereClause} ORDER BY id DESC",
+            $params,
+            $page
         );
-        $stmt->execute($params);
-        $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
 
-        echo json_encode([
-            'data' => $rows,
-            'total' => $total,
-            'page' => $page,
-            'per_page' => $perPage,
-        ]);
+        Helpers::jsonOk($result);
     }
 
     public function get(string $id): void
@@ -54,7 +47,7 @@ class AuditLogController
         $stmt = $this->pdo->prepare('SELECT * FROM audit_log WHERE id = ?');
         $stmt->execute([$id]);
         $row = $stmt->fetch(\PDO::FETCH_ASSOC);
-        if (!$row) { http_response_code(404); echo json_encode(['error' => 'Not found']); return; }
+        if (!$row) { Helpers::jsonError('Not found', 404); return; }
         echo json_encode($row);
     }
 }
