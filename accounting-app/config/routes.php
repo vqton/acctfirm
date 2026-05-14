@@ -271,6 +271,20 @@ function defineRoutes(Router $router): void
     $router->get('/he-thong/nguoi-dung', function() { require __DIR__ . '/../public/views/users.php'; });
     $router->get('/he-thong/vai-tro', function() { require __DIR__ . '/../public/views/roles.php'; });
 
+    // Financial Statements
+    $router->get('/bao-cao/tinh-hinh-tai-chinh', function() { (new \Accounting\Interfaces\HTTP\FsController(
+        $GLOBALS['container']['fsService']
+    ))->viewBC01(); });
+    $router->get('/bao-cao/ket-qua-kinh-doanh', function() { (new \Accounting\Interfaces\HTTP\FsController(
+        $GLOBALS['container']['fsService']
+    ))->viewBC02(); });
+    $router->get('/api/fs/bc01', function() { (new \Accounting\Interfaces\HTTP\FsController(
+        $GLOBALS['container']['fsService']
+    ))->bc01(); });
+    $router->get('/api/fs/bc02', function() { (new \Accounting\Interfaces\HTTP\FsController(
+        $GLOBALS['container']['fsService']
+    ))->bc02(); });
+
     // Period Management
     $router->get('/he-thong/quan-ly-ky', function() { require __DIR__ . '/../public/views/periods.php'; });
     $router->get('/api/periods', function() { (new \Accounting\Interfaces\HTTP\PeriodController(

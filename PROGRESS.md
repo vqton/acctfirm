@@ -192,7 +192,29 @@ CashService → JournalService → Account balance (all cash/bank operations)
 | `tests/HelpersTest.php` | 42 | Helpers |
 | `tests/DBTest.php` | 18 | DB Helper |
 | `tests/PeriodTest.php` | 18 | Period Engine |
-| **Total** | **339** | **25 test files** |
+| `tests/FsTest.php` | 18 | Financial Statements |
+| **Total** | **357** | **26 test files** |
+
+---
+
+## Financial Statements — BC 01 & BC 02
+
+| Statement | UC | Service | Tests | Status |
+|---|---|---|---|---|
+| BC 01 — Balance Sheet | UC-001 | `FsService::generateBC01()` | FsTest (18) | ✅ |
+| BC 02 — Income Statement | UC-002 | `FsService::generateBC02()` | FsTest (18) | ✅ |
+
+**Features:**
+- Account-to-FS-line mapping via `fs_line_items` table (80+ BC 01 items, 18+ BC 02 items)
+- Formula engine: account (GL balance), sum (child roll-up), calculated (expressions), manual
+- Formula expressions support: `+`, `-`, parentheses — e.g. `50-(51+52)`, `20+21+22-(23+25+26)`
+- Cross-statement validation: Assets (280) = Liabilities + Equity (440)
+- FS snapshots stored in `fs_snapshots` table for audit trail and comparative data
+- Prior period data retrieval for year-over-year comparison
+- Views at `/bao-cao/tinh-hinh-tai-chinh` and `/bao-cao/ket-qua-kinh-doanh`
+- BC 02: full formula chain from revenue (01) to net profit (60)
+
+**Pending:** BC 03 (Cash Flow), BC 09 (Notes to FS), BC 03 → BC 01 cross-validation (cash reconciliation)
 
 ---
 
@@ -330,6 +352,7 @@ CashService → JournalService → Account balance (all cash/bank operations)
 | 035 | `create_rbac_tables` | Users, roles, permissions |
 | 036 | `create_fc_transactions_table` | FC transaction tracking |
 | 037 | `create_accounting_periods_table` | Period management |
+| 038 | `create_fs_tables` | FS line items + snapshots |
 
 ---
 
@@ -368,4 +391,4 @@ for f in tests/*.php; do php "$f"; done
 | `src/.../Infrastructure/Database/DB.php` | DB transaction/query helpers |
 | `src/.../Infrastructure/Database/AuditLogger.php` | Audit trail logger |
 | `database/migrate.php` | Migration runner |
-| `database/migrations/*.php` | 37 migration files |
+| `database/migrations/*.php` | 38 migration files |

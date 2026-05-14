@@ -222,9 +222,9 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
 
         <div class="nav-section">Báo cáo</div>
         <div class="nav-item"><a class="nav-link-s" data-bs-toggle="collapse" href="#menuReports"><i class="bi bi-bar-chart"></i> Báo cáo <i class="bi bi-chevron-right ms-auto" style="width:auto;font-size:10px;"></i></a>
-        <div class="collapse sub-menu" id="menuReports">
-            <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> BC CĐKT (BC 01)</a>
-            <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> KQKD (BC 02)</a>
+        <div class="collapse sub-menu<?= isActive(['fs_bc01','fs_bc02'],$activeMenu)?' show':'' ?>" id="menuReports">
+            <a href="/bao-cao/tinh-hinh-tai-chinh" class="nav-link-s<?= isActive('fs_bc01',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> BC CĐKT (BC 01)</a>
+            <a href="/bao-cao/ket-qua-kinh-doanh" class="nav-link-s<?= isActive('fs_bc02',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> KQKD (BC 02)</a>
             <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> LCTT (BC 03)</a>
             <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Thuyết minh BCTC</a>
             <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Báo cáo thuế</a>
