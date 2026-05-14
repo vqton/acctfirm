@@ -27,6 +27,7 @@ use Accounting\Domain\Service\BankReconciliationService;
 use Accounting\Domain\Service\PeriodService;
 use Accounting\Domain\Service\FsService;
 use Accounting\Domain\Service\ApService;
+use Accounting\Domain\Service\ArService;
 
 function createContainer(): array
 {
@@ -64,6 +65,7 @@ function createContainer(): array
     $periodService = new PeriodService($pdo, $accountRepository, $transactionRepository);
     $fsService = new FsService($pdo, $accountRepository);
     $apService = new ApService($pdo, $supplierRepository, $accountRepository);
+    $arService = new ArService($pdo, $accountRepository);
 
     return [
         'pdo' => $pdo, 'accountRepository' => $accountRepository,
@@ -85,7 +87,8 @@ function createContainer(): array
         'cashReportService' => $cashReportService,
         'periodService' => $periodService,
         'fsService' => $fsService,
-        'apService' => $apService
+        'apService' => $apService,
+        'arService' => $arService
     ];
 }
 

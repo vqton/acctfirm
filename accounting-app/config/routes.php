@@ -315,6 +315,22 @@ function defineRoutes(Router $router): void
         $GLOBALS['container']['apService']
     ))->statement($id); });
 
+    // AR (TK 131)
+    $router->get('/ban/cong-no-phai-thu', function() { require __DIR__ . '/../public/views/ar_invoices.php'; });
+    $router->get('/ban/phan-tich-tuoi-no', function() { require __DIR__ . '/../public/views/ar_aging.php'; });
+    $router->get('/ban/so-chi-tiet-cong-no', function() { require __DIR__ . '/../public/views/ar_statement.php'; });
+    $router->get('/api/ar/invoices', function() { (new \Accounting\Interfaces\HTTP\ArController($GLOBALS['container']['arService']))->invoices(); });
+    $router->post('/api/ar/invoices', function() { (new \Accounting\Interfaces\HTTP\ArController($GLOBALS['container']['arService']))->create(); });
+    $router->get('/api/ar/invoices/{id}', function($id) { (new \Accounting\Interfaces\HTTP\ArController($GLOBALS['container']['arService']))->get($id); });
+    $router->post('/api/ar/invoices/{id}/pay', function($id) { (new \Accounting\Interfaces\HTTP\ArController($GLOBALS['container']['arService']))->pay($id); });
+    $router->post('/api/ar/invoices/{id}/return', function($id) { (new \Accounting\Interfaces\HTTP\ArController($GLOBALS['container']['arService']))->returnGoods($id); });
+    $router->post('/api/ar/invoices/{id}/discount', function($id) { (new \Accounting\Interfaces\HTTP\ArController($GLOBALS['container']['arService']))->discount($id); });
+    $router->post('/api/ar/invoices/{id}/write-off', function($id) { (new \Accounting\Interfaces\HTTP\ArController($GLOBALS['container']['arService']))->writeOff($id); });
+    $router->post('/api/ar/prepay', function() { (new \Accounting\Interfaces\HTTP\ArController($GLOBALS['container']['arService']))->prepay(); });
+    $router->get('/api/ar/aging', function() { (new \Accounting\Interfaces\HTTP\ArController($GLOBALS['container']['arService']))->aging(); });
+    $router->get('/api/ar/customers', function() { (new \Accounting\Interfaces\HTTP\ArController($GLOBALS['container']['arService']))->customers(); });
+    $router->get('/api/ar/customers/{id}/statement', function($id) { (new \Accounting\Interfaces\HTTP\ArController($GLOBALS['container']['arService']))->statement($id); });
+
     // Financial Statements
     $router->get('/bao-cao/tinh-hinh-tai-chinh', function() { (new \Accounting\Interfaces\HTTP\FsController(
         $GLOBALS['container']['fsService']
