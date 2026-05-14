@@ -28,7 +28,7 @@
 </div></div></div>
 <script>
 $.get('/api/cash/accounts', function(accounts) {
-    accounts.forEach(function(a){if(a.code!=='111')$('#debitAccount').append('<option value="'+esc(a.code)+'">'+esc(a.code)+' - '+esc(a.name)+'</option>');});
+    accounts.forEach(function(a){if(a.code!=='111')$('#debitAccount').append('<option value="'+esc(a.code)+'">'+esc(a.code)+' - '+esc(a.name)+' ('+parseFloat(a.balance).toLocaleString()+' VND)</option>');});
 });
 function loadData() {
     $.get('/api/cash/payments', function(data) {

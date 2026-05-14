@@ -50,7 +50,7 @@ $('#txType').change(function(){
     if(v==='interest'){$('#accountField').hide();}else{$('#accountField').show();}
 });
 $.get('/api/cash/accounts', function(accounts) {
-    accounts.forEach(function(a){if(a.code!=='111'&&a.code!=='112')$('#accountCode').append('<option value="'+esc(a.code)+'">'+esc(a.code)+' - '+esc(a.name)+'</option>');});
+    accounts.forEach(function(a){if(a.code!=='111'&&a.code!=='112')$('#accountCode').append('<option value="'+esc(a.code)+'">'+esc(a.code)+' - '+esc(a.name)+' ('+parseFloat(a.balance).toLocaleString()+' VND)</option>');});
 });
 $('#creditForm').submit(function(e){e.preventDefault();
     var type=$('#txType').val();
