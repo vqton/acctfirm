@@ -8,6 +8,7 @@ public/index.php → autoloader → config/services.php (DI container) → confi
 
 JournalService::postEntry() → Transaction + LedgerEntry records → Account balance update
 InventoryService::receiveGoods() / issueGoods() → JournalService + stock_qty + cost layers
+CashService → JournalService → Account balance (all cash/bank operations)
 ```
 
 ---
@@ -32,172 +33,281 @@ InventoryService::receiveGoods() / issueGoods() → JournalService + stock_qty +
 | contracts | ✅ | `ContractController` | `/danh-muc/hop-dong` |
 | projects | ✅ | `ProjectController` | `/danh-muc/du-an` |
 | depreciation_policies | ✅ | `DepreciationPolicyController` | `/danh-muc/chinh-sach-khau-hao` |
-| accounts (COA) | ✅ (72 seeded) | `AccountController` | `/danh-muc/he-thong-tai-khoan` |
+| accounts (COA) | ✅ (~150 seeded) | `AccountController` | `/danh-muc/he-thong-tai-khoan` |
 
 ---
 
-## COA — Circular 99 Standard (Appendix II — Full Compliance)
+## Cash & Bank Module — 9 UCs (6.5 weeks)
 
-**Regulatory basis:** Article 11.1 of Circular 99/2025/TT-BTC requires enterprises to *"shall apply the chart of accounts provided in Appendix II"*. Article 11.2 permits modifications only if the enterprise issues an internal Accounting Policy Regulation. Default = full Appendix II.
+| Phase | Module | UC | Tests | Status |
+|---|---|---|---|---|
+| P1.1 | Cash Receipt (Phiếu thu) | UC-01 | CashTest (7) | ✅ |
+| P1.2 | Cash Payment (Phiếu chi) | UC-02 | CashTest (4) | ✅ |
+| P1.3 | Integration | — | CashTest + CashBankTest | ✅ |
+| P2.1 | Bank Transactions | UC-03 | CashBankTest (8) | ✅ |
+| P2.2 | Cash in Transit (TK 113) | UC-04 | CashTransitTest (4) | ✅ |
+| P3.1 | Cash Book (Sổ quỹ) | UC-05 | CashBookTest (5) | ✅ |
+| P3.2 | Petty Cash (Tạm ứng) | UC-07 | PettyCashTest (7) | ✅ |
+| P4.1 | **Bank Reconciliation** | **UC-06** | **BankReconciliationTest (24)** | ✅ |
+| P4.2 | **FX Cash (VAS 10)** | **UC-08** | **CashFXTest (17)** | ✅ |
+| P5.1 | **Cash Reports** | **UC-09** | **CashReportTest (14)** | ✅ |
+| P5.2 | Dashboard Widgets | — | — | ❌ |
 
-**Current state:** Seed updated to match Appendix II exactly — all Level 1 and Level 2 accounts, correct names per TT99, correct normal balances, all sub-accounts. Abolished accounts (TK 611, 631) removed. Accounts renamed: 112, 155, 156, 158, 242, 419, etc. New accounts added: 171, 215 (with sub-accounts), 332, 344, 347, 353, 356, 357, 412, 413, 414, etc. Total: ~150 accounts covering all 9 classes.
-
-**Key changes from previous seed:**
-- TK 112 renamed from "Tiền gửi ngân hàng" → "Tiền gửi không kỳ hạn"
-- TK 155 renamed from "Thành phẩm" → "Sản phẩm"
-- TK 242 renamed from "Chi phí trả trước" → "Chi phí chờ phân bổ"
-- TK 337 repurposed from "Trái phiếu phát hành" → "Thanh toán theo tiến độ hợp đồng XD"
-- TK 344 repurposed from "Nợ thuê tài chính" → "Nhận ký quỹ, ký cược"
-- TK 347 repurposed from "Doanh thu chưa thực hiện" → "Thuế TNDN hoãn lại phải trả"
-- TK 356 repurposed from "Quỹ khen thưởng, phúc lợi" → "Quỹ phát triển KHCN"
-- TK 631 removed (abolished in TT99 — was "Giá thành sản xuất")
-- New accounts: 171, 1361-1368, 1381-1388, 2141-2147, 2151-2153, 2281-2288, 2291-2295, 2411-2414, 332, 3331-3339 (detailed tax sub-accounts), 3361-3368, 3381-3388, 3411-3412, 3431-3432, 3521-3525, 3531-3534, 3561-3562, 357, 4111-4118, 412, 413, 414, 4211-4212, 8211-8212
+**Service:** `CashService` (435 lines) — single service for all cash/bank transactions.
+**Controller:** `CashController` (444 lines) — 10+ API endpoints.
+**Architecture:** `CashService → JournalService::postEntry()` — reuses existing double-entry engine.
 
 ---
 
-## Journal Engine (UC-01/02/03/07 — 25 tests)
+## Audit Log
+
+| Component | File | Status |
+|---|---|---|
+| Migration | `033_create_audit_log_table.php` | ✅ |
+| Logger | `AuditLogger.php` — static, auto-context (IP, request_id) | ✅ |
+| Instrumentation | `JournalService::postEntry()` — every financial transaction | ✅ |
+| Instrumentation | `AccountController` — COA create/update/delete/seed | ✅ |
+| Instrumentation | `BankReconciliationService::complete()` | ✅ |
+| Viewer | `AuditLogController` + view at `/he-thong/nhat-ky-hoat-dong` | ✅ |
+
+---
+
+## RBAC (Users, Roles, Permissions)
+
+| Component | File | Status |
+|---|---|---|
+| Migration | `035_create_rbac_tables.php` — users, roles, role_permissions, user_roles | ✅ |
+| Seed data | 9 roles, 81 permissions, admin user | ✅ |
+| Auth | `AuthController` — login/logout/me, PHP sessions | ✅ |
+| Auth guard | `index.php` — blocks unauthenticated access | ✅ |
+| Permission check | `Helpers::requirePermission(module, action)` | ✅ |
+| User CRUD | `UserController` + view at `/he-thong/nguoi-dung` | ✅ |
+| Role CRUD | `RoleController` + view at `/he-thong/vai-tro` | ✅ |
+| Permission matrix UI | Checkbox grid: 9 modules × 6 actions | ✅ |
+| Wired controllers | `CashController` — receipts/payments guarded | Partial |
+
+### Default roles
+| Role | Modules | Write |
+|---|---|---|
+| Quản trị dữ liệu | 9/9 | Yes |
+| Kế toán trưởng | 9/9 | Yes |
+| Kế toán vốn bằng tiền | cash, bank, master_data, reconciliation, report | Yes |
+| Kế toán mua hàng | inventory, master_data, report | Yes |
+| Kế toán bán hàng | inventory, master_data, report | Yes |
+| Kế toán kho | inventory, master_data, report | Yes |
+| Kế toán thuế | master_data, report | Yes |
+| Lãnh đạo | 7 modules | No |
+| Kiểm toán | 8 modules (no system) | No |
+
+---
+
+## Helpers & Utilities
+
+| Helper | Location | Methods |
+|---|---|---|
+| **Helpers** | `src/Accounting/Infrastructure/Helpers.php` | toVnWords, fmt, e, jsonOk, jsonError, isValidAccountCode, nextVoucherNo, paginate, isAuthenticated, hasPermission, requirePermission, currentUser, isAdmin |
+| **DB** | `src/Accounting/Infrastructure/Database/DB.php` | select, fetch, fetchColumn, execute, insertGetId, transaction, sqlIn, sqlInCondition, tableExists |
+| **AuditLogger** | `src/Accounting/Infrastructure/Database/AuditLogger.php` | log(action, resource, id, old, new, actor) |
+
+---
+
+## Journal Engine
 
 | Service | File | Tests |
 |---|---|---|
-| `ValuationService` | `src/Accounting/Domain/Service/ValuationService.php` | `tests/ValuationServiceTest.php` — 4/4 |
-| `JournalService` | `src/Accounting/Domain/Service/JournalService.php` | `tests/JournalServiceTest.php` — 12/12 |
-| `InventoryService` | `src/Accounting/Domain/Service/InventoryService.php` | combined in receipt + issue tests |
-
-### Key fixes applied
-- `Account::debit()` — removed "Insufficient balance" check (wrong for double-entry)
-- `PDOAccountRepository` — `hydrate()` now loads balance via `setBalance()`
-- `PDOAccountRepository` — `ON DUPLICATE KEY UPDATE` includes `balance=VALUES(balance)`
-- `JournalService::postEntry()` — Dr=Cr validation BEFORE balance changes (4-phase ordering)
-- `Transaction` model — added `setStatus()`, `setCreatedBy()` setters
-- `PDOTransactionRepository` — uses setters instead of private property access
-
-### COA account posting rules (in JournalService)
-- Dr asset/expense = increase (calls `credit()` on Account model)
-- Cr liability/equity/revenue = increase (calls `credit()` on Account model)
-- Reverse for opposite: calls `debit()` (decrease balance)
+| `JournalService` | `src/Accounting/Domain/Service/JournalService.php` | 12 |
+| `ValuationService` | `src/Accounting/Domain/Service/ValuationService.php` | 4 |
+| `TrialBalance` | `tests/TrialBalanceTest.php` | 9 |
+| `PostingValidation` | `tests/PostingValidationTest.php` | 5 |
+| **Total** | | **30** |
 
 ---
 
-## Inventory Module — All 10 phases (98 tests)
+## Inventory Module — All 10 phases
 
-### P1: Valuation Engine — 4/4 tests
-- `ValuationService::calculateWeightedAverage()` — basic, single batch, zero qty, empty
-- Items table: `valuation_method_id` column
-- Valuation methods seeded: specific_id, weighted_avg, fifo, retail, standard_cost
-
-### P2: Goods Receipt — 9/9 tests
-- `InventoryService::receiveGoods()` — Dr Inventory (152/155/156) — Cr AP (331)
-- Landed cost: base price + add-on costs (freight, duty, insurance)
-- Stock quantity incremented, cost layers saved
-
-### P3: Goods Issue / COGS — 6/6 tests
-- `InventoryService::issueGoods()` — Dr COGS (632) or WIP (154) — Cr Inventory
-- Insufficient stock rejected, FIFO cost layer consumption
-- Issue types: `sale` → Dr 632, `production` → Dr 154
-
-### Inventory Account Mapping (used by P2–P10)
-| item_type | Inventory (Cr) | Sale (Dr) | Production (Dr) |
-|---|---|---|---|
-| material/tool/other | 152 | 632 | 154 |
-| product | 155 | 632 | 154 |
-| merchandise | 156 | 632 | 154 |
-
----
-
-### P4: Warehouse Transfer — 11/11 tests
-- `InventoryService::transferGoods()` — moves goods between warehouses
-- Dr Inventory — Cr Inventory (same account, net zero on GL)
-- Cost layers consumed from source, created for destination (warehouse_id tracking)
-- Migration 023: `warehouse_id` on `inventory_cost_layers`
-- API: `/api/transfers`, Frontend: `/kho/dieu-chuyen`
-
-### P5: In Transit (TK 151) — 10/10 tests
-- `InventoryService::recordInTransit()` — Dr 151 — Cr 331 (no stock change)
-- `InventoryService::receiveFromTransit()` — Dr Inventory — Cr 151 (stock + cost layers)
-- Partial receive support, transit record tracking
-- Migration 024: `inventory_in_transit` table
-- API: `/api/inventory-transit`, Frontend: `/kho/hang-dang-di-duong`
-
-### P6: Consignment (TK 157) — 10/10 tests
-- `InventoryService::consignGoods()` — Dr 157 — Cr Inventory, stock decreases
-- `InventoryService::sellConsigned()` — Dr 632 — Cr 157
-- `InventoryService::returnConsigned()` — Dr Inventory — Cr 157 (return to stock)
-- Migration 025: `inventory_consignment` table
-- API: `/api/consignments`, Frontend: `/kho/hang-gui-ban`
-
-### P7: Physical Count — 10/10 tests
-- `InventoryService::adjustPhysicalCount()` — surplus Dr Inventory / Cr 711, shortage Dr 632 / Cr Inventory
-- `InventoryService::createCountSession()` — batch count session with lines
-- Cost layers created/consumed for adjustments
-- Migration 026: `inventory_count_sessions` + `inventory_count_lines`
-- API: `/api/physical-count/*`, Frontend: `/kho/kiem-ke`
-
-### P8: Impairment (TK 229) — 6/6 tests
-- `InventoryService::recordImpairment()` — Dr 632 — Cr 229 (contra-asset, credit balance)
-- `InventoryService::reverseImpairment()` — Dr 229 — Cr 632
-- Remaining amount tracking, reversal validation
-- Migration 027: `inventory_impairment` table
-- API: `/api/impairments`, Frontend: `/kho/du-phong-giam-gia`
-
-### P9: Promotional — 4/4 tests
-- `InventoryService::issuePromotional()` — Dr 641 (selling expense) — Cr Inventory
-- Stock decreases, cost layers consumed
-- API: `POST /api/promotional/issue`
-
-### P10: Periodic System — 7/7 tests
-- `InventoryService::closePeriodicInventory()` — COGS = total available - closing value
-- Periodic close clears cost layers, sets new closing stock
-- Full multi-period COGS accumulation
-- Migration 028: `periodic_inventory` table
-- API: `/api/periodic`, Frontend: `/kho/kiem-ke-dinh-ky`
-
----
-
-## All Tests (98 total — ALL PASS)
-
-| Test file | Tests | Status |
+| Phase | Service methods | Tests |
 |---|---|---|
-| `tests/ValuationServiceTest.php` | 4 | ✅ PASS |
-| `tests/JournalServiceTest.php` | 12 | ✅ PASS |
-| `tests/TrialBalanceTest.php` | 9 | ✅ PASS |
-| `tests/InventoryReceiptTest.php` | 9 | ✅ PASS |
-| `tests/InventoryIssueTest.php` | 6 | ✅ PASS |
-| `tests/InventoryTransferTest.php` | 11 | ✅ PASS |
-| `tests/InventoryTransitTest.php` | 10 | ✅ PASS |
-| `tests/InventoryConsignmentTest.php` | 10 | ✅ PASS |
-| `tests/InventoryPhysicalCountTest.php` | 10 | ✅ PASS |
-| `tests/InventoryImpairmentTest.php` | 6 | ✅ PASS |
-| `tests/InventoryPromotionalTest.php` | 4 | ✅ PASS |
-| `tests/InventoryPeriodicTest.php` | 7 | ✅ PASS |
-| **Total** | **98** | **✅ ALL PASS** |
+| P1: Valuation Engine | `calculateWeightedAverage()` | 4 |
+| P2: Goods Receipt | `receiveGoods()` | 9 |
+| P3: Goods Issue / COGS | `issueGoods()` | 6 |
+| P4: Warehouse Transfer | `transferGoods()` | 11 |
+| P5: In Transit (TK 151) | `recordInTransit()`, `receiveFromTransit()` | 10 |
+| P6: Consignment (TK 157) | `consignGoods()`, `sellConsigned()`, `returnConsigned()` | 10 |
+| P7: Physical Count | `adjustPhysicalCount()`, `createCountSession()` | 10 |
+| P8: Impairment (TK 229) | `recordImpairment()`, `reverseImpairment()` | 6 |
+| P9: Promotional | `issuePromotional()` | 4 |
+| P10: Periodic System | `closePeriodicInventory()` | 7 |
+| **Total** | | **77** |
+
+**Service:** `InventoryService` (500+ lines)
+**Inventory Account Mapping:** material/tool/other → 152, product → 155, merchandise → 156
+
+---
+
+## All Tests (290 total — ALL PASS)
+
+| Test file | Tests | Module |
+|---|---|---|
+| `tests/ValuationServiceTest.php` | 4 | Inventory P1 |
+| `tests/JournalServiceTest.php` | 12 | Journal Engine |
+| `tests/TrialBalanceTest.php` | 9 | Journal Engine |
+| `tests/PostingValidationTest.php` | 5 | Journal Engine |
+| `tests/InventoryReceiptTest.php` | 9 | Inventory P2 |
+| `tests/InventoryIssueTest.php` | 6 | Inventory P3 |
+| `tests/InventoryTransferTest.php` | 11 | Inventory P4 |
+| `tests/InventoryTransitTest.php` | 10 | Inventory P5 |
+| `tests/InventoryConsignmentTest.php` | 10 | Inventory P6 |
+| `tests/InventoryPhysicalCountTest.php` | 10 | Inventory P7 |
+| `tests/InventoryImpairmentTest.php` | 6 | Inventory P8 |
+| `tests/InventoryPromotionalTest.php` | 4 | Inventory P9 |
+| `tests/InventoryPeriodicTest.php` | 7 | Inventory P10 |
+| `tests/CashTest.php` | 11 | Cash & Bank |
+| `tests/CashBankTest.php` | 14 | Cash & Bank |
+| `tests/CashBookTest.php` | 9 | Cash & Bank |
+| `tests/CashTransitTest.php` | 10 | Cash & Bank |
+| `tests/PettyCashTest.php` | 15 | Cash & Bank |
+| `tests/BankReconciliationTest.php` | 24 | Cash & Bank |
+| `tests/CashFXTest.php` | 17 | Cash & Bank |
+| `tests/CashReportTest.php` | 14 | Cash & Bank |
+| `tests/COATest.php` | 47 | COA |
+| `tests/HelpersTest.php` | 42 | Helpers |
+| `tests/DBTest.php` | 18 | DB Helper |
+| **Total** | **321** | **24 test files** |
 
 ---
 
 ## API Endpoints
 
+### Cash & Bank (20+ endpoints)
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/api/coa` | List COA accounts |
-| POST | `/api/coa/seed` | Seed 72 standard accounts |
+| GET/POST | `/api/cash/receipts` | List/create cash receipts |
+| GET/POST | `/api/cash/payments` | List/create cash payments |
+| GET | `/api/cash/accounts` | Account picker |
+| GET | `/api/bank-transactions` | List bank transactions |
+| POST | `/api/bank/deposit` | Cash → bank deposit |
+| POST | `/api/bank/withdrawal` | Bank → cash withdrawal |
+| POST | `/api/bank/receipt` | Customer pays to bank |
+| POST | `/api/bank/payment` | Supplier paid from bank |
+| POST | `/api/bank/interest` | Bank interest income |
+| POST | `/api/bank/charge` | Bank service fee |
+| GET/POST | `/api/cash/transit` | List/record cash in transit |
+| POST | `/api/cash/transit/confirm` | Confirm bank credited |
+| POST | `/api/cash/transit/reverse` | Reverse transit (cheque dishonour) |
+| GET | `/api/cash-book` | Cash book (computed) |
+| GET/POST | `/api/petty-cash/funds` | List/create petty cash funds |
+| POST | `/api/petty-cash/disburse` | Disburse from petty cash |
+| POST | `/api/petty-cash/replenish` | Replenish petty cash |
+| POST | `/api/petty-cash/close` | Close petty cash fund |
+| GET | `/api/petty-cash/{id}/transactions` | Petty cash transaction history |
+
+### Bank Reconciliation (11 endpoints)
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/bank-reconciliation/sessions` | List sessions |
+| POST | `/api/bank-reconciliation/start` | Start new session |
+| GET | `/api/bank-reconciliation/{id}/session` | Session detail |
+| GET | `/api/bank-reconciliation/{id}/items` | All items (book + statement) |
+| GET | `/api/bank-reconciliation/{id}/unmatched` | Unmatched items |
+| POST | `/api/bank-reconciliation/{id}/statement-entry` | Add statement transaction |
+| POST | `/api/bank-reconciliation/{id}/auto-match` | Auto-match by amount/ref/date |
+| POST | `/api/bank-reconciliation/{id}/manual-match` | Manual match pair |
+| POST | `/api/bank-reconciliation/{id}/adjust` | Adjusting entry (bank charges) |
+| POST | `/api/bank-reconciliation/{id}/complete` | Complete reconciliation |
+| GET | `/api/bank-reconciliation/bank-accounts` | Bank accounts (TK 112) |
+
+### COA
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/coa` | List all accounts |
+| POST | `/api/coa/seed` | Seed Circular 99 standard COA |
+
+### Journal
+| Method | Path | Purpose |
+|---|---|---|
 | POST | `/api/journal` | Post journal entry |
 | GET | `/api/trial-balance` | Get trial balance |
-| GET/POST/PUT/DELETE | `/api/items`, `customers`, etc. | 16 master data CRUDs |
+
+### Inventory
+| Method | Path | Purpose |
+|---|---|---|
+| GET/POST/PUT/DELETE | `/api/items`, `/api/customers`, etc. | 16 master data CRUDs |
 | POST | `/api/transfers` | Warehouse transfer |
-| GET | `/api/inventory-transit` | List goods in transit |
-| POST | `/api/inventory-transit` | Record goods in transit |
+| GET/POST | `/api/inventory-transit` | Goods in transit |
 | POST | `/api/inventory-transit/receive` | Receive from transit |
-| GET | `/api/consignments` | List consignments |
-| POST | `/api/consignments` | Send goods on consignment |
-| POST | `/api/consignments/sell` | Sell consigned goods |
-| POST | `/api/consignments/return` | Return from consignment |
-| GET | `/api/physical-count/sessions` | List count sessions |
-| POST | `/api/physical-count/sessions` | Create count session |
-| POST | `/api/physical-count/adjust` | Adjust physical count |
-| GET | `/api/impairments` | List impairment provisions |
-| POST | `/api/impairments` | Record impairment |
+| GET/POST | `/api/consignments` | Consignment management |
+| POST | `/api/consignments/sell` | Sell consigned |
+| POST | `/api/consignments/return` | Return consigned |
+| GET/POST | `/api/physical-count/sessions` | Physical count |
+| POST | `/api/physical-count/adjust` | Adjust count |
+| GET/POST | `/api/impairments` | Impairment provision |
 | POST | `/api/impairments/reverse` | Reverse impairment |
 | POST | `/api/promotional/issue` | Issue promotional goods |
 | POST | `/api/periodic/close` | Close periodic inventory |
+
+### Audit Log
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/audit-log` | Paginated, filterable audit log |
+| GET | `/api/audit-log/{id}` | Single entry detail |
+
+### Auth
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/api/auth/login` | Login with username/password |
+| POST | `/api/auth/logout` | Destroy session |
+| GET | `/api/auth/me` | Current user info + permissions |
+
+### User & Role Management
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/users` | User list with roles |
+| POST | `/api/users` | Create user |
+| PUT | `/api/users/{id}` | Update user |
+| DELETE | `/api/users/{id}` | Deactivate user |
+| GET | `/api/roles` | List roles |
+| POST | `/api/roles` | Create role |
+| PUT | `/api/roles/{id}` | Update role |
+| DELETE | `/api/roles/{id}` | Delete role (non-system) |
+| GET | `/api/roles/{id}/permissions` | Get permission matrix |
+| PUT | `/api/roles/{id}/permissions` | Update permission matrix |
+
+### Frontend Views
+| Path | Page |
+|---|---|
+| `/` | Dashboard |
+| `/dang-nhap` | Login |
+| `/danh-muc/*` | 16 master data CRUD pages |
+| `/thu/quy-tien-mat` | Cash receipt (Phiếu thu) |
+| `/chi/quy-tien-mat` | Cash payment (Phiếu chi) |
+| `/thu/giao-bao-co` | Bank credit (Giấy báo Có) |
+| `/chi/giao-bao-no` | Bank debit (Giấy báo Nợ) |
+| `/thu/tien-dang-chuyen` | Cash in transit |
+| `/thu/so-quy-tien-mat` | Cash book (Sổ quỹ) |
+| `/thu/tam-ung` | Petty cash (Tạm ứng) |
+| `/thu/doi-chieu-ngan-hang` | Bank reconciliation |
+| `/kho/*` | Inventory views (receipt, issue, transfer, count, etc.) |
+| `/he-thong/nhat-ky-hoat-dong` | Audit log |
+| `/he-thong/nguoi-dung` | User management |
+| `/he-thong/vai-tro` | Role & permission management |
+
+---
+
+## Database Migrations (35 total)
+
+| # | File | Purpose |
+|---|---|---|
+| 001-019 | — | Master data tables + COA seed |
+| 020-021 | — | Account alterations, valuation method |
+| 022-028 | — | Inventory module (cost layers, transit, consignment, count, impairment, periodic) |
+| 029 | `add_is_control_to_accounts` | Control account flag |
+| 030 | `create_cash_transit_table` | Cash in transit tracking |
+| 031 | `create_petty_cash_tables` | Petty cash funds + transactions |
+| 032 | `create_bank_reconciliation_tables` | Reconciliation sessions + items |
+| 033 | `create_audit_log_table` | Audit trail |
+| 034 | `create_voucher_sequences_table` | Document number sequences |
+| 035 | `create_rbac_tables` | Users, roles, permissions |
+| 036 | `create_fc_transactions_table` | FC transaction tracking |
 
 ---
 
@@ -223,16 +333,16 @@ for f in tests/*.php; do php "$f"; done
 
 | File | Purpose |
 |---|---|
-| `public/index.php` | Entry point + autoloader |
+| `public/index.php` | Entry point + autoloader + session auth guard |
 | `config/services.php` | DI container |
-| `config/routes.php` | All routes (50+ endpoints) |
+| `config/routes.php` | All routes (100+ endpoints) |
 | `config/database.php` | DB credentials (dev/123456) |
 | `src/.../Service/JournalService.php` | Double-entry engine |
+| `src/.../Service/CashService.php` | Cash & bank operations (435 lines) |
 | `src/.../Service/InventoryService.php` | All 10 inventory phases (500+ lines) |
-| `src/.../Service/ValuationService.php` | Weighted average calculator |
-| `src/.../Model/Account.php` | COA account with balance |
-| `src/.../Model/Transaction.php` | Journal entry |
-| `src/.../Model/LedgerEntry.php` | Journal line |
-| `src/.../Repository/PDOAccountRepository.php` | Account CRUD + balance |
+| `src/.../Service/BankReconciliationService.php` | Reconciliation matching engine |
+| `src/.../Infrastructure/Helpers.php` | Utility functions (auth, format, etc.) |
+| `src/.../Infrastructure/Database/DB.php` | DB transaction/query helpers |
+| `src/.../Infrastructure/Database/AuditLogger.php` | Audit trail logger |
 | `database/migrate.php` | Migration runner |
-| `database/migrations/*.php` | 28 migration files |
+| `database/migrations/*.php` | 36 migration files |
