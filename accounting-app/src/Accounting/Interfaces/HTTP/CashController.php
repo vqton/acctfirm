@@ -421,6 +421,33 @@ class CashController
         echo json_encode($this->cash->getPettyCashTransactions($fundId));
     }
 
+    // ── FX ──
+
+    public function fcBalances(): void
+    {
+        Helpers::jsonOk($this->cash->getFCBalances());
+    }
+
+    public function fcRevalue(): void
+    {
+        $data = json_decode(file_get_contents('php://input'), true);
+        if (!$data || !isset($data['account_code'], $data['currency_code'], $data['closing_rate'])) {
+            Helpers::jsonError('account_code, currency_code, closing_rate required');
+            return;
+        }
+        try {
+            $result = $this->cash->revalueFC(
+                $data['account_code'], $data['currency_code'],
+                (float)$data['closing_rate'],
+                $data['as_of_date'] ?? date('Y-m-d'),
+                $data['created_by'] ?? 'system'
+            );
+            Helpers::jsonOk($result);
+        } catch (\InvalidArgumentException $e) {
+            Helpers::jsonError($e->getMessage());
+        }
+    }
+
     // ── Account picker ──
 
     public function accounts(): void

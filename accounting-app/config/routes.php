@@ -276,6 +276,15 @@ function defineRoutes(Router $router): void
     $router->get('/api/audit-log', function() { (new \Accounting\Interfaces\HTTP\AuditLogController($GLOBALS['container']['pdo']))->list(); });
     $router->get('/api/audit-log/{id}', function($id) { (new \Accounting\Interfaces\HTTP\AuditLogController($GLOBALS['container']['pdo']))->get($id); });
 
+    // FX
+    $router->get('/thu/danh-gia-lai-ngoai-te', function() { require __DIR__ . '/../public/views/fx_revaluation.php'; });
+    $router->get('/api/fx/balances', function() { (new \Accounting\Interfaces\HTTP\CashController(
+        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
+    ))->fcBalances(); });
+    $router->post('/api/fx/revalue', function() { (new \Accounting\Interfaces\HTTP\CashController(
+        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
+    ))->fcRevalue(); });
+
     // Cash Reports
     $router->get('/thu/bao-cao-von-bang-tien', function() { require __DIR__ . '/../public/views/cash_reports.php'; });
     $router->get('/api/cash-reports/position', function() { (new \Accounting\Interfaces\HTTP\CashReportController(

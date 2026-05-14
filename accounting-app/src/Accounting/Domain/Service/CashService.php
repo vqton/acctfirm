@@ -432,4 +432,128 @@ class CashService
         $row = $stmt->fetch(\PDO::FETCH_ASSOC);
         return $row ? $row : null;
     }
+
+    // ── Foreign Currency ──
+
+    public function recordReceiptFC(float $fcAmount, string $creditAccountCode, string $currencyCode, float $exchangeRate, string $description, string $reference, string $createdBy): array
+    {
+        if ($fcAmount <= 0) throw new \InvalidArgumentException('Amount must be positive');
+        if ($exchangeRate <= 0) throw new \InvalidArgumentException('Exchange rate must be positive');
+
+        $vndAmount = round($fcAmount * $exchangeRate);
+
+        $creditAccount = $this->accountRepo->findByCode($creditAccountCode);
+        if (!$creditAccount) throw new \InvalidArgumentException("Account not found: {$creditAccountCode}");
+
+        $journal = new JournalService($this->accountRepo, $this->txnRepo);
+        $txn = $journal->postEntry("FC receipt: {$description}", $reference, [
+            ['account_code' => '112', 'amount' => $vndAmount, 'is_debit' => true],
+            ['account_code' => $creditAccountCode, 'amount' => $vndAmount, 'is_debit' => false],
+        ], $createdBy);
+
+        $this->recordFCTransaction($txn->getId(), '112', $currencyCode, $fcAmount, $exchangeRate, $vndAmount, 'receipt', $description);
+
+        return ['transaction_id' => $txn->getId(), 'fc_amount' => $fcAmount, 'vnd_amount' => $vndAmount, 'rate' => $exchangeRate, 'currency' => $currencyCode, 'type' => 'fc_receipt'];
+    }
+
+    public function recordPaymentFC(float $fcAmount, string $debitAccountCode, string $currencyCode, float $exchangeRate, string $description, string $reference, string $createdBy): array
+    {
+        if ($fcAmount <= 0) throw new \InvalidArgumentException('Amount must be positive');
+        if ($exchangeRate <= 0) throw new \InvalidArgumentException('Exchange rate must be positive');
+
+        $vndAmount = round($fcAmount * $exchangeRate);
+
+        $bank = $this->accountRepo->findByCode('112');
+        if ($bank && $bank->getBalance() < $vndAmount) {
+            throw new \InvalidArgumentException("Insufficient bank balance: have {$bank->getBalance()}, need {$vndAmount}");
+        }
+
+        $debitAccount = $this->accountRepo->findByCode($debitAccountCode);
+        if (!$debitAccount) throw new \InvalidArgumentException("Account not found: {$debitAccountCode}");
+
+        $journal = new JournalService($this->accountRepo, $this->txnRepo);
+        $txn = $journal->postEntry("FC payment: {$description}", $reference, [
+            ['account_code' => $debitAccountCode, 'amount' => $vndAmount, 'is_debit' => true],
+            ['account_code' => '112', 'amount' => $vndAmount, 'is_debit' => false],
+        ], $createdBy);
+
+        $this->recordFCTransaction($txn->getId(), '112', $currencyCode, -$fcAmount, $exchangeRate, -$vndAmount, 'payment', $description);
+
+        return ['transaction_id' => $txn->getId(), 'fc_amount' => -$fcAmount, 'vnd_amount' => $vndAmount, 'rate' => $exchangeRate, 'currency' => $currencyCode, 'type' => 'fc_payment'];
+    }
+
+    public function getFCBalances(): array
+    {
+        if (!$this->pdo) return [];
+        $rows = $this->pdo->query(
+            "SELECT account_code, currency_code as currency, 
+                    SUM(fc_amount) as fc_balance,
+                    SUM(vnd_amount) as vnd_balance,
+                    COUNT(*) as transaction_count
+             FROM fc_transactions 
+             GROUP BY account_code, currency_code
+             ORDER BY currency_code"
+        )->fetchAll(\PDO::FETCH_ASSOC);
+
+        return array_map(fn($r) => [
+            'account' => $r['account_code'],
+            'currency' => $r['currency'],
+            'fc_balance' => (float)$r['fc_balance'],
+            'vnd_balance' => (float)$r['vnd_balance'],
+            'avg_rate' => (float)$r['fc_balance'] != 0 
+                ? round((float)$r['vnd_balance'] / (float)$r['fc_balance'], 2) 
+                : 0,
+            'transaction_count' => (int)$r['transaction_count'],
+        ], $rows);
+    }
+
+    public function revalueFC(string $accountCode, string $currencyCode, float $closingRate, string $asOfDate, string $createdBy): array
+    {
+        $balances = $this->getFCBalances();
+        $entry = current(array_filter($balances, fn($b) => $b['account'] === $accountCode && $b['currency'] === $currencyCode));
+
+        if (!$entry || abs($entry['fc_balance']) < 0.01) {
+            return ['transaction_id' => null, 'gain_loss' => 0, 'message' => 'No FC balance to revalue'];
+        }
+
+        $bookRate = $entry['avg_rate'];
+        $fcBalance = $entry['fc_balance'];
+        $currentVnd = $entry['vnd_balance'];
+        $revaluedVnd = round($fcBalance * $closingRate);
+        $gainLoss = $revaluedVnd - $currentVnd;
+
+        if (abs($gainLoss) < 1) {
+            return ['transaction_id' => null, 'gain_loss' => 0, 'message' => 'No gain/loss'];
+        }
+
+        $journal = new JournalService($this->accountRepo, $this->txnRepo);
+
+        if ($gainLoss > 0) {
+            // Unrealized gain: Dr 112 — Cr 413
+            $txn = $journal->postEntry("FC revaluation: {$currencyCode} gain", "REV-{$currencyCode}-{$asOfDate}", [
+                ['account_code' => $accountCode, 'amount' => $gainLoss, 'is_debit' => true],
+                ['account_code' => '413', 'amount' => $gainLoss, 'is_debit' => false],
+            ], $createdBy);
+        } else {
+            // Unrealized loss: Dr 413 — Cr 112
+            $loss = abs($gainLoss);
+            $txn = $journal->postEntry("FC revaluation: {$currencyCode} loss", "REV-{$currencyCode}-{$asOfDate}", [
+                ['account_code' => '413', 'amount' => $loss, 'is_debit' => true],
+                ['account_code' => $accountCode, 'amount' => $loss, 'is_debit' => false],
+            ], $createdBy);
+        }
+
+        $this->recordFCTransaction($txn->getId(), $accountCode, $currencyCode, 0, $closingRate, $gainLoss, 'revaluation', "Period-end FX revaluation adj");
+
+        return ['transaction_id' => $txn->getId(), 'gain_loss' => $gainLoss, 'book_rate' => $bookRate, 'closing_rate' => $closingRate, 'fc_balance' => $fcBalance];
+    }
+
+    private function recordFCTransaction(string $transactionId, string $accountCode, string $currencyCode, float $fcAmount, float $exchangeRate, float $vndAmount, string $type, string $description): void
+    {
+        if (!$this->pdo) return;
+        $this->pdo->prepare(
+            'INSERT INTO fc_transactions (transaction_id, account_code, currency_code, fc_amount, exchange_rate, vnd_amount, type, description)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+        )->execute([$transactionId, $accountCode, $currencyCode, $fcAmount, $exchangeRate, $vndAmount, $type, $description]);
+    }
 }
