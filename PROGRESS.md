@@ -194,7 +194,8 @@ CashService → JournalService → Account balance (all cash/bank operations)
 | `tests/PeriodTest.php` | 18 | Period Engine |
 | `tests/FsTest.php` | 18 | Financial Statements |
 | `tests/ApTest.php` | 22 | Accounts Payable |
-| **Total** | **379** | **27 test files** |
+| `tests/ArTest.php` | 19 | Accounts Receivable |
+| **Total** | **398** | **28 test files** |
 
 ---
 
