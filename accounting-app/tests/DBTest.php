@@ -64,5 +64,29 @@ $id = DB::insertGetId(
 assertTrue($id > 0, 'insertGetId returns auto-increment ID');
 DB::execute('DELETE FROM audit_log WHERE id = ?', [$id]);
 
+echo "\n=== fetch Tests ===\n";
+$row = DB::fetch('SELECT code, name FROM accounts WHERE code = ?', ['111']);
+assertTrue($row !== null, 'fetch returns row');
+assertEq('111', $row['code'], 'fetch correct code');
+assertEq('Tiền mặt', $row['name'], 'fetch correct name');
+
+$notFound = DB::fetch('SELECT * FROM accounts WHERE code = ?', ['NONEXIST']);
+assertTrue($notFound === null, 'fetch returns null for missing');
+
+echo "\n=== fetchColumn Tests ===\n";
+$count = DB::fetchColumn('SELECT COUNT(*) FROM accounts');
+assertTrue($count > 0, 'fetchColumn returns count');
+
+$name = DB::fetchColumn('SELECT name FROM accounts WHERE code = ?', ['111']);
+assertEq('Tiền mặt', $name, 'fetchColumn returns single value');
+
+$missing = DB::fetchColumn('SELECT code FROM accounts WHERE code = ?', ['NONEXIST']);
+assertTrue($missing === null, 'fetchColumn returns null for missing');
+
+echo "\n=== tableExists Tests ===\n";
+assertTrue(DB::tableExists('accounts'), 'tableExists accounts');
+assertTrue(DB::tableExists('audit_log'), 'tableExists audit_log');
+assertTrue(!DB::tableExists('nonexistent_table_xyz'), 'tableExists false for missing');
+
 echo "\n=== Results: {$total} tests, {$failed} failed ===\n";
 exit($failed > 0 ? 1 : 0);

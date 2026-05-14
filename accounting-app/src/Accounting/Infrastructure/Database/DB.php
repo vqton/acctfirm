@@ -66,4 +66,26 @@ class DB
         $placeholders = implode(',', array_fill(0, count($values), '?'));
         return "{$field} IN ({$placeholders})";
     }
+
+    public static function fetch(string $sql, array $params = []): ?array
+    {
+        $stmt = self::pdo()->prepare($sql);
+        $stmt->execute($params);
+        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+        return $row ?: null;
+    }
+
+    public static function fetchColumn(string $sql, array $params = []): mixed
+    {
+        $stmt = self::pdo()->prepare($sql);
+        $stmt->execute($params);
+        $val = $stmt->fetchColumn();
+        return $val !== false ? $val : null;
+    }
+
+    public static function tableExists(string $table): bool
+    {
+        $stmt = self::pdo()->query("SHOW TABLES LIKE " . self::pdo()->quote($table));
+        return (bool)$stmt->fetch();
+    }
 }
