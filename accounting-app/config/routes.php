@@ -271,6 +271,30 @@ function defineRoutes(Router $router): void
     $router->get('/he-thong/nguoi-dung', function() { require __DIR__ . '/../public/views/users.php'; });
     $router->get('/he-thong/vai-tro', function() { require __DIR__ . '/../public/views/roles.php'; });
 
+    // Period Management
+    $router->get('/he-thong/quan-ly-ky', function() { require __DIR__ . '/../public/views/periods.php'; });
+    $router->get('/api/periods', function() { (new \Accounting\Interfaces\HTTP\PeriodController(
+        $GLOBALS['container']['periodService']
+    ))->list(); });
+    $router->get('/api/periods/{id}', function($id) { (new \Accounting\Interfaces\HTTP\PeriodController(
+        $GLOBALS['container']['periodService']
+    ))->get($id); });
+    $router->post('/api/periods', function() { (new \Accounting\Interfaces\HTTP\PeriodController(
+        $GLOBALS['container']['periodService']
+    ))->create(); });
+    $router->post('/api/periods/{id}/close', function($id) { (new \Accounting\Interfaces\HTTP\PeriodController(
+        $GLOBALS['container']['periodService']
+    ))->close($id); });
+    $router->post('/api/periods/{id}/reopen', function($id) { (new \Accounting\Interfaces\HTTP\PeriodController(
+        $GLOBALS['container']['periodService']
+    ))->reOpen($id); });
+    $router->get('/api/periods/{id}/can-close', function($id) { (new \Accounting\Interfaces\HTTP\PeriodController(
+        $GLOBALS['container']['periodService']
+    ))->canClose($id); });
+    $router->post('/api/periods/{id}/execute-closing', function($id) { (new \Accounting\Interfaces\HTTP\PeriodController(
+        $GLOBALS['container']['periodService']
+    ))->executeClosing($id); });
+
     // Audit Log
     $router->get('/he-thong/nhat-ky-hoat-dong', function() { require __DIR__ . '/../public/views/audit_log.php'; });
     $router->get('/api/audit-log', function() { (new \Accounting\Interfaces\HTTP\AuditLogController($GLOBALS['container']['pdo']))->list(); });

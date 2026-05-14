@@ -31,6 +31,10 @@ class JournalService
             throw new \InvalidArgumentException('Journal entry must have at least 2 lines');
         }
 
+        if (!PeriodService::isPeriodOpen(date('Y-m-d'))) {
+            throw new \RuntimeException('Cannot post: current date is in a closed period');
+        }
+
         // Phase 1: Validate all lines + compute totals (NO balance changes yet)
         $totalDr = 0.0;
         $totalCr = 0.0;

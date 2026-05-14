@@ -111,6 +111,25 @@ CashService → JournalService → Account balance (all cash/bank operations)
 
 ---
 
+## Period Engine (Law on Accounting 2015 — Article 12, 26.6)
+
+| Service | UC | Tests |
+|---|---|---|
+| `PeriodService` | UC-001–004 | PeriodTest (18) |
+
+**Features:**
+- Period CRUD (create monthly/quarterly/annual periods)
+- Period open/close lifecycle with status tracking
+- Closing entries: Dr Revenue → Cr P&L, Dr P&L → Cr Expense, P&L → Retained Earnings
+- Period guard in JournalService (rejects posting to closed periods)
+- Re-open with audit trail and re-open counter
+- `isPeriodOpen()` static check consumed by JournalService
+- View at `/he-thong/quan-ly-ky`
+
+**Migration:** `037_create_accounting_periods_table.php`
+
+---
+
 ## Journal Engine
 
 | Service | File | Tests |
@@ -172,7 +191,8 @@ CashService → JournalService → Account balance (all cash/bank operations)
 | `tests/COATest.php` | 47 | COA |
 | `tests/HelpersTest.php` | 42 | Helpers |
 | `tests/DBTest.php` | 18 | DB Helper |
-| **Total** | **321** | **24 test files** |
+| `tests/PeriodTest.php` | 18 | Period Engine |
+| **Total** | **339** | **25 test files** |
 
 ---
 
@@ -308,6 +328,7 @@ CashService → JournalService → Account balance (all cash/bank operations)
 | 034 | `create_voucher_sequences_table` | Document number sequences |
 | 035 | `create_rbac_tables` | Users, roles, permissions |
 | 036 | `create_fc_transactions_table` | FC transaction tracking |
+| 037 | `create_accounting_periods_table` | Period management |
 
 ---
 
@@ -345,4 +366,4 @@ for f in tests/*.php; do php "$f"; done
 | `src/.../Infrastructure/Database/DB.php` | DB transaction/query helpers |
 | `src/.../Infrastructure/Database/AuditLogger.php` | Audit trail logger |
 | `database/migrate.php` | Migration runner |
-| `database/migrations/*.php` | 36 migration files |
+| `database/migrations/*.php` | 37 migration files |
