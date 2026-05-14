@@ -3,6 +3,7 @@ namespace Accounting\Interfaces\HTTP;
 
 use Accounting\Domain\Model\Account;
 use Accounting\Domain\Repository\AccountRepositoryInterface;
+use Accounting\Infrastructure\Database\AuditLogger;
 
 class AccountController
 {
@@ -34,6 +35,7 @@ class AccountController
             $data['account_class'] ?? null, $data['description'] ?? null
         );
         $this->repo->save($x);
+        AuditLogger::log('account.create', 'account', $x->getId(), null, $x->toArray(), $_SERVER['PHP_AUTH_USER'] ?? 'system');
         http_response_code(201);
         echo json_encode($x->toArray());
     }
@@ -44,6 +46,7 @@ class AccountController
         if (!$x) { http_response_code(404); echo json_encode(['error' => 'Not found']); return; }
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data) { http_response_code(400); echo json_encode(['error' => 'Invalid data']); return; }
+        $old = $x->toArray();
         if (isset($data['code'])) $x->setCode($data['code']);
         if (isset($data['name'])) $x->setName($data['name']);
         if (isset($data['type'])) $x->setType($data['type']);
@@ -53,13 +56,17 @@ class AccountController
         if (isset($data['description'])) $x->setDescription($data['description']);
         if (isset($data['status'])) $x->setStatus((bool)$data['status']);
         $this->repo->save($x);
+        AuditLogger::log('account.update', 'account', $id, $old, $x->toArray(), $_SERVER['PHP_AUTH_USER'] ?? 'system');
         echo json_encode($x->toArray());
     }
 
     public function delete(string $id): void
     {
-        if (!$this->repo->findById($id)) { http_response_code(404); echo json_encode(['error' => 'Not found']); return; }
+        $x = $this->repo->findById($id);
+        if (!$x) { http_response_code(404); echo json_encode(['error' => 'Not found']); return; }
+        $old = $x->toArray();
         $this->repo->delete($id);
+        AuditLogger::log('account.delete', 'account', $id, $old, null, $_SERVER['PHP_AUTH_USER'] ?? 'system');
         echo json_encode(['message' => 'Deleted']);
     }
 
@@ -269,6 +276,7 @@ class AccountController
             if ($a && !$a->isControl()) { $a->setControl(true); $this->repo->save($a); }
         }
 
+        AuditLogger::log('account.seed', 'account', null, null, ['new' => $count, 'updated' => $updateCount], $_SERVER['PHP_AUTH_USER'] ?? 'system');
         echo json_encode(['message' => 'Seeded', 'new' => $count, 'updated' => $updateCount]);
     }
 }

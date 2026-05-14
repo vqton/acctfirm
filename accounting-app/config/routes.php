@@ -246,6 +246,47 @@ function defineRoutes(Router $router): void
         $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
     ))->pettyTransactions($id); });
 
+    // Audit Log
+    $router->get('/he-thong/nhat-ky-hoat-dong', function() { require __DIR__ . '/../public/views/audit_log.php'; });
+    $router->get('/api/audit-log', function() { (new \Accounting\Interfaces\HTTP\AuditLogController($GLOBALS['container']['pdo']))->list(); });
+    $router->get('/api/audit-log/{id}', function($id) { (new \Accounting\Interfaces\HTTP\AuditLogController($GLOBALS['container']['pdo']))->get($id); });
+
+    // Bank Reconciliation
+    $router->get('/thu/doi-chieu-ngan-hang', function() { require __DIR__ . '/../public/views/bank_reconciliation.php'; });
+    $router->get('/api/bank-reconciliation/sessions', function() { (new \Accounting\Interfaces\HTTP\BankReconciliationController(
+        $GLOBALS['container']['bankReconciliationService'], $GLOBALS['container']['accountRepository']
+    ))->sessions(); });
+    $router->post('/api/bank-reconciliation/start', function() { (new \Accounting\Interfaces\HTTP\BankReconciliationController(
+        $GLOBALS['container']['bankReconciliationService'], $GLOBALS['container']['accountRepository']
+    ))->startSession(); });
+    $router->get('/api/bank-reconciliation/{id}/session', function($id) { (new \Accounting\Interfaces\HTTP\BankReconciliationController(
+        $GLOBALS['container']['bankReconciliationService'], $GLOBALS['container']['accountRepository']
+    ))->getSession($id); });
+    $router->get('/api/bank-reconciliation/{id}/items', function($id) { (new \Accounting\Interfaces\HTTP\BankReconciliationController(
+        $GLOBALS['container']['bankReconciliationService'], $GLOBALS['container']['accountRepository']
+    ))->items($id); });
+    $router->get('/api/bank-reconciliation/{id}/unmatched', function($id) { (new \Accounting\Interfaces\HTTP\BankReconciliationController(
+        $GLOBALS['container']['bankReconciliationService'], $GLOBALS['container']['accountRepository']
+    ))->unmatched($id); });
+    $router->post('/api/bank-reconciliation/{id}/statement-entry', function($id) { (new \Accounting\Interfaces\HTTP\BankReconciliationController(
+        $GLOBALS['container']['bankReconciliationService'], $GLOBALS['container']['accountRepository']
+    ))->addStatementEntry($id); });
+    $router->post('/api/bank-reconciliation/{id}/auto-match', function($id) { (new \Accounting\Interfaces\HTTP\BankReconciliationController(
+        $GLOBALS['container']['bankReconciliationService'], $GLOBALS['container']['accountRepository']
+    ))->autoMatch($id); });
+    $router->post('/api/bank-reconciliation/{id}/manual-match', function($id) { (new \Accounting\Interfaces\HTTP\BankReconciliationController(
+        $GLOBALS['container']['bankReconciliationService'], $GLOBALS['container']['accountRepository']
+    ))->manualMatch($id); });
+    $router->post('/api/bank-reconciliation/{id}/adjust', function($id) { (new \Accounting\Interfaces\HTTP\BankReconciliationController(
+        $GLOBALS['container']['bankReconciliationService'], $GLOBALS['container']['accountRepository']
+    ))->addAdjustingEntry($id); });
+    $router->post('/api/bank-reconciliation/{id}/complete', function($id) { (new \Accounting\Interfaces\HTTP\BankReconciliationController(
+        $GLOBALS['container']['bankReconciliationService'], $GLOBALS['container']['accountRepository']
+    ))->complete($id); });
+    $router->get('/api/bank-reconciliation/bank-accounts', function() { (new \Accounting\Interfaces\HTTP\BankReconciliationController(
+        $GLOBALS['container']['bankReconciliationService'], $GLOBALS['container']['accountRepository']
+    ))->bankAccounts(); });
+
     // Physical Count
     $router->get('/kho/kiem-ke', function() { require __DIR__ . '/../public/views/physical_count.php'; });
     $router->get('/api/physical-count/sessions', function() { (new \Accounting\Interfaces\HTTP\PhysicalCountController(

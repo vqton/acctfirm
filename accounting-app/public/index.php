@@ -34,6 +34,8 @@ spl_autoload_register(function ($class) {
     if (file_exists($file)) require $file;
 });
 
+$GLOBALS['request_id'] = uniqid('req_', true);
+
 header('Content-Type: application/json; charset=utf-8');
 
 require __DIR__ . '/../config/services.php';

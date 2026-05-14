@@ -95,7 +95,7 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
         <div class="nav-section">Vốn bằng tiền</div>
         <div class="nav-item">
             <a class="nav-link-s" data-bs-toggle="collapse" href="#menuCash"><i class="bi bi-cash"></i> Vốn bằng tiền <i class="bi bi-chevron-right ms-auto" style="width:auto;font-size:10px;"></i></a>
-            <div class="collapse sub-menu<?= isActive(['bank_accounts','cash_receipts','cash_payments','bank_credit','bank_debit','cash_transit','cash_book','petty_cash'],$activeMenu)?' show':'' ?>" id="menuCash">
+            <div class="collapse sub-menu<?= isActive(['bank_accounts','cash_receipts','cash_payments','bank_credit','bank_debit','cash_transit','cash_book','petty_cash','bank_reconciliation'],$activeMenu)?' show':'' ?>" id="menuCash">
                 <a href="/danh-muc/tai-khoan-ngan-hang" class="nav-link-s<?= isActive('bank_accounts',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> TK ngân hàng</a>
                 <a href="/thu/quy-tien-mat" class="nav-link-s<?= isActive('cash_receipts',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Phiếu thu</a>
                 <a href="/chi/quy-tien-mat" class="nav-link-s<?= isActive('cash_payments',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Phiếu chi</a>
@@ -105,7 +105,7 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
                 <a href="/thu/so-quy-tien-mat" class="nav-link-s<?= isActive('cash_book',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Sổ quỹ tiền mặt</a>
                 <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Chuyển tiền nội bộ</a>
                 <a href="/thu/tam-ung" class="nav-link-s<?= isActive('petty_cash',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Tạm ứng</a>
-                <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Đối chiếu NH</a>
+                <a href="/thu/doi-chieu-ngan-hang" class="nav-link-s<?= isActive('bank_reconciliation',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Đối chiếu NH</a>
             </div>
         </div>
 
@@ -232,9 +232,9 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
 
         <div class="nav-section">Hệ thống</div>
         <div class="nav-item"><a class="nav-link-s" data-bs-toggle="collapse" href="#menuSys"><i class="bi bi-gear"></i> Hệ thống <i class="bi bi-chevron-right ms-auto" style="width:auto;font-size:10px;"></i></a>
-        <div class="collapse sub-menu" id="menuSys">
+        <div class="collapse sub-menu<?= isActive('audit_log',$activeMenu)?' show':'' ?>" id="menuSys">
             <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Người dùng & Phân quyền</a>
-            <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Nhật ký hệ thống</a>
+            <a href="/he-thong/nhat-ky-hoat-dong" class="nav-link-s<?= isActive('audit_log',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Nhật ký hoạt động</a>
             <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Cấu hình</a>
             <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Quản lý kỳ</a>
             <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Sao lưu & Phục hồi</a>

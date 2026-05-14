@@ -5,6 +5,7 @@ use Accounting\Domain\Model\LedgerEntry;
 use Accounting\Domain\Model\Transaction;
 use Accounting\Domain\Repository\AccountRepositoryInterface;
 use Accounting\Domain\Repository\TransactionRepositoryInterface;
+use Accounting\Infrastructure\Database\AuditLogger;
 
 class JournalService
 {
@@ -96,6 +97,18 @@ class JournalService
         }
         $txn->post($createdBy);
         $this->txnRepo->save($txn);
+
+        AuditLogger::log('journal.post', 'transaction', $txn->getId(), null, [
+            'reference' => $reference,
+            'description' => $description,
+            'total_dr' => $totalDr,
+            'total_cr' => $totalCr,
+            'lines' => array_map(fn($l) => [
+                'account_code' => $l['account']->getCode(),
+                'amount' => $l['amount'],
+                'is_debit' => $l['is_debit'],
+            ], $validated),
+        ], $createdBy);
 
         return $txn;
     }
