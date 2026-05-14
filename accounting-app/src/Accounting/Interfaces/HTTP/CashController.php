@@ -20,6 +20,7 @@ class CashController
 
     public function receipts(): void
     {
+        Helpers::requirePermission('cash', 'view');
         $pdo = $this->getPdo();
         $stmt = $pdo->query("SELECT t.id, t.description, t.reference, t.status, t.created_at, t.created_by
             FROM transactions t WHERE t.description LIKE 'Cash receipt:%'
@@ -51,6 +52,7 @@ class CashController
 
     public function payments(): void
     {
+        Helpers::requirePermission('cash', 'view');
         $pdo = $this->getPdo();
         $stmt = $pdo->query("SELECT t.id, t.description, t.reference, t.status, t.created_at, t.created_by
             FROM transactions t WHERE t.description LIKE 'Cash payment:%'
