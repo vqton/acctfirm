@@ -15,15 +15,10 @@
 <form id="creditForm">
 <div class="modal-header"><h5 class="modal-title">Giấy báo Có</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
 <div class="modal-body">
-    <div class="mb-3"><label>Loại giao dịch</label>
-        <select class="form-select" id="txType">
-            <option value="receipt">Khách hàng thanh toán</option>
-            <option value="deposit">Nộp tiền vào tài khoản</option>
-            <option value="interest">Lãi ngân hàng</option>
-        </select>
-    </div>
+    <div class="mb-3"><label>Loại giao dịch</label><select class="form-select" id="txType"><option value="">Chọn loại...</option></select></div>
     <div class="mb-3"><label>Số tiền</label><input type="number" class="form-control" id="amount" step="1000" min="1" required></div>
-    <div class="mb-3" id="accountField"><label>Ghi Có TK</label><select class="form-select" id="accountCode"></select></div>
+    <div class="row g-2"><div class="col-6 mb-2"><label>Ghi Có TK</label><select class="form-select" id="accountCode"></select></div>
+    <div class="col-6 mb-2" id="vatField"><label>Thuế GTGT</label><div class="input-group"><input type="number" class="form-control" id="vatAmount" step="100" min="0" placeholder="0"><span class="input-group-text">VND</span></div></div></div>
     <div class="mb-3"><label>Diễn giải</label><input type="text" class="form-control" id="description"></div>
     <div class="mb-3"><label>Số chứng từ</label><input type="text" class="form-control" id="reference"></div>
 </div>
@@ -49,8 +44,57 @@ $('#txType').change(function(){
     var v=$(this).val();
     if(v==='interest'){$('#accountField').hide();}else{$('#accountField').show();}
 });
-$.get('/api/cash/accounts?for=receipt', function(accounts) {
-    accounts.forEach(function(a){if(a.code!=='111'&&a.code!=='112')$('#accountCode').append('<option value="'+esc(a.code)+'">'+esc(a.code)+' - '+esc(a.name)+' ('+parseFloat(a.balance).toLocaleString()+' VND)</option>');});
+var accounts = [];
+var templates = [];
+
+$.get('/api/cash/accounts?for=receipt', function(a) { accounts = a; });
+
+$.get('/api/cash/templates?type=receipt', function(t) {
+    templates = t;
+    // Override default_account to use 112-compatible accounts for bank
+    var bankTemplates = [
+        {id:'ar_payment',name:'Khách hàng thanh toán',default_account:'131',has_vat:false},
+        {id:'sales',name:'Thu tiền bán hàng',default_account:'511',has_vat:true,vat_rate:10},
+        {id:'finance_income',name:'Thu nhập tài chính',default_account:'515',has_vat:false},
+        {id:'other_income',name:'Thu nhập khác',default_account:'711',has_vat:false},
+        {id:'deposit_from_cash',name:'Nộp tiền từ quỹ',default_account:'111',has_vat:false},
+        {id:'capital',name:'Nhận vốn góp',default_account:'4111',has_vat:false},
+    ];
+    templates = bankTemplates;
+    bankTemplates.forEach(function(tm) { $('#txType').append('<option value="'+tm.id+'">'+esc(tm.name)+'</option>'); });
+});
+
+$('#txType').change(function() {
+    var t = templates.find(function(tm) { return tm.id === $(this).val(); }.bind(this));
+    if (!t) { $('#accountCode').val(''); $('#vatField').hide(); return; }
+    $('#accountCode').val(t.default_account);
+    if (t.has_vat) { $('#vatField').show(); calcVat(t.vat_rate); }
+    else { $('#vatField').hide(); $('#vatAmount').val(0); }
+});
+
+function calcVat(rate) {
+    var amt = parseFloat($('#amount').val()) || 0;
+    var r = rate || 10;
+    $('#vatAmount').val(Math.round(amt * r / (100 + r)));
+}
+
+$('#amount').on('input', function() {
+    var sel = $('#txType').val();
+    var t = templates.find(function(tm) { return tm.id === sel; });
+    if (t && t.has_vat) calcVat(t.vat_rate);
+});
+
+$('#creditForm').submit(function(e){e.preventDefault();
+    var sel = $('#txType').val();
+    var t = templates.find(function(tm) { return tm.id === sel; });
+    var url, payload = {amount:parseFloat($('#amount').val()),description:$('#description').val(),reference:$('#reference').val()||undefined};
+    if (sel === 'deposit_from_cash') { url='/api/bank/deposit'; }
+    else {
+        url = '/api/bank/receipt';
+        payload.credit_account_code = $('#accountCode').val();
+        if (t && t.has_vat) { payload.vat_amount = parseFloat($('#vatAmount').val()) || 0; payload.vat_rate = t.vat_rate; }
+    }
+    $.ajax({url:url,method:'POST',contentType:'application/json',data:JSON.stringify(payload),success:function(){$('#creditModal').modal('hide');$('#creditForm')[0].reset();showToast('Tạo báo Có thành công','success');loadData();},error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}});
 });
 $('#creditForm').submit(function(e){e.preventDefault();
     var type=$('#txType').val();

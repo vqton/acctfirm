@@ -207,6 +207,9 @@ function defineRoutes(Router $router): void
     $router->post('/api/cash/payments', function() { (new \Accounting\Interfaces\HTTP\CashController(
         $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
     ))->createPayment(); });
+    $router->get('/api/cash/templates', function() { (new \Accounting\Interfaces\HTTP\CashController(
+        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
+    ))->transactionTemplates(); });
     $router->get('/api/cash/accounts', function() { (new \Accounting\Interfaces\HTTP\CashController(
         $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
     ))->accounts(); });

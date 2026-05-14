@@ -448,6 +448,43 @@ class CashController
         }
     }
 
+    // ── Transaction Templates ──
+
+    public function transactionTemplates(): void
+    {
+        $type = $_GET['type'] ?? 'receipt';
+
+        $receiptTemplates = [
+            ['id' => 'sales', 'name' => 'Thu tiền bán hàng', 'default_account' => '511', 'has_vat' => true, 'vat_rate' => 10],
+            ['id' => 'ar_recovery', 'name' => 'Thu hồi công nợ', 'default_account' => '131', 'has_vat' => false, 'vat_rate' => 0],
+            ['id' => 'finance_income', 'name' => 'Thu nhập tài chính', 'default_account' => '515', 'has_vat' => false, 'vat_rate' => 0],
+            ['id' => 'other_income', 'name' => 'Thu nhập khác', 'default_account' => '711', 'has_vat' => false, 'vat_rate' => 0],
+            ['id' => 'bank_withdrawal', 'name' => 'Rút tiền NH về quỹ', 'default_account' => '112', 'has_vat' => false, 'vat_rate' => 0],
+            ['id' => 'capital_contribution', 'name' => 'Nhận vốn góp', 'default_account' => '4111', 'has_vat' => false, 'vat_rate' => 0],
+            ['id' => 'deposit_return', 'name' => 'Thu ký quỹ, ký cược', 'default_account' => '344', 'has_vat' => false, 'vat_rate' => 0],
+            ['id' => 'advance_recovery', 'name' => 'Thu hồi tạm ứng', 'default_account' => '141', 'has_vat' => false, 'vat_rate' => 0],
+            ['id' => 'subsidy', 'name' => 'Nhận trợ cấp Nhà nước', 'default_account' => '3339', 'has_vat' => false, 'vat_rate' => 0],
+        ];
+
+        $paymentTemplates = [
+            ['id' => 'inventory', 'name' => 'Mua hàng tồn kho', 'default_account' => '152', 'has_vat' => true, 'vat_rate' => 10],
+            ['id' => 'fixed_asset', 'name' => 'Mua TSCĐ', 'default_account' => '211', 'has_vat' => true, 'vat_rate' => 10],
+            ['id' => 'expense', 'name' => 'Chi phí SXKD', 'default_account' => '642', 'has_vat' => true, 'vat_rate' => 10],
+            ['id' => 'supplier_payment', 'name' => 'Thanh toán nhà cung cấp', 'default_account' => '331', 'has_vat' => false, 'vat_rate' => 0],
+            ['id' => 'tax_payment', 'name' => 'Nộp thuế', 'default_account' => '333', 'has_vat' => false, 'vat_rate' => 0],
+            ['id' => 'salary', 'name' => 'Trả lương', 'default_account' => '334', 'has_vat' => false, 'vat_rate' => 0],
+            ['id' => 'loan_repayment', 'name' => 'Trả vay', 'default_account' => '341', 'has_vat' => false, 'vat_rate' => 0],
+            ['id' => 'investment', 'name' => 'Mua đầu tư tài chính', 'default_account' => '121', 'has_vat' => false, 'vat_rate' => 0],
+            ['id' => 'finance_cost', 'name' => 'Chi phí tài chính', 'default_account' => '635', 'has_vat' => false, 'vat_rate' => 0],
+            ['id' => 'bank_deposit', 'name' => 'Gửi tiền vào NH', 'default_account' => '112', 'has_vat' => false, 'vat_rate' => 0],
+            ['id' => 'escrow', 'name' => 'Ký quỹ, ký cược', 'default_account' => '244', 'has_vat' => false, 'vat_rate' => 0],
+            ['id' => 'advance', 'name' => 'Tạm ứng', 'default_account' => '141', 'has_vat' => false, 'vat_rate' => 0],
+        ];
+
+        $templates = ($type === 'receipt') ? $receiptTemplates : $paymentTemplates;
+        echo json_encode($templates);
+    }
+
     // ── Account picker ──
 
     public function accounts(): void
