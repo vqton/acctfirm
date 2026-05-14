@@ -308,6 +308,7 @@ CashService → JournalService → Account balance (all cash/bank operations)
 | `/thu/doi-chieu-ngan-hang` | Bank reconciliation |
 | `/kho/*` | Inventory views (receipt, issue, transfer, count, etc.) |
 | `/he-thong/nhat-ky-hoat-dong` | Audit log |
+| `/he-thong/quan-ly-ky` | Period management |
 | `/he-thong/nguoi-dung` | User management |
 | `/he-thong/vai-tro` | Role & permission management |
 
@@ -362,6 +363,7 @@ for f in tests/*.php; do php "$f"; done
 | `src/.../Service/CashService.php` | Cash & bank operations (435 lines) |
 | `src/.../Service/InventoryService.php` | All 10 inventory phases (500+ lines) |
 | `src/.../Service/BankReconciliationService.php` | Reconciliation matching engine |
+| `src/.../Service/PeriodService.php` | Period open/close/closing entries |
 | `src/.../Infrastructure/Helpers.php` | Utility functions (auth, format, etc.) |
 | `src/.../Infrastructure/Database/DB.php` | DB transaction/query helpers |
 | `src/.../Infrastructure/Database/AuditLogger.php` | Audit trail logger |
