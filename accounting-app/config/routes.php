@@ -271,6 +271,50 @@ function defineRoutes(Router $router): void
     $router->get('/he-thong/nguoi-dung', function() { require __DIR__ . '/../public/views/users.php'; });
     $router->get('/he-thong/vai-tro', function() { require __DIR__ . '/../public/views/roles.php'; });
 
+    // AP (TK 331)
+    $router->get('/mua/cong-no-phai-tra', function() { require __DIR__ . '/../public/views/ap_invoices.php'; });
+    $router->get('/mua/phan-tich-tuoi-no', function() { require __DIR__ . '/../public/views/ap_aging.php'; });
+    $router->get('/mua/so-chi-tiet-cong-no', function() { require __DIR__ . '/../public/views/ap_statement.php'; });
+    $router->get('/api/ap/invoices', function() { (new \Accounting\Interfaces\HTTP\ApController(
+        $GLOBALS['container']['apService']
+    ))->invoices(); });
+    $router->post('/api/ap/invoices', function() { (new \Accounting\Interfaces\HTTP\ApController(
+        $GLOBALS['container']['apService']
+    ))->create(); });
+    $router->get('/api/ap/invoices/{id}', function($id) { (new \Accounting\Interfaces\HTTP\ApController(
+        $GLOBALS['container']['apService']
+    ))->get($id); });
+    $router->get('/api/ap/invoices/{id}/payments', function($id) { (new \Accounting\Interfaces\HTTP\ApController(
+        $GLOBALS['container']['apService']
+    ))->payments($id); });
+    $router->post('/api/ap/invoices/{id}/pay', function($id) { (new \Accounting\Interfaces\HTTP\ApController(
+        $GLOBALS['container']['apService']
+    ))->pay($id); });
+    $router->post('/api/ap/invoices/{id}/return', function($id) { (new \Accounting\Interfaces\HTTP\ApController(
+        $GLOBALS['container']['apService']
+    ))->returnGoods($id); });
+    $router->post('/api/ap/invoices/{id}/discount', function($id) { (new \Accounting\Interfaces\HTTP\ApController(
+        $GLOBALS['container']['apService']
+    ))->discount($id); });
+    $router->post('/api/ap/invoices/{id}/write-off', function($id) { (new \Accounting\Interfaces\HTTP\ApController(
+        $GLOBALS['container']['apService']
+    ))->writeOff($id); });
+    $router->get('/api/ap/prepay', function() { (new \Accounting\Interfaces\HTTP\ApController(
+        $GLOBALS['container']['apService']
+    ))->prepay(); });  // dummy GET to register the view route
+    $router->post('/api/ap/prepay', function() { (new \Accounting\Interfaces\HTTP\ApController(
+        $GLOBALS['container']['apService']
+    ))->prepay(); });
+    $router->get('/api/ap/aging', function() { (new \Accounting\Interfaces\HTTP\ApController(
+        $GLOBALS['container']['apService']
+    ))->aging(); });
+    $router->get('/api/ap/suppliers', function() { (new \Accounting\Interfaces\HTTP\ApController(
+        $GLOBALS['container']['apService']
+    ))->suppliers(); });
+    $router->get('/api/ap/suppliers/{id}/statement', function($id) { (new \Accounting\Interfaces\HTTP\ApController(
+        $GLOBALS['container']['apService']
+    ))->statement($id); });
+
     // Financial Statements
     $router->get('/bao-cao/tinh-hinh-tai-chinh', function() { (new \Accounting\Interfaces\HTTP\FsController(
         $GLOBALS['container']['fsService']

@@ -193,7 +193,8 @@ CashService → JournalService → Account balance (all cash/bank operations)
 | `tests/DBTest.php` | 18 | DB Helper |
 | `tests/PeriodTest.php` | 18 | Period Engine |
 | `tests/FsTest.php` | 18 | Financial Statements |
-| **Total** | **357** | **26 test files** |
+| `tests/ApTest.php` | 22 | Accounts Payable |
+| **Total** | **379** | **27 test files** |
 
 ---
 
@@ -215,6 +216,49 @@ CashService → JournalService → Account balance (all cash/bank operations)
 - BC 02: full formula chain from revenue (01) to net profit (60)
 
 **Pending:** BC 03 (Cash Flow), BC 09 (Notes to FS), BC 03 → BC 01 cross-validation (cash reconciliation)
+
+---
+
+## Accounts Payable — TK 331
+
+| Feature | UC | Service | Tests | Status |
+|---|---|---|---|---|
+| Record invoice (Dr Inventory — Cr 331 + VAT) | UC-001 | `ApService::recordInvoice()` | ApTest | ✅ |
+| Pay supplier (Dr 331 — Cr 112) | UC-003 | `ApService::recordPayment()` | ApTest | ✅ |
+| Prepayment (Dr 331 — Cr 112) | UC-004 | `ApService::recordPrepayment()` | ApTest | ✅ |
+| Purchase return (Dr 331 — Cr Inventory + VAT) | UC-005 | `ApService::recordReturn()` | ApTest | ✅ |
+| Settlement discount (Dr 331 — Cr 515) | UC-006 | `ApService::recordDiscount()` | ApTest | ✅ |
+| Write-off (Dr 331 — Cr 711) | UC-008 | `ApService::writeOff()` | ApTest | ✅ |
+| AP aging report | UC-009 | `ApService::getAgingReport()` | ApTest | ✅ |
+| Supplier statement | UC-010 | `ApService::getSupplierStatement()` | ApTest | ✅ |
+
+**Features:**
+- `ap_invoices` sub-ledger with per-invoice tracking (supplier, amount, VAT, due date, balance)
+- `ap_payments` tracking for payment matching to invoices
+- Invoice-level aging by due date (current / 1-30 / 31-60 / 61-90 / 90+ days)
+- Supplier balance auto-updated on each transaction
+- All transactions post via JournalService for double-entry integrity
+- Views at `/mua/cong-no-phai-tra`, `/mua/phan-tich-tuoi-no`, `/mua/so-chi-tiet-cong-no`
+- 22 tests including trial balance verification
+
+---
+
+## General Ledger (Sổ Cái) — LEGALLY MANDATED
+
+**Regulatory basis:** Article 24-27 Law on Accounting 2015, Article 12-13 Circular 99/2025/TT-BTC, Appendix III (42 template forms).
+
+| Feature | Status | Notes |
+|---|---|---|
+| Sổ Cái per account (date, ref, Dr, Cr, running balance) | ❌ Not built | Data exists in `ledger_entries` + `transactions` — need view + API |
+| Sổ chi tiết (AR by customer, AP by supplier) | ❌ Not built | Data exists (TK 131/331) — need filtered view |
+| Period filter on ledger | ❌ Not built | PeriodService exists but not wired to ledger view |
+| Print + bind annually per Article 26.7 | ❌ Not built | Required for legal compliance |
+| Page numbering + signature fields | ❌ Not built | Required per Article 24.2 |
+| Correction via strikethrough (Article 27) | ❌ Not built | Only re-posting exists |
+| GL → Journal → Document drill-down | ❌ Not built | Industry standard (MISA/Fast/Bravo all have this) |
+| 10-year retention tracking | ❌ Not built | Linked to archived ledger output |
+
+**GL is independent of FS.** FS uses account balances. GL shows every transaction that produced those balances. Both are legally required. Tax inspection always requests Sổ Cái.
 
 ---
 
@@ -353,6 +397,7 @@ CashService → JournalService → Account balance (all cash/bank operations)
 | 036 | `create_fc_transactions_table` | FC transaction tracking |
 | 037 | `create_accounting_periods_table` | Period management |
 | 038 | `create_fs_tables` | FS line items + snapshots |
+| 039 | `create_ap_tables` | AP sub-ledger (invoices + payments) |
 
 ---
 
@@ -391,4 +436,4 @@ for f in tests/*.php; do php "$f"; done
 | `src/.../Infrastructure/Database/DB.php` | DB transaction/query helpers |
 | `src/.../Infrastructure/Database/AuditLogger.php` | Audit trail logger |
 | `database/migrate.php` | Migration runner |
-| `database/migrations/*.php` | 38 migration files |
+| `database/migrations/*.php` | 39 migration files |

@@ -114,14 +114,13 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
         <div class="nav-section">Mua hàng</div>
         <div class="nav-item">
             <a class="nav-link-s" data-bs-toggle="collapse" href="#menuPurchase"><i class="bi bi-cart"></i> Mua hàng <i class="bi bi-chevron-right ms-auto" style="width:auto;font-size:10px;"></i></a>
-            <div class="collapse sub-menu<?= isActive(['suppliers','contracts'],$activeMenu)?' show':'' ?>" id="menuPurchase">
+            <div class="collapse sub-menu<?= isActive(['suppliers','contracts','ap_invoices','ap_aging','ap_statement'],$activeMenu)?' show':'' ?>" id="menuPurchase">
                 <a href="/danh-muc/nha-cung-cap" class="nav-link-s<?= isActive('suppliers',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Nhà cung cấp</a>
                 <a href="/danh-muc/hop-dong" class="nav-link-s<?= isActive('contracts',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Hợp đồng</a>
                 <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Đơn đặt hàng</a>
-                <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Nhập kho / HĐ mua</a>
-                <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Trả lại NCC</a>
-                <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Phân bổ CP mua</a>
-                <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Thanh toán NCC</a>
+                <a href="/mua/cong-no-phai-tra" class="nav-link-s<?= isActive('ap_invoices',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Công nợ phải trả</a>
+                <a href="/mua/phan-tich-tuoi-no" class="nav-link-s<?= isActive('ap_aging',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Phân tích tuổi nợ</a>
+                <a href="/mua/so-chi-tiet-cong-no" class="nav-link-s<?= isActive('ap_statement',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Sổ chi tiết công nợ</a>
                 <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Bù trừ công nợ</a>
             </div>
         </div>
