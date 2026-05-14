@@ -4,6 +4,27 @@ use Accounting\Interfaces\HTTP\Router;
 
 function defineRoutes(Router $router): void
 {
+    // Auth
+    $router->get('/dang-nhap', function() { require __DIR__ . '/../public/views/login.php'; });
+    $router->post('/api/auth/login', function() { (new \Accounting\Interfaces\HTTP\AuthController($GLOBALS['container']['pdo']))->login(); });
+    $router->post('/api/auth/logout', function() { (new \Accounting\Interfaces\HTTP\AuthController($GLOBALS['container']['pdo']))->logout(); });
+    $router->get('/api/auth/me', function() { (new \Accounting\Interfaces\HTTP\AuthController($GLOBALS['container']['pdo']))->me(); });
+
+    // User management
+    $router->get('/api/users', function() { (new \Accounting\Interfaces\HTTP\UserController($GLOBALS['container']['pdo']))->list(); });
+    $router->post('/api/users', function() { (new \Accounting\Interfaces\HTTP\UserController($GLOBALS['container']['pdo']))->create(); });
+    $router->put('/api/users/{id}', function($id) { (new \Accounting\Interfaces\HTTP\UserController($GLOBALS['container']['pdo']))->update($id); });
+    $router->delete('/api/users/{id}', function($id) { (new \Accounting\Interfaces\HTTP\UserController($GLOBALS['container']['pdo']))->delete($id); });
+
+    // Role management
+    $router->get('/api/roles', function() { (new \Accounting\Interfaces\HTTP\RoleController($GLOBALS['container']['pdo']))->list(); });
+    $router->post('/api/roles', function() { (new \Accounting\Interfaces\HTTP\RoleController($GLOBALS['container']['pdo']))->create(); });
+    $router->put('/api/roles/{id}', function($id) { (new \Accounting\Interfaces\HTTP\RoleController($GLOBALS['container']['pdo']))->update($id); });
+    $router->delete('/api/roles/{id}', function($id) { (new \Accounting\Interfaces\HTTP\RoleController($GLOBALS['container']['pdo']))->delete($id); });
+    $router->get('/api/roles/{id}/permissions', function($id) { (new \Accounting\Interfaces\HTTP\RoleController($GLOBALS['container']['pdo']))->getPermissions($id); });
+    $router->put('/api/roles/{id}/permissions', function($id) { (new \Accounting\Interfaces\HTTP\RoleController($GLOBALS['container']['pdo']))->updatePermissions($id); });
+    $router->get('/api/user-management/users', function() { (new \Accounting\Interfaces\HTTP\UserController($GLOBALS['container']['pdo']))->listWithRoles(); });
+
     // Frontend pages
     $router->get('/', function() { require __DIR__ . '/../public/views/dashboard.php'; });
     $router->get('/danh-muc/vat-tu', function() { require __DIR__ . '/../public/views/items.php'; });
@@ -245,6 +266,10 @@ function defineRoutes(Router $router): void
     $router->get('/api/petty-cash/{id}/transactions', function($id) { (new \Accounting\Interfaces\HTTP\CashController(
         $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
     ))->pettyTransactions($id); });
+
+    // User & Role management
+    $router->get('/he-thong/nguoi-dung', function() { require __DIR__ . '/../public/views/users.php'; });
+    $router->get('/he-thong/vai-tro', function() { require __DIR__ . '/../public/views/roles.php'; });
 
     // Audit Log
     $router->get('/he-thong/nhat-ky-hoat-dong', function() { require __DIR__ . '/../public/views/audit_log.php'; });

@@ -232,8 +232,9 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
 
         <div class="nav-section">Hệ thống</div>
         <div class="nav-item"><a class="nav-link-s" data-bs-toggle="collapse" href="#menuSys"><i class="bi bi-gear"></i> Hệ thống <i class="bi bi-chevron-right ms-auto" style="width:auto;font-size:10px;"></i></a>
-        <div class="collapse sub-menu<?= isActive('audit_log',$activeMenu)?' show':'' ?>" id="menuSys">
-            <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Người dùng & Phân quyền</a>
+        <div class="collapse sub-menu<?= isActive(['users','roles','audit_log'],$activeMenu)?' show':'' ?>" id="menuSys">
+            <a href="/he-thong/nguoi-dung" class="nav-link-s<?= isActive('users',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Người dùng</a>
+            <a href="/he-thong/vai-tro" class="nav-link-s<?= isActive('roles',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Vai trò & Phân quyền</a>
             <a href="/he-thong/nhat-ky-hoat-dong" class="nav-link-s<?= isActive('audit_log',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Nhật ký hoạt động</a>
             <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Cấu hình</a>
             <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Quản lý kỳ</a>
@@ -246,10 +247,9 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
     <div class="topbar">
         <a href="/" class="text-decoration-none text-dark"><h6><i class="bi bi-house-door me-1"></i></h6></a>
         <span class="text-muted" style="font-size:12px;">/ <?= $title ?></span>
-        <div class="ms-auto">
-            <i class="bi bi-search me-3 text-muted" style="cursor:pointer"></i>
-            <i class="bi bi-bell me-3 text-muted" style="cursor:pointer"></i>
-            <i class="bi bi-person-circle text-muted" style="cursor:pointer"></i>
+        <div class="ms-auto d-flex align-items-center gap-3">
+            <span class="text-muted" style="font-size:13px;"><i class="bi bi-person-circle me-1"></i><?= \Accounting\Infrastructure\Helpers::e($_SESSION['user']['full_name'] ?? '') ?></span>
+            <a href="/api/auth/logout" class="text-muted" style="font-size:13px;text-decoration:none;" onclick="event.preventDefault();$.post('/api/auth/logout',function(){window.location.href='/dang-nhap';});"><i class="bi bi-box-arrow-right"></i> Đăng xuất</a>
         </div>
     </div>
     <div class="page-content">
