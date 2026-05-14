@@ -49,7 +49,7 @@ $('#txType').change(function(){
     var v=$(this).val();
     if(v==='charge'){$('#accountField').hide();}else{$('#accountField').show();}
 });
-$.get('/api/cash/accounts', function(accounts) {
+$.get('/api/cash/accounts?for=payment', function(accounts) {
     accounts.forEach(function(a){if(a.code!=='111'&&a.code!=='112')$('#accountCode').append('<option value="'+esc(a.code)+'">'+esc(a.code)+' - '+esc(a.name)+' ('+parseFloat(a.balance).toLocaleString()+' VND)</option>');});
 });
 $('#debitForm').submit(function(e){e.preventDefault();

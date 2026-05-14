@@ -452,10 +452,30 @@ class CashController
 
     public function accounts(): void
     {
-        echo json_encode(array_map(fn($a) => [
-            'code' => $a->getCode(), 'name' => $a->getName(),
-            'type' => $a->getType(), 'balance' => $a->getBalance(),
-        ], $this->accountRepo->findAll()));
+        $for = $_GET['for'] ?? 'all';
+        $excludeCash = $for !== 'all';
+
+        $all = $this->accountRepo->findAll();
+        $result = [];
+
+        foreach ($all as $a) {
+            $code = $a->getCode();
+            // Exclude cash accounts (111, 112, 113) for payment/receipt pickers
+            if ($excludeCash && in_array($code, ['111', '112', '113'])) continue;
+            // Exclude control accounts (parent accounts with sub-accounts)
+            if ($a->isControl()) continue;
+            // Exclude result determination account
+            if ($code === '911') continue;
+
+            $result[] = [
+                'code' => $code,
+                'name' => $a->getName(),
+                'type' => $a->getType(),
+                'balance' => $a->getBalance(),
+            ];
+        }
+
+        echo json_encode($result);
     }
 
     private function getPdo(): \PDO

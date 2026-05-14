@@ -59,7 +59,7 @@
 <script>
 var currentFundId = null;
 
-$.get('/api/cash/accounts', function(accounts) {
+$.get('/api/cash/accounts?for=payment', function(accounts) {
     accounts.forEach(function(a){if(a.code!=='111'&&a.code!=='112')$('#replenishAccount').append('<option value="'+esc(a.code)+'">'+esc(a.code)+' - '+esc(a.name)+' ('+parseFloat(a.balance).toLocaleString()+' VND)</option>');});
 });
 
