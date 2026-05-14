@@ -81,7 +81,7 @@ return function (PDO $pdo) {
     ];
     foreach ($rolePerms as $roleId => $mods) {
         foreach ($mods as $mod => $view) {
-            // Manager and auditor: view only
+            if (!$view) continue;
             if ($roleId === 'lanh_dao' || $roleId === 'kiem_toan') {
                 $pdo->prepare('INSERT IGNORE INTO role_permissions (role_id, module, can_view) VALUES (?, ?, 1)')->execute([$roleId, $mod]);
             } else {
