@@ -276,6 +276,24 @@ function defineRoutes(Router $router): void
     $router->get('/api/audit-log', function() { (new \Accounting\Interfaces\HTTP\AuditLogController($GLOBALS['container']['pdo']))->list(); });
     $router->get('/api/audit-log/{id}', function($id) { (new \Accounting\Interfaces\HTTP\AuditLogController($GLOBALS['container']['pdo']))->get($id); });
 
+    // Cash Reports
+    $router->get('/thu/bao-cao-von-bang-tien', function() { require __DIR__ . '/../public/views/cash_reports.php'; });
+    $router->get('/api/cash-reports/position', function() { (new \Accounting\Interfaces\HTTP\CashReportController(
+        $GLOBALS['container']['cashReportService']
+    ))->position(); });
+    $router->get('/api/cash-reports/bank-ledger', function() { (new \Accounting\Interfaces\HTTP\CashReportController(
+        $GLOBALS['container']['cashReportService']
+    ))->bankLedger(); });
+    $router->get('/api/cash-reports/daily-flow', function() { (new \Accounting\Interfaces\HTTP\CashReportController(
+        $GLOBALS['container']['cashReportService']
+    ))->dailyFlow(); });
+    $router->get('/api/cash-reports/concentration', function() { (new \Accounting\Interfaces\HTTP\CashReportController(
+        $GLOBALS['container']['cashReportService']
+    ))->concentration(); });
+    $router->get('/api/cash-reports/trend', function() { (new \Accounting\Interfaces\HTTP\CashReportController(
+        $GLOBALS['container']['cashReportService']
+    ))->trend(); });
+
     // Bank Reconciliation
     $router->get('/thu/doi-chieu-ngan-hang', function() { require __DIR__ . '/../public/views/bank_reconciliation.php'; });
     $router->get('/api/bank-reconciliation/sessions', function() { (new \Accounting\Interfaces\HTTP\BankReconciliationController(

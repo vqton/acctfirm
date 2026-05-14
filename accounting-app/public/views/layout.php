@@ -95,7 +95,7 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
         <div class="nav-section">Vốn bằng tiền</div>
         <div class="nav-item">
             <a class="nav-link-s" data-bs-toggle="collapse" href="#menuCash"><i class="bi bi-cash"></i> Vốn bằng tiền <i class="bi bi-chevron-right ms-auto" style="width:auto;font-size:10px;"></i></a>
-            <div class="collapse sub-menu<?= isActive(['bank_accounts','cash_receipts','cash_payments','bank_credit','bank_debit','cash_transit','cash_book','petty_cash','bank_reconciliation'],$activeMenu)?' show':'' ?>" id="menuCash">
+            <div class="collapse sub-menu<?= isActive(['bank_accounts','cash_receipts','cash_payments','bank_credit','bank_debit','cash_transit','cash_book','petty_cash','bank_reconciliation','cash_reports'],$activeMenu)?' show':'' ?>" id="menuCash">
                 <a href="/danh-muc/tai-khoan-ngan-hang" class="nav-link-s<?= isActive('bank_accounts',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> TK ngân hàng</a>
                 <a href="/thu/quy-tien-mat" class="nav-link-s<?= isActive('cash_receipts',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Phiếu thu</a>
                 <a href="/chi/quy-tien-mat" class="nav-link-s<?= isActive('cash_payments',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Phiếu chi</a>
@@ -106,6 +106,7 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
                 <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Chuyển tiền nội bộ</a>
                 <a href="/thu/tam-ung" class="nav-link-s<?= isActive('petty_cash',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Tạm ứng</a>
                 <a href="/thu/doi-chieu-ngan-hang" class="nav-link-s<?= isActive('bank_reconciliation',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Đối chiếu NH</a>
+                <a href="/thu/bao-cao-von-bang-tien" class="nav-link-s<?= isActive('cash_reports',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Báo cáo vốn bằng tiền</a>
             </div>
         </div>
 

@@ -22,6 +22,7 @@ use Accounting\Domain\Service\AccountingService;
 use Accounting\Domain\Service\JournalService;
 use Accounting\Domain\Service\InventoryService;
 use Accounting\Domain\Service\CashService;
+use Accounting\Domain\Service\CashReportService;
 use Accounting\Domain\Service\BankReconciliationService;
 
 function createContainer(): array
@@ -56,6 +57,7 @@ function createContainer(): array
     $inventoryService = new InventoryService($accountRepository, $transactionRepository, $itemRepository, $warehouseRepository);
     $cashService = new CashService($accountRepository, $transactionRepository, $pdo);
     $bankReconciliationService = new BankReconciliationService($accountRepository, $transactionRepository, $pdo);
+    $cashReportService = new CashReportService($pdo, $accountRepository);
 
     return [
         'pdo' => $pdo, 'accountRepository' => $accountRepository,
@@ -73,7 +75,8 @@ function createContainer(): array
         'accountingService' => $accountingService, 'journalService' => $journalService,
         'inventoryService' => $inventoryService,
         'cashService' => $cashService,
-        'bankReconciliationService' => $bankReconciliationService
+        'bankReconciliationService' => $bankReconciliationService,
+        'cashReportService' => $cashReportService
     ];
 }
 
