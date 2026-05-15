@@ -4,110 +4,139 @@
 
 Vietnamese enterprise accounting webapp. PHP 8.4, no framework, no Composer. MySQL/MariaDB via PDO. Bootstrap 5 + jQuery for UI. API returns JSON. Frontend consumes API via jQuery AJAX.
 
-## Entry point
-
-`public/index.php` is the single entry point. PHP built-in server:
+## Quick Commands
 
 ```sh
-php -S 0.0.0.0:8080 -t public public/index.php
+php -S 0.0.0.0:8080 -t public public/index.php   # Start server
+php database/migrate.php                           # Run migrations
+for f in tests/*.php; do php "$f"; done            # Run all tests
 ```
 
 ## Architecture
 
 ```
-public/index.php → autoloader → config/services.php (DI container) → config/routes.php → Router::dispatch() → Controller → Repository (PDO) → MySQL
+public/index.php → autoloader → config/services.php (DI container) → config/routes.php
+→ Router::dispatch() → Controller → Repository (PDO) → MySQL
+
+JournalService::postEntry() → Transaction + LedgerEntry → Account balance
+CashService → JournalService (all cash/bank operations)
+ApService/ArService → JournalService + sub-ledger tables
+FsService → account balances → BC 01/02
 ```
 
-- **Autoloader**: custom PSR-4-like. Namespace `Accounting\` maps to `src/Accounting/`. No Composer autoload.
-- **DI container**: a plain array in `$GLOBALS['container']`. Created by `config/services.php`. All repos are singletons created once.
-- **Router**: custom regex-based. Route `{id}` params become function args. Router accepts `callable|array|string` as handler (not strict `callable`).
-- **Controllers**: instantiated inline in route closures. Injected with the one repo they need from `$GLOBALS['container']`. Controllers echo JSON directly — no return value.
-- **Models**: plain PHP objects with getters/setters + `toArray()`. No ORM.
-- **Error handling**: `HttpError` helper (json/html), global exception handler in `index.php` catches all uncaught `Throwable` → JSON 500
-- **Layout**: all frontend views extend `public/views/layout.php` via output buffer pattern: `ob_start()` → content → `$content = ob_get_clean(); require __DIR__ . '/layout.php'`
-- **Content-Type**: API (`/api/*`) → `application/json` (set in `index.php`), HTML pages → `text/html` (set in `layout.php`)
+- **Autoloader**: custom PSR-4-like. `Accounting\` maps to `src/Accounting/`. No Composer.
+- **DI container**: plain array in `$GLOBALS['container']`. All repos/services singletons.
+- **Router**: custom regex-based. Accepts `callable|array|string`.
+- **Controllers**: instantiated inline in route closures. Echo JSON directly.
+- **Models**: plain PHP objects with getters/setters + `toArray()`.
+- **Views**: extend `layout.php` via output buffer pattern.
+- **Auth**: PHP sessions. Guard in `index.php` blocks all non-login routes.
+
+## Code Patterns
+
+| Pattern | Convention |
+|---|---|
+| Interfaces | Suffix `Interface` |
+| PDO impl | Prefix `PDO` |
+| Indentation | 4 spaces, no tabs |
+| SQL | PDO prepared statements, `?` placeholders |
+| Controllers | `echo json_encode(...)`, never return |
+| HTTP status | `http_response_code()` before echo |
+| Audit log | `AuditLogger::log(action, resource, id, old, new, actor)` |
+| Permissions | `Helpers::requirePermission(module, action)` |
+
+## Critical Gotchas (Code Review Findings)
+
+| Severity | Issue | Location | Fix |
+|---|---|---|---|
+| **RCE** | `eval()` in formula engine | `FsService.php:166` | Replace with safe arithmetic parser |
+| **SQLi** | String interpolation in SQL | `CashService.php:217,243` | Use prepared statements |
+| **Session fixation** | No `session_regenerate_id()` after login | `AuthController.php:58` | Add `session_regenerate_id(true)` |
+| **Path traversal** | Static file serving doesn't normalize URI | `index.php:7` | Use `realpath()` or reject `..` |
+| **Encapsulation** | Reflection to extract private PDO | 8 files (`*Controller::getPdo()`) | Inject PDO via constructor |
+| **Transactions** | Multi-step ops not wrapped in DB transactions | `JournalService`, `InventoryService`, `CashService` | Add `beginTransaction/commit/rollback` |
+| **Dead code** | `AccountingService` never used, constructor broken | `AccountingService.php` | Delete or fix |
+| **CRUD duplication** | 12 identical controllers | `WarehouseController`, `DepartmentController`, etc. | Extract generic CRUD or trait |
+| **N+1 queries** | Separate query per transaction for ledger entries | `PDOTransactionRepository::getAll()` | Use JOIN |
+| **No CSRF** | All POST/PUT/DELETE accept JSON without token | All controllers | Add session-bound CSRF token |
+| **WHERE 1=1** | Fragile SQL construction | `ApService`, `ArService` | Build WHERE array, join with AND |
+
+## To Add a New Entity
+
+1. Migration file in `database/migrations/`
+2. Model in `src/Accounting/Domain/Model/`
+3. RepositoryInterface in `src/Accounting/Domain/Repository/`
+4. PDO repo in `src/Accounting/Infrastructure/Repository/`
+5. Controller in `src/Accounting/Interfaces/HTTP/`
+6. Routes in `config/routes.php`
+7. DI entry in `config/services.php`
+8. View in `public/views/` (extends layout.php)
+9. Sidebar link in `public/views/layout.php`
+10. Tests in `tests/`
 
 ## Database
 
-- **Config**: `config/database.php` — credentials: `dev` / `123456`, db: `accounting_db`. Only place credentials exist.
-- **Migrations**: `php database/migrate.php` runs all `database/migrations/*.php` in sorted order.
-- **Each migration file** returns a `fn(PDO $pdo) { ... }` closure. No DB connection in migration files.
-- **Schema**: 19 tables — accounts, transactions, ledger_entries, items, customers, suppliers, warehouses, departments, employees, uoms, ccdc, bank_accounts, exchange_rates, tax_rates, fixed_assets, valuation_methods, contracts, projects, depreciation_policies.
+- **Config**: `config/database.php` — dev/123456, accounting_db.
+- **Migrations**: 40 files. Runner at `database/migrate.php`. Each returns `fn(PDO $pdo)`.
+- **No migration tracking table** — relies on IF NOT EXISTS. Schema changes need manual handling.
+- **No rollback** — one-way only.
 
-## Routes
+## Active Modules
 
-Defined in `config/routes.php`. Two styles:
-- **Frontend**: closures that `require` a PHP view file. These render Bootstrap HTML via `layout.php`.
-- **API**: closures that instantiate controller + call method. These echo JSON.
+| Module | Service | Tests | Status |
+|---|---|---|---|
+| Cash & Bank | `CashService` | ~100 | ✅ 9 UCs |
+| Inventory (10 phases) | `InventoryService` | 77 | ✅ |
+| Period Engine | `PeriodService` | 18 | ✅ |
+| Financial Statements (BC 01, BC 02) | `FsService` | 18 | ✅ |
+| Accounts Payable (TK 331) | `ApService` | 22 | ✅ |
+| Accounts Receivable (TK 131) | `ArService` | 19 | ✅ |
+| Bank Reconciliation | `BankReconciliationService` | 24 | ✅ |
+| RBAC | AuthController + Helpers | — | ✅ |
+| Audit Log | `AuditLogger` | — | ✅ |
+| Treasury Templates | CashController::transactionTemplates() | — | ✅ |
 
-Active endpoints:
-```
-GET  /                          → views/dashboard.php + layout.php
-GET  /danh-muc/vat-tu           → items CRUD page
-GET  /danh-muc/khach-hang       → customers CRUD page
-GET  /danh-muc/nha-cung-cap     → suppliers CRUD page
+**Total:** 28 test files, ~400 tests, 0 failures.
 
-GET/POST    /api/items[/{id}]
-PUT/DELETE  /api/items/{id}
-... same pattern for /api/customers, /api/suppliers
-```
+## Skill Selection
 
-To add a new entity: (1) migration file, (2) Model, (3) RepositoryInterface, (4) PDO repository, (5) Controller, (6) route closure in `config/routes.php`, (7) DI entry in `config/services.php`, (8) view file using layout.php, (9) sidebar link in `layout.php`.
+| Phase | Skill | When |
+|---|---|---|
+| **Clarify intent** | `interview-me` | Don't know what you actually want |
+| **Refine ideas** | `idea-refine` | Have a rough concept, need variants |
+| **Define** | `spec-driven-development` | Need acceptance criteria before coding |
+| **Plan** | `planning-and-task-breakdown` | Break spec into verifiable tasks |
+| **Build — general** | `incremental-implementation` | Default: vertical slices, test each |
+| **Build — API** | `api-and-interface-design` | REST endpoints, module contracts |
+| **Build — UI** | `frontend-ui-engineering` | Bootstrap 5 views with a11y |
+| **Build — verified** | `source-driven-development` | Verify patterns against official docs |
+| **Build — adversarial** | `doubt-driven-development` | High-stakes / unfamiliar code |
+| **Build — context** | `context-engineering` | Feed agent right files at right time |
+| **Test** | `test-driven-development` | Red-green-refactor per behavior |
+| **Test — browser** | `browser-testing-with-devtools` | Live DOM/console/network verify |
+| **Debug** | `debugging-and-error-recovery` | Reproduce → localize → fix → guard |
+| **Review** | `code-review-and-quality` | 5-axis review before merge |
+| **Review — security** | `security-and-hardening` | OWASP, input validation, secrets |
+| **Review — performance** | `performance-optimization` | Measure first, optimize second |
+| **Simplify** | `code-simplification` | Simplify after tests pass |
+| **Refactor** | `improve-codebase-architecture` | Deepen modules, extract seams |
+| **Git** | `git-workflow-and-versioning` | Atomic commits, clean history |
+| **CI/CD** | `ci-cd-and-automation` | Quality gates on every push |
+| **Docs** | `documentation-and-adrs` | Capture why, not what |
+| **Ship** | `shipping-and-launch` | Pre-launch checklist + rollback |
+| **Deprecate** | `deprecation-and-migration` | Remove code safely |
+| **Communication** | `caveman` | Terse mode for all output |
 
-## Style conventions
+**Default:** `karpathy-guidelines` (simplicity first, surgical changes) + `caveman` (terse output).
 
-- 4-space indentation in PHP. No tabs.
-- Namespace: `Accounting\{Domain|Infrastructure|Interfaces}\...`
-- Interfaces suffix `Interface`, PDO impl prefix `PDO`, e.g. `ItemRepositoryInterface` / `PDOItemRepository`.
-- All SQL uses PDO prepared statements with positional `?` placeholders.
-- Controllers never return — they `echo json_encode(...)` directly.
-- HTTP status codes set manually via `http_response_code()`.
-- Views extend `layout.php` via output buffer pattern — only content HTML in the view file.
-- JS `esc(str)` function available in all views for XSS-safe string output.
-- All views use Bootstrap 5 + Bootstrap Icons + jQuery 3 via CDN (included once in `layout.php`).
-- Error responses use `HttpError::json()` for API or `HttpError::html()` for full-page error.
+## SOLID Check
 
-## Skill selection (4WH)
-
-Before starting any task, use 4WH to match the right skill to the task type:
-
-| Dimension | What to ask |
+| Principle | Ask |
 |---|---|
-| **What** | What kind of work is this? (new feature / bug fix / refactor / test) |
-| **Why** | What outcome matters? (correctness / speed / maintainability / clarity) |
-| **Where** | What part of the codebase does it touch? (new code / existing code / config) |
-| **When** | How urgent? How large? (single file / multi-step / multi-session) |
-| **Who** | Who benefits? (developer / end user / auditor) |
-| **How** | Which skill fits best? |
+| S — Single Responsibility | Does this class have one reason to change? |
+| O — Open/Closed | Can I extend without modifying? |
+| L — Liskov Substitution | Can a subtype replace its parent? |
+| I — Interface Segregation | Are interfaces focused? |
+| D — Dependency Inversion | Does high-level depend on abstractions? |
 
-Available skills and their fit:
-- **karpathy-guidelines**: new features, simple tasks, any change where keeping scope small matters (default choice)
-- **diagnose**: bugs, regressions, performance issues, unexpected behavior
-- **improve-codebase-architecture**: refactoring, consolidation, extracting seams for testability
-- **tdd**: complex logic, critical financial calculations, regression-prone areas
-- **caveman**: communication mode only (not an implementation skill)
-
-When in doubt, default to **karpathy-guidelines** (simplicity first, surgical changes). Use multiple skills when a task spans categories.
-
-## SOLID check for new features
-
-When implementing any new feature, review whether SOLID principles apply. Do not force abstractions — but check each principle for a natural fit:
-
-| Principle | What to ask |
-|---|---|
-| **S** — Single Responsibility | Does this class/module have one reason to change? Can I split it? |
-| **O** — Open/Closed | Will I need to modify this code to add a new variant, or can I extend it? |
-| **L** — Liskov Substitution | If using inheritance or interfaces, can a subtype replace its parent without breaking callers? |
-| **I** — Interface Segregation | Are interfaces focused, or do they force implementors to define unused methods? |
-| **D** — Dependency Inversion | Does the high-level policy depend on abstractions, not concrete implementations? |
-
-The goal is pragmatic SOLID — not abstractions for their own sake. A plain function is better than a one-implementation interface. An interface earns its keep when a second implementation appears or when you need a test seam.
-
-## Gotchas
-
-- Router's `callable` typehint was removed — `[ClassName::class, 'method']` won't autoload the class at route definition time. Use closures that instantiate the controller instead.
-- `config/services.php` writes `$GLOBALS['container']`. `config/routes.php` writes `$GLOBALS['router']`. Order matters: services first, then routes.
-- Migration runner auto-creates the database if it doesn't exist.
-- All views use Bootstrap 5 + Bootstrap Icons + jQuery 3 via CDN — no local assets.
-- `Content-Type` is set globally: `application/json` in `index.php`, overridden to `text/html` in `layout.php` for HTML pages.
-- Controllers must set `http_response_code()` before `echo` — the global exception handler catches any uncaught `Throwable` as JSON 500.
+Pragmatic SOLID — not abstractions for their own sake.
