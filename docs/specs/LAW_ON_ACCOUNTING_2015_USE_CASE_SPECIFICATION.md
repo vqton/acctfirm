@@ -2,6 +2,10 @@
 
 ## Law on Accounting 2015 — Unique Provisions Beyond Circular 99/2025/TT-BTC
 
+**Version:** 1.0
+**Last Updated:** 2026-05-15
+**Regulatory Basis:** Circular 99/2025/TT-BTC, Law on Accounting 2015
+
 ---
 
 ## 1. Source
@@ -51,6 +55,10 @@
   - Other entities: from effective date of establishment decision
   - End of first period aligned to standard year/quarter/month end
 - **If first or last period < 90 days:** may be combined with next/prior period into a single fiscal year (Article 12.4). Combined period must be < 15 months.
+
+**Postconditions:**
+- Period hierarchy configured (year → quarters → months)
+- First period start/end dates determined
 
 **Business Rules:**
 - BR01: Default fiscal year: 1 Jan – 31 Dec (Article 12.1a)
@@ -102,6 +110,13 @@
 2. Opening balances carried forward from prior period closing balances (Article 5.5)
 3. For initial period: opening balances are zero (or opening balance entry if conversion)
 4. System records period open timestamp and actor
+
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- Period status set to "Open"
+- Opening balances carried forward
 
 **Business Rules:**
 - BR09: Periods must be sequential with no gaps (Article 5.5)
@@ -224,6 +239,14 @@
 5. Period re-closed after corrections completed
 6. System records: re-open user, timestamp, justification, entries posted, close user, timestamp
 
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- Period temporarily re-opened for corrections
+- Corrective entries posted with prior-period flag
+- Period re-closed with audit trail
+
 **Business Rules:**
 - BR19: Re-opening requires material justification and authorization (Article 27.4)
 - BR20: Errors found after annual FS submission: correct in discovery period, not in original period (Article 27.4) — note: this is the normal flow; re-open only when prior-period FS restatement is required
@@ -265,6 +288,13 @@
    - Accountant, cashier, warehouse keeper, asset buyer must be separate individuals
 6. System records position assignments with effective dates
 
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- Accounting organization structure configured
+- Role assignments recorded with effective dates
+
 **Business Rules:**
 - BR22: Legal representative responsible for accounting organization (Article 50)
 - BR23: Chief accountant required in all state agencies, state-funded entities, SOEs (>50% capital) (Article 53)
@@ -291,6 +321,13 @@
 3. System records the personnel assignment change with date
 4. Outgoing accountant's access revoked; incoming accountant's access granted
 5. Prior-period entries retain the original preparer's identity (immutable)
+
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- Personnel change recorded with handover documentation
+- Access rights updated
 
 **Business Rules:**
 - BR28: Each accountant is responsible for their period of work (Article 51.3)
@@ -326,6 +363,13 @@
 2. System enforces approval workflows per delegation matrix
 3. System blocks prohibited role combinations (Article 52)
 
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- Internal controls enforced
+- Segregation of duties maintained
+
 **Business Rules:**
 - BR30: Internal control system mandatory (Article 39.1)
 - BR31: Controls must ensure assets are safeguarded from misuse (Article 39.2a)
@@ -352,6 +396,13 @@
    - Control gaps, fraud risks, improvement recommendations (Article 39.3d)
 2. Findings recorded in system
 3. Recommendations tracked to closure
+
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- Audit findings documented
+- Recommendations tracked for closure
 
 **Priority:** High
 
@@ -388,6 +439,14 @@
 6. System records adjustment: Dr/Cr inventory — Cr/Dr corresponding account
 7. Adjusted balances used for FS (Article 40.3)
 8. Comprehensive inventory report generated
+
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- Physical count completed
+- Discrepancies investigated and adjusted
+- Book records updated to match physical
 
 **Business Rules:**
 - BR34: Physical inventory minimum: annually at year-end (Article 40.2a)
@@ -430,6 +489,13 @@
 4. Archive index created with retrieval metadata
 5. System tracks retention expiry; auto-alerts before deletion is permitted
 
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- Documents archived with retention tier
+- Archive index created
+
 **Business Rules:**
 - BR39: Documents must be archived within 12 months of period-end (Article 41.1)
 - BR40: Tier 1: minimum 5 years (Article 41.2a)
@@ -459,6 +525,13 @@
 3. If recovery impossible → conduct physical inventory (Article 42)
 4. Reconstructed values recorded with supporting protocol
 5. Loss reported to authorities if material
+
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- Lost documents reconstructed or recovered
+- Physical inventory conducted (if recovery fails)
 
 **Business Rules:**
 - BR45: Recovery must be attempted before reconstruction (Article 42)

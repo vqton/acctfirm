@@ -13,6 +13,7 @@ class InventoryService
     private TransactionRepositoryInterface $txnRepo;
     private ItemRepositoryInterface $itemRepo;
     private WarehouseRepositoryInterface $warehouseRepo;
+    private \PDO $pdo;
 
     private array $inventoryAccountMap = [
         'material' => '152', 'tool' => '152',
@@ -24,12 +25,14 @@ class InventoryService
         AccountRepositoryInterface $accountRepo,
         TransactionRepositoryInterface $txnRepo,
         ItemRepositoryInterface $itemRepo,
-        WarehouseRepositoryInterface $warehouseRepo
+        WarehouseRepositoryInterface $warehouseRepo,
+        \PDO $pdo
     ) {
         $this->accountRepo = $accountRepo;
         $this->txnRepo = $txnRepo;
         $this->itemRepo = $itemRepo;
         $this->warehouseRepo = $warehouseRepo;
+        $this->pdo = $pdo;
     }
 
     public function receiveGoods(string $itemId, float $qty, float $unitPrice,
@@ -48,7 +51,7 @@ class InventoryService
             ['account_code' => '331', 'amount' => $totalCost, 'is_debit' => false],
         ];
 
-        $journal = new JournalService($this->accountRepo, $this->txnRepo);
+        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
         $txn = $journal->postEntry("Goods receipt: {$item->getName()}", $reference, $lines, $createdBy);
 
         $item->setStockQty($item->getStockQty() + $qty);
@@ -80,7 +83,7 @@ class InventoryService
             ['account_code' => $inventoryCode, 'amount' => $totalCost, 'is_debit' => false],
         ];
 
-        $journal = new JournalService($this->accountRepo, $this->txnRepo);
+        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
         $txn = $journal->postEntry("Goods issue: {$item->getName()}", $reference, $lines, $createdBy);
 
         $item->setStockQty($item->getStockQty() - $qty);
@@ -156,7 +159,7 @@ class InventoryService
 
         // Post journal: Dr inventory — Cr inventory (same account, same value)
         $inventoryCode = $this->inventoryAccountMap[$item->getItemType()] ?? '152';
-        $journal = new JournalService($this->accountRepo, $this->txnRepo);
+        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
         $fromName = $fromWarehouseId ? $from->getName() : 'General';
         $txn = $journal->postEntry(
             "Transfer: {$item->getName()} ({$fromName} → {$to->getName()})",
@@ -187,7 +190,7 @@ class InventoryService
             ['account_code' => '331', 'amount' => $totalCost, 'is_debit' => false],
         ];
 
-        $journal = new JournalService($this->accountRepo, $this->txnRepo);
+        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
         $txn = $journal->postEntry("In transit: {$item->getName()}", $reference, $lines, $createdBy);
 
         $pdo = $this->getPdo();
@@ -226,7 +229,7 @@ class InventoryService
             ['account_code' => '151', 'amount' => $totalCost, 'is_debit' => false],
         ];
 
-        $journal = new JournalService($this->accountRepo, $this->txnRepo);
+        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
         $txn = $journal->postEntry("Receive from transit: {$item->getName()}", $reference, $lines, $createdBy);
 
         $item->setStockQty($item->getStockQty() + $qty);
@@ -264,7 +267,7 @@ class InventoryService
             ['account_code' => $inventoryCode, 'amount' => $totalCost, 'is_debit' => false],
         ];
 
-        $journal = new JournalService($this->accountRepo, $this->txnRepo);
+        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
         $txn = $journal->postEntry("Consignment: {$item->getName()} → {$consignee}", $reference, $lines, $createdBy);
 
         $item->setStockQty($item->getStockQty() - $qty);
@@ -295,7 +298,7 @@ class InventoryService
         $totalCost = $qty * $unitCost;
 
         // Dr 632 (COGS) — Cr 157 (release consignment)
-        $journal = new JournalService($this->accountRepo, $this->txnRepo);
+        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
         $txn = $journal->postEntry("Consignment sale", $reference, [
             ['account_code' => '632', 'amount' => $totalCost, 'is_debit' => true],
             ['account_code' => '157', 'amount' => $totalCost, 'is_debit' => false],
@@ -330,7 +333,7 @@ class InventoryService
         $inventoryCode = $this->inventoryAccountMap[$item->getItemType()] ?? '152';
 
         // Dr inventory — Cr 157 (return from consignment)
-        $journal = new JournalService($this->accountRepo, $this->txnRepo);
+        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
         $txn = $journal->postEntry("Consignment return", $reference, [
             ['account_code' => $inventoryCode, 'amount' => $totalCost, 'is_debit' => true],
             ['account_code' => '157', 'amount' => $totalCost, 'is_debit' => false],
@@ -368,7 +371,7 @@ class InventoryService
 
         if ($diff > 0) {
             // Surplus: Dr Inventory — Cr 711 (other income)
-            $journal = new JournalService($this->accountRepo, $this->txnRepo);
+            $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
             $txn = $journal->postEntry("Count surplus: {$item->getName()}", $reference, [
                 ['account_code' => $inventoryCode, 'amount' => $diffValue, 'is_debit' => true],
                 ['account_code' => '711', 'amount' => $diffValue, 'is_debit' => false],
@@ -377,7 +380,7 @@ class InventoryService
             $this->saveCostLayer($itemId, $diff, $unitCost, 0, null);
         } else {
             // Shortage: Dr 632 (COGS) — Cr Inventory
-            $journal = new JournalService($this->accountRepo, $this->txnRepo);
+            $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
             $txn = $journal->postEntry("Count shortage: {$item->getName()}", $reference, [
                 ['account_code' => '632', 'amount' => $diffValue, 'is_debit' => true],
                 ['account_code' => $inventoryCode, 'amount' => $diffValue, 'is_debit' => false],
@@ -434,7 +437,7 @@ class InventoryService
         if ($amount <= 0) throw new \InvalidArgumentException("Provision amount must be positive");
 
         // Dr 632 (COGS) — Cr 2294 (inventory impairment provision)
-        $journal = new JournalService($this->accountRepo, $this->txnRepo);
+        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
         $txn = $journal->postEntry("Impairment: {$item->getName()}", $reference, [
             ['account_code' => '632', 'amount' => $amount, 'is_debit' => true],
             ['account_code' => '2294', 'amount' => $amount, 'is_debit' => false],
@@ -463,7 +466,7 @@ class InventoryService
         $itemName = $item ? $item->getName() : $record['item_id'];
 
         // Dr 2294 — Cr 632 (reverse impairment)
-        $journal = new JournalService($this->accountRepo, $this->txnRepo);
+        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
         $txn = $journal->postEntry("Impairment reversal: {$itemName}", $reference, [
             ['account_code' => '2294', 'amount' => $amount, 'is_debit' => true],
             ['account_code' => '632', 'amount' => $amount, 'is_debit' => false],
@@ -489,7 +492,7 @@ class InventoryService
         $inventoryCode = $this->inventoryAccountMap[$item->getItemType()] ?? '152';
 
         // Dr 641 (selling expense) — Cr inventory
-        $journal = new JournalService($this->accountRepo, $this->txnRepo);
+        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
         $txn = $journal->postEntry("Promotional: {$item->getName()}", $reference, [
             ['account_code' => '641', 'amount' => $totalCost, 'is_debit' => true],
             ['account_code' => $inventoryCode, 'amount' => $totalCost, 'is_debit' => false],
@@ -520,7 +523,7 @@ class InventoryService
         $inventoryCode = $this->inventoryAccountMap[$item->getItemType()] ?? '152';
 
         if ($cogsValue > 0.01) {
-            $journal = new JournalService($this->accountRepo, $this->txnRepo);
+            $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
             $txn = $journal->postEntry("Periodic close: {$item->getName()}", $reference, [
                 ['account_code' => '632', 'amount' => $cogsValue, 'is_debit' => true],
                 ['account_code' => $inventoryCode, 'amount' => $cogsValue, 'is_debit' => false],
@@ -599,9 +602,6 @@ class InventoryService
 
     private function getPdo(): \PDO
     {
-        $ref = new \ReflectionClass($this->accountRepo);
-        $prop = $ref->getProperty('pdo');
-        $prop->setAccessible(true);
-        return $prop->getValue($this->accountRepo);
+        return $this->pdo;
     }
 }

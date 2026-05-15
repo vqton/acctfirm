@@ -29,7 +29,7 @@ class CashService
         $creditAccount = $this->accountRepo->findByCode($creditAccountCode);
         if (!$creditAccount) throw new \InvalidArgumentException("Account not found: {$creditAccountCode}");
 
-        $journal = new JournalService($this->accountRepo, $this->txnRepo);
+        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
         $txn = $journal->postEntry("Cash receipt: {$description}", $reference, [
             ['account_code' => '111', 'amount' => $amount, 'is_debit' => true],
             ['account_code' => $creditAccountCode, 'amount' => $amount, 'is_debit' => false],
@@ -52,7 +52,7 @@ class CashService
             throw new \InvalidArgumentException("Insufficient cash balance: have {$cash->getBalance()}, need {$amount}");
         }
 
-        $journal = new JournalService($this->accountRepo, $this->txnRepo);
+        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
         $txn = $journal->postEntry("Cash payment: {$description}", $reference, [
             ['account_code' => $debitAccountCode, 'amount' => $amount, 'is_debit' => true],
             ['account_code' => '111', 'amount' => $amount, 'is_debit' => false],
@@ -72,7 +72,7 @@ class CashService
             throw new \InvalidArgumentException("Insufficient cash balance: have {$cash->getBalance()}, need {$amount}");
         }
 
-        $journal = new JournalService($this->accountRepo, $this->txnRepo);
+        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
         $txn = $journal->postEntry("Bank deposit: {$description}", $reference, [
             ['account_code' => '112', 'amount' => $amount, 'is_debit' => true],
             ['account_code' => '111', 'amount' => $amount, 'is_debit' => false],
@@ -92,7 +92,7 @@ class CashService
             throw new \InvalidArgumentException("Insufficient bank balance: have {$bank->getBalance()}, need {$amount}");
         }
 
-        $journal = new JournalService($this->accountRepo, $this->txnRepo);
+        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
         $txn = $journal->postEntry("Bank withdrawal: {$description}", $reference, [
             ['account_code' => '111', 'amount' => $amount, 'is_debit' => true],
             ['account_code' => '112', 'amount' => $amount, 'is_debit' => false],
@@ -110,7 +110,7 @@ class CashService
         $creditAccount = $this->accountRepo->findByCode($creditAccountCode);
         if (!$creditAccount) throw new \InvalidArgumentException("Account not found: {$creditAccountCode}");
 
-        $journal = new JournalService($this->accountRepo, $this->txnRepo);
+        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
         $txn = $journal->postEntry("Bank receipt: {$description}", $reference, [
             ['account_code' => '112', 'amount' => $amount, 'is_debit' => true],
             ['account_code' => $creditAccountCode, 'amount' => $amount, 'is_debit' => false],
@@ -133,7 +133,7 @@ class CashService
             throw new \InvalidArgumentException("Insufficient bank balance: have {$bank->getBalance()}, need {$amount}");
         }
 
-        $journal = new JournalService($this->accountRepo, $this->txnRepo);
+        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
         $txn = $journal->postEntry("Bank payment: {$description}", $reference, [
             ['account_code' => $debitAccountCode, 'amount' => $amount, 'is_debit' => true],
             ['account_code' => '112', 'amount' => $amount, 'is_debit' => false],
@@ -148,7 +148,7 @@ class CashService
     {
         if ($amount <= 0) throw new \InvalidArgumentException('Amount must be positive');
 
-        $journal = new JournalService($this->accountRepo, $this->txnRepo);
+        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
         $txn = $journal->postEntry("Bank interest: {$description}", $reference, [
             ['account_code' => '112', 'amount' => $amount, 'is_debit' => true],
             ['account_code' => '515', 'amount' => $amount, 'is_debit' => false],
@@ -168,7 +168,7 @@ class CashService
             throw new \InvalidArgumentException("Insufficient bank balance: have {$bank->getBalance()}, need {$amount}");
         }
 
-        $journal = new JournalService($this->accountRepo, $this->txnRepo);
+        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
         $txn = $journal->postEntry("Bank charge: {$description}", $reference, [
             ['account_code' => '642', 'amount' => $amount, 'is_debit' => true],
             ['account_code' => '112', 'amount' => $amount, 'is_debit' => false],
@@ -188,7 +188,7 @@ class CashService
             throw new \InvalidArgumentException("Insufficient cash balance: have {$cash->getBalance()}, need {$amount}");
         }
 
-        $journal = new JournalService($this->accountRepo, $this->txnRepo);
+        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
         $txn = $journal->postEntry("Cash in transit: {$description}", $reference, [
             ['account_code' => '113', 'amount' => $amount, 'is_debit' => true],
             ['account_code' => '111', 'amount' => $amount, 'is_debit' => false],
@@ -214,13 +214,15 @@ class CashService
             throw new \RuntimeException('PDO not available for transit tracking');
         }
 
-        $row = $this->pdo->query("SELECT amount FROM cash_transit WHERE id='{$transitId}' AND status='in_transit'")->fetch();
+        $stmt = $this->pdo->prepare('SELECT amount FROM cash_transit WHERE id = ? AND status = ?');
+        $stmt->execute([$transitId, 'in_transit']);
+        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
         if (!$row) {
             throw new \InvalidArgumentException("Transit record not found or already resolved: {$transitId}");
         }
 
         $amount = (float)$row['amount'];
-        $journal = new JournalService($this->accountRepo, $this->txnRepo);
+        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
         $txn = $journal->postEntry("Transit confirmed: bank credited", "CNF-{$transitId}", [
             ['account_code' => '112', 'amount' => $amount, 'is_debit' => true],
             ['account_code' => '113', 'amount' => $amount, 'is_debit' => false],
@@ -237,10 +239,12 @@ class CashService
 
     public function reverseTransit(string $transitId, string $createdBy): array
     {
-        $journal = new JournalService($this->accountRepo, $this->txnRepo);
+        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
 
         if ($this->pdo) {
-            $row = $this->pdo->query("SELECT amount FROM cash_transit WHERE id='{$transitId}' AND status='in_transit'")->fetch();
+            $stmt = $this->pdo->prepare('SELECT amount FROM cash_transit WHERE id = ? AND status = ?');
+            $stmt->execute([$transitId, 'in_transit']);
+            $row = $stmt->fetch(\PDO::FETCH_ASSOC);
             if ($row) {
                 $amount = (float)$row['amount'];
                 $this->pdo->prepare(
@@ -268,18 +272,24 @@ class CashService
             throw new \RuntimeException('PDO not available for cash book');
         }
 
-        $where = "a.code = '111'";
-        if ($fromDate) $where .= " AND t.created_at >= " . $this->pdo->quote($fromDate);
-        if ($toDate) $where .= " AND t.created_at <= " . $this->pdo->quote($toDate . ' 23:59:59');
-
-        $rows = $this->pdo->query(
-            "SELECT t.id, t.description, t.reference, t.created_at, le.amount, le.is_debit
-             FROM ledger_entries le
-             JOIN transactions t ON t.id = le.transaction_id
-             JOIN accounts a ON a.id = le.account_id
-             WHERE {$where}
-             ORDER BY t.created_at ASC, t.id ASC"
-        )->fetchAll(\PDO::FETCH_ASSOC);
+        $sql = "SELECT t.id, t.description, t.reference, t.created_at, le.amount, le.is_debit
+                FROM ledger_entries le
+                JOIN transactions t ON t.id = le.transaction_id
+                JOIN accounts a ON a.id = le.account_id
+                WHERE a.code = '111'";
+        $params = [];
+        if ($fromDate) {
+            $sql .= " AND t.created_at >= ?";
+            $params[] = $fromDate;
+        }
+        if ($toDate) {
+            $sql .= " AND t.created_at <= ?";
+            $params[] = $toDate . ' 23:59:59';
+        }
+        $sql .= " ORDER BY t.created_at ASC, t.id ASC";
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
 
         $running = 0.0;
         $entries = [];
@@ -355,7 +365,7 @@ class CashService
         $disbursed = $fund['imprest_amount'] - $fund['current_balance'];
         if ($totalAmount <= 0) throw new \InvalidArgumentException('Amount must be positive');
 
-        $journal = new JournalService($this->accountRepo, $this->txnRepo);
+        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
         $txn = $journal->postEntry("Petty cash replenishment: {$description}", $reference, [
             ['account_code' => $expenseAccount, 'amount' => $totalAmount, 'is_debit' => true],
             ['account_code' => '111', 'amount' => $totalAmount, 'is_debit' => false],
@@ -382,7 +392,7 @@ class CashService
         if (!$fund) throw new \InvalidArgumentException("Petty cash fund not found: {$fundId}");
         if ($fund['status'] !== 'active') throw new \InvalidArgumentException('Fund is not active');
 
-        $journal = new JournalService($this->accountRepo, $this->txnRepo);
+        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
         $txn = $journal->postEntry("Petty cash fund closure: {$fund['fund_name']}", "CLOSE-{$fundId}", [
             ['account_code' => '111', 'amount' => $returnAmount, 'is_debit' => true],
             ['account_code' => '111', 'amount' => $returnAmount, 'is_debit' => false],
@@ -445,7 +455,7 @@ class CashService
         $creditAccount = $this->accountRepo->findByCode($creditAccountCode);
         if (!$creditAccount) throw new \InvalidArgumentException("Account not found: {$creditAccountCode}");
 
-        $journal = new JournalService($this->accountRepo, $this->txnRepo);
+        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
         $txn = $journal->postEntry("FC receipt: {$description}", $reference, [
             ['account_code' => '112', 'amount' => $vndAmount, 'is_debit' => true],
             ['account_code' => $creditAccountCode, 'amount' => $vndAmount, 'is_debit' => false],
@@ -471,7 +481,7 @@ class CashService
         $debitAccount = $this->accountRepo->findByCode($debitAccountCode);
         if (!$debitAccount) throw new \InvalidArgumentException("Account not found: {$debitAccountCode}");
 
-        $journal = new JournalService($this->accountRepo, $this->txnRepo);
+        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
         $txn = $journal->postEntry("FC payment: {$description}", $reference, [
             ['account_code' => $debitAccountCode, 'amount' => $vndAmount, 'is_debit' => true],
             ['account_code' => '112', 'amount' => $vndAmount, 'is_debit' => false],
@@ -526,7 +536,7 @@ class CashService
             return ['transaction_id' => null, 'gain_loss' => 0, 'message' => 'No gain/loss'];
         }
 
-        $journal = new JournalService($this->accountRepo, $this->txnRepo);
+        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
 
         if ($gainLoss > 0) {
             // Unrealized gain: Dr 112 — Cr 413

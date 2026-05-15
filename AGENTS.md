@@ -12,6 +12,28 @@ php database/migrate.php                           # Run migrations
 for f in tests/*.php; do php "$f"; done            # Run all tests
 ```
 
+## Directory Structure
+
+```
+├── config/            services.php (DI), routes.php, database.php
+├── database/          migrate.php runner + migrations/*.php
+├── public/            index.php (entry + auth guard), views/ (layout.php + *.php)
+├── src/Accounting/
+│   ├── Domain/
+│   │   ├── Model/        Plain PHP objects, getters/setters/toArray()
+│   │   ├── Repository/   Interfaces (suffix Interface)
+│   │   └── Service/      Business logic (JournalService, CashService, GlService...)
+│   ├── Infrastructure/
+│   │   ├── Database/     DB.php (PDO helper), AuditLogger.php
+│   │   ├── Helpers.php   toVnWords, fmt, jsonOk/Error, auth utils
+│   │   └── Repository/   PDO* implementations
+│   └── Interfaces/HTTP/  Controllers
+├── docs/
+│   ├── specs/            10 use case specifications
+│   ├── roadmaps/         7 implementation roadmaps
+│   └── research/         3 supporting docs
+└── tests/                29 files, ~410 tests
+
 ## Architecture
 
 ```
@@ -22,6 +44,7 @@ JournalService::postEntry() → Transaction + LedgerEntry → Account balance
 CashService → JournalService (all cash/bank operations)
 ApService/ArService → JournalService + sub-ledger tables
 FsService → account balances → BC 01/02
+GlService → ledger entries (date, ref, Dr, Cr, running balance, contra account)
 ```
 
 - **Autoloader**: custom PSR-4-like. `Accounting\` maps to `src/Accounting/`. No Composer.
@@ -44,6 +67,34 @@ FsService → account balances → BC 01/02
 | HTTP status | `http_response_code()` before echo |
 | Audit log | `AuditLogger::log(action, resource, id, old, new, actor)` |
 | Permissions | `Helpers::requirePermission(module, action)` |
+
+## Key Patterns
+
+```
+// Route: $router->get/post/put/delete($path, callable)
+$router->get('/api/cash/accounts', function () {
+    requirePermission('cash', 'read');
+    echo jsonOk((new CashController(...))->getAccounts());
+});
+
+// DI: $GLOBALS['container']['key'] = fn($c) => new Service($c['dep']);
+$GLOBALS['container'][JournalService::class] = fn($c) =>
+    new JournalService($c[AccountRepo::class], $c[TransactionRepo::class]);
+
+// Test: global assertEq/assertTrue with counter
+assertEq($result['closing_balance'], 7000000, '111 closing = 7M');
+assertTrue(count($entries) >= 2, 'At least 2 entries');
+// Run: php tests/GlTest.php → "=== Results: 12 tests, 0 failed ==="
+
+// View: ob_start extends layout.php
+<?php ob_start(); ?>
+<div class="container">...content...</div>
+<?php $content = ob_get_clean(); require __DIR__ . '/layout.php'; ?>
+
+// API response: Helpers::jsonOk($data, $msg, $code) / jsonError($msg, $code)
+function jsonOk($data = [], $msg = 'OK', $code = 200): void  // echo json_encode
+function jsonError($msg = 'Error', $code = 400): void         // echo json_encode
+```
 
 ## Critical Gotchas (Code Review Findings)
 
@@ -95,8 +146,9 @@ FsService → account balances → BC 01/02
 | RBAC | AuthController + Helpers | — | ✅ |
 | Audit Log | `AuditLogger` | — | ✅ |
 | Treasury Templates | CashController::transactionTemplates() | — | ✅ |
+| General Ledger (Sổ Cái) | `GlService` | 12 | ✅ |
 
-**Total:** 28 test files, ~400 tests, 0 failures.
+**Total:** 29 test files, ~410 tests, 0 failures.
 
 ## Skill Selection
 

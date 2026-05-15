@@ -3,7 +3,7 @@
 <html lang="vi">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Đăng nhập — Accounting</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="/assets/css/bootstrap.min.css" rel="stylesheet">
 <style>body{background:#f0f2f5;display:flex;align-items:center;min-height:100vh}.login-card{max-width:400px;width:100%;margin:0 auto}.card{border:0;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.08)}.brand{text-align:center;margin-bottom:24px}.brand h4{font-weight:600;color:#1a1a2e}</style>
 </head>
 <body>
@@ -19,13 +19,14 @@
         </form>
     </div>
 </div>
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="/assets/js/jquery-3.7.1.min.js"></script>
 <script>
+var returnUrl = <?= json_encode($_GET['return'] ?? '/', JSON_UNESCAPED_UNICODE) ?>;
 $('#loginForm').submit(function(e){
     e.preventDefault();
     $.ajax({url:'/api/auth/login',method:'POST',contentType:'application/json',
         data:JSON.stringify({username:$('#username').val(),password:$('#password').val()}),
-        success:function(){window.location.href='/';},
+        success:function(){window.location.href=returnUrl;},
         error:function(x){var m='Sai tên đăng nhập hoặc mật khẩu';try{m=JSON.parse(x.responseText).error;}catch(e){};$('#errorMsg').text(m).removeClass('d-none');}
     });
 });

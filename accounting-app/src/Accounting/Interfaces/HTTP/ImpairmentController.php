@@ -6,10 +6,12 @@ use Accounting\Domain\Service\InventoryService;
 class ImpairmentController
 {
     private InventoryService $inventory;
+    private \PDO $pdo;
 
-    public function __construct(InventoryService $inventory)
+    public function __construct(InventoryService $inventory, \PDO $pdo)
     {
         $this->inventory = $inventory;
+        $this->pdo = $pdo;
     }
 
     public function list(): void
@@ -63,13 +65,6 @@ class ImpairmentController
 
     private function getPdo(): \PDO
     {
-        $ref = new \ReflectionClass($this->inventory);
-        $prop = $ref->getProperty('accountRepo');
-        $prop->setAccessible(true);
-        $repo = $prop->getValue($this->inventory);
-        $pref = new \ReflectionClass($repo);
-        $pprop = $pref->getProperty('pdo');
-        $pprop->setAccessible(true);
-        return $pprop->getValue($repo);
+        return $this->pdo;
     }
 }

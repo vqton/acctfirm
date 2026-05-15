@@ -14,7 +14,7 @@ class ArService
     {
         $this->pdo = $pdo;
         $this->accountRepo = $accountRepo;
-        $this->journal = new JournalService($accountRepo, new \Accounting\Infrastructure\Repository\PDOTransactionRepository($pdo));
+        $this->journal = new JournalService($accountRepo, new \Accounting\Infrastructure\Repository\PDOTransactionRepository($pdo), $pdo);
     }
 
     public function recordInvoice(string $customerId, string $invoiceNumber, string $invoiceDate, string $dueDate, float $netAmount, float $vatAmount, float $vatRate, string $description, string $createdBy, string $revenueAccount = '511'): array

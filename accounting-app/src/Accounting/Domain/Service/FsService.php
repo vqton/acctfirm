@@ -157,15 +157,76 @@ class FsService
 
     private function evaluateExpression(string $expr, array $values): float
     {
-        // Replace mã số with actual values
         $evalStr = $expr;
         foreach ($values as $k => $v) {
             $evalStr = str_replace($k, (string)$v, $evalStr);
         }
-        // Basic arithmetic evaluation
-        $result = @eval("return {$evalStr};");
-        if ($result === false) return 0;
-        return (float)$result;
+        return $this->safeEval($evalStr);
+    }
+
+    private function safeEval(string $expression): float
+    {
+        $expression = preg_replace('/[^0-9+*.\/( )-]/', '', $expression);
+        $expression = trim($expression);
+        if ($expression === '') return 0;
+        if (preg_match('~^[*/]|[*/\-+]$|\(\)|\(\*|\(/|[*]{2}|[\\/]{2}|\.\d*\.~', $expression)) {
+            return 0;
+        }
+        if (substr_count($expression, '(') !== substr_count($expression, ')')) {
+            return 0;
+        }
+        $result = $this->parseExpression($expression);
+        return round($result, 2);
+    }
+
+    private function parseExpression(string &$expr): float
+    {
+        $result = $this->parseTerm($expr);
+        while (strlen($expr) > 0) {
+            $op = $expr[0];
+            if ($op !== '+' && $op !== '-') break;
+            $expr = substr($expr, 1);
+            $term = $this->parseTerm($expr);
+            if ($op === '+') $result += $term;
+            else $result -= $term;
+        }
+        return $result;
+    }
+
+    private function parseTerm(string &$expr): float
+    {
+        $result = $this->parseFactor($expr);
+        while (strlen($expr) > 0) {
+            $op = $expr[0];
+            if ($op !== '*' && $op !== '/') break;
+            $expr = substr($expr, 1);
+            $factor = $this->parseFactor($expr);
+            if ($op === '*') $result *= $factor;
+            elseif ($factor != 0) $result /= $factor;
+            else $result = 0;
+        }
+        return $result;
+    }
+
+    private function parseFactor(string &$expr): float
+    {
+        $expr = ltrim($expr);
+        if (strlen($expr) === 0) return 0;
+        if ($expr[0] === '(') {
+            $expr = substr($expr, 1);
+            $result = $this->parseExpression($expr);
+            $expr = ltrim($expr);
+            if (strlen($expr) > 0 && $expr[0] === ')') {
+                $expr = substr($expr, 1);
+            }
+            return $result;
+        }
+        $numStr = '';
+        while (strlen($expr) > 0 && (ctype_digit($expr[0]) || $expr[0] === '.')) {
+            $numStr .= $expr[0];
+            $expr = substr($expr, 1);
+        }
+        return $numStr === '' ? 0 : (float)$numStr;
     }
 
     public function getPeriods(): array

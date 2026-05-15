@@ -8,11 +8,13 @@ class ConsignmentController
 {
     private InventoryService $inventory;
     private ItemRepositoryInterface $itemRepo;
+    private \PDO $pdo;
 
-    public function __construct(InventoryService $inventory, ItemRepositoryInterface $itemRepo)
+    public function __construct(InventoryService $inventory, ItemRepositoryInterface $itemRepo, \PDO $pdo)
     {
         $this->inventory = $inventory;
         $this->itemRepo = $itemRepo;
+        $this->pdo = $pdo;
     }
 
     public function list(): void
@@ -86,9 +88,6 @@ class ConsignmentController
 
     private function getPdo(): \PDO
     {
-        $ref = new \ReflectionClass($this->itemRepo);
-        $prop = $ref->getProperty('pdo');
-        $prop->setAccessible(true);
-        return $prop->getValue($this->itemRepo);
+        return $this->pdo;
     }
 }

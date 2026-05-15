@@ -1,8 +1,8 @@
 # Implementation Roadmap — Treasury UX Enhancement
 
-**Base Spec:** `docs/use-case-spec-treasury-accounts-111-112-113.md` (37 UCs)
-**Regulatory Basis:** Circular 99/2025/TT-BTC — TK 111, 112, 113
-**Current State:** Generic cash/bank service methods. Account picker shows 126 accounts. User must know correct Dr/Cr account.
+**Version:** 1.0
+**Last Updated:** 2026-05-15
+**Base Spec:** `docs/specs/TREASURY_USE_CASE_SPECIFICATION.md`
 
 ---
 

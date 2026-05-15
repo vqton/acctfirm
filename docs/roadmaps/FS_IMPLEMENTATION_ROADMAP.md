@@ -1,8 +1,8 @@
 # Implementation Roadmap — Financial Statements Module
 
-**Base Spec:** `docs/FS_USE_CASE_SPECIFICATION.md`
-**Regulatory Basis:** Circular 99/2025/TT-BTC Article 17, Appendix IV
-**Statements:** BC 01 (Balance Sheet), BC 02 (Income Statement), BC 03 (Cash Flow), BC 09 (Notes)
+**Version:** 1.0
+**Last Updated:** 2026-05-15
+**Base Spec:** `docs/specs/FS_USE_CASE_SPECIFICATION.md`
 
 ---
 

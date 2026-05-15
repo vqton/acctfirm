@@ -156,7 +156,7 @@ class BankReconciliationService
         $session = $this->getSessionRaw($sessionId);
         if (!$session) throw new \InvalidArgumentException("Session not found: {$sessionId}");
 
-        $journal = new JournalService($this->accountRepo, $this->txnRepo);
+        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
         $txn = $journal->postEntry("Bank recon adj: {$description}", "RECON-ADJ-{$sessionId}", [
             ['account_code' => $debitAccount, 'amount' => $amount, 'is_debit' => true],
             ['account_code' => $creditAccount, 'amount' => $amount, 'is_debit' => false],

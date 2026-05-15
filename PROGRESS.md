@@ -9,6 +9,7 @@ public/index.php → autoloader → config/services.php (DI container) → confi
 JournalService::postEntry() → Transaction + LedgerEntry records → Account balance update
 InventoryService::receiveGoods() / issueGoods() → JournalService + stock_qty + cost layers
 CashService → JournalService → Account balance (all cash/bank operations)
+GlService → Ledger entries (date, ref, Dr, Cr, running balance, contra account)
 ```
 
 ---
@@ -163,7 +164,7 @@ CashService → JournalService → Account balance (all cash/bank operations)
 
 ---
 
-## All Tests (290 total — ALL PASS)
+## All Tests (410 total — ALL PASS)
 
 | Test file | Tests | Module |
 |---|---|---|
@@ -195,7 +196,8 @@ CashService → JournalService → Account balance (all cash/bank operations)
 | `tests/FsTest.php` | 18 | Financial Statements |
 | `tests/ApTest.php` | 22 | Accounts Payable |
 | `tests/ArTest.php` | 19 | Accounts Receivable |
-| **Total** | **398** | **28 test files** |
+| `tests/GlTest.php` | 12 | General Ledger |
+| **Total** | **410** | **29 test files** |
 
 ---
 
@@ -248,16 +250,17 @@ CashService → JournalService → Account balance (all cash/bank operations)
 
 **Regulatory basis:** Article 24-27 Law on Accounting 2015, Article 12-13 Circular 99/2025/TT-BTC, Appendix III (42 template forms).
 
-| Feature | Status | Notes |
-|---|---|---|
-| Sổ Cái per account (date, ref, Dr, Cr, running balance) | ❌ Not built | Data exists in `ledger_entries` + `transactions` — need view + API |
-| Sổ chi tiết (AR by customer, AP by supplier) | ❌ Not built | Data exists (TK 131/331) — need filtered view |
-| Period filter on ledger | ❌ Not built | PeriodService exists but not wired to ledger view |
-| Print + bind annually per Article 26.7 | ❌ Not built | Required for legal compliance |
-| Page numbering + signature fields | ❌ Not built | Required per Article 24.2 |
-| Correction via strikethrough (Article 27) | ❌ Not built | Only re-posting exists |
-| GL → Journal → Document drill-down | ❌ Not built | Industry standard (MISA/Fast/Bravo all have this) |
-| 10-year retention tracking | ❌ Not built | Linked to archived ledger output |
+| Feature | Service | Tests | Status |
+|---|---|---|---|
+| Sổ Cái per account (date, ref, Dr, Cr, running balance) | `GlService::getGeneralLedger()` | GlTest (12) | ✅ Service + test |
+| Sổ chi tiết (AR by customer, AP by supplier) | — | — | ❌ |
+| Period filter on ledger | `$fromDate/$toDate` params | GlTest | ✅ |
+| API endpoint + view | — | — | ❌ Not built |
+| Print + bind annually per Article 26.7 | — | — | ❌ |
+| Page numbering + signature fields | — | — | ❌ |
+| Correction via strikethrough (Article 27) | — | — | ❌ |
+| GL → Journal → Document drill-down | — | — | ❌ |
+| 10-year retention tracking | — | — | ❌ |
 
 **GL is independent of FS.** FS uses account balances. GL shows every transaction that produced those balances. Both are legally required. Tax inspection always requests Sổ Cái.
 
@@ -309,11 +312,13 @@ CashService → JournalService → Account balance (all cash/bank operations)
 | GET | `/api/coa` | List all accounts |
 | POST | `/api/coa/seed` | Seed Circular 99 standard COA |
 
-### Journal
+### Journal / GL
 | Method | Path | Purpose |
 |---|---|---|
 | POST | `/api/journal` | Post journal entry |
 | GET | `/api/trial-balance` | Get trial balance |
+| GET | `/api/gl/{code}` | General Ledger (Sổ Cái) per account |
+| GET | `/api/gl/accounts` | Account picker for GL |
 
 ### Inventory
 | Method | Path | Purpose |
@@ -381,7 +386,7 @@ CashService → JournalService → Account balance (all cash/bank operations)
 
 ---
 
-## Database Migrations (35 total)
+## Database Migrations (40 total)
 
 | # | File | Purpose |
 |---|---|---|
@@ -426,7 +431,7 @@ for f in tests/*.php; do php "$f"; done
 |---|---|
 | `public/index.php` | Entry point + autoloader + session auth guard |
 | `config/services.php` | DI container |
-| `config/routes.php` | All routes (100+ endpoints) |
+| `config/routes.php` | All routes (105+ endpoints) |
 | `config/database.php` | DB credentials (dev/123456) |
 | `src/.../Service/JournalService.php` | Double-entry engine |
 | `src/.../Service/CashService.php` | Cash & bank operations (435 lines) |
@@ -436,5 +441,6 @@ for f in tests/*.php; do php "$f"; done
 | `src/.../Infrastructure/Helpers.php` | Utility functions (auth, format, etc.) |
 | `src/.../Infrastructure/Database/DB.php` | DB transaction/query helpers |
 | `src/.../Infrastructure/Database/AuditLogger.php` | Audit trail logger |
+| `src/.../Service/GlService.php` | General Ledger (Sổ Cái) |
 | `database/migrate.php` | Migration runner |
-| `database/migrations/*.php` | 39 migration files |
+| `database/migrations/*.php` | 40 migration files |

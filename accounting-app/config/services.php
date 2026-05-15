@@ -18,7 +18,7 @@ use Accounting\Infrastructure\Repository\PDOValuationMethodRepository;
 use Accounting\Infrastructure\Repository\PDOContractRepository;
 use Accounting\Infrastructure\Repository\PDOProjectRepository;
 use Accounting\Infrastructure\Repository\PDODepreciationPolicyRepository;
-use Accounting\Domain\Service\AccountingService;
+use Accounting\Infrastructure\Logging\LoggingPDO;
 use Accounting\Domain\Service\JournalService;
 use Accounting\Domain\Service\InventoryService;
 use Accounting\Domain\Service\CashService;
@@ -33,10 +33,11 @@ use Accounting\Domain\Service\GlService;
 function createContainer(): array
 {
     $dbConfig = require __DIR__ . '/database.php';
-    $pdo = new PDO(
+    $innerPdo = new PDO(
         "mysql:host={$dbConfig['host']};dbname={$dbConfig['dbname']};charset={$dbConfig['charset']}",
         $dbConfig['username'], $dbConfig['password'], $dbConfig['options']
     );
+    $pdo = new LoggingPDO($innerPdo);
 
     $accountRepository = new PDOAccountRepository($pdo);
     $transactionRepository = new PDOTransactionRepository($pdo);
@@ -57,9 +58,8 @@ function createContainer(): array
     $projectRepository = new PDOProjectRepository($pdo);
     $depreciationPolicyRepository = new PDODepreciationPolicyRepository($pdo);
 
-    $accountingService = new AccountingService($accountRepository, $transactionRepository);
-    $journalService = new JournalService($accountRepository, $transactionRepository);
-    $inventoryService = new InventoryService($accountRepository, $transactionRepository, $itemRepository, $warehouseRepository);
+    $journalService = new JournalService($accountRepository, $transactionRepository, $pdo);
+    $inventoryService = new InventoryService($accountRepository, $transactionRepository, $itemRepository, $warehouseRepository, $pdo);
     $cashService = new CashService($accountRepository, $transactionRepository, $pdo);
     $bankReconciliationService = new BankReconciliationService($accountRepository, $transactionRepository, $pdo);
     $cashReportService = new CashReportService($pdo, $accountRepository);
@@ -82,7 +82,7 @@ function createContainer(): array
         'valuationMethodRepository' => $valuationMethodRepository,
         'contractRepository' => $contractRepository, 'projectRepository' => $projectRepository,
         'depreciationPolicyRepository' => $depreciationPolicyRepository,
-        'accountingService' => $accountingService, 'journalService' => $journalService,
+        'journalService' => $journalService,
         'inventoryService' => $inventoryService,
         'cashService' => $cashService,
         'bankReconciliationService' => $bankReconciliationService,

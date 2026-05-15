@@ -1,5 +1,11 @@
 # Vietnamese Accounting Software — Standard Modules, Menu & Built-In Requirements
 
+**Version:** 1.0
+**Last Updated:** 2026-05-15
+**Category:** Research / Reference
+
+---
+
 Research sources: MISA (MISA SME + AMIS), Fast Accounting (Fast Online), Bravo (Bravo 10 ERP). Vietnamese market rankings, vendor websites, user reviews.
 
 ---

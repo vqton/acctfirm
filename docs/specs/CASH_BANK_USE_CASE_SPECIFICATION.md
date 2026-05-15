@@ -2,6 +2,10 @@
 
 ## Cash and Bank Accounting (Kế toán vốn bằng tiền) — Circular 99/2025/TT-BTC
 
+**Version:** 1.0
+**Last Updated:** 2026-05-15
+**Regulatory Basis:** Circular 99/2025/TT-BTC, Law on Accounting 2015
+
 ---
 
 ## 1. Source
@@ -17,7 +21,7 @@
 
 ### Domain 1: Cash Receipt Management
 
-#### UC-01: Process Cash Receipt
+#### UC-001: Process Cash Receipt
 
 **Description:** Record incoming cash from customers, debtors, or other sources. Generate cash receipt voucher (Phiếu thu) as the primary documentary evidence for every cash inflow transaction.
 
@@ -75,7 +79,7 @@
 - BR04: Dr TK 111 always; Cr account depends on transaction nature.
 - BR05: Foreign currency receipts recorded at spot exchange rate on transaction date.
 - BR06: Receipt cannot be posted without matching supporting document.
-- BR07: Once posted, cash receipt cannot be deleted — only reversible via adjusting entry (UC-06 in Journal Posting spec).
+- BR07: Once posted, cash receipt cannot be deleted — only reversible via adjusting entry (UC-006 in Journal Posting spec).
 
 **Input Data:**
 - Receipt date, voucher number, payer, amount (VND/FC), exchange rate, description
@@ -94,6 +98,11 @@
 - Invoice/AR record exists (for customer payments)
 - Cash book initialized
 
+**Postconditions:**
+- Cash receipt voucher generated
+- Cash book updated
+- Account balance updated
+
 **Frequency:** Daily (high volume)
 
 **Priority:** Critical
@@ -104,7 +113,7 @@
 
 ### Domain 2: Cash Payment Management
 
-#### UC-02: Process Cash Payment
+#### UC-002: Process Cash Payment
 
 **Description:** Record outgoing cash for expenses, supplier payments, advances, and other disbursements. Generate cash payment voucher (Phiếu chi) as the primary documentary evidence.
 
@@ -150,7 +159,7 @@
 **Alternate Flow:**
 - **Partial payment:** Supplier invoice partially paid. System records partial payment, maintains outstanding AP balance.
 - **Prepayment:** Advance payment to supplier. Dr prepayment/advance account — Cr TK 111.
-- **Petty cash reimbursement:** Dr relevant expense accounts — Cr TK 111 (replenishment flow in UC-04).
+- **Petty cash reimbursement:** Dr relevant expense accounts — Cr TK 111 (replenishment flow in UC-004).
 - **Foreign currency payment:** Record at spot or book exchange rate per entity policy.
 
 **Exception Flow:**
@@ -184,6 +193,11 @@
 - Sufficient cash balance
 - Authorization matrix configured
 
+**Postconditions:**
+- Cash payment voucher generated
+- Cash book updated
+- Account balance updated
+
 **Frequency:** Daily (high volume)
 
 **Priority:** Critical
@@ -194,7 +208,7 @@
 
 ### Domain 3: Bank Deposit Management
 
-#### UC-03: Process Bank Deposit and Withdrawal
+#### UC-003: Process Bank Deposit and Withdrawal
 
 **Description:** Record cash deposits to bank accounts and withdrawals from bank accounts. Track movement between cash on hand (TK 111) and bank deposits (TK 112), as well as direct bank transactions.
 
@@ -265,6 +279,11 @@
 - Bank account master data (bank name, account number, currency)
 - Cash account (TK 111) for cash-to-bank movements
 
+**Postconditions:**
+- Bank transaction recorded
+- TK 112 balance updated
+- Bank reconciliation data point created
+
 **Frequency:** Daily (high volume)
 
 **Priority:** Critical
@@ -275,7 +294,7 @@
 
 ### Domain 4: Cash in Transit Accounting
 
-#### UC-04: Track Cash in Transit
+#### UC-004: Track Cash in Transit
 
 **Description:** Record cash and cheques that have left the entity but not yet been received by the bank (or vice versa). Account TK 113 (Cash in transit) serves as a clearing account for timing differences.
 
@@ -331,6 +350,10 @@
 - TK 113 configured in COA
 - Bank account master data
 
+**Postconditions:**
+- Transit entry recorded (Dr TK 113)
+- TK 113 balance awaits bank confirmation
+
 **Frequency:** Daily (for high-volume cash businesses); periodic at period-end
 
 **Priority:** High
@@ -341,7 +364,7 @@
 
 ### Domain 5: Cash Book Management
 
-#### UC-05: Maintain Cash Book
+#### UC-005: Maintain Cash Book
 
 **Description:** Maintain the official cash book (Sổ quỹ tiền mặt) as the chronological record of all cash receipts, payments, and daily balance. The cash book is legally mandated and serves as the primary audit trail for cash transactions.
 
@@ -353,7 +376,7 @@
 
 **Preconditions:**
 - Cash book is initialized with opening balance
-- Cash receipts and payments are recorded (UC-01, UC-02)
+- Cash receipts and payments are recorded (UC-001, UC-002)
 
 **Trigger:**
 - Every cash receipt or payment transaction
@@ -407,8 +430,13 @@
 - Cash discrepancy report
 
 **Dependencies:**
-- Cash receipt processing (UC-01)
-- Cash payment processing (UC-02)
+- Cash receipt processing (UC-001)
+- Cash payment processing (UC-002)
+
+**Postconditions:**
+- Cash book updated with running balance
+- Daily cash count reconciled
+- Discrepancies flagged (if any)
 
 **Frequency:** Continuous (daily)
 
@@ -420,7 +448,7 @@
 
 ### Domain 6: Bank Reconciliation
 
-#### UC-06: Perform Bank Reconciliation
+#### UC-006: Perform Bank Reconciliation
 
 **Description:** Periodically compare the entity's bank account ledger (TK 112) against the bank statement to identify and resolve timing differences, errors, and unauthorized transactions.
 
@@ -499,9 +527,14 @@
 - Approval record
 
 **Dependencies:**
-- Bank transaction recording (UC-03)
-- Cash in transit tracking (UC-04)
+- Bank transaction recording (UC-003)
+- Cash in transit tracking (UC-004)
 - Prior reconciliation completed
+
+**Postconditions:**
+- Bank reconciliation completed
+- Adjusting entries posted (bank charges, interest, errors)
+- Period closing unblocked
 
 **Frequency:** Monthly (minimum); may be performed more frequently for high-volume accounts
 
@@ -513,7 +546,7 @@
 
 ### Domain 7: Petty Cash Management
 
-#### UC-07: Manage Petty Cash Fund
+#### UC-007: Manage Petty Cash Fund
 
 **Description:** Establish, operate, reimburse, and close petty cash funds for small-value operational expenses that are impractical to process through the formal payment cycle.
 
@@ -578,8 +611,13 @@
 - Expense allocation summary
 
 **Dependencies:**
-- Cash payment processing (UC-02)
+- Cash payment processing (UC-002)
 - Expense account configuration in COA
+
+**Postconditions:**
+- Petty cash disbursed or replenished
+- Fund restored to imprest level (after replenishment)
+- Expense accounts updated
 
 **Frequency:** Daily (disbursements); weekly/bi-weekly (replenishment)
 
@@ -591,7 +629,7 @@
 
 ### Domain 8: Foreign Currency Cash Management
 
-#### UC-08: Account for Foreign Currency Cash and Bank Transactions
+#### UC-008: Account for Foreign Currency Cash and Bank Transactions
 
 **Description:** Record cash and bank transactions denominated in foreign currencies. Maintain dual-currency tracking (original currency + VND equivalent) and apply period-end revaluation per VAS 10.
 
@@ -653,9 +691,14 @@
 - FX gain/loss report (realized vs. unrealized)
 
 **Dependencies:**
-- Exchange rate master data (UC-04 in COA spec)
+- Exchange rate master data (UC-004 in COA spec)
 - FC account configuration in COA
-- Cash receipt/payment processing (UC-01, UC-02, UC-03)
+- Cash receipt/payment processing (UC-001, UC-002, UC-003)
+
+**Postconditions:**
+- FC transaction recorded in dual currency
+- Period-end revaluation posted
+- FX gain/loss recognized
 
 **Frequency:** Daily (transactions); monthly/quarterly (revaluation)
 
@@ -667,7 +710,7 @@
 
 ### Domain 9: Cash and Bank Reporting
 
-#### UC-09: Generate Cash and Bank Reports
+#### UC-009: Generate Cash and Bank Reports
 
 **Description:** Produce standard and ad-hoc reports on cash and bank positions, movements, and aging to support management decision-making and statutory reporting.
 
@@ -721,7 +764,7 @@
 
 **Input Data:**
 - Report type, date range, currency, bank account filter
-- Transaction data from UC-01 through UC-08
+- Transaction data from UC-001 through UC-008
 
 **Output Data:**
 - Cash position report
@@ -731,8 +774,12 @@
 - FC cash position report
 
 **Dependencies:**
-- All cash/bank transaction processing (UC-01–08)
+- All cash/bank transaction processing (UC-001–UC-008)
 - Bank reconciliation completed for period-end reports
+
+**Postconditions:**
+- Cash/bank report generated
+- Statutory reports ready for submission
 
 **Frequency:** Daily (cash position); monthly/quarterly/yearly (statutory)
 
@@ -747,34 +794,34 @@
 ### Use Case Dependency Graph
 
 ```
-UC-01: Cash Receipt ──────────────────────────────────────────────────────┐
-UC-02: Cash Payment ──────────────────────────────────────────────────────┤
-UC-03: Bank Deposit/Withdrawal ───────────────────────────────────────────┤
-UC-04: Cash in Transit ───────────────────────────────────────────────────┤
+UC-001: Cash Receipt ──────────────────────────────────────────────────────┐
+UC-002: Cash Payment ──────────────────────────────────────────────────────┤
+UC-003: Bank Deposit/Withdrawal ───────────────────────────────────────────┤
+UC-004: Cash in Transit ───────────────────────────────────────────────────┤
                                                                           │
-UC-05: Cash Book ─────────────────────────────────────────────────────────┤
+UC-005: Cash Book ─────────────────────────────────────────────────────────┤
                                                                           │
-UC-06: Bank Reconciliation ◄──────────────────────────────────────────────┤
+UC-006: Bank Reconciliation ◄──────────────────────────────────────────────┤
                                                                           │
-UC-07: Petty Cash ────────┤                                              │
-                          ├── UC-05 (Cash Book) feeds into               │
-UC-08: FC Cash ───────────┤              │                               │
+UC-007: Petty Cash ────────┤                                              │
+                          ├── UC-005 (Cash Book) feeds into               │
+UC-008: FC Cash ───────────┤              │                               │
                           │              ▼                               ▼
-                          └──── UC-09: Cash & Bank Reports ◄──── All UCs
+                          └──── UC-009: Cash & Bank Reports ◄──── All UCs
 ```
 
 ### Overlapping Use Cases
-- UC-01 (Receipt) and UC-05 (Cash Book): Every receipt immediately updates the cash book.
-- UC-02 (Payment) and UC-05 (Cash Book): Every payment immediately updates the cash book.
-- UC-03 (Bank) and UC-04 (Transit): Deposits in transit use UC-04 until confirmed, then become UC-03.
-- UC-06 (Reconciliation) consumes data from UC-03, UC-04 (transit items), UC-08 (FX).
-- UC-09 (Reporting) aggregates data from all other use cases.
+- UC-001 (Receipt) and UC-005 (Cash Book): Every receipt immediately updates the cash book.
+- UC-002 (Payment) and UC-005 (Cash Book): Every payment immediately updates the cash book.
+- UC-003 (Bank) and UC-004 (Transit): Deposits in transit use UC-004 until confirmed, then become UC-003.
+- UC-006 (Reconciliation) consumes data from UC-003, UC-004 (transit items), UC-008 (FX).
+- UC-009 (Reporting) aggregates data from all other use cases.
 
 ### Shared Dependencies
 - **TK 111/112/113:** All use cases depend on COA configuration of these three accounts.
 - **Documentary evidence:** Every transaction requires supporting documentation (vouchers, receipts, bank slips).
-- **Accountant segregation:** UC-02 (payment), UC-06 (reconciliation), UC-07 (petty cash) require different individuals for execution vs. recording vs. reconciliation.
-- **Real-time balance:** UC-05 (cash book running balance) is consumed by UC-02 (sufficient balance check).
+- **Accountant segregation:** UC-002 (payment), UC-006 (reconciliation), UC-007 (petty cash) require different individuals for execution vs. recording vs. reconciliation.
+- **Real-time balance:** UC-005 (cash book running balance) is consumed by UC-002 (sufficient balance check).
 
 ### Workflow Gaps
 - No explicit use case for **electronic bank statement import** (auto-matching from MT940/CSV).
@@ -787,7 +834,7 @@ UC-08: FC Cash ───────────┤              │            
 - Source material uses "Thu tiền" / "Chi tiền" (receive/pay money) interchangeably with "Phiếu thu" / "Phiếu chi" (receipt/payment voucher). Normalized to "Process Cash Receipt" and "Process Cash Payment" as the business capability, with vouchers as the documentary evidence.
 
 ### Potential System Risks
-- **Real-time vs. batch conflict:** Cash book (UC-05) requires real-time updating, but bank reconciliation (UC-06) is periodic. If transactions are posted late, reconciliation fails.
+- **Real-time vs. batch conflict:** Cash book (UC-005) requires real-time updating, but bank reconciliation (UC-006) is periodic. If transactions are posted late, reconciliation fails.
 - **Segregation of duties violation:** Same person creating and approving receipts/payments. System must enforce role-based access.
 - **Orphaned transit items:** TK 113 entries never cleared. System must age and escalate uncleared transit items.
 - **FX rate inconsistency:** Different rates used for different transactions in the same currency. System must enforce consistent rate policy.
@@ -843,15 +890,15 @@ UC-08: FC Cash ───────────┤              │            
 
 | Module | Responsibility |
 |---|---|
-| **Cash Receipt Engine** | Process, validate, post cash receipts (UC-01) |
-| **Cash Payment Engine** | Process, authorize, post cash payments (UC-02) |
-| **Bank Transaction Engine** | Record deposits, withdrawals, direct bank debits/credits (UC-03) |
-| **Cash in Transit Tracker** | Transit clearing management, aging, auto-reversal (UC-04) |
-| **Cash Book** | Real-time cash register, running balance, daily count verification (UC-05) |
-| **Bank Reconciliation** | Statement import, auto-matching, adjustment posting, aging (UC-06) |
-| **Petty Cash Manager** | Imprest fund tracking, disbursement logging, replenishment (UC-07) |
-| **FX Cash Engine** | Dual-currency tracking, revaluation, FX gain/loss calculation (UC-08) |
-| **Cash Reporting** | Cash position, cash book, bank ledger, cash flow inputs (UC-09) |
+| **Cash Receipt Engine** | Process, validate, post cash receipts (UC-001) |
+| **Cash Payment Engine** | Process, authorize, post cash payments (UC-002) |
+| **Bank Transaction Engine** | Record deposits, withdrawals, direct bank debits/credits (UC-003) |
+| **Cash in Transit Tracker** | Transit clearing management, aging, auto-reversal (UC-004) |
+| **Cash Book** | Real-time cash register, running balance, daily count verification (UC-005) |
+| **Bank Reconciliation** | Statement import, auto-matching, adjustment posting, aging (UC-006) |
+| **Petty Cash Manager** | Imprest fund tracking, disbursement logging, replenishment (UC-007) |
+| **FX Cash Engine** | Dual-currency tracking, revaluation, FX gain/loss calculation (UC-008) |
+| **Cash Reporting** | Cash position, cash book, bank ledger, cash flow inputs (UC-009) |
 | **Bank Master Data** | Bank account configuration, closure, authorized signatories |
 | **Cash Control Dashboard** | Real-time cash position, alerts, pending reconciliation items |
 
@@ -870,7 +917,7 @@ UC-08: FC Cash ───────────┤              │            
 3. **Bank confirmation automation:** Generate and track bank confirmation letters for period-end audit.
 
 ### Technical Improvements
-1. **Real-time bank balance integration:** Display actual bank balance alongside book balance from UC-06 reconciliation status.
+1. **Real-time bank balance integration:** Display actual bank balance alongside book balance from UC-006 reconciliation status.
 2. **Cheque management module:** Track cheque books, issued cheques, presented cheques, cancelled cheques, and stop-payment requests.
 3. **Batch payment processing:** Upload batch payment file for multiple suppliers with single approval (integrate with bank corporate portal).
 

@@ -2,6 +2,10 @@
 
 ## Accounts Receivable Management — TK 131 Under Circular 99/2025/TT-BTC
 
+**Version:** 1.0
+**Last Updated:** 2026-05-15
+**Regulatory Basis:** Circular 99/2025/TT-BTC, Law on Accounting 2015
+
 ---
 
 ## 1. Source
@@ -50,6 +54,11 @@
 - **Indirect taxes not separated at invoice time:** Record revenue at gross amount. Periodically determine tax liability and adjust: Dr 511 — Cr 333 (Article 3.1b).
 - **Export entrusted (giao ủy thác xuất khẩu):** Principal records AR from entrusted agent as normal sales transaction.
 - **Construction contract:** Progress billing per contract terms via TK 337 (Article 3.6).
+
+**Postconditions:**
+- Customer AR balance increased
+- Revenue recognized (net of tax)
+- Indirect tax liability recorded
 
 **Exception Flow:**
 - If customer credit limit exceeded: flag for approval
@@ -116,6 +125,11 @@
 - **Prepayment (customer advance):** Record as Dr 111/112 — Cr 131. TK 131 shows credit balance (customer prepayment = liability).
 - **Partial payment:** Record partial collection; balance remains outstanding.
 
+**Postconditions:**
+- Cash/bank increased
+- Customer AR balance reduced
+- Interest income recorded (if applicable)
+
 **Business Rules:**
 - BR07: Payment reduces TK 131 on the credit side (Article 3.5)
 - BR08: Prepayment creates credit balance on TK 131; shown as liability on BC 01
@@ -153,6 +167,14 @@
    - Cr 131 (reduce AR by total amount)
 4. Customer AR balance reduced
 
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- AR balance reduced
+- Revenue deduction recorded
+- Output VAT reversed
+
 **Business Rules:**
 - BR11: Sales return: Dr 521 + Dr 333 — Cr 131 (Article 3.2)
 - BR12: Return must reference original invoice for audit trail
@@ -175,6 +197,13 @@
    - **Trade discount on invoice:** Revenue recorded at net amount (no separate entry)
    - **Post-sale discount/allowance:** Dr 521 + Dr 333 — Cr 131 (Article 3.3)
 2. Customer AR balance reduced
+
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- AR balance reduced
+- Revenue deduction recorded (post-sale discount)
 
 **Business Rules:**
 - BR14: Trade discount shown on invoice = revenue at net amount (Article 3.3a)
@@ -200,6 +229,14 @@
    - Cr 131 (total invoice amount)
 3. AR balance cleared
 
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- AR balance cleared
+- Cash/bank increased (net amount)
+- Finance cost recorded
+
 **Business Rules:**
 - BR16: Settlement discount = Dr 635 (finance cost), NOT revenue reduction (Article 3.4)
 - BR17: Discount amount must not exceed invoice balance
@@ -224,6 +261,13 @@
    - Dr 133 (input VAT, if applicable)
    - Cr 131 (reduce AR by total amount)
 4. Inventory updated
+
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- AR balance reduced
+- Inventory increased at fair value
 
 **Business Rules:**
 - BR18: Barter: Dr inventory at fair value — Cr 131 (Article 3.7)
@@ -261,6 +305,14 @@
 3. System opens off-balance-sheet tracking for written-off amounts (Article 3.8)
 4. Written-off amounts tracked for potential future recovery
 
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- AR balance reduced
+- Bad debt provision utilized
+- Written-off amount tracked off-balance-sheet
+
 **Business Rules:**
 - BR20: Write-off: Dr 2293 (provision) + Dr 642 (excess) — Cr 131 (Article 3.8)
 - BR21: Written-off amounts tracked off-balance-sheet for recovery within legal期限
@@ -287,6 +339,13 @@
 5. Record adjustment:
    - If additional provision needed: Dr 642 — Cr 2293
    - If provision can be reduced: Dr 2293 — Cr 642 (reversal)
+
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- Bad debt provision balance adjusted
+- Expense recorded or reversed
 
 **Business Rules:**
 - BR24: Bad debt provision assessed per individual customer (AR aging)
@@ -326,6 +385,11 @@
 - **Performance bonus:** Additional billing when contract targets exceeded: Dr 131 — Cr 511 — Cr 3331
 - **Compensation from customer:** For delays, errors caused by customer: Dr 131 — Cr 511 — Cr 3331
 
+**Postconditions:**
+- AR recorded per progress billing
+- Revenue recognized
+- Output VAT recorded
+
 **Business Rules:**
 - BR26: Planned billing: Dr 337 (revenue) → Dr 131 (invoice) — Cr 337 (Article 3.6a)
 - BR27: Actual billing: Dr 131 (certified completed work) — Cr 511 (Article 3.6b)
@@ -351,6 +415,13 @@
 3. Aging buckets: current, 1-30 days, 31-60 days, 61-90 days, 90+ days
 4. Credit balance customers (prepayments) listed separately
 5. Report generated for collection follow-up and provision estimation
+
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- AR aging report generated
+- Prepayments identified separately
 
 **Business Rules:**
 - BR29: AR aging by invoice due date, not transaction date

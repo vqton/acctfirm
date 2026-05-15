@@ -2,6 +2,10 @@
 
 ## Chart of Accounts (COA) System — Circular 99/2025/TT-BTC Appendix II
 
+**Version:** 1.0
+**Last Updated:** 2026-05-15
+**Regulatory Basis:** Circular 99/2025/TT-BTC, Law on Accounting 2015
+
 ---
 
 ## 1. Source
@@ -25,7 +29,7 @@
 
 ### Domain 1: COA Master Data
 
-#### UC-01: Configure Uniform Chart of Accounts
+#### UC-001: Configure Uniform Chart of Accounts
 
 **Description:** Load and maintain the standard COA: 8 account classes, Level 1 (3-digit) and Level 2 (4-digit) accounts, each classified by economic nature with prescribed normal balance side.
 
@@ -53,6 +57,10 @@
 
 **Alternate Flow:** Transition from Circular 200: system loads legacy COA, applies account mapping rules, transfers opening balances.
 
+**Postconditions:**
+- Standard COA loaded and activated
+- COA version recorded with effective date
+
 **Business Rules:**
 - BR01: 8 account classes only. No class can be added or removed.
 - BR02: Level 1 = 3 digits. Level 2 = 4 digits (parent + 1 digit).
@@ -66,7 +74,7 @@
 
 ---
 
-#### UC-02: Manage Account Lifecycle
+#### UC-002: Manage Account Lifecycle
 
 **Description:** Activate, deactivate, add sub-accounts, merge accounts while preserving transactional integrity.
 
@@ -78,6 +86,13 @@
 1. User requests action: add sub-account, deactivate account, reactivate, merge.
 2. System validates: deactivation requires zero balance; merge transfers balance then deactivates source.
 3. System executes and logs.
+
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- Account lifecycle change applied
+- Change audit-logged immutably
 
 **Business Rules:**
 - BR08: Direct posting to Level 1 control accounts is prohibited.
@@ -91,7 +106,7 @@
 
 ### Domain 2: Posting Validation
 
-#### UC-03: Validate Posting Rules
+#### UC-003: Validate Posting Rules
 
 **Description:** Enforce correct posting logic: detail-only posting, normal balance enforcement, active account check.
 
@@ -106,6 +121,13 @@
    c. Account is Active
 2. Pass → accept. Fail → reject with specific error.
 
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- Entry validated or rejected with specific error
+- Only detail accounts affected
+
 **Business Rules:**
 - BR12: Asset accounts normally Dr; Liability/Equity accounts normally Cr.
 - BR13: Revenue accounts normally Cr; Expense accounts normally Dr.
@@ -119,7 +141,7 @@
 
 ### Domain 3: Foreign Currency Accounting
 
-#### UC-04: Manage Foreign Currency Accounts and Revaluation
+#### UC-004: Manage Foreign Currency Accounts and Revaluation
 
 **Description:** Track monetary accounts (cash, bank, AR, AP) by original currency. Apply spot-rate, prepayment-rate, and period-end revaluation per VAS 10 and Circular 99 TK 413.
 
@@ -136,6 +158,13 @@
 3. Exchange difference → TK 413 (not P&L immediately per VAS 10).
 4. Exchange rate policy must be consistently applied and disclosed.
 
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- FC transactions recorded with correct rates
+- Period-end revaluation posted
+
 **Business Rules:**
 - BR17: Cash/bank Dr → spot rate; Cr → spot rate or book rate.
 - BR18: Payable Cr → spot rate; Dr → spot rate or book rate.
@@ -150,7 +179,7 @@
 
 ### Domain 4: Financial Statement Mapping
 
-#### UC-05: Map Accounts to Financial Statement Lines
+#### UC-005: Map Accounts to Financial Statement Lines
 
 **Description:** Define mapping from COA accounts to Balance Sheet (BC 01), Income Statement (BC 02), Cash Flow (BC 03), and Notes (BC 09) line items.
 
@@ -164,13 +193,20 @@
 3. Every active account must map to exactly one FS line.
 4. Mapping is versioned; changes are audit-logged.
 
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- All active accounts mapped to FS lines
+- Mapping version recorded
+
 **Priority:** Critical
 
 ---
 
 ### Domain 5: COA Versioning & Migration
 
-#### UC-06: Migrate COA Between Accounting Regimes
+#### UC-006: Migrate COA Between Accounting Regimes
 
 **Description:** Transition from Circular 200/133 to Circular 99, including account mapping, balance transfer, and comparative adjustment.
 
@@ -185,6 +221,14 @@
 4. Deactivate old accounts. Activate new accounts.
 5. Generate migration report.
 
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- Opening balances transferred to new COA
+- Old accounts deactivated, new accounts activated
+- Migration report generated
+
 **Business Rules:**
 - BR23: Every old account maps to a new account.
 - BR24: Balance transfer preserves accounting equation.
@@ -196,7 +240,7 @@
 
 ### Domain 6: COA Audit
 
-#### UC-07: Audit COA Changes
+#### UC-007: Audit COA Changes
 
 **Description:** Maintain immutable audit trail of all COA changes: additions, status changes, mapping modifications, migrations.
 
@@ -209,55 +253,62 @@
 2. Prior versions preserved for comparative reporting.
 3. Deletion physically prohibited; accounts are deactivated.
 
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- COA change audit trail updated
+- Prior versions preserved
+
 **Priority:** High
 
 ---
 
 ### Class-by-Class Accounting Principles
 
-#### UC-08: Manage Asset Accounts (Class 1–2)
+#### UC-008: Manage Asset Accounts (Class 1–2)
 
 **Scope:** TK 111 (Cash), 112 (Bank), 113 (Cash in transit), 121 (Trading securities), 128 (HTM investments), 131 (AR), 133 (Input VAT), 136 (Interco AR), 138 (Other AR), 141 (Advances), 151–158 (Inventory), 211–217 (Fixed assets), 221–228 (Investments), 241 (CIP), 242 (Prepaid expenses), 243 (Deferred tax assets), 244 (Deposits), 258 (Other assets).
 
 **Rules:** Normally debit balance. Dr increases, Cr decreases. Foreign currency: Dr at spot rate, Cr at spot rate or book rate. Sub-accounts inherit asset nature.
 
-#### UC-09: Manage Liability Accounts (Class 3)
+#### UC-009: Manage Liability Accounts (Class 3)
 
 **Scope:** TK 311 (Payables), 331 (AP), 333 (Taxes payable), 334 (Wages), 335 (Accruals), 336 (Interco AP), 337 (Bond payables), 338 (Other payables), 341 (Borrowings), 343 (Bonds issued), 344 (Conversion debt), 347 (Lease liabilities), 352 (Provisions), 356 (Other liabilities), 358 (Deferred revenue).
 
 **Rules:** Normally credit balance. Cr increases, Dr decreases. Foreign currency: Cr at spot rate, Dr at spot rate or book rate. Prepayment: rate locked at prepayment date.
 
-#### UC-10: Manage Equity Accounts (Class 4)
+#### UC-010: Manage Equity Accounts (Class 4)
 
 **Scope:** TK 411 (Capital), 418 (Share premium), 419 (Treasury shares), 421 (Retained earnings).
 
 **Rules:** Normally credit balance. Cr increases, Dr decreases. Key accounts for financial position.
 
-#### UC-11: Manage Revenue Accounts (Class 5)
+#### UC-011: Manage Revenue Accounts (Class 5)
 
 **Scope:** TK 511 (Sales revenue), 515 (Finance income), 521 (Revenue deductions).
 
 **Rules:** Normally credit balance. Cr records revenue, Dr records deductions/closing transfers. Zero balance at period-end after closing.
 
-#### UC-12: Manage Production & Business Expense Accounts (Class 6)
+#### UC-012: Manage Production & Business Expense Accounts (Class 6)
 
 **Scope:** TK 621 (Raw materials), 622 (Labor), 623 (Machine costs), 627 (Overhead), 631 (Trading COGS), 632 (Production COGS), 635 (Finance costs), 641 (Selling expenses), 642 (Admin expenses).
 
 **Rules:** Normally debit balance. Dr records expenses, Cr records closing transfers. Zero balance at period-end. Abnormal costs charged to TK 632 (not inventoried).
 
-#### UC-13: Manage Other Income Accounts (Class 7)
+#### UC-013: Manage Other Income Accounts (Class 7)
 
 **Scope:** TK 711 (Other income), 721 (Other contribution income).
 
 **Rules:** Normally credit balance. Cr records income, Dr records closing transfers. Zero balance at period-end.
 
-#### UC-14: Manage Other Expense Accounts (Class 8)
+#### UC-014: Manage Other Expense Accounts (Class 8)
 
 **Scope:** TK 811 (Other expenses), 821 (CIT expense).
 
 **Rules:** Normally debit balance. Dr records expenses, Cr records closing transfers. Zero balance at period-end.
 
-#### UC-15: Manage Result Determination Account (Class 9)
+#### UC-015: Manage Result Determination Account (Class 9)
 
 **Scope:** TK 911 (Profit & loss determination).
 
@@ -268,14 +319,14 @@
 ## 3. Cross-Use Case Analysis
 
 ### Overlapping Use Cases
-- UC-03 (Posting Rules) consumed by UC-08 through UC-15 (all account classes)
-- UC-04 (FX Revaluation) applies to UC-08 (cash/bank/AR) and UC-09 (AP/payables)
-- UC-05 (FS Mapping) depends on UC-08–15 for correct account-to-FS-line mapping
+- UC-003 (Posting Rules) consumed by UC-008 through UC-015 (all account classes)
+- UC-004 (FX Revaluation) applies to UC-008 (cash/bank/AR) and UC-009 (AP/payables)
+- UC-005 (FS Mapping) depends on UC-008–15 for correct account-to-FS-line mapping
 
 ### Shared Dependencies
 - **Account master data:** all use cases depend on COA
-- **Account hierarchy (Level 1/2):** shared by UC-03 (posting restriction) and UC-05 (FS aggregation)
-- **Account status:** consumed by UC-03 (blocks posting) and UC-02 (lifecycle)
+- **Account hierarchy (Level 1/2):** shared by UC-003 (posting restriction) and UC-005 (FS aggregation)
+- **Account status:** consumed by UC-003 (blocks posting) and UC-002 (lifecycle)
 
 ### Workflow Gaps
 - No explicit use case for bulk account import from CSV/Excel

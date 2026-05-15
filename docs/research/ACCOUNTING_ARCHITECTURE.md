@@ -1,5 +1,11 @@
 # PHP Accounting Software Architecture (Framework-Free)
 
+**Version:** 1.0
+**Last Updated:** 2026-05-15
+**Category:** Research / Reference
+
+---
+
 ## Folder Structure
 
 ```

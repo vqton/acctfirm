@@ -15,7 +15,7 @@ $pdo = new PDO("mysql:host=127.0.0.1;dbname=accounting_db;charset=utf8mb4","dev"
 
 $accountRepo = new PDOAccountRepository($pdo);
 $txnRepo = new PDOTransactionRepository($pdo);
-$svc = new JournalService($accountRepo, $txnRepo);
+$svc = new JournalService($accountRepo, $txnRepo, $pdo);
 
 $failed = 0; $total = 0;
 function assertEq($a, $b, $m) { global $total, $failed;

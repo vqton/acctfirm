@@ -2,6 +2,10 @@
 
 ## Inventory Accounting System — Circular 99/2025/TT-BTC (Vietnamese Enterprise Accounting Regime)
 
+**Version:** 1.0
+**Last Updated:** 2026-05-15
+**Regulatory Basis:** Circular 99/2025/TT-BTC, Law on Accounting 2015
+
 ---
 
 ## 1. Source
@@ -71,6 +75,10 @@ Establish the cost-flow assumption for inventory valuation that is applied consi
 - BR003: Standard cost method requires periodic review and adjustment to actual cost
 - BR004: Retail method is restricted to retail/supermarket businesses with high-volume, low-margin, fast-moving goods
 
+##### Postconditions
+- Valuation method configuration saved
+- Policy election recorded with effective date
+
 ##### Input Data
 - Valuation method code
 - Effective date
@@ -134,6 +142,10 @@ Enable granular inventory tracking and control by category, type, and location.
 - BR006: TK 153 tools include: formwork, packaging, glass/ceramic tools, office supplies, protective equipment
 - BR007: Non-owned inventory (consignment, custody, processing) must NOT be recorded in TK 151–158; tracked separately off-balance-sheet
 - BR008: Inventory held >12 months or beyond one operating cycle must be reclassified as long-term assets (not presented as current inventory on balance sheet)
+
+##### Postconditions
+- Inventory categories configured with GL account mappings
+- Sub-classifications defined
 
 ##### Input Data
 - Category code and name
@@ -212,6 +224,11 @@ Accurately capture the landed cost of purchased inventory and update stock quant
 - BR012: Trade discounts and rebates received AFTER purchase must be allocated: reduce cost of inventory still on hand; reduce expense for inventory already consumed; reduce COGS for inventory already sold
 - BR013: Settlement discounts (early payment) are recorded as financial income (TK 515), not inventory cost reduction
 
+##### Postconditions
+- Goods receipt note created
+- Inventory quantity and value updated
+- Journal entry posted (Dr Inventory ± TK 133 — Cr AP/Cash)
+
 ##### Input Data
 - Supplier, invoice number, date
 - Item code, quantity, unit price
@@ -280,6 +297,11 @@ Capture manufacturing cost and transfer completed output from WIP to finished go
 - BR015: Variable overhead is allocated in full based on actual production volume
 - BR016: Direct material and direct labor above normal levels are expensed to COGS
 
+##### Postconditions
+- Finished goods receipt note created
+- WIP reduced, finished goods increased
+- Unit cost calculated
+
 ##### Input Data
 - Production order ID
 - Finished product codes and quantities
@@ -338,6 +360,10 @@ Capture processing cost and track returned processed inventory.
 
 ##### Business Rules
 - BR017: Cost of externally processed goods = raw material cost + processing fee + transport + related costs
+
+##### Postconditions
+- Processed goods received back
+- Processing cost recorded
 
 ##### Input Data
 - Processing order reference
@@ -407,6 +433,11 @@ Transfer raw material cost to work-in-process and track material consumption.
   - Coefficient = (Actual opening + Actual receipts) / (Provisional opening + Provisional receipts)
   - Actual issue cost = Provisional issue cost × Coefficient
 
+##### Postconditions
+- Material issue slip created
+- Inventory reduced, WIP/expense increased
+- Issue cost calculated per valuation method
+
 ##### Input Data
 - Requisition reference
 - Item codes and quantities
@@ -471,6 +502,11 @@ Recognize revenue and matching cost of goods sold upon sale/delivery.
 ##### Business Rules
 - BR020: Consignment goods (TK 157) remain enterprise property until sold by agent; risk and rewards not yet transferred
 - BR021: Bill-and-hold arrangements require careful evaluation of revenue recognition timing per VAS
+
+##### Postconditions
+- COGS recognized
+- Inventory reduced
+- Revenue recognized separately
 
 ##### Input Data
 - Sales order / delivery note
@@ -538,6 +574,10 @@ Ensure accurate period-end cut-off for inventory ownership and payables recognit
 - BR023: Detailed tracking by item type, shipment, and purchase contract is required
 - BR024: If invoice is not yet received at period-end, system must accrue the liability based on contract or estimate
 
+##### Postconditions
+- Goods in transit recorded (Dr TK 151)
+- Liability accrued (if invoice not yet received)
+
 ##### Input Data
 - Purchase order / contract reference
 - Invoice (or estimated value)
@@ -601,6 +641,10 @@ Maintain accurate inventory ownership segregation and recognize revenue only whe
 ##### Business Rules
 - BR025: Consignment goods are NOT removed from inventory valuation; they stay on balance sheet (TK 157) until sale to third party
 - BR026: Detailed tracking by consignee, location, and consignment contract is required
+
+##### Postconditions
+- Consignment dispatch recorded (Dr TK 157)
+- Inventory location updated
 
 ##### Input Data
 - Consignment reference
@@ -674,6 +718,12 @@ Determine accurate production cost per unit and support period-end inventory val
 - BR027: TK 154 must NOT include: selling expenses, administrative expenses, finance costs, other expenses, CIT expense, CAPEX, or expenses covered by other sources
 - BR028: Fixed overhead allocation rate = total fixed overhead / normal capacity; applied to actual units produced
 - BR029: WIP and finished goods are valued at actual production cost
+
+##### Postconditions
+- Production costs accumulated in TK 154
+- Unit cost calculated
+- Finished goods cost transferred to TK 155
+- WIP ending balance determined
 
 ##### Input Data
 - Opening WIP balance
@@ -754,6 +804,11 @@ Ensure inventory records match physical stock; identify and resolve shrinkage, o
 - BR033: Count results must be documented in official count minutes (Biên bản kiểm kê)
 - BR034: For periodic system: Issued quantity/value = Opening + Receipts − Closing (physical)
 
+##### Postconditions
+- Physical count completed
+- Discrepancies identified and adjusted
+- Adjustment journal entries posted
+
 ##### Input Data
 - Count sheets with physical quantities
 - Book quantities and unit costs
@@ -823,6 +878,10 @@ Ensure inventory is not carried above its recoverable amount; reflect true econo
 - BR037: Reversal of provision is capped at the original impairment amount (carrying cost cannot exceed original cost after reversal)
 - BR038: Raw materials are not written down below cost if finished product is still profitable (unless material is obsolete)
 
+##### Postconditions
+- Impairment provision calculated per item
+- Journal entry posted (Dr/Cr TK 632 — Cr/Dr TK 2294)
+
 ##### Input Data
 - Inventory item cost
 - Estimated selling price
@@ -887,6 +946,11 @@ Properly classify promotional costs as selling expense or revenue reduction base
 - BR039: Unconditional promotional giveaways are recorded as selling expense (TK 641)
 - BR040: Conditional promotions (requiring purchase of main product) are treated as a discount; revenue is allocated proportionally; promoted item cost is COGS
 - BR041: Free samples and marketing inventory must be tracked separately for tax purposes
+
+##### Postconditions
+- Promotional inventory issued
+- Selling expense or COGS recorded
+- Tax adjustment tracked
 
 ##### Input Data
 - Promotion campaign reference
@@ -953,6 +1017,11 @@ Reverse the original purchase transaction for returned goods and update supplier
 - BR042: Trade discounts and rebates received after initial purchase must be allocated based on inventory status at receipt date
 - BR043: VAT adjustment is required when input VAT was claimed on returned goods
 
+##### Postconditions
+- Return processed
+- Supplier credit reflected
+- VAT adjustment posted (if applicable)
+
 ##### Input Data
 - Original receipt reference
 - Returned item codes and quantities
@@ -1018,6 +1087,11 @@ Accurately reflect returned goods in inventory and correct previously recognized
 - BR044: Returned goods are valued at original cost if salable; at scrap value if damaged
 - BR045: Revenue reversal must be accompanied by proper credit note and VAT adjustment
 
+##### Postconditions
+- Customer return received
+- Revenue and COGS reversed
+- Inventory restocked (if salable)
+
 ##### Input Data
 - Original sales invoice reference
 - Returned item codes, quantities, condition
@@ -1079,6 +1153,11 @@ Recognize gain or loss on inventory disposal and remove from stock records.
 ##### Business Rules
 - BR046: Scrap/obsolete inventory sales are taxable revenue subject to VAT
 - BR047: COGS is the carrying value at disposal date
+
+##### Postconditions
+- Inventory removed from stock
+- Revenue and COGS recorded
+- Gain/loss on disposal recognized
 
 ##### Input Data
 - Items to dispose
@@ -1146,6 +1225,10 @@ Ensure accurate cost measurement for foreign-currency inventory in compliance wi
 - BR049: Prepayment amount is fixed at prepayment date rate; does not change on delivery
 - BR050: Tax values (import duty, VAT on imports) follow tax authority exchange rates
 - BR051: Exchange differences on inventory purchases are recognized in TK 413 and may be capitalized per VAS 10
+
+##### Postconditions
+- FC inventory cost recorded in VND
+- Exchange differences tracked
 
 ##### Input Data
 - Foreign currency invoice
@@ -1219,6 +1302,11 @@ Ensure inventory balances are complete, accurate, and properly presented in fina
 - BR052: Inventory sub-ledger must reconcile to GL before period can be closed
 - BR053: Cut-off procedures must ensure all inventory receipts/issues are recorded in correct period
 - BR054: Long-term inventory (>12 months or >1 operating cycle) must be reclassified from current assets to long-term assets
+
+##### Postconditions
+- Inventory sub-ledger reconciled to GL
+- Cut-off procedures completed
+- Inventory schedules generated
 
 ##### Input Data
 - Period parameters (opening/closing dates)

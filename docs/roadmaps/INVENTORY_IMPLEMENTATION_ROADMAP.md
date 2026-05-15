@@ -1,10 +1,12 @@
 # Inventory Module — Implementation Roadmap
 
-Based on the 12 use cases defined in `INVENTORY_USE_CASE_SPECIFICATION.md`.
+**Version:** 1.0
+**Last Updated:** 2026-05-15
+**Base Spec:** `docs/specs/INVENTORY_PRINCIPLES_USE_CASE_SPECIFICATION.md`
 
 ---
 
-## Current Status
+## Current State Assessment
 
 | Layer | Count | Status |
 |---|---|---|
@@ -21,7 +23,7 @@ Based on the 12 use cases defined in `INVENTORY_USE_CASE_SPECIFICATION.md`.
 
 **Goal:** Set up the cost calculation method per item so all future transactions compute correct issue cost.
 
-| Step | Description | Files | Verification |
+| Task | Description | Files | Verification |
 |---|---|---|---|
 | 1a | Add `valuation_method_id` column to `items` table | Migration 021 | Items link to valuation methods |
 | 1b | Update Item model with `getValuationMethod()`, `setValuationMethod()` | Item.php | REST API returns method |
@@ -36,7 +38,7 @@ Based on the 12 use cases defined in `INVENTORY_USE_CASE_SPECIFICATION.md`.
 
 **Goal:** Record inventory purchases with landed cost calculation, updating quantity + value simultaneously.
 
-| Step | Description | Verification |
+| Task | Description | Verification |
 |---|---|---|
 | 2a | **InventoryReceipt transaction:** POST `/api/inventory/receipt` — Dr Inventory (TK 152/155/156) — Cr AP/Cash | Journal entry balances |
 | 2b | **Landed cost allocation:** Freight, insurance, import duty, non-refundable taxes added to unit cost | Unit cost = (total cost) / quantity |
@@ -52,7 +54,7 @@ Based on the 12 use cases defined in `INVENTORY_USE_CASE_SPECIFICATION.md`.
 
 **Goal:** Record inventory issues (to production, to sale) using configured valuation method.
 
-| Step | Description | Verification |
+| Task | Description | Verification |
 |---|---|---|
 | 3a | **InventoryIssue transaction:** POST `/api/inventory/issue` — Dr Cost/Expense — Cr Inventory | COGS matches valuation method |
 | 3b | **FIFO cost calculation:** Track cost layers; issue consumes oldest layer first | FIFO cost < latest purchase cost |
@@ -68,7 +70,7 @@ Based on the 12 use cases defined in `INVENTORY_USE_CASE_SPECIFICATION.md`.
 
 **Goal:** Move inventory between warehouses without ownership change or P&L impact.
 
-| Step | Description | Verification |
+| Task | Description | Verification |
 |---|---|---|
 | 4a | **Transfer transaction:** POST `/api/inventory/transfer` — Dr Warehouse B — Cr Warehouse A | Same quantity, same cost, different warehouse |
 
@@ -80,7 +82,7 @@ Based on the 12 use cases defined in `INVENTORY_USE_CASE_SPECIFICATION.md`.
 
 **Goal:** Track inventory purchased but not yet received at period-end.
 
-| Step | Description | Verification |
+| Task | Description | Verification |
 |---|---|---|
 | 5a | **In-transit receipt:** PO shipped, not yet received → Dr TK 151 — Cr AP | TK 151 balance > 0 |
 | 5b | **In-transit arrival:** Goods received → Dr TK 152/155/156 — Cr TK 151 | TK 151 returns to 0 |
@@ -94,7 +96,7 @@ Based on the 12 use cases defined in `INVENTORY_USE_CASE_SPECIFICATION.md`.
 
 **Goal:** Track goods sent to agents for sale (still enterprise property until sold).
 
-| Step | Description | Verification |
+| Task | Description | Verification |
 |---|---|---|
 | 6a | **Consignment dispatch:** Dr TK 157 — Cr TK 155/156 | TK 157 balance increases |
 | 6b | **Consignment sale report:** Agent reports sale → Dr TK 632 — Cr TK 157; Dr AR — Cr Revenue | Revenue + COGS recorded |
@@ -108,7 +110,7 @@ Based on the 12 use cases defined in `INVENTORY_USE_CASE_SPECIFICATION.md`.
 
 **Goal:** Perform physical count, compare to book, adjust discrepancies.
 
-| Step | Description | Verification |
+| Task | Description | Verification |
 |---|---|---|
 | 7a | **Count sheet generation:** POST `/api/inventory/count-sheet` — creates count records per item/warehouse | Count sheet with book quantities |
 | 7b | **Count entry:** PUT `/api/inventory/count-sheet/{id}` — record physical quantities | Variance calculated |
@@ -123,7 +125,7 @@ Based on the 12 use cases defined in `INVENTORY_USE_CASE_SPECIFICATION.md`.
 
 **Goal:** Calculate and record provision when NRV < carrying cost.
 
-| Step | Description | Verification |
+| Task | Description | Verification |
 |---|---|---|
 | 8a | **NRV input:** For each item, enter estimated selling price, completion cost, selling cost | NRV calculated |
 | 8b | **Provision calculation:** If carrying cost > NRV → provision = carrying cost − NRV | Provision = difference |
@@ -138,7 +140,7 @@ Based on the 12 use cases defined in `INVENTORY_USE_CASE_SPECIFICATION.md`.
 
 **Goal:** Handle promotional giveaways and conditional promotions.
 
-| Step | Description | Verification |
+| Task | Description | Verification |
 |---|---|---|
 | 9a | **Unconditional promotion:** Free gift, no purchase → Dr TK 641 — Cr Inventory | Selling expense recorded |
 | 9b | **Conditional promotion:** Buy 2 get 1 → allocate consideration; promoted item cost → Dr TK 632 | COGS includes promoted item |
@@ -151,7 +153,7 @@ Based on the 12 use cases defined in `INVENTORY_USE_CASE_SPECIFICATION.md`.
 
 **Goal:** Simplified accounting for low-value, high-variety items.
 
-| Step | Description | Verification |
+| Task | Description | Verification |
 |---|---|---|
 | 10a | **Period-end calculation:** Issues = Opening + Receipts − Closing (physical) | Issues match formula |
 | 10b | **Journal entry:** Dr TK 632 — Cr Inventory (closing entry for periodic system) | COGS equals calculated issues |

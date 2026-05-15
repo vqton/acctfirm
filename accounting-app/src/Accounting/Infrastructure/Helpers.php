@@ -231,4 +231,24 @@ class Helpers
             exit;
         }
     }
+
+    // ── CSRF ──
+
+    public static function csrfToken(): string
+    {
+        if (empty($_SESSION['_csrf'])) {
+            $_SESSION['_csrf'] = bin2hex(random_bytes(32));
+        }
+        return $_SESSION['_csrf'];
+    }
+
+    public static function checkCsrf(): void
+    {
+        $token = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? $_POST['_csrf'] ?? null;
+        if (!$token || $token !== self::csrfToken()) {
+            http_response_code(419);
+            echo json_encode(['error' => 'CSRF token mismatch'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+    }
 }

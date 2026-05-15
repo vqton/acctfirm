@@ -2,6 +2,10 @@
 
 ## Double-Entry Journal Posting — Circular 99/2025/TT-BTC
 
+**Version:** 1.0
+**Last Updated:** 2026-05-15
+**Regulatory Basis:** Circular 99/2025/TT-BTC, Law on Accounting 2015
+
 ---
 
 ## 1. Source
@@ -17,7 +21,7 @@
 
 ### Domain 1: Journal Entry Management
 
-#### UC-01: Create Journal Entry
+#### UC-001: Create Journal Entry
 
 **Description:** Create a journal entry (chứng từ ghi sổ) with one or more debit/credit lines referencing COA accounts. Each entry represents a single financial transaction.
 
@@ -55,8 +59,12 @@
 6. System logs: user, timestamp, IP address.
 
 **Alternate Flow:**
-- **Auto-generated from sub-ledger:** Sales invoice posts automatically: Dr AR — Cr Revenue. System uses pre-defined accounting templates (UC-04).
+- **Auto-generated from sub-ledger:** Sales invoice posts automatically: Dr AR — Cr Revenue. System uses pre-defined accounting templates (UC-004).
 - **Reversing entry:** Created at period open to reverse prior-period accruals. Automatically reverses on a specified date.
+
+**Postconditions:**
+- Journal entry created with status "Pending"
+- Total debits = total credits validated
 
 **Exception Flow:**
 - If any referenced account does not exist, system rejects the entire entry (atomic).
@@ -71,7 +79,7 @@
 - BR05: Credit to asset/expense account = decrease; credit to liability/equity/revenue = increase.
 - BR06: Entry date must fall within an open accounting period.
 - BR07: Journal entry number is auto-generated, configurable per document type.
-- BR08: Once saved, journal entries cannot be edited or deleted — only reversed (UC-06).
+- BR08: Once saved, journal entries cannot be edited or deleted — only reversed (UC-006).
 - BR09: Foreign currency entries require original currency amount, exchange rate, and VND equivalent.
 
 **Input Data:**
@@ -95,7 +103,7 @@
 
 ---
 
-#### UC-02: Post Journal Entry to General Ledger
+#### UC-002: Post Journal Entry to General Ledger
 
 **Description:** Post a pending journal entry to the general ledger, updating account balances. Once posted, the entry becomes immutable and affects financial reports.
 
@@ -104,7 +112,7 @@
 **Primary Actors:** Accountant, Chief Accountant
 
 **Preconditions:**
-- Journal entry exists with status "Pending" (UC-01)
+- Journal entry exists with status "Pending" (UC-001)
 - Entry is balanced (debits = credits)
 
 **Trigger:**
@@ -129,6 +137,11 @@
 - **Batch posting:** Multiple entries posted in a single transaction. If any fails, all roll back.
 - **Automatic posting:** Sub-ledger (AP, AR, inventory, payroll) posts entries automatically via API.
 
+**Postconditions:**
+- Entry status set to "Posted"
+- Account running balances updated
+- Entry becomes immutable
+
 **Exception Flow:**
 - If any account was deactivated between entry creation and posting, system blocks and notifies.
 - If period was closed since entry creation, system blocks.
@@ -137,7 +150,7 @@
 - BR10: Posted entries are IMMUTABLE — cannot be edited, deleted, or modified.
 - BR11: Posting updates account running balances in real-time.
 - BR12: Posting timestamp is the ledger timestamp, NOT the entry date.
-- BR13: Sub-ledger auto-posting uses pre-defined accounting templates (UC-04).
+- BR13: Sub-ledger auto-posting uses pre-defined accounting templates (UC-004).
 - BR14: Period-end batch posting locks the period after completion.
 
 **Input Data:** Journal entry ID
@@ -151,7 +164,7 @@
 
 ---
 
-#### UC-03: Validate Account Posting Rules
+#### UC-003: Validate Account Posting Rules
 
 **Description:** Enforce COA-specific posting logic: detail-only posting, normal balance side, active status check, and foreign currency treatment.
 
@@ -173,6 +186,12 @@
    b. Exchange rate at transaction date is recorded.
    c. Period-end revaluation follows VAS 10 via TK 413.
 
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- Entry validated or rejected with specific error
+
 **Business Rules:**
 - BR15: Posting to Level 1 accounts is strictly prohibited (exception: Chief Accountant override with audit log).
 - BR16: Account deactivation blocks all postings regardless of user role.
@@ -183,7 +202,7 @@
 
 ---
 
-#### UC-04: Manage Accounting Templates
+#### UC-004: Manage Accounting Templates
 
 **Description:** Define pre-configured journal entry templates for recurring transactions (e.g., purchase receipt, sales invoice, salary payment, depreciation).
 
@@ -200,6 +219,13 @@
 3. When triggered, system generates entry with actual values.
 4. System posts entry automatically (or queues for approval).
 
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- Accounting template saved
+- Template-generated entries follow standard validation
+
 **Business Rules:**
 - BR19: Templates must reference detail accounts only.
 - BR20: Template-generated entries follow same validation as manual entries.
@@ -211,7 +237,7 @@
 
 ### Domain 2: Period-End Closing
 
-#### UC-05: Perform Period-End Closing
+#### UC-005: Perform Period-End Closing
 
 **Description:** Close the accounting period: verify all entries are posted, run trial balance, execute closing entries, lock the period.
 
@@ -225,7 +251,7 @@
    b. All bank reconciliations are complete.
    c. All intercompany transactions are reconciled.
    d. No unposted entries remain.
-2. **Run trial balance** (UC-07).
+2. **Run trial balance** (UC-007).
 3. **Closing entries:**
    a. Close revenue accounts (Class 5, 7): Dr Revenue — Cr P&L (TK 911).
    b. Close expense accounts (Class 6, 8): Dr P&L — Cr Expense.
@@ -241,6 +267,12 @@
 - **Loss:** Dr Retained Earnings — Cr P&L (reverse of profit entry).
 - **Re-opening (with auditor approval):** Chief Accountant can re-open a closed period for corrections, subject to audit notification.
 
+**Postconditions:**
+- Period locked
+- All revenue/expense accounts zeroed
+- Net profit/loss transferred to retained earnings
+- Next period opened
+
 **Business Rules:**
 - BR22: All revenue and expense accounts must be zeroed at period-end via closing entries.
 - BR23: Profit distribution entries (dividends, bonuses) are posted AFTER closing to retained earnings.
@@ -251,7 +283,7 @@
 
 ---
 
-#### UC-06: Reverse or Adjust Posted Entry
+#### UC-006: Reverse or Adjust Posted Entry
 
 **Description:** Correct an error in a posted journal entry. Direct editing is prohibited — corrections use reversing entries or adjusting entries.
 
@@ -270,6 +302,13 @@
    b. Post the adjustment.
    c. Original and adjustment together show correct amounts.
 
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- Error corrected with full audit trail
+- Original entry preserved
+
 **Business Rules:**
 - BR26: Posted entries are NEVER edited or deleted.
 - BR27: Reversing entries reference the original entry for audit trail.
@@ -282,7 +321,7 @@
 
 ### Domain 3: Financial Reporting
 
-#### UC-07: Generate Trial Balance
+#### UC-007: Generate Trial Balance
 
 **Description:** List all COA accounts with their debit/credit balances at a point in time. Total debits must equal total credits.
 
@@ -301,6 +340,13 @@
 5. System validates: total debits = total credits.
 6. If unequal, system flags accounts with errors.
 
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- Trial balance generated with total debits = total credits
+- All accounts listed with balances
+
 **Business Rules:**
 - BR30: Trial balance must balance: total debits = total credits.
 - BR31: Asset/Expense accounts normally have debit balance.
@@ -311,7 +357,7 @@
 
 ---
 
-#### UC-08: Generate Financial Statements
+#### UC-008: Generate Financial Statements
 
 **Description:** Produce Balance Sheet (BC 01), Income Statement (BC 02), Cash Flow Statement (BC 03), and Notes (BC 09) from the trial balance.
 
@@ -320,8 +366,8 @@
 **Primary Actors:** Chief Accountant
 
 **Main Flow:**
-1. System loads trial balance (UC-07).
-2. System maps each account balance to FS line item per FS mapping (UC-05 in COA spec).
+1. System loads trial balance (UC-007).
+2. System maps each account balance to FS line item per FS mapping (UC-005 in COA spec).
 3. **Balance Sheet:**
    - Assets (Class 1–2) → current/long-term classification.
    - Liabilities (Class 3) → current/long-term.
@@ -331,6 +377,13 @@
 5. **Cash Flow:**
    - Direct or indirect method.
 6. **Notes:** Accounting policies, contingent liabilities, related party transactions.
+
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- Financial statements generated (BC 01–BC 09)
+- FS match trial balance totals
 
 **Business Rules:**
 - BR34: FS must match trial balance totals.
@@ -344,7 +397,7 @@
 
 ### Domain 4: Foreign Currency & Revaluation
 
-#### UC-09: Revalue Foreign Currency Balances
+#### UC-009: Revalue Foreign Currency Balances
 
 **Description:** At period-end, revalue all monetary items (cash, AR, AP) at the closing exchange rate. Record unrealized gain/loss through TK 413.
 
@@ -359,6 +412,13 @@
 4. Record entry: Dr/Cr TK 413 — Cr/Dr corresponding monetary account.
 5. Disclose revaluation policy in FS notes.
 
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- FC monetary balances revalued at closing rate
+- Unrealized FX difference recorded in TK 413
+
 **Business Rules:**
 - BR38: All monetary items revalued at period-end.
 - BR39: Exchange differences → TK 413 (not P&L until realized).
@@ -370,7 +430,7 @@
 
 ### Domain 5: Audit & Compliance
 
-#### UC-10: Maintain Journal Audit Trail
+#### UC-010: Maintain Journal Audit Trail
 
 **Description:** Record every journal entry event (create, post, reverse, adjust) with user, timestamp, before/after values. Immutable log.
 
@@ -387,6 +447,12 @@
 2. Log is append-only. No deletion.
 3. Auditor can query by: date range, user, account, entry number.
 
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- Audit log updated for journal entry event
+
 **Business Rules:**
 - BR41: All journal entry actions are logged immutably.
 - BR42: Deletion of journal entries is physically impossible.
@@ -396,7 +462,7 @@
 
 ---
 
-#### UC-11: Lock/Unlock Accounting Period
+#### UC-011: Lock/Unlock Accounting Period
 
 **Description:** Control period status: Open, Closing, Closed. Prevent or allow posting based on status.
 
@@ -406,9 +472,16 @@
 
 **Main Flow:**
 1. New period is created with status "Open".
-2. During closing process (UC-05), status changes to "Closing" (prevents new entries from sub-ledgers).
+2. During closing process (UC-005), status changes to "Closing" (prevents new entries from sub-ledgers).
 3. After closing entries are posted, status changes to "Closed".
 4. Re-opening requires dual authorization.
+
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- Period status set (Open/Closing/Closed)
+- Posting access controlled by period status
 
 **Business Rules:**
 - BR44: Only one period can be "Open" at a time.
@@ -427,28 +500,28 @@
 Business Event (purchase, sale, etc.)
     │
     ▼
-UC-01: Create Journal Entry (Dr/Cr lines, account validation)
+UC-001: Create Journal Entry (Dr/Cr lines, account validation)
     │
     ▼
-UC-03: Validate Posting Rules (detail account, normal balance, active status)
+UC-003: Validate Posting Rules (detail account, normal balance, active status)
     │
     ▼
-UC-02: Post to General Ledger (update account balances, immutable record)
+UC-002: Post to General Ledger (update account balances, immutable record)
     │
     ▼
 [Period-end]
     │
-    ├── UC-09: Revalue FX balances
-    ├── UC-07: Generate Trial Balance
-    ├── UC-05: Closing entries (zero revenue/expense, transfer to retained earnings)
-    ├── UC-08: Generate Financial Statements (BC01–BC09)
-    └── UC-11: Lock Period
+    ├── UC-009: Revalue FX balances
+    ├── UC-007: Generate Trial Balance
+    ├── UC-005: Closing entries (zero revenue/expense, transfer to retained earnings)
+    ├── UC-008: Generate Financial Statements (BC01–BC09)
+    └── UC-011: Lock Period
 ```
 
 ### Overlapping Use Cases
-- UC-03 (Posting Validation) consumed by UC-01 (Create Entry) and UC-02 (Post Entry)
-- UC-07 (Trial Balance) consumed by UC-05 (Closing) and UC-08 (FS Generation)
-- UC-06 (Reverse Entry) depends on UC-02 (Posted entries exist)
+- UC-003 (Posting Validation) consumed by UC-001 (Create Entry) and UC-002 (Post Entry)
+- UC-007 (Trial Balance) consumed by UC-005 (Closing) and UC-008 (FS Generation)
+- UC-006 (Reverse Entry) depends on UC-002 (Posted entries exist)
 
 ### Workflow Gaps
 - No explicit use case for **budget checking** (warn when posting would exceed budget)

@@ -1,8 +1,8 @@
 # Implementation Roadmap — Law on Accounting 2015 Provisions
 
-**Scope:** Features mandated by Law 88/2015/QH13 that Circular 99/2025/TT-BTC does NOT cover.
-**Base Spec:** `docs/LAW_ON_ACCOUNTING_2015_USE_CASE_SPECIFICATION.md`
-**Regulatory Reference:** Chapter I (General), Chapter II §4–6 (Inventory, Retention, Transitional), Chapter III (Organization), Chapter V (Inspection)
+**Version:** 1.0
+**Last Updated:** 2026-05-15
+**Base Spec:** `docs/specs/LAW_ON_ACCOUNTING_2015_USE_CASE_SPECIFICATION.md`
 
 ---
 
@@ -11,9 +11,9 @@
 | Domain | UC | Status in Codebase | Gap |
 |---|---|---|---|
 | **Period Management** | UC-001–004 | ✅ PeriodService, period guard, closing entries, view | Done (migration 037, 18 tests) |
-| **Personnel & Organization** | UC-005–006 | ⚠️ Users/RBAC exist (migration 035) | Missing: prohibited person validation, role conflict checks, chief accountant enforcement |
-| **Internal Control** | UC-007–008 | ⚠️ RBAC permissions exist (migration 035) | Missing: cash disbursement dual-signature enforcement, segregation enforcement |
-| **Physical Inventory** | UC-009 | ⚠️ Count sessions + adjustment exist (inventory P7) | Missing: connection to period close enforcement |
+| **Personnel & Organization** | UC-005–006 | ❌ Users/RBAC exist (migration 035) | Missing: prohibited person validation, role conflict checks, chief accountant enforcement |
+| **Internal Control** | UC-007–008 | ❌ RBAC permissions exist (migration 035) | Missing: cash disbursement dual-signature enforcement, segregation enforcement |
+| **Physical Inventory** | UC-009 | ❌ Count sessions + adjustment exist (inventory P7) | Missing: connection to period close enforcement |
 | **Document Retention** | UC-010–011 | ❌ No archiving, no retention tracking | Full build needed |
 | **Transitional Events** | UC-012–017 | ❌ No restructuring workflows | Full build needed (low freq — manual feasible) |
 | **Regulatory Inspection** | UC-018 | ❌ No inspection support | Manual feasible |
@@ -25,7 +25,7 @@
 
 ### Phase 1: Period Engine (Week 1 — CRITICAL PATH)
 
-**Business value:** Without period management, system can't close a month. No go-live possible.
+**Goal:** Without period management, system can't close a month. No go-live possible.
 
 | Task | UC | Files | Days |
 |---|---|---|---|
@@ -87,7 +87,7 @@ CREATE TABLE accounting_periods (
 
 ### Phase 2: Physical Inventory → Period Link (Week 2 — 2 days)
 
-**Business value:** Legal mandate — inventory must complete before close (Article 40.3).
+**Goal:** Legal mandate — inventory must complete before close (Article 40.3).
 
 | Task | Files | Days |
 |---|---|---|
@@ -100,7 +100,7 @@ CREATE TABLE accounting_periods (
 
 ### Phase 3: Personnel Validation (Week 2 — 2 days)
 
-**Business value:** Legal compliance — preventing prohibited persons and role conflicts (Articles 52–54).
+**Goal:** Legal compliance — preventing prohibited persons and role conflicts (Articles 52–54).
 
 | Task | Files | Days |
 |---|---|---|
@@ -113,7 +113,7 @@ CREATE TABLE accounting_periods (
 
 ### Phase 4: Internal Control Enforcement (Week 2 — 1 day)
 
-**Business value:** Article 39 mandate — segregation of duties, cash disbursement dual-signature.
+**Goal:** Article 39 mandate — segregation of duties, cash disbursement dual-signature.
 
 | Task | Files | Days |
 |---|---|---|
@@ -124,7 +124,7 @@ CREATE TABLE accounting_periods (
 
 ### Phase 5: Document Retention (Week 3 — 2 days)
 
-**Business value:** Legal compliance — retention tiers (5/10 years/permanent) and 12-month archival rule.
+**Goal:** Legal compliance — retention tiers (5/10 years/permanent) and 12-month archival rule.
 
 | Task | Files | Days |
 |---|---|---|
@@ -137,7 +137,7 @@ CREATE TABLE accounting_periods (
 
 ### Phase 6: Transitional Events — Manual Procedures Only (Week 3 — 0.5 day)
 
-**Business value:** Low frequency events (merger, dissolution, etc.). Procedure documentation sufficient.
+**Goal:** Low frequency events (merger, dissolution, etc.). Procedure documentation sufficient.
 
 | Task | Days |
 |---|---|

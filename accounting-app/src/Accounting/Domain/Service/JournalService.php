@@ -11,13 +11,16 @@ class JournalService
 {
     private AccountRepositoryInterface $accountRepo;
     private TransactionRepositoryInterface $txnRepo;
+    private ?\PDO $pdo;
 
     public function __construct(
         AccountRepositoryInterface $accountRepo,
-        TransactionRepositoryInterface $txnRepo
+        TransactionRepositoryInterface $txnRepo,
+        ?\PDO $pdo = null
     ) {
         $this->accountRepo = $accountRepo;
         $this->txnRepo = $txnRepo;
+        $this->pdo = $pdo;
     }
 
     /**
@@ -35,85 +38,95 @@ class JournalService
             throw new \RuntimeException('Cannot post: current date is in a closed period');
         }
 
-        // Phase 1: Validate all lines + compute totals (NO balance changes yet)
-        $totalDr = 0.0;
-        $totalCr = 0.0;
-        $validated = [];
+        $inTransaction = $this->pdo !== null;
+        if ($inTransaction) $this->pdo->beginTransaction();
 
-        foreach ($lines as $line) {
-            if ($line['amount'] <= 0) {
-                throw new \InvalidArgumentException('Amount must be positive');
+        try {
+            // Phase 1: Validate all lines + compute totals (NO balance changes yet)
+            $totalDr = 0.0;
+            $totalCr = 0.0;
+            $validated = [];
+
+            foreach ($lines as $line) {
+                if ($line['amount'] <= 0) {
+                    throw new \InvalidArgumentException('Amount must be positive');
+                }
+
+                $account = $this->accountRepo->findByCode($line['account_code']);
+                if (!$account) {
+                    throw new \InvalidArgumentException("Account not found: {$line['account_code']}");
+                }
+
+                // BR15: Block posting to control accounts unless override
+                if ($account->isControl() && !$allowControl) {
+                    throw new \InvalidArgumentException(
+                        "Account {$line['account_code']} ({$account->getName()}) is a control account — post to a detail sub-account instead"
+                    );
+                }
+
+                if ($line['is_debit']) {
+                    $totalDr += $line['amount'];
+                } else {
+                    $totalCr += $line['amount'];
+                }
+
+                $validated[] = ['account' => $account, 'amount' => $line['amount'], 'is_debit' => $line['is_debit']];
             }
 
-            $account = $this->accountRepo->findByCode($line['account_code']);
-            if (!$account) {
-                throw new \InvalidArgumentException("Account not found: {$line['account_code']}");
-            }
-
-            // BR15: Block posting to control accounts unless override
-            if ($account->isControl() && !$allowControl) {
+            // Phase 2: Check Dr = Cr BEFORE any balance changes
+            if (abs($totalDr - $totalCr) > 10) {
                 throw new \InvalidArgumentException(
-                    "Account {$line['account_code']} ({$account->getName()}) is a control account — post to a detail sub-account instead"
+                    "Debit ({$totalDr}) does not equal Credit ({$totalCr})"
                 );
             }
 
-            if ($line['is_debit']) {
-                $totalDr += $line['amount'];
-            } else {
-                $totalCr += $line['amount'];
+            // Phase 3: Apply balance changes + create ledger entries
+            $entryLines = [];
+            foreach ($validated as $v) {
+                $account = $this->accountRepo->findByCode($v['account']->getCode());
+                if ($v['is_debit']) {
+                    if (in_array($account->getType(), ['asset', 'expense'])) {
+                        $account->credit($v['amount']);
+                    } else {
+                        $account->debit($v['amount']);
+                    }
+                } else {
+                    if (in_array($account->getType(), ['liability', 'equity', 'revenue'])) {
+                        $account->credit($v['amount']);
+                    } else {
+                        $account->debit($v['amount']);
+                    }
+                }
+                $this->accountRepo->save($account);
+                $entryLines[] = new LedgerEntry(uniqid('led_'), $account->getId(), $v['amount'], $v['is_debit']);
             }
 
-            $validated[] = ['account' => $account, 'amount' => $line['amount'], 'is_debit' => $line['is_debit']];
-        }
-
-        // Phase 2: Check Dr = Cr BEFORE any balance changes
-        if (abs($totalDr - $totalCr) > 10) {
-            throw new \InvalidArgumentException(
-                "Debit ({$totalDr}) does not equal Credit ({$totalCr})"
-            );
-        }
-
-        // Phase 3: Apply balance changes + create ledger entries
-        $entryLines = [];
-        foreach ($validated as $v) {
-            $account = $this->accountRepo->findByCode($v['account']->getCode());
-            if ($v['is_debit']) {
-                if (in_array($account->getType(), ['asset', 'expense'])) {
-                    $account->credit($v['amount']);
-                } else {
-                    $account->debit($v['amount']);
-                }
-            } else {
-                if (in_array($account->getType(), ['liability', 'equity', 'revenue'])) {
-                    $account->credit($v['amount']);
-                } else {
-                    $account->debit($v['amount']);
-                }
+            // Phase 4: Create and persist transaction
+            $txn = new Transaction(uniqid('jrn_'), new \DateTimeImmutable(), $description, $reference);
+            foreach ($entryLines as $entry) {
+                $txn->addLedgerEntry($entry);
             }
-            $this->accountRepo->save($account);
-            $entryLines[] = new LedgerEntry(uniqid('led_'), $account->getId(), $v['amount'], $v['is_debit']);
+            $txn->post($createdBy);
+            $this->txnRepo->save($txn);
+
+            if ($inTransaction) $this->pdo->commit();
+
+            AuditLogger::log('journal.post', 'transaction', $txn->getId(), null, [
+                'reference' => $reference,
+                'description' => $description,
+                'total_dr' => $totalDr,
+                'total_cr' => $totalCr,
+                'lines' => array_map(fn($l) => [
+                    'account_code' => $l['account']->getCode(),
+                    'amount' => $l['amount'],
+                    'is_debit' => $l['is_debit'],
+                ], $validated),
+            ], $createdBy);
+
+            return $txn;
+        } catch (\Exception $e) {
+            if ($inTransaction) $this->pdo->rollBack();
+            throw $e;
         }
-
-        // Phase 4: Create and persist transaction
-        $txn = new Transaction(uniqid('jrn_'), new \DateTimeImmutable(), $description, $reference);
-        foreach ($entryLines as $entry) {
-            $txn->addLedgerEntry($entry);
-        }
-        $txn->post($createdBy);
-        $this->txnRepo->save($txn);
-
-        AuditLogger::log('journal.post', 'transaction', $txn->getId(), null, [
-            'reference' => $reference,
-            'description' => $description,
-            'total_dr' => $totalDr,
-            'total_cr' => $totalCr,
-            'lines' => array_map(fn($l) => [
-                'account_code' => $l['account']->getCode(),
-                'amount' => $l['amount'],
-                'is_debit' => $l['is_debit'],
-            ], $validated),
-        ], $createdBy);
-
-        return $txn;
     }
 }

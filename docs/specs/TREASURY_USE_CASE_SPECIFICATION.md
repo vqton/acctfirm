@@ -1,5 +1,10 @@
-# Use Case Specification: Treasury Account Management (TK 111, 112, 113)
-## Circular 99/2025/TT-BTC — Vietnamese Enterprise Accounting Regime
+# Use Case Specification
+
+## Treasury Account Management (TK 111, 112, 113) — Circular 99/2025/TT-BTC
+
+**Version:** 1.0
+**Last Updated:** 2026-05-15
+**Regulatory Basis:** Circular 99/2025/TT-BTC, Law on Accounting 2015
 
 ---
 
@@ -76,6 +81,11 @@ Customer tenders cash payment for goods or services.
 
 - **AF-1: Foreign currency sale**
   Cash received in foreign currency. Record at actual exchange rate on transaction date. FX difference handled at period-end (see UC-027).
+
+**Postconditions**
+
+- Journal entry posted: Dr TK 111, Cr TK 511 / TK 333
+- Cash book updated
 
 **Business Rules**
 - BR-001: Indirect tax types must be separated by tax code (33311 = VAT, 3332 = excise, 3333 = export tax).
@@ -374,6 +384,11 @@ Customer transfers payment for goods/services to company bank account.
   If payment was previously recorded as cash in transit (see UC-018), clear suspense:
   - Debit TK 112 — Bank deposit
   - Credit TK 113 — Cash in transit
+
+**Postconditions**
+
+- Journal entry posted
+- Bank deposit ledger updated
 
 **Input Data**
 - Bank advice ID, customer reference, amount (total/ex-tax/tax), invoice reference, bank account.
@@ -761,6 +776,12 @@ Company pays supplier, remits tax, pays salary, or repays borrowing via bank tra
 
 - **AF-1: Transfer to payee not yet received**
   If payee has not yet received funds, record via TK 113 instead (see UC-021).
+
+**Postconditions**
+
+- Journal entry posted
+- Liability balance reduced
+- Bank balance decreased
 
 **Input Data**
 - Liability account, counterparty, invoice/period reference, amount, bank debit advice.
@@ -1223,6 +1244,11 @@ Scheduled (daily/monthly/quarterly) or surprise cash count.
 - BR-020: Cash counts must be conducted in the presence of both the cashier and an independent verifier (accountant or internal auditor).
 - BR-021: Count results must be documented in a signed cash count report.
 
+**Postconditions**
+
+- Cash count completed
+- Discrepancy report generated (if applicable)
+
 **Input Data**
 - Count date, expected balance by currency/gold, actual count by currency/gold.
 
@@ -1265,6 +1291,11 @@ Period-end closing or as part of internal control procedures.
 - BR-022: Regular reconciliation (at least monthly) is mandatory per Circular 99.
 - BR-023: Unresolved differences must be documented with action plan.
 
+**Postconditions**
+
+- Cash book reconciled to general ledger
+- Differences documented
+
 **Input Data**
 - General ledger balance, cash book balance.
 
@@ -1306,6 +1337,11 @@ Cash shortage confirmed but undocumented.
 **Business Rules**
 - BR-024: Shortages must be recorded at the time of discovery.
 - BR-025: If ultimately determined as cashier liability, transfer to TK 1388 or withhold from salary.
+
+**Postconditions**
+
+- Shortage recorded in suspense (Dr TK 1381)
+- Investigation initiated
 
 **Input Data**
 - Shortage amount, currency, count report reference.
@@ -1394,6 +1430,11 @@ Investigation concludes on root cause of shortage/surplus.
 - BR-026: All discrepancy resolutions must be approved by Chief Accountant.
 - BR-027: Write-offs require management approval per company policy.
 
+**Postconditions**
+
+- Discrepancy resolved
+- Suspense account cleared
+
 **Input Data**
 - Investigation report, discrepancy entry reference, resolution decision.
 
@@ -1443,6 +1484,11 @@ Bank statement received (typically monthly).
 - BR-028: Bank reconciliation must be performed at least monthly.
 - BR-029: Outstanding items from prior periods must be followed up and resolved.
 
+**Postconditions**
+
+- Bank reconciliation completed
+- Reconciling items identified
+
 **Input Data**
 - Bank statement, company bank ledger, prior period reconciliation.
 
@@ -1485,6 +1531,11 @@ Difference between company and bank records cannot be immediately identified.
 **Business Rules**
 - BR-030: Temporary entries via 138/338 must be cleared in the following month.
 - BR-031: Long-outstanding reconciling items must be escalated.
+
+**Postconditions**
+
+- Reconciliation difference recorded in suspense
+- Follow-up scheduled for next period
 
 **Input Data**
 - Difference amount, direction, bank statement line item, company entry reference.
@@ -1538,6 +1589,11 @@ Period-end closing (monthly, quarterly, annually).
 **Business Rules**
 - BR-032: Revaluation method must be consistent with VAS 10 (Vietnamese Accounting Standard — Foreign Currency).
 - BR-033: Exchange rate source must be documented (e.g., commercial bank rate, central bank rate).
+
+**Postconditions**
+
+- FX cash balance revalued at period-end rate
+- Unrealized FX gain/loss recorded
 
 **Input Data**
 - Currency code, period-end balance in original currency, period-end exchange rate, book value in VND.
@@ -1620,6 +1676,11 @@ Period-end closing.
 **Business Rules**
 - BR-034: Gold valuation uses domestic purchase price per Circular 99.
 - BR-035: Gold revaluation treatment mirrors FX revaluation per VAS guidance.
+
+**Postconditions**
+
+- Gold holdings revalued at domestic purchase price
+- Unrealized gain/loss recorded
 
 **Input Data**
 - Gold quantity (grams/taels), period-end unit price, book value.

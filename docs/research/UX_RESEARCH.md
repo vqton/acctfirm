@@ -1,5 +1,11 @@
 # Accounting Software UI/UX Research — Top 10 Analysis
 
+**Version:** 1.0
+**Last Updated:** 2026-05-15
+**Category:** Research / Reference
+
+---
+
 ## Ranking (Ease of Use + User Satisfaction)
 
 | # | Product | UI Score | Key UX Strength | Best For |

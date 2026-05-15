@@ -17,7 +17,7 @@ class ApService
         $this->pdo = $pdo;
         $this->supplierRepo = $supplierRepo;
         $this->accountRepo = $accountRepo;
-        $this->journal = new JournalService($accountRepo, new \Accounting\Infrastructure\Repository\PDOTransactionRepository($pdo));
+        $this->journal = new JournalService($accountRepo, new \Accounting\Infrastructure\Repository\PDOTransactionRepository($pdo), $pdo);
     }
 
     // ── Invoice ──

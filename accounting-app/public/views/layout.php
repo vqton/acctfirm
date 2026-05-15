@@ -12,10 +12,10 @@ function isActive($keys, $menu) {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title><?= $title ?> - Accounting</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<link href="/assets/css/bootstrap.min.css" rel="stylesheet">
+<link href="/assets/css/bootstrap-icons.css" rel="stylesheet">
+<script src="/assets/js/jquery-3.7.1.min.js"></script>
+<script src="/assets/js/bootstrap.bundle.min.js"></script>
 <style>
 body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
 .sidebar { width:250px; background:#1e2a3a; color:#b4bcc8; position:fixed; top:0; left:0; height:100vh; z-index:1000; display:flex; flex-direction:column; }
@@ -103,7 +103,6 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
                 <a href="/chi/giao-bao-no" class="nav-link-s<?= isActive('bank_debit',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Giấy báo Nợ</a>
                 <a href="/thu/tien-dang-chuyen" class="nav-link-s<?= isActive('cash_transit',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Tiền đang chuyển</a>
                 <a href="/thu/so-quy-tien-mat" class="nav-link-s<?= isActive('cash_book',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Sổ quỹ tiền mặt</a>
-                <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Chuyển tiền nội bộ</a>
                 <a href="/thu/tam-ung" class="nav-link-s<?= isActive('petty_cash',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Tạm ứng</a>
                 <a href="/thu/doi-chieu-ngan-hang" class="nav-link-s<?= isActive('bank_reconciliation',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Đối chiếu NH</a>
                 <a href="/thu/bao-cao-von-bang-tien" class="nav-link-s<?= isActive('cash_reports',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Báo cáo vốn bằng tiền</a>
@@ -271,6 +270,7 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
 </div>
 
 <script>
+var csrf=<?= json_encode(\Accounting\Infrastructure\Helpers::csrfToken()) ?>;
 function esc(s){return String(s).replace(/[&<>"']/g,function(m){if(m==='&')return'&amp;';if(m==='<')return'&lt;';if(m==='>')return'&gt;';if(m==='"')return'&quot;';return'&#39;';});}
 
 function showToast(msg,type){

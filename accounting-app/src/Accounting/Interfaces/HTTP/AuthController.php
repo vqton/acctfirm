@@ -55,6 +55,8 @@ class AuthController
         $roleStmt->execute([$user['id']]);
         $roles = $roleStmt->fetchAll(\PDO::FETCH_ASSOC);
 
+        session_regenerate_id(true);
+
         $_SESSION['user'] = [
             'id' => $user['id'],
             'username' => $user['username'],
@@ -68,7 +70,11 @@ class AuthController
         // Update last_login
         $this->pdo->prepare('UPDATE users SET last_login = NOW() WHERE id = ?')->execute([$user['id']]);
 
-        Helpers::jsonOk(['user' => $_SESSION['user'], 'roles' => $roles]);
+        Helpers::jsonOk([
+            'user' => $_SESSION['user'],
+            'roles' => $roles,
+            'csrf' => Helpers::csrfToken(),
+        ]);
     }
 
     public function logout(): void

@@ -2,6 +2,10 @@
 
 ## Financial Statement Preparation — Circular 99/2025/TT-BTC
 
+**Version:** 1.0
+**Last Updated:** 2026-05-15
+**Regulatory Basis:** Circular 99/2025/TT-BTC, Law on Accounting 2015
+
 ---
 
 ## 1. Source
@@ -86,6 +90,13 @@
 4. System populates comparative column (prior year end) from prior period FS
 5. Statement signed and submitted for signature
 
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- BC 01 generated with balanced assets = liabilities + equity
+- Comparative data populated
+
 **Business Rules:**
 - BR01: Assets = Liabilities + Equity (accounting equation)
 - BR02: Current vs. non-current classification based on 12-month/operating cycle rule
@@ -162,6 +173,13 @@
 3. System validates: Formula chain integrity (30, 40, 50, 60 cross-checked)
 4. System populates comparative column (prior period)
 5. For consolidated/combined statements: all intra-entity revenue/expense eliminated
+
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- BC 02 generated with formula chain integrity verified
+- Comparative data populated
 
 **Business Rules:**
 - BR08: Indirect taxes (VAT, excise, export duties) excluded from revenue
@@ -251,6 +269,13 @@
 ```
 6. System validates: **70** (closing cash) must equal **111** (Cash) from BC 01
 7. Comparative column populated from prior period BC 03
+
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- BC 03 generated with closing cash = BC 01 cash
+- Direct or indirect method applied
 
 **Business Rules:**
 - BR14: Closing cash (70) must reconcile to BC 01 Cash line (111)
@@ -365,6 +390,13 @@
 2. System validates cross-references: each BC 01/02/03 mã số must have a corresponding BC 09 note
 3. Comparative data populated from prior year BC 09
 
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- BC 09 generated with cross-references to BC 01/02/03
+- All mã số have corresponding notes
+
 **Business Rules:**
 - BR19: BC 09 is an integral part of the FS — not optional (VAS 21)
 - BR20: Every mã số in BC 01/02/03 must be cross-referenced to a BC 09 note
@@ -417,6 +449,13 @@
 3. Chief Accountant reviews and resolves flags
 4. Clean validation confirms FS ready for signature
 
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- All cross-statement validations passed
+- FS integrity confirmed
+
 **Business Rules:**
 - BR24: Assets = Liabilities + Equity
 - BR25: Closing cash (BC 03) = Cash + equivalents (BC 01 111)
@@ -453,6 +492,13 @@
 6. If audited: audit report attached to FS submission (Article 33)
 7. Deadline tracked: annual FS within 90 days of year-end
 
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- FS signed by all required parties
+- FS submitted to regulatory authorities
+
 **Business Rules:**
 - BR28: Three signatures required: preparer, chief accountant, legal representative (Article 29.4)
 - BR29: Annual FS due within 90 days of year-end (Article 29.5)
@@ -478,6 +524,12 @@
    - Condensed form (B01b-DN, B02b-DN, B03b-DN): fewer line items
 2. Interim comparative: current period vs. same period prior year
 3. Notes (B09a-DN): selective — only material changes since prior year-end
+
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- Interim FS generated per VAS 27
 
 **Business Rules:**
 - BR31: Interim FS per VAS 27
@@ -505,6 +557,13 @@
 3. All long-term assets/liabilities reclassified as current
 4. Assets measured at net realizable value
 5. FS signed and submitted per dissolution/bankruptcy regulations
+
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- Non-going concern FS generated
+- All items classified as current
 
 **Business Rules:**
 - BR33: Non-going concern FS uses separate form templates (Bxx-DNKLT)

@@ -95,132 +95,130 @@ class PDOTransactionRepository implements TransactionRepositoryInterface
 
     public function save(Transaction $transaction): void
     {
-        $this->pdo->beginTransaction();
+        // Save transaction
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO transactions (id, date, description, reference, status, created_by) VALUES (?, ?, ?, ?, ?, ?) ' .
+            'ON DUPLICATE KEY UPDATE date = ?, description = ?, reference = ?, status = ?, created_by = ?'
+        );
+        $stmt->execute([
+            $transaction->getId(),
+            $transaction->getDate()->format('Y-m-d H:i:s'),
+            $transaction->getDescription(),
+            $transaction->getReference(),
+            $transaction->getStatus(),
+            $transaction->getCreatedBy(),
+            $transaction->getDate()->format('Y-m-d H:i:s'),
+            $transaction->getDescription(),
+            $transaction->getReference(),
+            $transaction->getStatus(),
+            $transaction->getCreatedBy()
+        ]);
 
-        try {
-            // Save transaction
-            $stmt = $this->pdo->prepare(
-                'INSERT INTO transactions (id, date, description, reference, status, created_by) VALUES (?, ?, ?, ?, ?, ?) ' .
-                'ON DUPLICATE KEY UPDATE date = ?, description = ?, reference = ?, status = ?, created_by = ?'
-            );
+        // Delete existing ledger entries for this transaction
+        $stmt = $this->pdo->prepare('DELETE FROM ledger_entries WHERE transaction_id = ?');
+        $stmt->execute([$transaction->getId()]);
+
+        // Insert new ledger entries
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO ledger_entries (id, transaction_id, account_id, amount, is_debit, note) VALUES (?, ?, ?, ?, ?, ?)'
+        );
+
+        foreach ($transaction->getLedgerEntries() as $entry) {
             $stmt->execute([
+                $entry->getId(),
                 $transaction->getId(),
-                $transaction->getDate()->format('Y-m-d H:i:s'),
-                $transaction->getDescription(),
-                $transaction->getReference(),
-                $transaction->getStatus(),
-                $transaction->getCreatedBy(),
-                $transaction->getDate()->format('Y-m-d H:i:s'),
-                $transaction->getDescription(),
-                $transaction->getReference(),
-                $transaction->getStatus(),
-                $transaction->getCreatedBy()
+                $entry->getAccountId(),
+                $entry->getAmount(),
+                $entry->isDebit() ? 1 : 0,
+                $entry->getNote()
             ]);
-
-            // Delete existing ledger entries for this transaction
-            $stmt = $this->pdo->prepare('DELETE FROM ledger_entries WHERE transaction_id = ?');
-            $stmt->execute([$transaction->getId()]);
-
-            // Insert new ledger entries
-            $stmt = $this->pdo->prepare(
-                'INSERT INTO ledger_entries (id, transaction_id, account_id, amount, is_debit, note) VALUES (?, ?, ?, ?, ?, ?)'
-            );
-
-            foreach ($transaction->getLedgerEntries() as $entry) {
-                $stmt->execute([
-                    $entry->getId(),
-                    $transaction->getId(),
-                    $entry->getAccountId(),
-                    $entry->getAmount(),
-                    $entry->isDebit() ? 1 : 0,
-                    $entry->getNote()
-                ]);
-            }
-
-            $this->pdo->commit();
-        } catch (\Exception $e) {
-            $this->pdo->rollback();
-            throw $e;
         }
     }
 
     public function getAll(): array
     {
-        $stmt = $this->pdo->query('SELECT id, date, description, reference, status, created_by FROM transactions ORDER BY date DESC, id DESC');
-        $transactions = [];
-
-        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-            $transaction = new Transaction(
-                $row['id'],
-                new \DateTimeImmutable($row['date']),
-                $row['description'],
-                $row['reference']
-            );
-            
-             $transaction->setStatus($row['status']);
-             $transaction->setCreatedBy($row['created_by']);
-
-            // Load ledger entries
-            $stmtEntries = $this->pdo->prepare('SELECT id, account_id, amount, is_debit, note FROM ledger_entries WHERE transaction_id = ? ORDER BY id');
-            $stmtEntries->execute([$row['id']]);
-            
-            while ($entryRow = $stmtEntries->fetch(PDO::FETCH_ASSOC)) {
-                $ledgerEntry = new LedgerEntry(
-                    $entryRow['id'],
-                    $entryRow['account_id'],
-                    (float) $entryRow['amount'],
-                    (bool) $entryRow['is_debit'],
-                    $entryRow['note']
-                );
-                $transaction->addLedgerEntry($ledgerEntry);
-            }
-
-            $transactions[] = $transaction;
-        }
-
-        return $transactions;
+        $stmt = $this->pdo->query(
+            'SELECT t.id, t.date, t.description, t.reference, t.status, t.created_by,
+                    le.id AS le_id, le.account_id, le.amount AS le_amount, le.is_debit, le.note
+             FROM transactions t
+             LEFT JOIN ledger_entries le ON le.transaction_id = t.id
+             ORDER BY t.date DESC, t.id DESC, le.id'
+        );
+        return $this->buildTransactions($stmt->fetchAll(PDO::FETCH_ASSOC));
     }
 
     public function getTransactionsByDateRange(\DateTimeInterface $start, \DateTimeInterface $end): array
     {
         $stmt = $this->pdo->prepare(
-            'SELECT id, date, description, reference, status, created_by FROM transactions ' .
-            'WHERE date >= ? AND date <= ? ORDER BY date DESC, id DESC'
+            'SELECT t.id, t.date, t.description, t.reference, t.status, t.created_by,
+                    le.id AS le_id, le.account_id, le.amount AS le_amount, le.is_debit, le.note
+             FROM transactions t
+             LEFT JOIN ledger_entries le ON le.transaction_id = t.id
+             WHERE t.date >= ? AND t.date <= ?
+             ORDER BY t.date DESC, t.id DESC, le.id'
         );
         $stmt->execute([
             $start->format('Y-m-d H:i:s'),
             $end->format('Y-m-d H:i:s')
         ]);
-        
+        return $this->buildTransactions($stmt->fetchAll(PDO::FETCH_ASSOC));
+    }
+
+    private function buildTransactions(array $rows): array
+    {
         $transactions = [];
-        
-        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-            $transaction = new Transaction(
-                $row['id'],
-                new \DateTimeImmutable($row['date']),
-                $row['description'],
-                $row['reference']
-            );
-            
-             $transaction->setStatus($row['status']);
-             $transaction->setCreatedBy($row['created_by']);
+        $current = null;
 
-            // Load ledger entries
-            $stmtEntries = $this->pdo->prepare('SELECT id, account_id, amount, is_debit, note FROM ledger_entries WHERE transaction_id = ? ORDER BY id');
-            $stmtEntries->execute([$row['id']]);
-            
-            while ($entryRow = $stmtEntries->fetch(PDO::FETCH_ASSOC)) {
-                $ledgerEntry = new LedgerEntry(
-                    $entryRow['id'],
-                    $entryRow['account_id'],
-                    (float) $entryRow['amount'],
-                    (bool) $entryRow['is_debit'],
-                    $entryRow['note']
-                );
-                $transaction->addLedgerEntry($ledgerEntry);
+        foreach ($rows as $row) {
+            if ($current === null || $current['id'] !== $row['id']) {
+                if ($current !== null) {
+                    $txn = new Transaction(
+                        $current['id'],
+                        new \DateTimeImmutable($current['date']),
+                        $current['description'],
+                        $current['reference']
+                    );
+                    $txn->setStatus($current['status']);
+                    $txn->setCreatedBy($current['created_by']);
+                    foreach ($current['entries'] as $entry) {
+                        $txn->addLedgerEntry($entry);
+                    }
+                    $transactions[] = $txn;
+                }
+                $current = [
+                    'id' => $row['id'],
+                    'date' => $row['date'],
+                    'description' => $row['description'],
+                    'reference' => $row['reference'],
+                    'status' => $row['status'],
+                    'created_by' => $row['created_by'],
+                    'entries' => [],
+                ];
             }
+            if ($row['le_id'] !== null) {
+                $current['entries'][] = new LedgerEntry(
+                    $row['le_id'],
+                    $row['account_id'],
+                    (float) $row['le_amount'],
+                    (bool) $row['is_debit'],
+                    $row['note']
+                );
+            }
+        }
 
-            $transactions[] = $transaction;
+        if ($current !== null) {
+            $txn = new Transaction(
+                $current['id'],
+                new \DateTimeImmutable($current['date']),
+                $current['description'],
+                $current['reference']
+            );
+            $txn->setStatus($current['status']);
+            $txn->setCreatedBy($current['created_by']);
+            foreach ($current['entries'] as $entry) {
+                $txn->addLedgerEntry($entry);
+            }
+            $transactions[] = $txn;
         }
 
         return $transactions;

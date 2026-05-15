@@ -1,8 +1,8 @@
 # Implementation Roadmap — Accounts Payable Module (TK 331)
 
-**Base Spec:** `docs/AP_USE_CASE_SPECIFICATION.md`
-**Regulatory Basis:** Circular 99/2025/TT-BTC — TK 331
-**Current State:** Supplier master data exists. TK 331 used via JournalService for basic AP posting. No invoice-level tracking, no aging, no payment matching.
+**Version:** 1.0
+**Last Updated:** 2026-05-15
+**Base Spec:** `docs/specs/AP_USE_CASE_SPECIFICATION.md`
 
 ---
 

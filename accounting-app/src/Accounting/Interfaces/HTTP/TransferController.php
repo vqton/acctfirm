@@ -10,15 +10,18 @@ class TransferController
     private InventoryService $inventory;
     private ItemRepositoryInterface $itemRepo;
     private WarehouseRepositoryInterface $warehouseRepo;
+    private \PDO $pdo;
 
     public function __construct(
         InventoryService $inventory,
         ItemRepositoryInterface $itemRepo,
-        WarehouseRepositoryInterface $warehouseRepo
+        WarehouseRepositoryInterface $warehouseRepo,
+        \PDO $pdo
     ) {
         $this->inventory = $inventory;
         $this->itemRepo = $itemRepo;
         $this->warehouseRepo = $warehouseRepo;
+        $this->pdo = $pdo;
     }
 
     public function list(): void
@@ -78,9 +81,6 @@ class TransferController
 
     private function getPdo(): \PDO
     {
-        $ref = new \ReflectionClass($this->itemRepo);
-        $prop = $ref->getProperty('pdo');
-        $prop->setAccessible(true);
-        return $prop->getValue($this->itemRepo);
+        return $this->pdo;
     }
 }

@@ -49,7 +49,7 @@ $pdo = new PDO("mysql:host=127.0.0.1;dbname=accounting_db;charset=utf8mb4","dev"
 $accountRepo = new \Accounting\Infrastructure\Repository\PDOAccountRepository($pdo);
 $txnRepo = new \Accounting\Infrastructure\Repository\PDOTransactionRepository($pdo);
 
-$svc = new JournalService($accountRepo, $txnRepo);
+$svc = new JournalService($accountRepo, $txnRepo, $pdo);
 
 // Make sure COA accounts exist for testing
 $cash = $accountRepo->findByCode('111');

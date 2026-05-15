@@ -9,6 +9,7 @@ function defineRoutes(Router $router): void
     $router->post('/api/auth/login', function() { (new \Accounting\Interfaces\HTTP\AuthController($GLOBALS['container']['pdo']))->login(); });
     $router->post('/api/auth/logout', function() { (new \Accounting\Interfaces\HTTP\AuthController($GLOBALS['container']['pdo']))->logout(); });
     $router->get('/api/auth/me', function() { (new \Accounting\Interfaces\HTTP\AuthController($GLOBALS['container']['pdo']))->me(); });
+    $router->get('/api/auth/csrf', function() { echo json_encode(['token' => \Accounting\Infrastructure\Helpers::csrfToken()]); });
 
     // User management
     $router->get('/api/users', function() { (new \Accounting\Interfaces\HTTP\UserController($GLOBALS['container']['pdo']))->list(); });
@@ -94,13 +95,7 @@ function defineRoutes(Router $router): void
     $router->put('/api/ccdc/{id}', function($id) { (new \Accounting\Interfaces\HTTP\CcdcController($GLOBALS['container']['ccdcRepository']))->update($id); });
     $router->delete('/api/ccdc/{id}', function($id) { (new \Accounting\Interfaces\HTTP\CcdcController($GLOBALS['container']['ccdcRepository']))->delete($id); });
 
-    // Bank Accounts
-    $router->get('/danh-muc/tai-khoan-ngan-hang', function() { require __DIR__ . '/../public/views/bank_accounts.php'; });
-    $router->get('/api/bank-accounts', function() { (new \Accounting\Interfaces\HTTP\BankAccountController($GLOBALS['container']['bankAccountRepository']))->list(); });
-    $router->get('/api/bank-accounts/{id}', function($id) { (new \Accounting\Interfaces\HTTP\BankAccountController($GLOBALS['container']['bankAccountRepository']))->get($id); });
-    $router->post('/api/bank-accounts', function() { (new \Accounting\Interfaces\HTTP\BankAccountController($GLOBALS['container']['bankAccountRepository']))->create(); });
-    $router->put('/api/bank-accounts/{id}', function($id) { (new \Accounting\Interfaces\HTTP\BankAccountController($GLOBALS['container']['bankAccountRepository']))->update($id); });
-    $router->delete('/api/bank-accounts/{id}', function($id) { (new \Accounting\Interfaces\HTTP\BankAccountController($GLOBALS['container']['bankAccountRepository']))->delete($id); });
+
 
     // Exchange Rates
     $router->get('/danh-muc/ty-gia', function() { require __DIR__ . '/../public/views/exchange_rates.php'; });
@@ -171,104 +166,132 @@ function defineRoutes(Router $router): void
     $router->post('/api/journal', function() { (new \Accounting\Interfaces\HTTP\JournalController($GLOBALS['container']['journalService'], $GLOBALS['container']['accountRepository']))->postEntry(); });
     $router->get('/api/trial-balance', function() { (new \Accounting\Interfaces\HTTP\JournalController($GLOBALS['container']['journalService'], $GLOBALS['container']['accountRepository']))->trialBalance(); });
 
+    // Cash & Bank API
+    $cc = new \Accounting\Interfaces\HTTP\CashController(
+        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository'], $GLOBALS['container']['pdo']
+    );
+    $router->get('/api/cash/receipts', function() use ($cc) { $cc->receipts(); });
+    $router->post('/api/cash/receipts', function() use ($cc) { $cc->createReceipt(); });
+    $router->get('/api/cash/payments', function() use ($cc) { $cc->payments(); });
+    $router->post('/api/cash/payments', function() use ($cc) { $cc->createPayment(); });
+    $router->get('/api/cash/templates', function() use ($cc) { $cc->transactionTemplates(); });
+    $router->get('/api/cash/accounts', function() use ($cc) { $cc->accounts(); });
+    $router->get('/api/bank-transactions', function() use ($cc) { $cc->bankTransactions(); });
+    $router->post('/api/bank/deposit', function() use ($cc) { $cc->createDeposit(); });
+    $router->post('/api/bank/withdrawal', function() use ($cc) { $cc->createWithdrawal(); });
+    $router->post('/api/bank/receipt', function() use ($cc) { $cc->createBankReceipt(); });
+    $router->post('/api/bank/payment', function() use ($cc) { $cc->createBankPayment(); });
+    $router->post('/api/bank/interest', function() use ($cc) { $cc->createInterest(); });
+    $router->post('/api/bank/charge', function() use ($cc) { $cc->createCharge(); });
+    $router->get('/api/cash/transit', function() use ($cc) { $cc->transitRecords(); });
+    $router->post('/api/cash/transit', function() use ($cc) { $cc->createTransit(); });
+    $router->post('/api/cash/transit/confirm', function() use ($cc) { $cc->confirmTransit(); });
+    $router->post('/api/cash/transit/reverse', function() use ($cc) { $cc->reverseTransit(); });
+    $router->get('/api/cash-book', function() use ($cc) { $cc->cashBook(); });
+    $router->get('/api/petty-cash/funds', function() use ($cc) { $cc->pettyFunds(); });
+    $router->post('/api/petty-cash/funds', function() use ($cc) { $cc->createPettyFund(); });
+    $router->post('/api/petty-cash/disburse', function() use ($cc) { $cc->disbursePetty(); });
+    $router->post('/api/petty-cash/replenish', function() use ($cc) { $cc->replenishPetty(); });
+    $router->post('/api/petty-cash/close', function() use ($cc) { $cc->closePettyFund(); });
+    $router->get('/api/petty-cash/{id}/transactions', function($id) use ($cc) { $cc->pettyTransactions($id); });
+
+    // Cash & Bank views
+    $router->get('/thu/quy-tien-mat', function() { require __DIR__ . '/../public/views/cash_receipts.php'; });
+    $router->get('/chi/quy-tien-mat', function() { require __DIR__ . '/../public/views/cash_payments.php'; });
+    $router->get('/thu/giao-bao-co', function() { require __DIR__ . '/../public/views/bank_credit.php'; });
+    $router->get('/chi/giao-bao-no', function() { require __DIR__ . '/../public/views/bank_debit.php'; });
+    $router->get('/thu/tien-dang-chuyen', function() { require __DIR__ . '/../public/views/cash_transit.php'; });
+    $router->get('/thu/so-quy-tien-mat', function() { require __DIR__ . '/../public/views/cash_book.php'; });
+    $router->get('/thu/tam-ung', function() { require __DIR__ . '/../public/views/petty_cash.php'; });
+    $router->get('/thu/doi-chieu-ngan-hang', function() { require __DIR__ . '/../public/views/bank_reconciliation.php'; });
+    $router->get('/thu/bao-cao-von-bang-tien', function() { require __DIR__ . '/../public/views/cash_reports.php'; });
+    $router->get('/thu/danh-gia-lai-ngoai-te', function() { require __DIR__ . '/../public/views/fx_revaluation.php'; });
+    $router->get('/danh-muc/tai-khoan-ngan-hang', function() { require __DIR__ . '/../public/views/bank_accounts.php'; });
+
+    // Bank Accounts API
+    $router->get('/api/bank-accounts', function() { (new \Accounting\Interfaces\HTTP\BankAccountController($GLOBALS['container']['bankAccountRepository']))->list(); });
+    $router->get('/api/bank-accounts/{id}', function($id) { (new \Accounting\Interfaces\HTTP\BankAccountController($GLOBALS['container']['bankAccountRepository']))->get($id); });
+    $router->post('/api/bank-accounts', function() { (new \Accounting\Interfaces\HTTP\BankAccountController($GLOBALS['container']['bankAccountRepository']))->create(); });
+    $router->put('/api/bank-accounts/{id}', function($id) { (new \Accounting\Interfaces\HTTP\BankAccountController($GLOBALS['container']['bankAccountRepository']))->update($id); });
+    $router->delete('/api/bank-accounts/{id}', function($id) { (new \Accounting\Interfaces\HTTP\BankAccountController($GLOBALS['container']['bankAccountRepository']))->delete($id); });
+
+    // FX
+    $router->get('/api/fx/balances', function() { (new \Accounting\Interfaces\HTTP\CashController(
+        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository'], $GLOBALS['container']['pdo']
+    ))->fcBalances(); });
+    $router->post('/api/fx/revalue', function() { (new \Accounting\Interfaces\HTTP\CashController(
+        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository'], $GLOBALS['container']['pdo']
+    ))->fcRevalue(); });
+
+    // Cash Reports API
+    $router->get('/api/cash-reports/position', function() { (new \Accounting\Interfaces\HTTP\CashReportController(
+        $GLOBALS['container']['cashReportService']
+    ))->position(); });
+    $router->get('/api/cash-reports/bank-ledger', function() { (new \Accounting\Interfaces\HTTP\CashReportController(
+        $GLOBALS['container']['cashReportService']
+    ))->bankLedger(); });
+    $router->get('/api/cash-reports/daily-flow', function() { (new \Accounting\Interfaces\HTTP\CashReportController(
+        $GLOBALS['container']['cashReportService']
+    ))->dailyFlow(); });
+    $router->get('/api/cash-reports/concentration', function() { (new \Accounting\Interfaces\HTTP\CashReportController(
+        $GLOBALS['container']['cashReportService']
+    ))->concentration(); });
+    $router->get('/api/cash-reports/trend', function() { (new \Accounting\Interfaces\HTTP\CashReportController(
+        $GLOBALS['container']['cashReportService']
+    ))->trend(); });
+
+    // Bank Reconciliation API
+    $router->get('/api/bank-reconciliation/sessions', function() { (new \Accounting\Interfaces\HTTP\BankReconciliationController(
+        $GLOBALS['container']['bankReconciliationService'], $GLOBALS['container']['accountRepository']
+    ))->sessions(); });
+    $router->post('/api/bank-reconciliation/start', function() { (new \Accounting\Interfaces\HTTP\BankReconciliationController(
+        $GLOBALS['container']['bankReconciliationService'], $GLOBALS['container']['accountRepository']
+    ))->startSession(); });
+    $router->get('/api/bank-reconciliation/{id}/session', function($id) { (new \Accounting\Interfaces\HTTP\BankReconciliationController(
+        $GLOBALS['container']['bankReconciliationService'], $GLOBALS['container']['accountRepository']
+    ))->getSession($id); });
+    $router->get('/api/bank-reconciliation/{id}/items', function($id) { (new \Accounting\Interfaces\HTTP\BankReconciliationController(
+        $GLOBALS['container']['bankReconciliationService'], $GLOBALS['container']['accountRepository']
+    ))->items($id); });
+    $router->get('/api/bank-reconciliation/{id}/unmatched', function($id) { (new \Accounting\Interfaces\HTTP\BankReconciliationController(
+        $GLOBALS['container']['bankReconciliationService'], $GLOBALS['container']['accountRepository']
+    ))->unmatched($id); });
+    $router->post('/api/bank-reconciliation/{id}/statement-entry', function($id) { (new \Accounting\Interfaces\HTTP\BankReconciliationController(
+        $GLOBALS['container']['bankReconciliationService'], $GLOBALS['container']['accountRepository']
+    ))->addStatementEntry($id); });
+    $router->post('/api/bank-reconciliation/{id}/auto-match', function($id) { (new \Accounting\Interfaces\HTTP\BankReconciliationController(
+        $GLOBALS['container']['bankReconciliationService'], $GLOBALS['container']['accountRepository']
+    ))->autoMatch($id); });
+    $router->post('/api/bank-reconciliation/{id}/manual-match', function($id) { (new \Accounting\Interfaces\HTTP\BankReconciliationController(
+        $GLOBALS['container']['bankReconciliationService'], $GLOBALS['container']['accountRepository']
+    ))->manualMatch($id); });
+    $router->post('/api/bank-reconciliation/{id}/adjust', function($id) { (new \Accounting\Interfaces\HTTP\BankReconciliationController(
+        $GLOBALS['container']['bankReconciliationService'], $GLOBALS['container']['accountRepository']
+    ))->addAdjustingEntry($id); });
+    $router->post('/api/bank-reconciliation/{id}/complete', function($id) { (new \Accounting\Interfaces\HTTP\BankReconciliationController(
+        $GLOBALS['container']['bankReconciliationService'], $GLOBALS['container']['accountRepository']
+    ))->complete($id); });
+    $router->get('/api/bank-reconciliation/bank-accounts', function() { (new \Accounting\Interfaces\HTTP\BankReconciliationController(
+        $GLOBALS['container']['bankReconciliationService'], $GLOBALS['container']['accountRepository']
+    ))->bankAccounts(); });
+
     // Transfer
     $router->get('/kho/dieu-chuyen', function() { require __DIR__ . '/../public/views/transfers.php'; });
 
     // Consignment
     $router->get('/kho/hang-gui-ban', function() { require __DIR__ . '/../public/views/consignment.php'; });
     $router->get('/api/consignments', function() { (new \Accounting\Interfaces\HTTP\ConsignmentController(
-        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository']
+        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository'], $GLOBALS['container']['pdo']
     ))->list(); });
     $router->post('/api/consignments', function() { (new \Accounting\Interfaces\HTTP\ConsignmentController(
-        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository']
+        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository'], $GLOBALS['container']['pdo']
     ))->consign(); });
     $router->post('/api/consignments/sell', function() { (new \Accounting\Interfaces\HTTP\ConsignmentController(
-        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository']
+        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository'], $GLOBALS['container']['pdo']
     ))->sell(); });
     $router->post('/api/consignments/return', function() { (new \Accounting\Interfaces\HTTP\ConsignmentController(
-        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository']
+        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository'], $GLOBALS['container']['pdo']
     ))->returnConsignment(); });
-
-    // Cash & Bank
-    $router->get('/thu/quy-tien-mat', function() { require __DIR__ . '/../public/views/cash_receipts.php'; });
-    $router->get('/chi/quy-tien-mat', function() { require __DIR__ . '/../public/views/cash_payments.php'; });
-    $router->get('/thu/giao-bao-co', function() { require __DIR__ . '/../public/views/bank_credit.php'; });
-    $router->get('/chi/giao-bao-no', function() { require __DIR__ . '/../public/views/bank_debit.php'; });
-    $router->get('/thu/tien-dang-chuyen', function() { require __DIR__ . '/../public/views/cash_transit.php'; });
-    $router->get('/api/cash/receipts', function() { (new \Accounting\Interfaces\HTTP\CashController(
-        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
-    ))->receipts(); });
-    $router->get('/api/cash/payments', function() { (new \Accounting\Interfaces\HTTP\CashController(
-        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
-    ))->payments(); });
-    $router->post('/api/cash/receipts', function() { (new \Accounting\Interfaces\HTTP\CashController(
-        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
-    ))->createReceipt(); });
-    $router->post('/api/cash/payments', function() { (new \Accounting\Interfaces\HTTP\CashController(
-        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
-    ))->createPayment(); });
-    $router->get('/api/cash/templates', function() { (new \Accounting\Interfaces\HTTP\CashController(
-        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
-    ))->transactionTemplates(); });
-    $router->get('/api/cash/accounts', function() { (new \Accounting\Interfaces\HTTP\CashController(
-        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
-    ))->accounts(); });
-    $router->get('/api/bank-transactions', function() { (new \Accounting\Interfaces\HTTP\CashController(
-        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
-    ))->bankTransactions(); });
-    $router->post('/api/bank/deposit', function() { (new \Accounting\Interfaces\HTTP\CashController(
-        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
-    ))->createDeposit(); });
-    $router->post('/api/bank/withdrawal', function() { (new \Accounting\Interfaces\HTTP\CashController(
-        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
-    ))->createWithdrawal(); });
-    $router->post('/api/bank/receipt', function() { (new \Accounting\Interfaces\HTTP\CashController(
-        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
-    ))->createBankReceipt(); });
-    $router->post('/api/bank/payment', function() { (new \Accounting\Interfaces\HTTP\CashController(
-        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
-    ))->createBankPayment(); });
-    $router->post('/api/bank/interest', function() { (new \Accounting\Interfaces\HTTP\CashController(
-        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
-    ))->createInterest(); });
-    $router->post('/api/bank/charge', function() { (new \Accounting\Interfaces\HTTP\CashController(
-        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
-    ))->createCharge(); });
-    $router->get('/api/cash/transit', function() { (new \Accounting\Interfaces\HTTP\CashController(
-        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
-    ))->transitRecords(); });
-    $router->post('/api/cash/transit', function() { (new \Accounting\Interfaces\HTTP\CashController(
-        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
-    ))->createTransit(); });
-    $router->post('/api/cash/transit/confirm', function() { (new \Accounting\Interfaces\HTTP\CashController(
-        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
-    ))->confirmTransit(); });
-    $router->post('/api/cash/transit/reverse', function() { (new \Accounting\Interfaces\HTTP\CashController(
-        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
-    ))->reverseTransit(); });
-    $router->get('/thu/so-quy-tien-mat', function() { require __DIR__ . '/../public/views/cash_book.php'; });
-    $router->get('/api/cash-book', function() { (new \Accounting\Interfaces\HTTP\CashController(
-        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
-    ))->cashBook(); });
-    $router->get('/thu/tam-ung', function() { require __DIR__ . '/../public/views/petty_cash.php'; });
-    $router->get('/api/petty-cash/funds', function() { (new \Accounting\Interfaces\HTTP\CashController(
-        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
-    ))->pettyFunds(); });
-    $router->post('/api/petty-cash/funds', function() { (new \Accounting\Interfaces\HTTP\CashController(
-        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
-    ))->createPettyFund(); });
-    $router->post('/api/petty-cash/disburse', function() { (new \Accounting\Interfaces\HTTP\CashController(
-        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
-    ))->disbursePetty(); });
-    $router->post('/api/petty-cash/replenish', function() { (new \Accounting\Interfaces\HTTP\CashController(
-        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
-    ))->replenishPetty(); });
-    $router->post('/api/petty-cash/close', function() { (new \Accounting\Interfaces\HTTP\CashController(
-        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
-    ))->closePettyFund(); });
-    $router->get('/api/petty-cash/{id}/transactions', function($id) { (new \Accounting\Interfaces\HTTP\CashController(
-        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
-    ))->pettyTransactions($id); });
 
     // User & Role management
     $router->get('/he-thong/nguoi-dung', function() { require __DIR__ . '/../public/views/users.php'; });
@@ -388,99 +411,36 @@ function defineRoutes(Router $router): void
     $router->get('/api/audit-log', function() { (new \Accounting\Interfaces\HTTP\AuditLogController($GLOBALS['container']['pdo']))->list(); });
     $router->get('/api/audit-log/{id}', function($id) { (new \Accounting\Interfaces\HTTP\AuditLogController($GLOBALS['container']['pdo']))->get($id); });
 
-    // FX
-    $router->get('/thu/danh-gia-lai-ngoai-te', function() { require __DIR__ . '/../public/views/fx_revaluation.php'; });
-    $router->get('/api/fx/balances', function() { (new \Accounting\Interfaces\HTTP\CashController(
-        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
-    ))->fcBalances(); });
-    $router->post('/api/fx/revalue', function() { (new \Accounting\Interfaces\HTTP\CashController(
-        $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
-    ))->fcRevalue(); });
-
     // Dashboard API
     $router->get('/api/dashboard', function() { (new \Accounting\Interfaces\HTTP\CashReportController(
         $GLOBALS['container']['cashReportService']
     ))->kpis(); });
 
-    // Cash Reports
-    $router->get('/thu/bao-cao-von-bang-tien', function() { require __DIR__ . '/../public/views/cash_reports.php'; });
-    $router->get('/api/cash-reports/position', function() { (new \Accounting\Interfaces\HTTP\CashReportController(
-        $GLOBALS['container']['cashReportService']
-    ))->position(); });
-    $router->get('/api/cash-reports/bank-ledger', function() { (new \Accounting\Interfaces\HTTP\CashReportController(
-        $GLOBALS['container']['cashReportService']
-    ))->bankLedger(); });
-    $router->get('/api/cash-reports/daily-flow', function() { (new \Accounting\Interfaces\HTTP\CashReportController(
-        $GLOBALS['container']['cashReportService']
-    ))->dailyFlow(); });
-    $router->get('/api/cash-reports/concentration', function() { (new \Accounting\Interfaces\HTTP\CashReportController(
-        $GLOBALS['container']['cashReportService']
-    ))->concentration(); });
-    $router->get('/api/cash-reports/trend', function() { (new \Accounting\Interfaces\HTTP\CashReportController(
-        $GLOBALS['container']['cashReportService']
-    ))->trend(); });
-
-    // Bank Reconciliation
-    $router->get('/thu/doi-chieu-ngan-hang', function() { require __DIR__ . '/../public/views/bank_reconciliation.php'; });
-    $router->get('/api/bank-reconciliation/sessions', function() { (new \Accounting\Interfaces\HTTP\BankReconciliationController(
-        $GLOBALS['container']['bankReconciliationService'], $GLOBALS['container']['accountRepository']
-    ))->sessions(); });
-    $router->post('/api/bank-reconciliation/start', function() { (new \Accounting\Interfaces\HTTP\BankReconciliationController(
-        $GLOBALS['container']['bankReconciliationService'], $GLOBALS['container']['accountRepository']
-    ))->startSession(); });
-    $router->get('/api/bank-reconciliation/{id}/session', function($id) { (new \Accounting\Interfaces\HTTP\BankReconciliationController(
-        $GLOBALS['container']['bankReconciliationService'], $GLOBALS['container']['accountRepository']
-    ))->getSession($id); });
-    $router->get('/api/bank-reconciliation/{id}/items', function($id) { (new \Accounting\Interfaces\HTTP\BankReconciliationController(
-        $GLOBALS['container']['bankReconciliationService'], $GLOBALS['container']['accountRepository']
-    ))->items($id); });
-    $router->get('/api/bank-reconciliation/{id}/unmatched', function($id) { (new \Accounting\Interfaces\HTTP\BankReconciliationController(
-        $GLOBALS['container']['bankReconciliationService'], $GLOBALS['container']['accountRepository']
-    ))->unmatched($id); });
-    $router->post('/api/bank-reconciliation/{id}/statement-entry', function($id) { (new \Accounting\Interfaces\HTTP\BankReconciliationController(
-        $GLOBALS['container']['bankReconciliationService'], $GLOBALS['container']['accountRepository']
-    ))->addStatementEntry($id); });
-    $router->post('/api/bank-reconciliation/{id}/auto-match', function($id) { (new \Accounting\Interfaces\HTTP\BankReconciliationController(
-        $GLOBALS['container']['bankReconciliationService'], $GLOBALS['container']['accountRepository']
-    ))->autoMatch($id); });
-    $router->post('/api/bank-reconciliation/{id}/manual-match', function($id) { (new \Accounting\Interfaces\HTTP\BankReconciliationController(
-        $GLOBALS['container']['bankReconciliationService'], $GLOBALS['container']['accountRepository']
-    ))->manualMatch($id); });
-    $router->post('/api/bank-reconciliation/{id}/adjust', function($id) { (new \Accounting\Interfaces\HTTP\BankReconciliationController(
-        $GLOBALS['container']['bankReconciliationService'], $GLOBALS['container']['accountRepository']
-    ))->addAdjustingEntry($id); });
-    $router->post('/api/bank-reconciliation/{id}/complete', function($id) { (new \Accounting\Interfaces\HTTP\BankReconciliationController(
-        $GLOBALS['container']['bankReconciliationService'], $GLOBALS['container']['accountRepository']
-    ))->complete($id); });
-    $router->get('/api/bank-reconciliation/bank-accounts', function() { (new \Accounting\Interfaces\HTTP\BankReconciliationController(
-        $GLOBALS['container']['bankReconciliationService'], $GLOBALS['container']['accountRepository']
-    ))->bankAccounts(); });
-
     // Physical Count
     $router->get('/kho/kiem-ke', function() { require __DIR__ . '/../public/views/physical_count.php'; });
     $router->get('/api/physical-count/sessions', function() { (new \Accounting\Interfaces\HTTP\PhysicalCountController(
-        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository']
+        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository'], $GLOBALS['container']['pdo']
     ))->sessions(); });
     $router->get('/api/physical-count/lines/{id}', function($id) { (new \Accounting\Interfaces\HTTP\PhysicalCountController(
-        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository']
+        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository'], $GLOBALS['container']['pdo']
     ))->lines($id); });
     $router->post('/api/physical-count/sessions', function() { (new \Accounting\Interfaces\HTTP\PhysicalCountController(
-        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository']
+        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository'], $GLOBALS['container']['pdo']
     ))->createSession(); });
     $router->post('/api/physical-count/adjust', function() { (new \Accounting\Interfaces\HTTP\PhysicalCountController(
-        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository']
+        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository'], $GLOBALS['container']['pdo']
     ))->adjust(); });
 
     // Impairment
     $router->get('/kho/du-phong-giam-gia', function() { require __DIR__ . '/../public/views/impairment.php'; });
     $router->get('/api/impairments', function() { (new \Accounting\Interfaces\HTTP\ImpairmentController(
-        $GLOBALS['container']['inventoryService']
+        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['pdo']
     ))->list(); });
     $router->post('/api/impairments', function() { (new \Accounting\Interfaces\HTTP\ImpairmentController(
-        $GLOBALS['container']['inventoryService']
+        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['pdo']
     ))->record(); });
     $router->post('/api/impairments/reverse', function() { (new \Accounting\Interfaces\HTTP\ImpairmentController(
-        $GLOBALS['container']['inventoryService']
+        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['pdo']
     ))->reverse(); });
 
     // Promotional
@@ -491,35 +451,38 @@ function defineRoutes(Router $router): void
     // Periodic Inventory
     $router->get('/kho/kiem-ke-dinh-ky', function() { require __DIR__ . '/../public/views/periodic.php'; });
     $router->get('/api/periodic', function() { (new \Accounting\Interfaces\HTTP\PeriodicController(
-        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository']
+        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository'], $GLOBALS['container']['pdo']
     ))->list(); });
     $router->post('/api/periodic/close', function() { (new \Accounting\Interfaces\HTTP\PeriodicController(
-        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository']
+        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository'], $GLOBALS['container']['pdo']
     ))->close(); });
 
     // In Transit
     $router->get('/kho/hang-dang-di-duong', function() { require __DIR__ . '/../public/views/transit.php'; });
     $router->get('/api/inventory-transit', function() { (new \Accounting\Interfaces\HTTP\InventoryTransitController(
-        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository']
+        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository'], $GLOBALS['container']['pdo']
     ))->list(); });
     $router->post('/api/inventory-transit', function() { (new \Accounting\Interfaces\HTTP\InventoryTransitController(
-        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository']
+        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository'], $GLOBALS['container']['pdo']
     ))->record(); });
     $router->post('/api/inventory-transit/receive', function() { (new \Accounting\Interfaces\HTTP\InventoryTransitController(
-        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository']
+        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository'], $GLOBALS['container']['pdo']
     ))->receive(); });
     $router->get('/api/transfers', function() { (new \Accounting\Interfaces\HTTP\TransferController(
-        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository'], $GLOBALS['container']['warehouseRepository']
+        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository'], $GLOBALS['container']['warehouseRepository'], $GLOBALS['container']['pdo']
     ))->list(); });
     $router->post('/api/transfers', function() { (new \Accounting\Interfaces\HTTP\TransferController(
-        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository'], $GLOBALS['container']['warehouseRepository']
+        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository'], $GLOBALS['container']['warehouseRepository'], $GLOBALS['container']['pdo']
     ))->transfer(); });
     $router->get('/api/transfers/items', function() { (new \Accounting\Interfaces\HTTP\TransferController(
-        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository'], $GLOBALS['container']['warehouseRepository']
+        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository'], $GLOBALS['container']['warehouseRepository'], $GLOBALS['container']['pdo']
     ))->items(); });
     $router->get('/api/transfers/warehouses', function() { (new \Accounting\Interfaces\HTTP\TransferController(
-        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository'], $GLOBALS['container']['warehouseRepository']
+        $GLOBALS['container']['inventoryService'], $GLOBALS['container']['itemRepository'], $GLOBALS['container']['warehouseRepository'], $GLOBALS['container']['pdo']
     ))->warehouses(); });
+
+    // CSRF
+    $router->get('/api/csrf-token', function() { echo json_encode(['token' => \Accounting\Infrastructure\Helpers::csrfToken()]); });
 }
 
 $GLOBALS['router'] = new Router();

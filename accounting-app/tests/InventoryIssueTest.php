@@ -21,7 +21,7 @@ $accountRepo = new PDOAccountRepository($pdo);
 $txnRepo = new PDOTransactionRepository($pdo);
 $itemRepo = new PDOItemRepository($pdo);
 $warehouseRepo = new PDOWarehouseRepository($pdo);
-$svc = new InventoryService($accountRepo, $txnRepo, $itemRepo, $warehouseRepo);
+$svc = new InventoryService($accountRepo, $txnRepo, $itemRepo, $warehouseRepo, $pdo);
 
 $failed = 0; $total = 0;
 function assertEq($a, $b, $m) { global $total, $failed;

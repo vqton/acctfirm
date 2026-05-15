@@ -2,6 +2,10 @@
 
 ## Inventory Accounting — Circular 99/2025/TT-BTC (Principles)
 
+**Version:** 1.0
+**Last Updated:** 2026-05-15
+**Regulatory Basis:** Circular 99/2025/TT-BTC, Law on Accounting 2015
+
 ---
 
 ## 1. Source
@@ -19,7 +23,7 @@
 
 ### Domain 1: Inventory Classification & Recognition
 
-#### UC-01: Classify Inventory by Category and Holding Period
+#### UC-001: Classify Inventory by Category and Holding Period
 
 ##### Description
 Enterprise classifies inventory items into prescribed categories (goods in transit, raw materials, tools, WIP, finished goods, merchandise, consignment goods, bonded warehouse materials) and determines balance sheet presentation based on expected holding period.
@@ -70,6 +74,11 @@ Ensure inventory is correctly categorized and presented as current or long-term 
 - BR03: Non-owned inventory must be tracked off-balance-sheet and disclosed in financial statement notes
 - BR04: Raw materials sub-classification: main materials, sub-materials, fuel, spare parts, construction materials
 
+##### Postconditions
+- Inventory classified by category
+- Current/long-term asset flag assigned
+- Non-owned inventory tracked off-balance-sheet
+
 ##### Input Data
 - Item code, category code, quantity, unit cost
 - Purchase/production date
@@ -81,7 +90,7 @@ Ensure inventory is correctly categorized and presented as current or long-term 
 - Off-balance-sheet tracking record (for non-owned inventory)
 
 ##### Dependencies
-- UC-04 (Configure Valuation Method)
+- UC-004 (Configure Valuation Method)
 
 ##### Frequency
 - Event-driven (at receipt) + periodic review at period-end
@@ -94,7 +103,7 @@ Ensure inventory is correctly categorized and presented as current or long-term 
 
 ---
 
-#### UC-02: Identify and Record Non-Owned Inventory Off-Balance-Sheet
+#### UC-002: Identify and Record Non-Owned Inventory Off-Balance-Sheet
 
 ##### Description
 Record inventory held by the enterprise but not owned (custody, consignment received, processing received, import/export commission) in off-balance-sheet records with full disclosure.
@@ -133,6 +142,10 @@ Prevent misstatement of inventory assets on balance sheet; provide auditor and r
 - BR06: Off-balance-sheet records must track: product, quantity, owner, agreement date, location
 - BR07: Disclosure in financial statement notes is mandatory
 
+##### Postconditions
+- Non-owned inventory recorded off-balance-sheet
+- Disclosure note prepared
+
 ##### Input Data
 - Non-ownership agreement reference
 - Item codes and quantities
@@ -144,7 +157,7 @@ Prevent misstatement of inventory assets on balance sheet; provide auditor and r
 - Period-end disclosure note
 
 ##### Dependencies
-- UC-01
+- UC-001
 
 ##### Frequency
 - Event-driven
@@ -159,7 +172,7 @@ Prevent misstatement of inventory assets on balance sheet; provide auditor and r
 
 ### Domain 2: Inventory Cost Determination
 
-#### UC-03: Determine Inventory Cost (Landed Cost)
+#### UC-003: Determine Inventory Cost (Landed Cost)
 
 ##### Description
 Calculate and record the full landed cost of purchased, self-manufactured, or externally processed inventory, including all directly attributable costs and non-refundable taxes.
@@ -208,6 +221,10 @@ Ensure inventory is initially recognized at cost per VAS 02 §5–7, including a
 - BR12: Trade discounts and rebates received after purchase must be allocated: reduce cost of inventory still on hand; reduce cost of inventory already consumed; reduce COGS of inventory already sold
 - BR13: Bonus items received with purchase must be recorded at fair value unless enterprise does not intend to sell/use separately
 
+##### Postconditions
+- Landed cost calculated
+- Journal entry posted at landed cost
+
 ##### Input Data
 - Purchase invoice or production cost report
 - Tax amounts (VAT, import duty, excise, environmental, resource)
@@ -219,7 +236,7 @@ Ensure inventory is initially recognized at cost per VAS 02 §5–7, including a
 - Journal entry (Dr TK 152/153/155/156 ± TK 133 — Cr TK 111/112/141/331)
 
 ##### Dependencies
-- UC-04 (Valuation Method)
+- UC-004 (Valuation Method)
 
 ##### Frequency
 - Event-driven (each receipt)
@@ -234,7 +251,7 @@ Ensure inventory is initially recognized at cost per VAS 02 §5–7, including a
 
 ### Domain 3: Inventory Valuation Methods
 
-#### UC-04: Configure and Apply Valuation Method
+#### UC-004: Configure and Apply Valuation Method
 
 ##### Description
 Enterprise selects and applies a consistent cost-flow assumption for inventory valuation from five permitted methods: Specific Identification, Weighted Average (periodic or perpetual), FIFO, Retail Method, Standard Cost.
@@ -278,6 +295,10 @@ Establish consistent cost-flow assumption for inventory valuation and COGS deter
 - BR19: Standard Cost must be periodically reviewed and adjusted to approximate actual cost
 - BR20: Specific Identification is for low-volume, identifiable, stable items
 
+##### Postconditions
+- Valuation method configured per inventory category
+- Policy election recorded with effective date
+
 ##### Input Data
 - Valuation method code per item category
 - Effective date
@@ -303,7 +324,7 @@ Establish consistent cost-flow assumption for inventory valuation and COGS deter
 
 ### Domain 4: Inventory Accounting Systems
 
-#### UC-05: Operate Perpetual Inventory System
+#### UC-005: Operate Perpetual Inventory System
 
 ##### Description
 Maintain continuous, real-time tracking of inventory quantities and values through systematic recording of every receipt and issue transaction.
@@ -332,7 +353,7 @@ Ensure inventory book balance is always available at any point during the period
 4. System maintains continuous book balance (quantity + value)
 5. At period-end, physical count is performed
 6. System compares physical count to book balance
-7. If discrepancy exists → UC-10 (Investigate Inventory Discrepancy)
+7. If discrepancy exists → UC-010 (Investigate Inventory Discrepancy)
 
 ##### Alternate Flow
 - None
@@ -345,6 +366,10 @@ Ensure inventory book balance is always available at any point during the period
 - BR22: Perpetual system is required for manufacturing enterprises, construction enterprises, and high-value goods trading
 - BR23: Issue cost is calculated per transaction (not at period-end)
 
+##### Postconditions
+- Continuous inventory book balance maintained
+- Issue cost calculated per transaction
+
 ##### Input Data
 - All receipt, issue, transfer, adjustment transactions
 
@@ -354,8 +379,8 @@ Ensure inventory book balance is always available at any point during the period
 - Period-end reconciliation report
 
 ##### Dependencies
-- UC-04 (Valuation Method)
-- UC-10 (Physical Count)
+- UC-004 (Valuation Method)
+- UC-010 (Physical Count)
 
 ##### Frequency
 - Continuous/Real-time
@@ -368,7 +393,7 @@ Ensure inventory book balance is always available at any point during the period
 
 ---
 
-#### UC-06: Operate Periodic Inventory System
+#### UC-006: Operate Periodic Inventory System
 
 ##### Description
 Determine inventory quantities and values at period-end through physical count, and calculate issues as residual: Opening + Receipts − Closing = Issues.
@@ -392,7 +417,7 @@ Provide simplified inventory accounting for low-value, high-variety items where 
 
 ##### Main Flow
 1. System accumulates all receipts for the period
-2. Physical count is conducted at period-end (UC-10)
+2. Physical count is conducted at period-end (UC-010)
 3. System calculates issues: Issues = Opening + Receipts − Closing
 4. System records COGS/expense based on calculated issues
 5. System updates GL with closing balance
@@ -408,6 +433,10 @@ Provide simplified inventory accounting for low-value, high-variety items where 
 - BR25: Periodic system is for high-volume, low-value items with many variations (retail)
 - BR26: Accuracy depends on physical count and warehouse management quality
 
+##### Postconditions
+- Issues calculated as residual
+- Period-end inventory balance determined
+
 ##### Input Data
 - Opening inventory balance
 - All receipt documents for the period
@@ -419,7 +448,7 @@ Provide simplified inventory accounting for low-value, high-variety items where 
 - COGS journal entry
 
 ##### Dependencies
-- UC-10 (Physical Count)
+- UC-010 (Physical Count)
 
 ##### Frequency
 - Period-end (monthly/quarterly/yearly)
@@ -434,7 +463,7 @@ Provide simplified inventory accounting for low-value, high-variety items where 
 
 ### Domain 5: Physical Inventory & Adjustment
 
-#### UC-07: Perform Physical Inventory Count
+#### UC-007: Perform Physical Inventory Count
 
 ##### Description
 Conduct systematic physical count of all inventory items, compare results to book records, and resolve discrepancies.
@@ -473,6 +502,10 @@ Verify physical stock exists and matches accounting records.
 - BR27: Physical count at minimum at each period-end
 - BR28: Count results documented in official count minutes
 
+##### Postconditions
+- Physical count results compared to book
+- Variance report generated
+
 ##### Input Data
 - Count sheets with physical quantities
 - Book quantities from system
@@ -482,7 +515,7 @@ Verify physical stock exists and matches accounting records.
 - Adjustment journal entries
 
 ##### Dependencies
-- UC-10 (Investigate Discrepancy)
+- UC-010 (Investigate Discrepancy)
 
 ##### Frequency
 - Monthly/Quarterly/Yearly or continuous
@@ -495,7 +528,7 @@ Verify physical stock exists and matches accounting records.
 
 ---
 
-#### UC-08: Investigate and Adjust Inventory Discrepancy
+#### UC-008: Investigate and Adjust Inventory Discrepancy
 
 ##### Description
 Analyze count variances, determine root cause, and record adjustment entries for surpluses and deficits.
@@ -512,7 +545,7 @@ Restore accuracy between physical stock and book records.
 - Department Manager
 
 ##### Preconditions
-- Physical count (UC-07) completed
+- Physical count (UC-007) completed
 - Variance report generated
 
 ##### Trigger
@@ -540,6 +573,10 @@ Restore accuracy between physical stock and book records.
 - BR32: Unidentified deficit: Dr TK 1381 (pending investigation)
 - BR33: Upon resolution, close TK 1381/3381 to appropriate final account
 
+##### Postconditions
+- Inventory adjusted to physical count
+- Discrepancy suspense cleared
+
 ##### Input Data
 - Variance report
 - Investigation findings
@@ -550,7 +587,7 @@ Restore accuracy between physical stock and book records.
 - Updated stock records
 
 ##### Dependencies
-- UC-07
+- UC-007
 
 ##### Frequency
 - Event-driven (after each count)
@@ -565,7 +602,7 @@ Restore accuracy between physical stock and book records.
 
 ### Domain 6: Inventory Impairment
 
-#### UC-09: Calculate and Record Inventory Impairment Provision
+#### UC-009: Calculate and Record Inventory Impairment Provision
 
 ##### Description
 Assess net realizable value (NRV) of each inventory item at period-end and record provision if NRV < carrying cost.
@@ -606,6 +643,10 @@ Ensure inventory is not carried above recoverable amount.
 - BR36: Reversal capped at original impairment amount
 - BR37: Raw materials not written down if finished product is profitable (unless obsolete)
 
+##### Postconditions
+- Impairment provision calculated per item
+- Journal entry posted (Dr/Cr TK 632 — Cr/Dr TK 2294)
+
 ##### Input Data
 - Item carrying cost
 - Estimated selling price
@@ -617,7 +658,7 @@ Ensure inventory is not carried above recoverable amount.
 - Journal entry (Dr/Cr TK 632 — Cr/Dr TK 2294)
 
 ##### Dependencies
-- UC-04 (Valuation Method)
+- UC-004 (Valuation Method)
 
 ##### Frequency
 - Quarterly/Annually (minimum at year-end)
@@ -632,7 +673,7 @@ Ensure inventory is not carried above recoverable amount.
 
 ### Domain 7: Promotional & Marketing Inventory
 
-#### UC-10: Account for Promotional Inventory
+#### UC-010: Account for Promotional Inventory
 
 ##### Description
 Record inventory withdrawn for promotional campaigns, distinguishing between unconditional giveaways (selling expense) and conditional promotions (revenue allocation).
@@ -671,6 +712,10 @@ Properly classify promotional costs in accordance with transaction substance.
 - BR39: Conditional promotions → revenue is allocated; promoted item cost is COGS (TK 632)
 - BR40: Substance over form: a "buy 2 get 1 free" is a discount, not a donation
 
+##### Postconditions
+- Promotional inventory issued
+- Selling expense or COGS recorded
+
 ##### Input Data
 - Promotion campaign reference
 - Item codes and quantities
@@ -683,7 +728,7 @@ Properly classify promotional costs in accordance with transaction substance.
 - Tax adjustment report
 
 ##### Dependencies
-- UC-06 (Goods Issue)
+- UC-006 (Goods Issue)
 
 ##### Frequency
 - Event-driven
@@ -698,7 +743,7 @@ Properly classify promotional costs in accordance with transaction substance.
 
 ### Domain 8: Foreign Currency Inventory
 
-#### UC-11: Account for Foreign Currency Inventory Purchases
+#### UC-011: Account for Foreign Currency Inventory Purchases
 
 ##### Description
 Record inventory purchased in foreign currency at appropriate exchange rates, including prepayment and period-end revaluation.
@@ -738,6 +783,10 @@ Ensure accurate VND cost measurement for foreign-currency inventory.
 - BR43: Tax values follow tax authority exchange rate
 - BR44: Exchange differences on inventory purchases → TK 413
 
+##### Postconditions
+- FC inventory cost recorded in VND
+- Exchange differences tracked
+
 ##### Input Data
 - Foreign currency invoice
 - Exchange rate at transaction date
@@ -750,7 +799,7 @@ Ensure accurate VND cost measurement for foreign-currency inventory.
 - Exchange difference report
 
 ##### Dependencies
-- UC-03 (Landed Cost)
+- UC-003 (Landed Cost)
 
 ##### Frequency
 - Event-driven + period-end revaluation
@@ -765,7 +814,7 @@ Ensure accurate VND cost measurement for foreign-currency inventory.
 
 ### Domain 9: Dual Tracking (Quantity & Value)
 
-#### UC-12: Maintain Dual Inventory Records (Quantity + Value)
+#### UC-012: Maintain Dual Inventory Records (Quantity + Value)
 
 ##### Description
 Maintain simultaneous tracking of inventory by physical quantity and monetary value, at item, category, and location level.
@@ -805,6 +854,10 @@ Ensure perpetual reconciliation between physical stock and financial records.
 - BR46: Quantity and value must always reconcile: value = quantity × unit cost
 - BR47: Tracking granularity: by item, by specification, by warehouse/location
 
+##### Postconditions
+- Dual records maintained (quantity + value)
+- Unit cost derivable at any point
+
 ##### Input Data
 - Transaction quantity and value
 
@@ -829,16 +882,16 @@ Ensure perpetual reconciliation between physical stock and financial records.
 ## 3. Cross-Use Case Analysis
 
 ### Overlapping Use Cases
-- UC-03 (Landed Cost) and UC-11 (Foreign Currency) share FX rate logic
-- UC-04 (Valuation Method) is consumed by UC-05 and UC-06 (both inventory systems)
-- UC-07 (Physical Count) and UC-08 (Discrepancy) must execute as a sequential pair
-- UC-09 (Impairment) depends on UC-04 (valuation) for carrying cost
-- UC-10 (Promotional) overlaps with UC-03 (cost) for fair value allocation
+- UC-003 (Landed Cost) and UC-011 (Foreign Currency) share FX rate logic
+- UC-004 (Valuation Method) is consumed by UC-005 and UC-006 (both inventory systems)
+- UC-007 (Physical Count) and UC-008 (Discrepancy) must execute as a sequential pair
+- UC-009 (Impairment) depends on UC-004 (valuation) for carrying cost
+- UC-010 (Promotional) overlaps with UC-003 (cost) for fair value allocation
 
 ### Shared Dependencies
-- **Valuation method** (UC-04): shared by all issue calculations (UC-05, UC-06)
-- **Cost determination** (UC-03): shared by all receipt types (purchase, manufacture, processing)
-- **Classification** (UC-01): prerequisite for all downstream inventory transactions
+- **Valuation method** (UC-004): shared by all issue calculations (UC-005, UC-006)
+- **Cost determination** (UC-003): shared by all receipt types (purchase, manufacture, processing)
+- **Classification** (UC-001): prerequisite for all downstream inventory transactions
 
 ### Workflow Gaps
 - No explicit use case for **inter-warehouse transfer** (ownership unchanged, location changes)

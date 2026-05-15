@@ -160,7 +160,7 @@ class PeriodService
 
     public function executeClosingEntries(string $createdBy): void
     {
-        $journal = new JournalService($this->accountRepo, $this->txnRepo);
+        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
 
         // Get all revenue accounts (Class 5, 7) with non-zero balance
         $revenueAccounts = $this->accountRepo->findAll();

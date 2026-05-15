@@ -23,6 +23,7 @@ class BankReconciliationController
 
     public function startSession(): void
     {
+        Helpers::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['bank_account_code'], $data['statement_date'], $data['statement_balance'])) {
             http_response_code(400);
@@ -65,6 +66,7 @@ class BankReconciliationController
 
     public function addStatementEntry(int $sessionId): void
     {
+        Helpers::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['amount'], $data['type'])) {
             http_response_code(400);
@@ -87,8 +89,16 @@ class BankReconciliationController
 
     public function autoMatch(int $sessionId): void
     {
+        Helpers::checkCsrf();
+        $data = json_decode(file_get_contents('php://input'), true);
+        if (!$data || !isset($data['statement_item_id'], $data['book_item_id'])) {
+            http_response_code(400);
+            echo json_encode(['error' => 'statement_item_id, book_item_id required']);
+            return;
+        }
         try {
-            echo json_encode($this->recon->autoMatch($sessionId));
+            $this->recon->manualMatch($sessionId, (int)$data['statement_item_id'], (int)$data['book_item_id']);
+            echo json_encode(['matched' => true]);
         } catch (\InvalidArgumentException $e) {
             http_response_code(400);
             echo json_encode(['error' => $e->getMessage()]);
@@ -97,6 +107,7 @@ class BankReconciliationController
 
     public function manualMatch(int $sessionId): void
     {
+        Helpers::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['statement_item_id'], $data['book_item_id'])) {
             http_response_code(400);
@@ -114,6 +125,7 @@ class BankReconciliationController
 
     public function addAdjustingEntry(int $sessionId): void
     {
+        Helpers::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['debit_account'], $data['credit_account'], $data['amount'])) {
             http_response_code(400);
@@ -135,6 +147,7 @@ class BankReconciliationController
 
     public function complete(int $sessionId): void
     {
+        Helpers::checkCsrf();
         try {
             echo json_encode($this->recon->complete($sessionId));
         } catch (\InvalidArgumentException $e) {

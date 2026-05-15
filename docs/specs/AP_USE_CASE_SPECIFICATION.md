@@ -2,6 +2,10 @@
 
 ## Accounts Payable Management — TK 331 Under Circular 99/2025/TT-BTC
 
+**Version:** 1.0
+**Last Updated:** 2026-05-15
+**Regulatory Basis:** Circular 99/2025/TT-BTC, Law on Accounting 2015
+
 ---
 
 ## 1. Source
@@ -53,6 +57,11 @@
 - **Services (utilities, consulting, audit):** Dr 241/242/627/641/642 — Cr 331.
 - **Goods received before invoice:** Record as goods in transit (TK 151) at period-end if invoice not yet received.
 
+**Postconditions:**
+- Supplier payable recorded
+- Inventory/asset/expense updated
+- Input VAT recorded (if deductible)
+
 **Exception Flow:**
 - If received quantity ≠ invoiced quantity: flag for investigation before posting
 - If VAT rate on invoice doesn't match tax code: reject
@@ -95,6 +104,16 @@
 **Goal:** Ensure accurate VND measurement of FC-denominated payables.
 
 **Primary Actors:** Accountant
+
+**Supporting Actors:** Bank, Customs Broker
+
+**Preconditions:**
+- Invoice received denominated in foreign currency
+- Exchange rate observable at transaction date
+- Supplier master data exists
+
+**Trigger:**
+- FC supplier invoice received
 
 **Main Flow:**
 1. Accountant records invoice at spot exchange rate on invoice date (Article 2.1b)
@@ -145,6 +164,11 @@
 - **Prepayment (advance payment):** Dr 331 — Cr 111/112. Supplier balance shows debit (prepayment asset).
 - **Payment via borrowing:** Dr 331 — Cr 341 (loan proceeds paid directly to supplier).
 
+**Postconditions:**
+- Supplier AP balance reduced
+- Cash/bank balance decreased
+- Settlement discount recorded (if applicable)
+
 **Business Rules:**
 - BR10: Payment reduces TK 331 on the debit side (Article 2.3)
 - BR11: Prepayment creates debit balance on TK 331; shown as asset on BC 01 (Article 2.3)
@@ -175,6 +199,14 @@
    - Cr 111/112 (cash/bank)
 2. System shows supplier with debit balance (prepayment)
 3. When goods received: Dr inventory — Cr 331 (clears advance + records remaining payable)
+
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- Prepayment recorded as Dr balance on TK 331
+- Cash/bank decreased
+- When goods received: prepayment cleared, remaining payable recorded
 
 **Business Rules:**
 - BR14: Prepayment recorded as Dr 331, not a separate prepaid account (Article 2.3)
@@ -217,6 +249,11 @@
 **Alternate Flow:**
 - **Goods already consumed in production:** Allocate return credit proportionally: Dr 331 — Cr 154/621/627/641/642 (cost accounts) and Cr 133 (VAT reversal).
 
+**Postconditions:**
+- Supplier AP balance reduced
+- Inventory decreased
+- Input VAT reversed (if previously claimed)
+
 **Business Rules:**
 - BR17: Purchase return reverses original entry: Dr 331 — Cr 133 — Cr inventory (Article 2.7)
 - BR18: Return must reference original invoice for audit trail
@@ -239,6 +276,13 @@
    - **Settlement discount** (early payment): Dr 331 — Cr 515 (finance income) — Article 2.6
    - **Trade discount/rebate** (post-purchase): Dr 331 — Cr 152/153/156 (reduce inventory cost proportionally) — Article 2.7
 2. Supplier balance reduced accordingly
+
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- Supplier balance reduced
+- Finance income recorded (settlement discount) or inventory cost reduced (trade discount)
 
 **Business Rules:**
 - BR20: Settlement discount = finance income (TK 515), never cost reduction (Article 2.6)
@@ -264,6 +308,13 @@
    - If rate increased: Dr 635 (or Cr 413) — Cr 331 (loss)
    - If rate decreased: Dr 331 — Cr 515 (or Dr 413) (gain)
 4. Net difference through P&L or equity per VAS 10
+
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- AP balances updated to closing rate
+- FX gain/loss recorded
 
 **Business Rules:**
 - BR23: FC AP revalued at period-end closing rate (Article 2.1)
@@ -295,6 +346,13 @@
    - Dr 331 — Cr 711 (other income) — Article 2.8
 3. Supplier balance zeroed
 
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- AP balance cleared
+- Other income recorded
+
 **Business Rules:**
 - BR25: Write-off requires Chief Accountant approval (Article 2.8)
 - BR26: Write-off recorded as other income (TK 711), not reduction of COGS
@@ -320,6 +378,13 @@
 4. System also identifies debit balance suppliers (prepayments) separately
 5. Report generated for review and payment planning
 
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- Aging report generated
+- Prepayments identified separately
+
 **Business Rules:**
 - BR27: AP aging reports by invoice due date, not by transaction date
 - BR28: Prepayments (Dr balance) shown separately from payables (Cr balance)
@@ -342,6 +407,12 @@
 2. System lists all transactions: invoices, payments, returns, discounts, adjustments
 3. Opening balance, period activity, closing balance
 4. Report used to confirm balance with supplier
+
+**Alternative Flows:**
+None documented
+
+**Postconditions:**
+- Supplier statement generated
 
 **Priority:** Medium
 

@@ -9,11 +9,13 @@ class CashController
 {
     private CashService $cash;
     private AccountRepositoryInterface $accountRepo;
+    private \PDO $pdo;
 
-    public function __construct(CashService $cash, AccountRepositoryInterface $accountRepo)
+    public function __construct(CashService $cash, AccountRepositoryInterface $accountRepo, \PDO $pdo)
     {
         $this->cash = $cash;
         $this->accountRepo = $accountRepo;
+        $this->pdo = $pdo;
     }
 
     // ── Cash Receipts ──
@@ -25,11 +27,13 @@ class CashController
         $stmt = $pdo->query("SELECT t.id, t.description, t.reference, t.status, t.created_at, t.created_by
             FROM transactions t WHERE t.description LIKE 'Cash receipt:%'
             ORDER BY t.created_at DESC LIMIT 200");
+        header('Content-Type: application/json; charset=utf-8');
         echo json_encode($stmt->fetchAll(\PDO::FETCH_ASSOC));
     }
 
     public function createReceipt(): void
     {
+        Helpers::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['amount'], $data['credit_account_code'])) {
             Helpers::jsonError('amount, credit_account_code required');
@@ -57,11 +61,13 @@ class CashController
         $stmt = $pdo->query("SELECT t.id, t.description, t.reference, t.status, t.created_at, t.created_by
             FROM transactions t WHERE t.description LIKE 'Cash payment:%'
             ORDER BY t.created_at DESC LIMIT 200");
+        header('Content-Type: application/json; charset=utf-8');
         echo json_encode($stmt->fetchAll(\PDO::FETCH_ASSOC));
     }
 
     public function createPayment(): void
     {
+        Helpers::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['amount'], $data['debit_account_code'])) {
             Helpers::jsonError('amount, debit_account_code required');
@@ -96,11 +102,13 @@ class CashController
                OR t.description LIKE 'Bank interest:%'
                OR t.description LIKE 'Bank charge:%'
             ORDER BY t.created_at DESC LIMIT 200");
+        header('Content-Type: application/json; charset=utf-8');
         echo json_encode($stmt->fetchAll(\PDO::FETCH_ASSOC));
     }
 
     public function createDeposit(): void
     {
+        Helpers::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['amount'])) {
             http_response_code(400);
@@ -124,6 +132,7 @@ class CashController
 
     public function createWithdrawal(): void
     {
+        Helpers::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['amount'])) {
             http_response_code(400);
@@ -147,6 +156,7 @@ class CashController
 
     public function createBankReceipt(): void
     {
+        Helpers::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['amount'], $data['credit_account_code'])) {
             http_response_code(400);
@@ -170,6 +180,7 @@ class CashController
 
     public function createBankPayment(): void
     {
+        Helpers::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['amount'], $data['debit_account_code'])) {
             http_response_code(400);
@@ -193,6 +204,7 @@ class CashController
 
     public function createInterest(): void
     {
+        Helpers::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['amount'])) {
             http_response_code(400);
@@ -216,6 +228,7 @@ class CashController
 
     public function createCharge(): void
     {
+        Helpers::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['amount'])) {
             http_response_code(400);
@@ -248,6 +261,7 @@ class CashController
 
     public function createTransit(): void
     {
+        Helpers::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['amount'])) {
             http_response_code(400);
@@ -271,6 +285,7 @@ class CashController
 
     public function confirmTransit(): void
     {
+        Helpers::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['transit_id'])) {
             http_response_code(400);
@@ -291,6 +306,7 @@ class CashController
 
     public function reverseTransit(): void
     {
+        Helpers::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['transit_id'])) {
             http_response_code(400);
@@ -332,6 +348,7 @@ class CashController
 
     public function createPettyFund(): void
     {
+        Helpers::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['fund_name'], $data['imprest_amount'])) {
             http_response_code(400);
@@ -353,6 +370,7 @@ class CashController
 
     public function disbursePetty(): void
     {
+        Helpers::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['fund_id'], $data['amount'])) {
             http_response_code(400);
@@ -376,6 +394,7 @@ class CashController
 
     public function replenishPetty(): void
     {
+        Helpers::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['fund_id'], $data['expense_account'], $data['total_amount'])) {
             http_response_code(400);
@@ -398,6 +417,7 @@ class CashController
 
     public function closePettyFund(): void
     {
+        Helpers::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['fund_id'])) {
             http_response_code(400);
@@ -430,6 +450,7 @@ class CashController
 
     public function fcRevalue(): void
     {
+        Helpers::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['account_code'], $data['currency_code'], $data['closing_rate'])) {
             Helpers::jsonError('account_code, currency_code, closing_rate required');
@@ -489,25 +510,45 @@ class CashController
 
     public function accounts(): void
     {
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: no-cache, must-revalidate');
         $for = $_GET['for'] ?? 'all';
-        $excludeCash = $for !== 'all';
+
+        // Define allowed account types per transaction nature
+        // Receipt (Dr 111 -> Cr X): credit-normal accounts
+        $receiptTypes = ['liability', 'equity', 'revenue'];
+        // Payment (Dr X -> Cr 111): debit-normal accounts
+        $paymentTypes = ['asset', 'expense'];
 
         $all = $this->accountRepo->findAll();
         $result = [];
 
         foreach ($all as $a) {
             $code = $a->getCode();
-            // Exclude cash accounts (111, 112, 113) for payment/receipt pickers
-            if ($excludeCash && in_array($code, ['111', '112', '113'])) continue;
+            // Always exclude cash/bank accounts (111, 112, 113)
+            if (in_array($code, ['111', '112', '113'])) continue;
             // Exclude control accounts (parent accounts with sub-accounts)
             if ($a->isControl()) continue;
             // Exclude result determination account
             if ($code === '911') continue;
 
+            // Filter by transaction nature
+            $type = $a->getType();
+            if ($for === 'receipt') {
+                // Credit accounts for receipt: revenue/liability/equity + AR (131)
+                $allowed = in_array($type, $receiptTypes) || $code === '131';
+                if (!$allowed) continue;
+            }
+            if ($for === 'payment') {
+                // Debit accounts for payment: asset/expense + AP (331)
+                $allowed = in_array($type, $paymentTypes) || $code === '331';
+                if (!$allowed) continue;
+            }
+
             $result[] = [
                 'code' => $code,
                 'name' => $a->getName(),
-                'type' => $a->getType(),
+                'type' => $type,
                 'balance' => $a->getBalance(),
             ];
         }
@@ -517,9 +558,6 @@ class CashController
 
     private function getPdo(): \PDO
     {
-        $ref = new \ReflectionClass($this->accountRepo);
-        $prop = $ref->getProperty('pdo');
-        $prop->setAccessible(true);
-        return $prop->getValue($this->accountRepo);
+        return $this->pdo;
     }
 }

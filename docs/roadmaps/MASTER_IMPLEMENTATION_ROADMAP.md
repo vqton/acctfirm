@@ -1,13 +1,12 @@
 # Inventory Accounting System — Implementation Roadmap
 
-**Prepared by:** Lead Business Analyst
-**Date:** May 2026
-**Regime:** Circular 99/2025/TT-BTC
-**Current State:** 16/16 master tables implemented (100% complete)
+**Version:** 1.0
+**Last Updated:** 2026-05-15
+**Base Spec:** N/A
 
 ---
 
-## 1. Current Status
+## 1. Current State Assessment
 
 | Layer | Count | Status |
 |---|---|---|
@@ -25,12 +24,16 @@
 
 ### Phase 1: Foundation (Weeks 1–2)
 
+**Goal:** Establish foundational data prerequisites (COA and opening balances) for all downstream modules.
+
 | Priority | Module | Business Rationale | Use Cases |
 |---|---|---|---|
 | **P1** | **Seed Chart of Accounts** | Every transaction posts to COA. Must exist first. | — |
 | **P2** | **Opening Balances** | Enterprise cannot start with zero balances. Must load opening inventory, AR, AP, cash. | — |
 
 ### Phase 2: Core Cash & Bank (Weeks 3–4)
+
+**Goal:** Implement core cash and bank transaction processing for daily operations.
 
 | Priority | Module | Business Rationale | Use Cases |
 |---|---|---|---|
@@ -41,6 +44,8 @@
 | **P7** | **Petty Cash / Advance (Tạm ứng)** | Employee advance management | — |
 
 ### Phase 3: Trade Modules (Weeks 5–8)
+
+**Goal:** Build purchase-to-pay and order-to-cash cycles.
 
 | Priority | Module | Business Rationale | Use Cases |
 |---|---|---|---|
@@ -54,6 +59,8 @@
 
 ### Phase 4: Inventory Operations (Weeks 9–10)
 
+**Goal:** Implement warehouse operations including receipt, issue, transfer, count, and cost calculation.
+
 | Priority | Module | Business Rationale | Use Cases |
 |---|---|---|---|
 | **P15** | **Inventory Receipt / Issue / Transfer** | Core warehouse operations | UC-05, UC-12 |
@@ -66,6 +73,8 @@
 
 ### Phase 5: Production (Weeks 11–12)
 
+**Goal:** Implement production order management, WIP tracking, and cost calculation.
+
 | Priority | Module | Business Rationale | Use Cases |
 |---|---|---|---|
 | **P22** | **BOM (Định mức NVL)** | Material requirement planning | — |
@@ -76,6 +85,8 @@
 
 ### Phase 6: Fixed Assets & Payroll (Weeks 13–14)
 
+**Goal:** Implement fixed asset lifecycle management and payroll processing.
+
 | Priority | Module | Business Rationale | Use Cases |
 |---|---|---|---|
 | **P27** | **Asset Addition / Depreciation** | Balance sheet impact | — |
@@ -84,6 +95,8 @@
 | **P30** | **Insurance & PIT Declaration** | Statutory compliance | — |
 
 ### Phase 7: Tax & GL (Weeks 15–16)
+
+**Goal:** Implement tax declarations, closing entries, and financial statement generation.
 
 | Priority | Module | Business Rationale | Use Cases |
 |---|---|---|---|
@@ -94,6 +107,8 @@
 | **P35** | **Financial Statements** | Legal reporting | — |
 
 ### Phase 8: Reporting & Admin (Weeks 17–18)
+
+**Goal:** Implement management reporting, RBAC, audit logging, and backup.
 
 | Priority | Module | Business Rationale | Use Cases |
 |---|---|---|---|

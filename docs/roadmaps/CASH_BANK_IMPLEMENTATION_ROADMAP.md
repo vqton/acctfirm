@@ -1,11 +1,8 @@
 # Cash & Bank Module — Implementation Roadmap
 
-**Prepared by:** Lead Business Analyst
-**Date:** May 2026
-**Regime:** Circular 99/2025/TT-BTC
-**Base Spec:** `CASH_BANK_USE_CASE.md` (9 use cases, UC-01 through UC-09)
-**Platform:** PHP 8.4, MySQL, Bootstrap 5 + jQuery, no framework
-**Current Architecture Pattern:** Controller → JournalService → PDO Repository → MySQL (see AGENTS.md)
+**Version:** 1.0
+**Last Updated:** 2026-05-15
+**Base Spec:** `docs/specs/CASH_BANK_USE_CASE_SPECIFICATION.md`
 
 ---
 
@@ -25,7 +22,7 @@
 | **Petty Cash (UC-07)** | ❌ Not started | No imprest fund management |
 | **FX Cash (UC-08)** | ❌ Not started | No dual-currency tracking |
 | **Cash Reporting (UC-09)** | ❌ Not started | No cash position reports |
-| **Sidebar links** | 🟡 Placeholder | 8 menu items under "Vốn bằng tiền" all `href="#"` |
+| **Sidebar links** | ❌ Placeholder | 8 menu items under "Vốn bằng tiền" all `href="#"` |
 
 ---
 

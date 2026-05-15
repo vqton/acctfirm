@@ -6,52 +6,23 @@ use Accounting\Domain\Repository\WarehouseRepositoryInterface;
 
 class WarehouseController
 {
+    use CrudControllerTrait;
+
     private WarehouseRepositoryInterface $repo;
-
     public function __construct(WarehouseRepositoryInterface $repo) { $this->repo = $repo; }
+    protected function repo() { return $this->repo; }
+    protected function idPrefix(): string { return 'wh_'; }
 
-    public function list(): void { echo json_encode(array_map(fn($x) => $x->toArray(), $this->repo->findAll())); }
-
-    public function get(string $id): void
+    protected function createEntity(array $data): object
     {
-        $x = $this->repo->findById($id);
-        if (!$x) { http_response_code(404); echo json_encode(['error' => 'Not found']); return; }
-        echo json_encode($x->toArray());
+        return new Warehouse($data['id'], $data['code'], $data['name'], $data['address'] ?? null);
     }
 
-    public function create(): void
+    protected function updateEntity(object $entity, array $data): void
     {
-        $data = json_decode(file_get_contents('php://input'), true);
-        if (!$data || !isset($data['code'], $data['name'])) {
-            http_response_code(400); echo json_encode(['error' => 'code and name required']); return;
-        }
-        if ($this->repo->findByCode($data['code'])) {
-            http_response_code(409); echo json_encode(['error' => 'Code already exists']); return;
-        }
-        $x = new Warehouse($data['id'] ?? uniqid('wh_'), $data['code'], $data['name'], $data['address'] ?? null);
-        $this->repo->save($x);
-        http_response_code(201);
-        echo json_encode($x->toArray());
-    }
-
-    public function update(string $id): void
-    {
-        $x = $this->repo->findById($id);
-        if (!$x) { http_response_code(404); echo json_encode(['error' => 'Not found']); return; }
-        $data = json_decode(file_get_contents('php://input'), true);
-        if (!$data) { http_response_code(400); echo json_encode(['error' => 'Invalid data']); return; }
-        if (isset($data['code'])) $x->setCode($data['code']);
-        if (isset($data['name'])) $x->setName($data['name']);
-        if (isset($data['address'])) $x->setAddress($data['address']);
-        if (isset($data['status'])) $x->setStatus((bool)$data['status']);
-        $this->repo->save($x);
-        echo json_encode($x->toArray());
-    }
-
-    public function delete(string $id): void
-    {
-        if (!$this->repo->findById($id)) { http_response_code(404); echo json_encode(['error' => 'Not found']); return; }
-        $this->repo->delete($id);
-        echo json_encode(['message' => 'Deleted']);
+        if (isset($data['code'])) $entity->setCode($data['code']);
+        if (isset($data['name'])) $entity->setName($data['name']);
+        if (isset($data['address'])) $entity->setAddress($data['address']);
+        if (isset($data['status'])) $entity->setStatus((bool)$data['status']);
     }
 }
