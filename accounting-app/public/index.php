@@ -91,7 +91,7 @@ use Accounting\Infrastructure\SessionMiddleware;
 SessionMiddleware::open();
 
 // Auth guard: /api/* and view pages require login, except login page and auth API
-$publicPaths = ['/', '/dang-nhap', '/api/auth/login'];
+$publicPaths = ['/', '/dang-nhap', '/api/auth/login', '/api/utils/to-words'];
 if (!isset($_SESSION['user']) && !in_array($uri, $publicPaths) && !str_starts_with($uri, '/api/auth/')) {
     SessionMiddleware::close();
     if (str_starts_with($uri, '/api/')) {

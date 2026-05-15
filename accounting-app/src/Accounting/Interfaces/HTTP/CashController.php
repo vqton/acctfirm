@@ -24,7 +24,11 @@ class CashController
     {
         Helpers::requirePermission('cash', 'view');
         $pdo = $this->getPdo();
-        $stmt = $pdo->query("SELECT t.id, t.description, t.reference, t.status, t.created_at, t.created_by
+        $stmt = $pdo->query("SELECT t.id, t.description, t.reference, t.status,
+            t.created_at, t.created_by,
+            t.transaction_date, t.payer_name, t.payer_type, t.payer_id,
+            (SELECT SUM(le.amount) FROM ledger_entries le WHERE le.transaction_id = t.id AND le.is_debit = 1) as amount,
+            (SELECT a.code FROM ledger_entries le JOIN accounts a ON a.id = le.account_id WHERE le.transaction_id = t.id AND le.is_debit = 0 LIMIT 1) as credit_account
             FROM transactions t WHERE t.description LIKE 'Cash receipt:%'
             ORDER BY t.created_at DESC LIMIT 200");
         header('Content-Type: application/json; charset=utf-8');
@@ -46,6 +50,22 @@ class CashController
                 $data['reference'] ?? Helpers::nextVoucherNo('PT'),
                 $data['created_by'] ?? 'system'
             );
+            // Save payer info and transaction date
+            $txnId = $result['transaction_id'] ?? null;
+            if ($txnId && ($data['payer_name'] ?? null)) {
+                $pdo = $this->getPdo();
+                $pdo->prepare('UPDATE transactions SET
+                    transaction_date = COALESCE(?, transaction_date),
+                    payer_name = ?, payer_type = ?, payer_id = ?
+                    WHERE id = ?')
+                    ->execute([
+                        $data['transaction_date'] ?? null,
+                        $data['payer_name'] ?? null,
+                        $data['payer_type'] ?? null,
+                        $data['payer_id'] ?? null,
+                        $txnId
+                    ]);
+            }
             Helpers::jsonOk($result, 201);
         } catch (\InvalidArgumentException $e) {
             Helpers::jsonError($e->getMessage());
@@ -58,7 +78,11 @@ class CashController
     {
         Helpers::requirePermission('cash', 'view');
         $pdo = $this->getPdo();
-        $stmt = $pdo->query("SELECT t.id, t.description, t.reference, t.status, t.created_at, t.created_by
+        $stmt = $pdo->query("SELECT t.id, t.description, t.reference, t.status,
+            t.created_at, t.created_by,
+            t.transaction_date, t.payer_name, t.payer_type, t.payer_id,
+            (SELECT SUM(le.amount) FROM ledger_entries le WHERE le.transaction_id = t.id AND le.is_debit = 0) as amount,
+            (SELECT a.code FROM ledger_entries le JOIN accounts a ON a.id = le.account_id WHERE le.transaction_id = t.id AND le.is_debit = 1 LIMIT 1) as debit_account
             FROM transactions t WHERE t.description LIKE 'Cash payment:%'
             ORDER BY t.created_at DESC LIMIT 200");
         header('Content-Type: application/json; charset=utf-8');
@@ -80,6 +104,21 @@ class CashController
                 $data['reference'] ?? Helpers::nextVoucherNo('PC'),
                 $data['created_by'] ?? 'system'
             );
+            $txnId = $result['transaction_id'] ?? null;
+            if ($txnId && ($data['payer_name'] ?? null)) {
+                $pdo = $this->getPdo();
+                $pdo->prepare('UPDATE transactions SET
+                    transaction_date = COALESCE(?, transaction_date),
+                    payer_name = ?, payer_type = ?, payer_id = ?
+                    WHERE id = ?')
+                    ->execute([
+                        $data['transaction_date'] ?? null,
+                        $data['payer_name'] ?? null,
+                        $data['payer_type'] ?? null,
+                        $data['payer_id'] ?? null,
+                        $txnId
+                    ]);
+            }
             Helpers::jsonOk($result, 201);
         } catch (\InvalidArgumentException $e) {
             Helpers::jsonError($e->getMessage());

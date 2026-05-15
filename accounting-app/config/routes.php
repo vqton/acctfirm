@@ -10,6 +10,11 @@ function defineRoutes(Router $router): void
     $router->post('/api/auth/logout', function() { (new \Accounting\Interfaces\HTTP\AuthController($GLOBALS['container']['pdo']))->logout(); });
     $router->get('/api/auth/me', function() { (new \Accounting\Interfaces\HTTP\AuthController($GLOBALS['container']['pdo']))->me(); });
     $router->get('/api/auth/csrf', function() { echo json_encode(['token' => \Accounting\Infrastructure\Helpers::csrfToken()]); });
+    $router->get('/api/utils/to-words', function() {
+        $n = (float)($_GET['amount'] ?? 0);
+        header('Content-Type: application/json');
+        echo json_encode(['words' => \Accounting\Infrastructure\Helpers::toVnWords($n)]);
+    });
 
     // User management
     $router->get('/api/users', function() { (new \Accounting\Interfaces\HTTP\UserController($GLOBALS['container']['pdo']))->list(); });
@@ -165,6 +170,24 @@ function defineRoutes(Router $router): void
     // Journal entries
     $router->post('/api/journal', function() { (new \Accounting\Interfaces\HTTP\JournalController($GLOBALS['container']['journalService'], $GLOBALS['container']['accountRepository']))->postEntry(); });
     $router->get('/api/trial-balance', function() { (new \Accounting\Interfaces\HTTP\JournalController($GLOBALS['container']['journalService'], $GLOBALS['container']['accountRepository']))->trialBalance(); });
+
+    // Payer search (customers + suppliers + employees)
+    $router->get('/api/payers/search', function() {
+        $q = $_GET['q'] ?? '';
+        $pdo = $GLOBALS['container']['pdo'];
+        $results = [];
+        if (strlen($q) >= 1) {
+            $like = '%' . $q . '%';
+            $stmt = $pdo->prepare("SELECT id, code, name, 'customer' as type FROM customers WHERE name LIKE ? OR code LIKE ? LIMIT 10");
+            $stmt->execute([$like, $like]); $results = array_merge($results, $stmt->fetchAll(\PDO::FETCH_ASSOC));
+            $stmt = $pdo->prepare("SELECT id, code, name, 'supplier' as type FROM suppliers WHERE name LIKE ? OR code LIKE ? LIMIT 10");
+            $stmt->execute([$like, $like]); $results = array_merge($results, $stmt->fetchAll(\PDO::FETCH_ASSOC));
+            $stmt = $pdo->prepare("SELECT id, code, name, 'employee' as type FROM employees WHERE name LIKE ? OR code LIKE ? LIMIT 10");
+            $stmt->execute([$like, $like]); $results = array_merge($results, $stmt->fetchAll(\PDO::FETCH_ASSOC));
+        }
+        header('Content-Type: application/json');
+        echo json_encode($results);
+    });
 
     // Cash & Bank API
     $cc = new \Accounting\Interfaces\HTTP\CashController(
