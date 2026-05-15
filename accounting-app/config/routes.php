@@ -386,6 +386,11 @@ function defineRoutes(Router $router): void
         $GLOBALS['container']['cashService'], $GLOBALS['container']['accountRepository']
     ))->fcRevalue(); });
 
+    // Dashboard API
+    $router->get('/api/dashboard', function() { (new \Accounting\Interfaces\HTTP\CashReportController(
+        $GLOBALS['container']['cashReportService']
+    ))->kpis(); });
+
     // Cash Reports
     $router->get('/thu/bao-cao-von-bang-tien', function() { require __DIR__ . '/../public/views/cash_reports.php'; });
     $router->get('/api/cash-reports/position', function() { (new \Accounting\Interfaces\HTTP\CashReportController(

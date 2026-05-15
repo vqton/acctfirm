@@ -106,6 +106,44 @@ class CashReportService
         return ['accounts' => $rows, 'total' => $total];
     }
 
+    public function getKPIs(): array
+    {
+        $cash = $this->accountRepo->findByCode('111');
+        $bank = $this->accountRepo->findByCode('112');
+        $pos = $this->getCashPosition();
+
+        // Today's cash receipts and payments
+        $stmt = $this->pdo->prepare(
+            "SELECT
+                SUM(CASE WHEN le.is_debit = 1 AND a.code = '111' THEN le.amount ELSE 0 END) as receipts,
+                SUM(CASE WHEN le.is_debit = 0 AND a.code = '111' THEN le.amount ELSE 0 END) as payments
+             FROM ledger_entries le
+             JOIN transactions t ON t.id = le.transaction_id
+             JOIN accounts a ON a.id = le.account_id
+             WHERE a.code = '111' AND DATE(t.created_at) = CURDATE()"
+        );
+        $stmt->execute();
+        $today = $stmt->fetch(\PDO::FETCH_ASSOC);
+
+        // Pending bank reconciliation sessions
+        $pendingRecon = $this->pdo->query(
+            "SELECT COUNT(*) FROM bank_reconciliation_sessions WHERE status = 'in_progress'"
+        )->fetchColumn();
+
+        // 7-day trend
+        $trend = $this->getCashFlowTrend(7);
+
+        return [
+            'cash_balance' => $pos['cash_balance'],
+            'bank_balance' => $pos['bank_balance'],
+            'total_cash_bank' => $pos['total'],
+            'today_receipts' => (float)($today['receipts'] ?? 0),
+            'today_payments' => (float)($today['payments'] ?? 0),
+            'pending_recon_count' => (int)$pendingRecon,
+            'trend' => $trend,
+        ];
+    }
+
     public function getCashFlowTrend(int $days = 7): array
     {
         $to = date('Y-m-d');

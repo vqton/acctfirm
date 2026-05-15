@@ -13,6 +13,11 @@ class CashReportController
         $this->report = $report;
     }
 
+    public function kpis(): void
+    {
+        Helpers::jsonOk($this->report->getKPIs());
+    }
+
     public function position(): void
     {
         Helpers::jsonOk($this->report->getCashPosition());
