@@ -18,7 +18,7 @@ $title = 'Phiếu chi'; $activeMenu = 'cash_payments'; ob_start(); ?>
 <div class="modal-body">
     <div class="row g-2">
         <div class="col-4 mb-2"><label>Ngày</label><input type="date" class="form-control" id="txnDate"></div>
-        <div class="col-4 mb-2"><label>Số tiền</label><input type="number" class="form-control" id="amount" step="1000" min="1" required></div>
+        <div class="col-4 mb-2"><label>Số tiền</label><input type="number" class="form-control" id="amount" step="1" min="1" required></div>
         <div class="col-4 mb-2"><label>TK Nợ (đối ứng)</label><select class="form-select" id="debitAccount" required></select></div>
     </div>
     <div class="mb-2" id="amountWords" style="font-size:12px;color:#6d7a8a;min-height:20px"></div>
