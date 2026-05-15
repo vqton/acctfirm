@@ -372,6 +372,17 @@ function defineRoutes(Router $router): void
         $GLOBALS['container']['periodService']
     ))->executeClosing($id); });
 
+    // GL (Sổ Cái)
+    $router->get('/bao-cao/so-cai', function() { (new \Accounting\Interfaces\HTTP\GlController(
+        $GLOBALS['container']['glService']
+    ))->view(); });
+    $router->get('/api/gl/ledger', function() { (new \Accounting\Interfaces\HTTP\GlController(
+        $GLOBALS['container']['glService']
+    ))->ledger(); });
+    $router->get('/api/gl/accounts', function() { (new \Accounting\Interfaces\HTTP\GlController(
+        $GLOBALS['container']['glService']
+    ))->accounts(); });
+
     // Audit Log
     $router->get('/he-thong/nhat-ky-hoat-dong', function() { require __DIR__ . '/../public/views/audit_log.php'; });
     $router->get('/api/audit-log', function() { (new \Accounting\Interfaces\HTTP\AuditLogController($GLOBALS['container']['pdo']))->list(); });

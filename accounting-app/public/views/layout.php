@@ -205,7 +205,7 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
         <div class="nav-section">Tổng hợp</div>
         <div class="nav-item">
             <a class="nav-link-s" data-bs-toggle="collapse" href="#menuGL"><i class="bi bi-journal"></i> Tổng hợp <i class="bi bi-chevron-right ms-auto" style="width:auto;font-size:10px;"></i></a>
-            <div class="collapse sub-menu<?= isActive('projects',$activeMenu)?' show':'' ?>" id="menuGL">
+            <div class="collapse sub-menu<?= isActive(['projects','so_cai'],$activeMenu)?' show':'' ?>" id="menuGL">
                 <a href="/danh-muc/he-thong-tai-khoan" class="nav-link-s<?= $activeMenu==='coa'?' active':'' ?>"><i class="bi bi-circle-fill"></i> Hệ thống tài khoản</a>
                 <a href="/danh-muc/du-an" class="nav-link-s<?= isActive('projects',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Dự án / Công trình</a>
                 <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Chứng từ ghi sổ</a>
@@ -213,7 +213,7 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
                 <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Bút toán kết chuyển</a>
                 <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Khóa sổ cuối kỳ</a>
                 <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> BCĐ số phát sinh</a>
-                <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Sổ cái & Chi tiết</a>
+                <a href="/bao-cao/so-cai" class="nav-link-s<?= isActive('so_cai',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Sổ cái</a>
                 <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Báo cáo tài chính</a>
             </div>
         </div>

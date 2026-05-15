@@ -28,6 +28,7 @@ use Accounting\Domain\Service\PeriodService;
 use Accounting\Domain\Service\FsService;
 use Accounting\Domain\Service\ApService;
 use Accounting\Domain\Service\ArService;
+use Accounting\Domain\Service\GlService;
 
 function createContainer(): array
 {
@@ -66,6 +67,7 @@ function createContainer(): array
     $fsService = new FsService($pdo, $accountRepository);
     $apService = new ApService($pdo, $supplierRepository, $accountRepository);
     $arService = new ArService($pdo, $accountRepository);
+    $glService = new GlService($pdo, $accountRepository);
 
     return [
         'pdo' => $pdo, 'accountRepository' => $accountRepository,
@@ -88,7 +90,8 @@ function createContainer(): array
         'periodService' => $periodService,
         'fsService' => $fsService,
         'apService' => $apService,
-        'arService' => $arService
+        'arService' => $arService,
+        'glService' => $glService
     ];
 }
 
