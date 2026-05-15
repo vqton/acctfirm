@@ -55,8 +55,18 @@ GlService → Ledger entries (date, ref, Dr, Cr, running balance, contra account
 | P5.2 | Dashboard Widgets | — | — | ❌ |
 
 **Service:** `CashService` (435 lines) — single service for all cash/bank transactions.
-**Controller:** `CashController` (444 lines) — 10+ API endpoints.
+**Controller:** `CashController` (550+ lines) — 25+ API endpoints.
 **Architecture:** `CashService → JournalService::postEntry()` — reuses existing double-entry engine.
+
+**2026-05-15 Updates (Circular 99 compliance):**
+- Migration 041: Added `transaction_date`, `payer_name`, `payer_type`, `payer_id` to `transactions` table
+- New API: `GET /api/payers/search?q=` — searches customers + suppliers + employees
+- New API: `GET /api/utils/to-words?amount=` — Vietnamese number-to-words conversion
+- Cash forms now include: date picker, live amount-in-words display, payer autocomplete search
+- Account picker filters by transaction nature: 62 accounts for receipt, 66 for payment
+- `Content-Type: application/json` set on all CashController endpoints (fixes jQuery parsing)
+- Cache-busting + no-cache headers on cash views to prevent stale browser cache
+- Visual load status indicator + console.error debugging on cash forms
 
 ---
 
@@ -101,6 +111,22 @@ GlService → Ledger entries (date, ref, Dr, Cr, running balance, contra account
 | Kiểm toán | 8 modules (no system) | No |
 
 ---
+
+## Logging Infrastructure
+
+| Component | File | Purpose |
+|---|---|---|
+| **Logger** | `src/Accounting/Infrastructure/Logging/Logger.php` | Django-style structured logging: HTTP requests + SQL queries |
+| **LoggingPDO** | `src/Accounting/Infrastructure/Logging/LoggingPDO.php` | PDO decorator capturing all queries with params + timing |
+| **Request logging** | `public/index.php` (shutdown function) | Captures all requests even on exit/error via `register_shutdown_function` |
+
+**Features:**
+- Color-coded HTTP request lines (green=2xx, yellow=4xx, red=5xx)
+- SQL query logging with full SQL text and bound parameters
+- Request body logging for POST cash/bank operations
+- Error response body logging for 4xx/5xx responses
+- `[Cash]` tag on cash/bank routes for easy `grep`
+- Session lock automatically released after auth check (`session_write_close()`)
 
 ## Helpers & Utilities
 
@@ -346,9 +372,16 @@ GlService → Ledger entries (date, ref, Dr, Cr, running balance, contra account
 ### Auth
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/api/auth/login` | Login with username/password |
+| GET | `/api/auth/csrf` | Get CSRF token (no auth required) |
+| POST | `/api/auth/login` | Login with username/password (returns csrf) |
 | POST | `/api/auth/logout` | Destroy session |
 | GET | `/api/auth/me` | Current user info + permissions |
+
+### Utilities
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/utils/to-words` | Convert number to Vietnamese words |
+| GET | `/api/payers/search` | Search customers + suppliers + employees |
 
 ### User & Role Management
 | Method | Path | Purpose |
@@ -386,7 +419,7 @@ GlService → Ledger entries (date, ref, Dr, Cr, running balance, contra account
 
 ---
 
-## Database Migrations (40 total)
+## Database Migrations (41 total)
 
 | # | File | Purpose |
 |---|---|---|
@@ -404,6 +437,8 @@ GlService → Ledger entries (date, ref, Dr, Cr, running balance, contra account
 | 037 | `create_accounting_periods_table` | Period management |
 | 038 | `create_fs_tables` | FS line items + snapshots |
 | 039 | `create_ap_tables` | AP sub-ledger (invoices + payments) |
+| 040 | `create_ar_tables` | AR sub-ledger (invoices + payments) |
+| 041 | `add_transaction_payer_fields` | transaction_date, payer_name/type/id for Circular 99 |
 
 ---
 

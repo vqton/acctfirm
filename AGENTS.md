@@ -26,6 +26,8 @@ for f in tests/*.php; do php "$f"; done            # Run all tests
 │   ├── Infrastructure/
 │   │   ├── Database/     DB.php (PDO helper), AuditLogger.php
 │   │   ├── Helpers.php   toVnWords, fmt, jsonOk/Error, auth utils
+│   │   ├── Logging/      Logger.php, LoggingPDO.php (Django-style SQL + request logging)
+│   │   ├── SessionMiddleware.php  open/close/authGuard, session_write_close for API
 │   │   └── Repository/   PDO* implementations
 │   └── Interfaces/HTTP/  Controllers
 ├── docs/
@@ -53,7 +55,8 @@ GlService → ledger entries (date, ref, Dr, Cr, running balance, contra account
 - **Controllers**: instantiated inline in route closures. Echo JSON directly.
 - **Models**: plain PHP objects with getters/setters + `toArray()`.
 - **Views**: extend `layout.php` via output buffer pattern.
-- **Auth**: PHP sessions. Guard in `index.php` blocks all non-login routes.
+- **Auth**: PHP sessions. `SessionMiddleware` manages open/close + session_write_close for API.
+- **Logging**: `Logger` + `LoggingPDO` wrap PDO for Django-style request/SQL logging.
 
 ## Code Patterns
 
@@ -81,6 +84,14 @@ $router->get('/api/cash/accounts', function () {
 $GLOBALS['container'][JournalService::class] = fn($c) =>
     new JournalService($c[AccountRepo::class], $c[TransactionRepo::class]);
 
+// Session: SessionMiddleware::open() / close() / authGuard()
+SessionMiddleware::authGuard();      // Opens session, checks auth, closes lock
+SessionMiddleware::close();           // session_write_close() — release lock for API
+
+// Logging: Logger + LoggingPDO
+Logger::printRequest($method, $uri, $status, $duration, $size);  // Django-style HTTP
+Logger::printSQL($sql, $params, $ms);                             // Django-style SQL
+
 // Test: global assertEq/assertTrue with counter
 assertEq($result['closing_balance'], 7000000, '111 closing = 7M');
 assertTrue(count($entries) >= 2, 'At least 2 entries');
@@ -100,17 +111,19 @@ function jsonError($msg = 'Error', $code = 400): void         // echo json_encod
 
 | Severity | Issue | Location | Fix |
 |---|---|---|---|
-| **RCE** | `eval()` in formula engine | `FsService.php:166` | Replace with safe arithmetic parser |
-| **SQLi** | String interpolation in SQL | `CashService.php:217,243` | Use prepared statements |
-| **Session fixation** | No `session_regenerate_id()` after login | `AuthController.php:58` | Add `session_regenerate_id(true)` |
-| **Path traversal** | Static file serving doesn't normalize URI | `index.php:7` | Use `realpath()` or reject `..` |
-| **Encapsulation** | Reflection to extract private PDO | 8 files (`*Controller::getPdo()`) | Inject PDO via constructor |
-| **Transactions** | Multi-step ops not wrapped in DB transactions | `JournalService`, `InventoryService`, `CashService` | Add `beginTransaction/commit/rollback` |
-| **Dead code** | `AccountingService` never used, constructor broken | `AccountingService.php` | Delete or fix |
-| **CRUD duplication** | 12 identical controllers | `WarehouseController`, `DepartmentController`, etc. | Extract generic CRUD or trait |
-| **N+1 queries** | Separate query per transaction for ledger entries | `PDOTransactionRepository::getAll()` | Use JOIN |
-| **No CSRF** | All POST/PUT/DELETE accept JSON without token | All controllers | Add session-bound CSRF token |
-| **WHERE 1=1** | Fragile SQL construction | `ApService`, `ArService` | Build WHERE array, join with AND |
+| ~~RCE~~ | ~~`eval()` in formula engine~~ | ~~FsService.php~~ | ✅ Safe recursive descent parser |
+| ~~SQLi~~ | ~~String interpolation in SQL~~ | ~~CashService.php~~ | ✅ Prepared statements |
+| ~~Session fixation~~ | ~~No `session_regenerate_id()` after login~~ | ~~AuthController.php~~ | ✅ `session_regenerate_id(true)` |
+| ~~Path traversal~~ | ~~Static file serving doesn't normalize URI~~ | ~~index.php~~ | ✅ `realpath()` check |
+| ~~Encapsulation~~ | ~~Reflection to extract private PDO~~ | ~~8 controllers + InventoryService~~ | ✅ Constructor injection |
+| ~~Transactions~~ | ~~Multi-step ops not wrapped~~ | ~~JournalService, InventoryService, CashService~~ | ✅ `beginTransaction/commit/rollback` |
+| ~~Dead code~~ | ~~AccountingService, TransactionController~~ | ~~2 files~~ | ✅ Deleted |
+| ~~CRUD duplication~~ | ~~12 identical controllers~~ | ~~Master data controllers~~ | ✅ `CrudControllerTrait` |
+| ~~N+1 queries~~ | ~~Separate query per transaction~~ | ~~PDOTransactionRepository::getAll()~~ | ✅ Single JOIN |
+| **No CSRF** | POST/PUT/DELETE accept JSON without token | All controllers | ✅ CSRF token in layout + login response + `/api/auth/csrf` endpoint |
+| **Session lock** | Concurrent AJAX blocked by session | `index.php`, all API routes | ✅ `SessionMiddleware::close()` releases lock after auth check |
+| **Missing Content-Type** | JSON APIs missing header | `CashController` | ✅ `Content-Type: application/json` on all endpoints |
+| **Circular 99 fields** | Missing date, payer, amount-in-words | cash forms, transactions table | ✅ Migration 041 added `transaction_date`, `payer_name/type/id` |
 
 ## To Add a New Entity
 
@@ -128,7 +141,7 @@ function jsonError($msg = 'Error', $code = 400): void         // echo json_encod
 ## Database
 
 - **Config**: `config/database.php` — dev/123456, accounting_db.
-- **Migrations**: 40 files. Runner at `database/migrate.php`. Each returns `fn(PDO $pdo)`.
+- **Migrations**: 41 files. Runner at `database/migrate.php`. Each returns `fn(PDO $pdo)`.
 - **No migration tracking table** — relies on IF NOT EXISTS. Schema changes need manual handling.
 - **No rollback** — one-way only.
 
