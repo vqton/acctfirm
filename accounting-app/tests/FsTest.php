@@ -8,8 +8,8 @@ spl_autoload_register(function ($class) {
 
 use Accounting\Domain\Service\FsService;
 use Accounting\Domain\Service\JournalService;
-use Accounting\Infrastructure\Repository\PDOAccountRepository;
-use Accounting\Infrastructure\Repository\PDOTransactionRepository;
+use Accounting\Infrastructure\Persistence\PDOAccountRepository;
+use Accounting\Infrastructure\Persistence\PDOTransactionRepository;
 
 $pdo = new PDO("mysql:host=127.0.0.1;dbname=accounting_db;charset=utf8mb4","dev","123456",
     [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);

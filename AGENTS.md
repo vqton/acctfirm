@@ -16,19 +16,23 @@ for f in tests/*.php; do php "$f"; done            # Run all tests
 
 ```
 ├── config/            services.php (DI), routes.php, database.php
+├── data/              Static data files (coa_circular_99.json)
 ├── database/          migrate.php runner + migrations/*.php
 ├── public/            index.php (entry + auth guard), views/ (layout.php + *.php)
 ├── src/Accounting/
 │   ├── Domain/
 │   │   ├── Model/        Plain PHP objects, getters/setters/toArray()
 │   │   ├── Repository/   Interfaces (suffix Interface)
-│   │   └── Service/      Business logic (JournalService, CashService, GlService...)
+│   │   └── Service/      Business logic (JournalService, CashService, PettyCashService, GlService...)
 │   ├── Infrastructure/
 │   │   ├── Database/     DB.php (PDO helper), AuditLogger.php
-│   │   ├── Helpers.php   toVnWords, fmt, jsonOk/Error, auth utils
-│   │   ├── Logging/      Logger.php, LoggingPDO.php (Django-style SQL + request logging)
+│   │   ├── Auth.php        isAuthenticated, hasPermission, requirePermission, csrfToken, checkCsrf
+│   │   ├── Helpers.php     fmt, e, isValidAccountCode, nextVoucherNo, paginate (delegates json/auth/VnWords)
+│   │   ├── JsonResponse.php ok($data,$code), error($message,$code)
+│   │   ├── Logging/        Logger.php, LoggingPDO.php (Django-style SQL + request logging)
 │   │   ├── SessionMiddleware.php  open/close/authGuard, session_write_close for API
-│   │   └── Repository/   PDO* implementations
+│   │   ├── VnWords.php     toWords($amount)
+│   │   └── Repository/     PDO* implementations
 │   └── Interfaces/HTTP/  Controllers
 ├── docs/
 │   ├── specs/            10 use case specifications
@@ -52,7 +56,7 @@ GlService → ledger entries (date, ref, Dr, Cr, running balance, contra account
 - **Autoloader**: custom PSR-4-like. `Accounting\` maps to `src/Accounting/`. No Composer.
 - **DI container**: plain array in `$GLOBALS['container']`. All repos/services singletons.
 - **Router**: custom regex-based. Accepts `callable|array|string`.
-- **Controllers**: instantiated inline in route closures. Echo JSON directly.
+- **Controllers**: instantiated inline in route closures. `JsonResponse::ok/error(...)` for output.
 - **Models**: plain PHP objects with getters/setters + `toArray()`.
 - **Views**: extend `layout.php` via output buffer pattern.
 - **Auth**: PHP sessions. `SessionMiddleware` manages open/close + session_write_close for API.
@@ -66,18 +70,20 @@ GlService → ledger entries (date, ref, Dr, Cr, running balance, contra account
 | PDO impl | Prefix `PDO` |
 | Indentation | 4 spaces, no tabs |
 | SQL | PDO prepared statements, `?` placeholders |
-| Controllers | `echo json_encode(...)`, never return |
-| HTTP status | `http_response_code()` before echo |
+| Controllers | `JsonResponse::ok/error(...)`, never return |
+| HTTP status | Pass code as 2nd arg to `JsonResponse::ok/error` |
 | Audit log | `AuditLogger::log(action, resource, id, old, new, actor)` |
-| Permissions | `Helpers::requirePermission(module, action)` |
+| Permissions | `Auth::requirePermission(module, action)` |
+| Auth/CSRF | `Auth::csrfToken()`, `Auth::checkCsrf()` |
+| VN words | `VnWords::toWords(float)` |
 
 ## Key Patterns
 
 ```
 // Route: $router->get/post/put/delete($path, callable)
 $router->get('/api/cash/accounts', function () {
-    requirePermission('cash', 'read');
-    echo jsonOk((new CashController(...))->getAccounts());
+    Auth::requirePermission('cash', 'read');
+    JsonResponse::ok((new CashController(...))->getAccounts());
 });
 
 // DI: $GLOBALS['container']['key'] = fn($c) => new Service($c['dep']);
@@ -102,9 +108,9 @@ assertTrue(count($entries) >= 2, 'At least 2 entries');
 <div class="container">...content...</div>
 <?php $content = ob_get_clean(); require __DIR__ . '/layout.php'; ?>
 
-// API response: Helpers::jsonOk($data, $msg, $code) / jsonError($msg, $code)
-function jsonOk($data = [], $msg = 'OK', $code = 200): void  // echo json_encode
-function jsonError($msg = 'Error', $code = 400): void         // echo json_encode
+// API response: JsonResponse::ok($data, $code) / JsonResponse::error($msg, $code)
+JsonResponse::ok($data, $code);   // http_response_code + echo json_encode (JSON_UNESCAPED_UNICODE)
+JsonResponse::error($msg, $code); // same with ['error' => $msg] structure
 ```
 
 ## Critical Gotchas (Code Review Findings)
@@ -124,6 +130,12 @@ function jsonError($msg = 'Error', $code = 400): void         // echo json_encod
 | **Session lock** | Concurrent AJAX blocked by session | `index.php`, all API routes | ✅ `SessionMiddleware::close()` releases lock after auth check |
 | **Missing Content-Type** | JSON APIs missing header | `CashController` | ✅ `Content-Type: application/json` on all endpoints |
 | **Circular 99 fields** | Missing date, payer, amount-in-words | cash forms, transactions table | ✅ Migration 041 added `transaction_date`, `payer_name/type/id` |
+| ~~Dual PDO~~ | ~~`DB::` static vs container PDO~~ | ~~no prod usage~~ | ✅ Deleted `DB.php` references; all PDO via constructor |
+| ~~Dead code~~ | ~~ValuationService never wired~~ | ~~Domain/Service/~~ | ✅ Deleted |
+| ~~No migration tracking~~ | ~~Every migration runs every time~~ | ~~migrate.php~~ | ✅ `_migrations` table tracks executed migrations |
+| ~~COA seed in controller~~ | ~~209-line inline array in AccountController~~ | ~~AccountController.php~~ | ✅ Extracted to `data/coa_circular_99.json` |
+| ~~God object CashController~~ | ~~602 lines, 9 responsibilities~~ | ~~CashController/CashService~~ | ✅ PettyCash extracted (126/130 lines removed). More to do. |
+| ~~No shared test bootstrap~~ | ~~Autoloader + asserts duplicated 29x~~ | ~~tests/~~ | ✅ `tests/bootstrap.php` created, HelpersTest uses it |
 
 ## To Add a New Entity
 
@@ -136,14 +148,25 @@ function jsonError($msg = 'Error', $code = 400): void         // echo json_encod
 7. DI entry in `config/services.php`
 8. View in `public/views/` (extends layout.php)
 9. Sidebar link in `public/views/layout.php`
-10. Tests in `tests/`
+10. Tests in `tests/` (use `tests/bootstrap.php`)
 
 ## Database
 
 - **Config**: `config/database.php` — dev/123456, accounting_db.
 - **Migrations**: 41 files. Runner at `database/migrate.php`. Each returns `fn(PDO $pdo)`.
-- **No migration tracking table** — relies on IF NOT EXISTS. Schema changes need manual handling.
-- **No rollback** — one-way only.
+- **Migration tracking** — `_migrations` table tracks executed migrations. Already-run migrations are skipped.
+- **No rollback** — one-way only. Schema changes need manual handling.
+
+## Test Bootstrap
+
+`tests/bootstrap.php` provides shared autoloader + assert helpers. Use in any test file:
+
+```php
+<?php
+require __DIR__ . '/bootstrap.php';
+// ... tests ...
+results();
+```
 
 ## Active Modules
 
@@ -156,9 +179,10 @@ function jsonError($msg = 'Error', $code = 400): void         // echo json_encod
 | Accounts Payable (TK 331) | `ApService` | 22 | ✅ |
 | Accounts Receivable (TK 131) | `ArService` | 19 | ✅ |
 | Bank Reconciliation | `BankReconciliationService` | 24 | ✅ |
-| RBAC | AuthController + Helpers | — | ✅ |
+| RBAC | AuthController + Auth | — | ✅ |
 | Audit Log | `AuditLogger` | — | ✅ |
 | Treasury Templates | CashController::transactionTemplates() | — | ✅ |
+| Petty Cash (Tạm ứng) | `PettyCashService` | 6 | ✅ |
 | General Ledger (Sổ Cái) | `GlService` | 12 | ✅ |
 
 **Total:** 29 test files, ~410 tests, 0 failures.

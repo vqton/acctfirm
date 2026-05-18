@@ -1,27 +1,32 @@
 <?php
 namespace Accounting\Domain\Service;
 
+use Accounting\Domain\Contract\AuditLoggerInterface;
 use Accounting\Domain\Repository\AccountRepositoryInterface;
 use Accounting\Domain\Repository\TransactionRepositoryInterface;
-use Accounting\Infrastructure\Database\AuditLogger;
 
 class PeriodService
 {
     private \PDO $pdo;
     private AccountRepositoryInterface $accountRepo;
     private TransactionRepositoryInterface $txnRepo;
+    private JournalService $journal;
+    private ?AuditLoggerInterface $auditLogger;
 
-    public function __construct(\PDO $pdo, AccountRepositoryInterface $accountRepo, TransactionRepositoryInterface $txnRepo)
+    public function __construct(\PDO $pdo, AccountRepositoryInterface $accountRepo, TransactionRepositoryInterface $txnRepo, JournalService $journal, ?AuditLoggerInterface $auditLogger = null)
     {
         $this->pdo = $pdo;
         $this->accountRepo = $accountRepo;
         $this->txnRepo = $txnRepo;
+        $this->journal = $journal;
+        $this->auditLogger = $auditLogger;
     }
 
-    public static function isPeriodOpen(string $date): bool
+    public static function isPeriodOpen(?string $date = null, ?\PDO $pdo = null): bool
     {
-        $pdo = $GLOBALS['container']['pdo'] ?? null;
+        $pdo ??= $GLOBALS['container']['pdo'] ?? null;
         if (!$pdo) return true; // no period management yet
+        $date ??= date('Y-m-d');
 
         $stmt = $pdo->prepare(
             "SELECT COUNT(*) FROM accounting_periods WHERE ? BETWEEN start_date AND end_date AND status = ?"
@@ -84,7 +89,7 @@ class PeriodService
 
         $id = (int)$this->pdo->lastInsertId();
 
-        AuditLogger::log('period.create', 'accounting_period', (string)$id,
+        $this->auditLogger?->log('period.create', 'accounting_period', (string)$id,
             null, ['type' => $type, 'code' => $code, 'start' => $start, 'end' => $end],
             $openedBy);
 
@@ -133,7 +138,7 @@ class PeriodService
             'UPDATE accounting_periods SET status = ?, closed_by = ?, closed_at = NOW() WHERE id = ?'
         )->execute(['closed', $closedBy, $id]);
 
-        AuditLogger::log('period.close', 'accounting_period', (string)$id,
+        $this->auditLogger?->log('period.close', 'accounting_period', (string)$id,
             ['status' => 'open'], ['status' => 'closed'],
             $closedBy);
 
@@ -151,7 +156,7 @@ class PeriodService
             'UPDATE accounting_periods SET status = ?, closed_by = NULL, closed_at = NULL, re_open_count = re_open_count + 1 WHERE id = ?'
         )->execute(['open', $id]);
 
-        AuditLogger::log('period.reopen', 'accounting_period', (string)$id,
+        $this->auditLogger?->log('period.reopen', 'accounting_period', (string)$id,
             ['status' => 'closed'], ['status' => 'open', 're_open_count' => $period['re_open_count'] + 1],
             $reOpenedBy);
 
@@ -160,8 +165,6 @@ class PeriodService
 
     public function executeClosingEntries(string $createdBy): void
     {
-        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
-
         // Get all revenue accounts (Class 5, 7) with non-zero balance
         $revenueAccounts = $this->accountRepo->findAll();
         $revenueLines = [];
@@ -178,7 +181,7 @@ class PeriodService
 
         if ($totalRevenue > 0) {
             $revenueLines[] = ['account_code' => '911', 'amount' => $totalRevenue, 'is_debit' => false];
-            $journal->postEntry('Closing entry: transfer revenue', 'CLOSE-REV-' . date('Ymd'), $revenueLines, $createdBy, true);
+            $this->journal->postEntry('Closing entry: transfer revenue', 'CLOSE-REV-' . date('Ymd'), $revenueLines, $createdBy, true);
         }
 
         // Get expense accounts (Class 6, 8) with non-zero balance
@@ -196,7 +199,7 @@ class PeriodService
         }
 
         if ($totalExpense > 0) {
-            $journal->postEntry('Closing entry: transfer expenses', 'CLOSE-EXP-' . date('Ymd'), $expenseLines, $createdBy, true);
+            $this->journal->postEntry('Closing entry: transfer expenses', 'CLOSE-EXP-' . date('Ymd'), $expenseLines, $createdBy, true);
         }
 
         // Transfer net profit/loss to retained earnings
@@ -204,14 +207,14 @@ class PeriodService
         if (abs($netProfit) > 1) {
             if ($netProfit > 0) {
                 // Dr 911 — Cr 421
-                $journal->postEntry('Closing entry: net profit to retained earnings', 'CLOSE-PROFIT-' . date('Ymd'), [
+                $this->journal->postEntry('Closing entry: net profit to retained earnings', 'CLOSE-PROFIT-' . date('Ymd'), [
                     ['account_code' => '911', 'amount' => $netProfit, 'is_debit' => true],
                     ['account_code' => '421', 'amount' => $netProfit, 'is_debit' => false],
                 ], $createdBy, true);
             } else {
                 $loss = abs($netProfit);
                 // Dr 421 — Cr 911
-                $journal->postEntry('Closing entry: net loss to retained earnings', 'CLOSE-LOSS-' . date('Ymd'), [
+                $this->journal->postEntry('Closing entry: net loss to retained earnings', 'CLOSE-LOSS-' . date('Ymd'), [
                     ['account_code' => '421', 'amount' => $loss, 'is_debit' => true],
                     ['account_code' => '911', 'amount' => $loss, 'is_debit' => false],
                 ], $createdBy, true);

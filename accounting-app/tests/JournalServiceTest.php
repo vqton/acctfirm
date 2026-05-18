@@ -46,8 +46,8 @@ function assertTrue($cond, $msg) {
 $pdo = new PDO("mysql:host=127.0.0.1;dbname=accounting_db;charset=utf8mb4","dev","123456",
     [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 
-$accountRepo = new \Accounting\Infrastructure\Repository\PDOAccountRepository($pdo);
-$txnRepo = new \Accounting\Infrastructure\Repository\PDOTransactionRepository($pdo);
+$accountRepo = new \Accounting\Infrastructure\Persistence\PDOAccountRepository($pdo);
+$txnRepo = new \Accounting\Infrastructure\Persistence\PDOTransactionRepository($pdo);
 
 $svc = new JournalService($accountRepo, $txnRepo, $pdo);
 

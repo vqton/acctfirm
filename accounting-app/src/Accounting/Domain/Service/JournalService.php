@@ -3,24 +3,27 @@ namespace Accounting\Domain\Service;
 
 use Accounting\Domain\Model\LedgerEntry;
 use Accounting\Domain\Model\Transaction;
+use Accounting\Domain\Contract\AuditLoggerInterface;
 use Accounting\Domain\Repository\AccountRepositoryInterface;
 use Accounting\Domain\Repository\TransactionRepositoryInterface;
-use Accounting\Infrastructure\Database\AuditLogger;
 
 class JournalService
 {
     private AccountRepositoryInterface $accountRepo;
     private TransactionRepositoryInterface $txnRepo;
     private ?\PDO $pdo;
+    private ?AuditLoggerInterface $auditLogger;
 
     public function __construct(
         AccountRepositoryInterface $accountRepo,
         TransactionRepositoryInterface $txnRepo,
-        ?\PDO $pdo = null
+        ?\PDO $pdo = null,
+        ?AuditLoggerInterface $auditLogger = null
     ) {
         $this->accountRepo = $accountRepo;
         $this->txnRepo = $txnRepo;
         $this->pdo = $pdo;
+        $this->auditLogger = $auditLogger;
     }
 
     /**
@@ -34,7 +37,7 @@ class JournalService
             throw new \InvalidArgumentException('Journal entry must have at least 2 lines');
         }
 
-        if (!PeriodService::isPeriodOpen(date('Y-m-d'))) {
+        if (!PeriodService::isPeriodOpen(date('Y-m-d'), $this->pdo)) {
             throw new \RuntimeException('Cannot post: current date is in a closed period');
         }
 
@@ -111,7 +114,7 @@ class JournalService
 
             if ($inTransaction) $this->pdo->commit();
 
-            AuditLogger::log('journal.post', 'transaction', $txn->getId(), null, [
+            $this->auditLogger?->log('journal.post', 'transaction', $txn->getId(), null, [
                 'reference' => $reference,
                 'description' => $description,
                 'total_dr' => $totalDr,

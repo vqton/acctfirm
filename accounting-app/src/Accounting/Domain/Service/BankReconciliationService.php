@@ -1,24 +1,30 @@
 <?php
 namespace Accounting\Domain\Service;
 
+use Accounting\Domain\Contract\AuditLoggerInterface;
 use Accounting\Domain\Repository\AccountRepositoryInterface;
 use Accounting\Domain\Repository\TransactionRepositoryInterface;
-use Accounting\Infrastructure\Database\AuditLogger;
 
 class BankReconciliationService
 {
     private AccountRepositoryInterface $accountRepo;
     private TransactionRepositoryInterface $txnRepo;
     private ?\PDO $pdo;
+    private JournalService $journal;
+    private ?AuditLoggerInterface $auditLogger;
 
     public function __construct(
         AccountRepositoryInterface $accountRepo,
         TransactionRepositoryInterface $txnRepo,
-        ?\PDO $pdo = null
+        JournalService $journal,
+        ?\PDO $pdo = null,
+        ?AuditLoggerInterface $auditLogger = null
     ) {
         $this->accountRepo = $accountRepo;
         $this->txnRepo = $txnRepo;
+        $this->journal = $journal;
         $this->pdo = $pdo;
+        $this->auditLogger = $auditLogger;
     }
 
     public function startSession(string $bankAccountCode, string $statementDate, float $statementBalance, string $createdBy): array
@@ -156,8 +162,7 @@ class BankReconciliationService
         $session = $this->getSessionRaw($sessionId);
         if (!$session) throw new \InvalidArgumentException("Session not found: {$sessionId}");
 
-        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
-        $txn = $journal->postEntry("Bank recon adj: {$description}", "RECON-ADJ-{$sessionId}", [
+        $txn = $this->journal->postEntry("Bank recon adj: {$description}", "RECON-ADJ-{$sessionId}", [
             ['account_code' => $debitAccount, 'amount' => $amount, 'is_debit' => true],
             ['account_code' => $creditAccount, 'amount' => $amount, 'is_debit' => false],
         ], $createdBy);
@@ -222,7 +227,7 @@ class BankReconciliationService
             'UPDATE bank_reconciliation_sessions SET status = ?, completed_by = ?, completed_at = NOW() WHERE id = ?'
         )->execute(['completed', 'system', $sessionId]);
 
-        AuditLogger::log('recon.complete', 'reconciliation_session', (string)$sessionId,
+        $this->auditLogger?->log('recon.complete', 'reconciliation_session', (string)$sessionId,
             ['book_balance' => $bookBalance, 'statement_balance' => $stmtBalance],
             ['adjusted_book' => $adjustedBook, 'deposits_in_transit' => $unmatchedReceipts, 'outstanding_cheques' => $unmatchedPayments],
             'system');

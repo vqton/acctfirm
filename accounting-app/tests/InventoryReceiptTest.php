@@ -10,10 +10,10 @@ spl_autoload_register(function ($class) {
 });
 
 use Accounting\Domain\Service\InventoryService;
-use Accounting\Infrastructure\Repository\PDOAccountRepository;
-use Accounting\Infrastructure\Repository\PDOTransactionRepository;
-use Accounting\Infrastructure\Repository\PDOItemRepository;
-use Accounting\Infrastructure\Repository\PDOWarehouseRepository;
+use Accounting\Infrastructure\Persistence\PDOAccountRepository;
+use Accounting\Infrastructure\Persistence\PDOTransactionRepository;
+use Accounting\Infrastructure\Persistence\PDOItemRepository;
+use Accounting\Infrastructure\Persistence\PDOWarehouseRepository;
 
 $pdo = new PDO("mysql:host=127.0.0.1;dbname=accounting_db;charset=utf8mb4","dev","123456",
     [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);

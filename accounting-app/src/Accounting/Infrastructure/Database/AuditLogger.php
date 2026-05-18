@@ -1,9 +1,18 @@
 <?php
 namespace Accounting\Infrastructure\Database;
 
-class AuditLogger
+use Accounting\Domain\Contract\AuditLoggerInterface;
+
+class AuditLogger implements AuditLoggerInterface
 {
-    public static function log(
+    private ?\PDO $pdo;
+
+    public function __construct(?\PDO $pdo = null)
+    {
+        $this->pdo = $pdo ?? $GLOBALS['container']['pdo'] ?? null;
+    }
+
+    public function log(
         string $action,
         string $resourceType,
         ?string $resourceId = null,
@@ -12,7 +21,7 @@ class AuditLogger
         ?string $actorId = null,
         ?string $actorEmail = null
     ): void {
-        $pdo = $GLOBALS['container']['pdo'] ?? null;
+        $pdo = $this->pdo;
         if (!$pdo) return;
 
         $ip = $_SERVER['REMOTE_ADDR'] ?? null;

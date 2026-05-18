@@ -1,6 +1,9 @@
 <?php
 namespace Accounting\Interfaces\HTTP;
 
+use Accounting\Infrastructure\Auth;
+use Accounting\Infrastructure\JsonResponse;
+
 trait CrudControllerTrait
 {
     abstract protected function repo();
@@ -14,64 +17,62 @@ trait CrudControllerTrait
 
     public function list(): void
     {
-        echo json_encode(array_map(fn($x) => $x->toArray(), $this->repo()->findAll()));
+        JsonResponse::ok(array_map(fn($x) => $x->toArray(), $this->repo()->findAll()));
     }
 
     public function get(string $id): void
     {
         $entity = $this->repo()->findById($id);
-        if (!$entity) { http_response_code(404); echo json_encode(['error' => 'Not found']); return; }
-        echo json_encode($entity->toArray());
+        if (!$entity) { JsonResponse::error('Not found', 404); return; }
+        JsonResponse::ok($entity->toArray());
     }
 
     public function create(): void
     {
-        \Accounting\Infrastructure\Helpers::checkCsrf();
+        Auth::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         foreach ($this->requiredFields() as $f) {
             if (!isset($data[$f])) {
-                http_response_code(400);
-                echo json_encode(['error' => implode(', ', $this->requiredFields()) . ' required']);
+                JsonResponse::error(implode(', ', $this->requiredFields()) . ' required', 400);
                 return;
             }
         }
         $cf = $this->codeField();
         if (isset($data[$cf]) && method_exists($this->repo(), 'findByCode') && $this->repo()->findByCode($data[$cf])) {
-            http_response_code(409); echo json_encode(['error' => 'Code already exists']); return;
+            JsonResponse::error('Code already exists', 409); return;
         }
         if (!isset($data['id'])) $data['id'] = uniqid($this->idPrefix());
         $entity = $this->createEntity($data);
         $this->repo()->save($entity);
-        http_response_code(201);
-        echo json_encode($entity->toArray());
+        JsonResponse::ok($entity->toArray(), 201);
     }
 
     public function update(string $id): void
     {
-        \Accounting\Infrastructure\Helpers::checkCsrf();
+        Auth::checkCsrf();
         $entity = $this->repo()->findById($id);
-        if (!$entity) { http_response_code(404); echo json_encode(['error' => 'Not found']); return; }
+        if (!$entity) { JsonResponse::error('Not found', 404); return; }
         $data = json_decode(file_get_contents('php://input'), true);
-        if (!$data) { http_response_code(400); echo json_encode(['error' => 'Invalid data']); return; }
+        if (!$data) { JsonResponse::error('Invalid data', 400); return; }
         $cf = $this->codeField();
         if (isset($data[$cf]) && method_exists($this->repo(), 'findByCode')) {
             $existing = $this->repo()->findByCode($data[$cf]);
             if ($existing && $existing->getId() !== $id) {
-                http_response_code(409); echo json_encode(['error' => 'Code already exists']); return;
+                JsonResponse::error('Code already exists', 409); return;
             }
         }
         $this->updateEntity($entity, $data);
         $this->repo()->save($entity);
-        echo json_encode($entity->toArray());
+        JsonResponse::ok($entity->toArray());
     }
 
     public function delete(string $id): void
     {
-        \Accounting\Infrastructure\Helpers::checkCsrf();
+        Auth::checkCsrf();
         if (!$this->repo()->findById($id)) {
-            http_response_code(404); echo json_encode(['error' => 'Not found']); return;
+            JsonResponse::error('Not found', 404); return;
         }
         $this->repo()->delete($id);
-        echo json_encode(['message' => 'Deleted']);
+        JsonResponse::ok(['message' => 'Deleted']);
     }
 }

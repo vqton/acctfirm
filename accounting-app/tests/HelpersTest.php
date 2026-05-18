@@ -1,20 +1,7 @@
 <?php
-spl_autoload_register(function ($class) {
-    $prefix = 'Accounting\\';
-    $baseDir = __DIR__ . '/../src/Accounting/';
-    if (strncmp($prefix, $class, strlen($prefix)) !== 0) return;
-    require $baseDir . str_replace('\\', '/', substr($class, strlen($prefix))) . '.php';
-});
+require __DIR__ . '/bootstrap.php';
 
 use Accounting\Infrastructure\Helpers;
-
-$failed = 0; $total = 0;
-function assertEq($a, $b, $m) { global $total, $failed;
-    $total++; if($a!==$b){echo"FAIL: {$m}\n  expected: {$b}\n  got:      {$a}\n";$failed++;}else echo "PASS: {$m}\n";
-}
-function assertTrue($c, $m) { global $total, $failed;
-    $total++; if(!$c){echo"FAIL: {$m}\n";$failed++;}else echo "PASS: {$m}\n";
-}
 
 echo "\n=== toVnWords Tests ===\n";
 assertEq('Không đồng', Helpers::toVnWords(0), 'Zero');
@@ -66,5 +53,4 @@ assertTrue(!Helpers::isValidAccountCode('abc'), 'Letters invalid');
 assertTrue(!Helpers::isValidAccountCode('11111111'), '8-digit invalid (too long)');
 assertTrue(!Helpers::isValidAccountCode('11a'), 'Mixed invalid');
 
-echo "\n=== Results: {$total} tests, {$failed} failed ===\n";
-exit($failed > 0 ? 1 : 0);
+results();

@@ -1,18 +1,20 @@
 <?php
 namespace Accounting\Domain\Service;
 
+use Accounting\Domain\Contract\AuditLoggerInterface;
 use Accounting\Domain\Repository\AccountRepositoryInterface;
-use Accounting\Infrastructure\Database\AuditLogger;
 
 class FsService
 {
     private \PDO $pdo;
     private AccountRepositoryInterface $accountRepo;
+    private ?AuditLoggerInterface $auditLogger;
 
-    public function __construct(\PDO $pdo, AccountRepositoryInterface $accountRepo)
+    public function __construct(\PDO $pdo, AccountRepositoryInterface $accountRepo, ?AuditLoggerInterface $auditLogger = null)
     {
         $this->pdo = $pdo;
         $this->accountRepo = $accountRepo;
+        $this->auditLogger = $auditLogger;
     }
 
     public function getLineItems(string $statement): array
@@ -103,7 +105,7 @@ class FsService
              ON DUPLICATE KEY UPDATE data = VALUES(data), created_at = NOW()'
         )->execute([$statement, $periodCode, $data, $_SESSION['user']['username'] ?? 'system']);
 
-        AuditLogger::log('fs.generate', 'fs_statement', "{$statement}_{$periodCode}",
+        $this->auditLogger?->log('fs.generate', 'fs_statement', "{$statement}_{$periodCode}",
             null, ['statement' => $statement, 'period' => $periodCode, 'items' => count($result)],
             $_SESSION['user']['username'] ?? 'system');
 

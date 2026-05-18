@@ -1,9 +1,9 @@
 <?php
 namespace Accounting\Domain\Service;
 
+use Accounting\Domain\Contract\AuditLoggerInterface;
 use Accounting\Domain\Repository\AccountRepositoryInterface;
 use Accounting\Domain\Repository\SupplierRepositoryInterface;
-use Accounting\Infrastructure\Database\AuditLogger;
 
 class ApService
 {
@@ -11,13 +11,15 @@ class ApService
     private SupplierRepositoryInterface $supplierRepo;
     private AccountRepositoryInterface $accountRepo;
     private JournalService $journal;
+    private ?AuditLoggerInterface $auditLogger;
 
-    public function __construct(\PDO $pdo, SupplierRepositoryInterface $supplierRepo, AccountRepositoryInterface $accountRepo)
+    public function __construct(\PDO $pdo, SupplierRepositoryInterface $supplierRepo, AccountRepositoryInterface $accountRepo, JournalService $journal, ?AuditLoggerInterface $auditLogger = null)
     {
         $this->pdo = $pdo;
         $this->supplierRepo = $supplierRepo;
         $this->accountRepo = $accountRepo;
-        $this->journal = new JournalService($accountRepo, new \Accounting\Infrastructure\Repository\PDOTransactionRepository($pdo), $pdo);
+        $this->journal = $journal;
+        $this->auditLogger = $auditLogger;
     }
 
     // ── Invoice ──
@@ -51,7 +53,7 @@ class ApService
         $supplier->setBalance($supplier->getBalance() + $totalAmount);
         $this->supplierRepo->save($supplier);
 
-        AuditLogger::log('ap.invoice', 'ap_invoice', (string)$invoiceId, null,
+        $this->auditLogger?->log('ap.invoice', 'ap_invoice', (string)$invoiceId, null,
             ['supplier' => $supplierId, 'amount' => $totalAmount, 'invoice' => $invoiceNumber], $createdBy);
 
         return ['invoice_id' => $invoiceId, 'transaction_id' => $txn->getId(), 'amount' => $totalAmount];
@@ -88,7 +90,7 @@ class ApService
             $this->supplierRepo->save($supplier);
         }
 
-        AuditLogger::log('ap.payment', 'ap_invoice', (string)$invoiceId,
+        $this->auditLogger?->log('ap.payment', 'ap_invoice', (string)$invoiceId,
             ['balance_before' => $invoice['balance']], ['payment' => $payAmount, 'balance_after' => max(0, $newBalance)], $createdBy);
 
         return ['invoice_id' => $invoiceId, 'transaction_id' => $txn->getId(), 'amount' => $payAmount, 'balance' => max(0, $newBalance)];

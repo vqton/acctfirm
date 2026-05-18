@@ -7,7 +7,7 @@ spl_autoload_register(function ($class) {
 });
 
 use Accounting\Domain\Model\Account;
-use Accounting\Infrastructure\Repository\PDOAccountRepository;
+use Accounting\Infrastructure\Persistence\PDOAccountRepository;
 
 $pdo = new PDO("mysql:host=127.0.0.1;dbname=accounting_db;charset=utf8mb4","dev","123456",
     [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);

@@ -11,6 +11,7 @@ spl_autoload_register(function ($class) {
 });
 
 use Accounting\Infrastructure\Logging\Logger;
+use Accounting\Infrastructure\JsonResponse;
 
 $GLOBALS['request_start'] = microtime(true);
 Logger::init();
@@ -77,13 +78,7 @@ if ($uri !== '/' && $realPath !== false && str_starts_with($realPath, $realBase)
 }
 
 set_exception_handler(function (\Throwable $e) {
-    http_response_code(500);
-    header('Content-Type: application/json');
-    echo json_encode([
-        'error' => 'Internal server error',
-        'code' => 500,
-        'message' => $e->getMessage(),
-    ]);
+    JsonResponse::error($e->getMessage(), 500);
 });
 
 use Accounting\Infrastructure\SessionMiddleware;
@@ -95,9 +90,7 @@ $publicPaths = ['/', '/dang-nhap', '/api/auth/login', '/api/utils/to-words'];
 if (!isset($_SESSION['user']) && !in_array($uri, $publicPaths) && !str_starts_with($uri, '/api/auth/')) {
     SessionMiddleware::close();
     if (str_starts_with($uri, '/api/')) {
-        http_response_code(401);
-        header('Content-Type: application/json');
-        echo json_encode(['error' => 'Chưa đăng nhập'], JSON_UNESCAPED_UNICODE);
+        JsonResponse::error('Chưa đăng nhập', 401);
         exit;
     }
     $return = urlencode($uri);

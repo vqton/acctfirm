@@ -1,6 +1,7 @@
+<?php use Accounting\Infrastructure\Auth; ?>
 <?php
 header('Content-Type: text/html; charset=utf-8');
-$title = $title ?? 'Accounting';
+$title = $title ?? 'BookWise';
 $activeMenu = $activeMenu ?? 'dashboard';
 
 function isActive($keys, $menu) {
@@ -11,7 +12,8 @@ function isActive($keys, $menu) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title><?= $title ?> - Accounting</title>
+<title><?= $title ?> - BookWise</title>
+<link rel="icon" type="image/svg+xml" href="/assets/images/bookwise-icon.svg">
 <link href="/assets/css/bootstrap.min.css" rel="stylesheet">
 <link href="/assets/css/bootstrap-icons.css" rel="stylesheet">
 <script src="/assets/js/jquery-3.7.1.min.js"></script>
@@ -85,7 +87,7 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
 
 <div class="sidebar">
     <div class="brand">
-        <h6><i class="bi bi-calculator me-2"></i>ACCOUNTING</h6>
+        <a href="/" style="display:block;"><img src="/assets/images/bookwise-logo.svg" alt="BookWise" height="40" style="display:block;"></a>
     </div>
     <div class="sidebar-scroll">
 
@@ -270,7 +272,7 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
 </div>
 
 <script>
-var csrf=<?= json_encode(\Accounting\Infrastructure\Helpers::csrfToken()) ?>;
+var csrf=<?= json_encode(Auth::csrfToken()) ?>;
 function esc(s){return String(s).replace(/[&<>"']/g,function(m){if(m==='&')return'&amp;';if(m==='<')return'&lt;';if(m==='>')return'&gt;';if(m==='"')return'&quot;';return'&#39;';});}
 
 function showToast(msg,type){

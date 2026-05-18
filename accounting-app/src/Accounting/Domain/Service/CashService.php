@@ -9,14 +9,17 @@ class CashService
     private AccountRepositoryInterface $accountRepo;
     private TransactionRepositoryInterface $txnRepo;
     private ?\PDO $pdo;
+    private JournalService $journal;
 
     public function __construct(
         AccountRepositoryInterface $accountRepo,
         TransactionRepositoryInterface $txnRepo,
+        JournalService $journal,
         ?\PDO $pdo = null
     ) {
         $this->accountRepo = $accountRepo;
         $this->txnRepo = $txnRepo;
+        $this->journal = $journal;
         $this->pdo = $pdo;
     }
 
@@ -29,8 +32,8 @@ class CashService
         $creditAccount = $this->accountRepo->findByCode($creditAccountCode);
         if (!$creditAccount) throw new \InvalidArgumentException("Account not found: {$creditAccountCode}");
 
-        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
-        $txn = $journal->postEntry("Cash receipt: {$description}", $reference, [
+        
+        $txn = $this->journal->postEntry("Cash receipt: {$description}", $reference, [
             ['account_code' => '111', 'amount' => $amount, 'is_debit' => true],
             ['account_code' => $creditAccountCode, 'amount' => $amount, 'is_debit' => false],
         ], $createdBy);
@@ -52,8 +55,8 @@ class CashService
             throw new \InvalidArgumentException("Insufficient cash balance: have {$cash->getBalance()}, need {$amount}");
         }
 
-        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
-        $txn = $journal->postEntry("Cash payment: {$description}", $reference, [
+        
+        $txn = $this->journal->postEntry("Cash payment: {$description}", $reference, [
             ['account_code' => $debitAccountCode, 'amount' => $amount, 'is_debit' => true],
             ['account_code' => '111', 'amount' => $amount, 'is_debit' => false],
         ], $createdBy);
@@ -72,8 +75,8 @@ class CashService
             throw new \InvalidArgumentException("Insufficient cash balance: have {$cash->getBalance()}, need {$amount}");
         }
 
-        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
-        $txn = $journal->postEntry("Bank deposit: {$description}", $reference, [
+        
+        $txn = $this->journal->postEntry("Bank deposit: {$description}", $reference, [
             ['account_code' => '112', 'amount' => $amount, 'is_debit' => true],
             ['account_code' => '111', 'amount' => $amount, 'is_debit' => false],
         ], $createdBy);
@@ -92,8 +95,8 @@ class CashService
             throw new \InvalidArgumentException("Insufficient bank balance: have {$bank->getBalance()}, need {$amount}");
         }
 
-        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
-        $txn = $journal->postEntry("Bank withdrawal: {$description}", $reference, [
+        
+        $txn = $this->journal->postEntry("Bank withdrawal: {$description}", $reference, [
             ['account_code' => '111', 'amount' => $amount, 'is_debit' => true],
             ['account_code' => '112', 'amount' => $amount, 'is_debit' => false],
         ], $createdBy);
@@ -110,8 +113,8 @@ class CashService
         $creditAccount = $this->accountRepo->findByCode($creditAccountCode);
         if (!$creditAccount) throw new \InvalidArgumentException("Account not found: {$creditAccountCode}");
 
-        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
-        $txn = $journal->postEntry("Bank receipt: {$description}", $reference, [
+        
+        $txn = $this->journal->postEntry("Bank receipt: {$description}", $reference, [
             ['account_code' => '112', 'amount' => $amount, 'is_debit' => true],
             ['account_code' => $creditAccountCode, 'amount' => $amount, 'is_debit' => false],
         ], $createdBy);
@@ -133,8 +136,8 @@ class CashService
             throw new \InvalidArgumentException("Insufficient bank balance: have {$bank->getBalance()}, need {$amount}");
         }
 
-        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
-        $txn = $journal->postEntry("Bank payment: {$description}", $reference, [
+        
+        $txn = $this->journal->postEntry("Bank payment: {$description}", $reference, [
             ['account_code' => $debitAccountCode, 'amount' => $amount, 'is_debit' => true],
             ['account_code' => '112', 'amount' => $amount, 'is_debit' => false],
         ], $createdBy);
@@ -148,8 +151,8 @@ class CashService
     {
         if ($amount <= 0) throw new \InvalidArgumentException('Amount must be positive');
 
-        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
-        $txn = $journal->postEntry("Bank interest: {$description}", $reference, [
+        
+        $txn = $this->journal->postEntry("Bank interest: {$description}", $reference, [
             ['account_code' => '112', 'amount' => $amount, 'is_debit' => true],
             ['account_code' => '515', 'amount' => $amount, 'is_debit' => false],
         ], $createdBy);
@@ -168,8 +171,8 @@ class CashService
             throw new \InvalidArgumentException("Insufficient bank balance: have {$bank->getBalance()}, need {$amount}");
         }
 
-        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
-        $txn = $journal->postEntry("Bank charge: {$description}", $reference, [
+        
+        $txn = $this->journal->postEntry("Bank charge: {$description}", $reference, [
             ['account_code' => '642', 'amount' => $amount, 'is_debit' => true],
             ['account_code' => '112', 'amount' => $amount, 'is_debit' => false],
         ], $createdBy);
@@ -188,8 +191,8 @@ class CashService
             throw new \InvalidArgumentException("Insufficient cash balance: have {$cash->getBalance()}, need {$amount}");
         }
 
-        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
-        $txn = $journal->postEntry("Cash in transit: {$description}", $reference, [
+        
+        $txn = $this->journal->postEntry("Cash in transit: {$description}", $reference, [
             ['account_code' => '113', 'amount' => $amount, 'is_debit' => true],
             ['account_code' => '111', 'amount' => $amount, 'is_debit' => false],
         ], $createdBy);
@@ -222,8 +225,8 @@ class CashService
         }
 
         $amount = (float)$row['amount'];
-        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
-        $txn = $journal->postEntry("Transit confirmed: bank credited", "CNF-{$transitId}", [
+        
+        $txn = $this->journal->postEntry("Transit confirmed: bank credited", "CNF-{$transitId}", [
             ['account_code' => '112', 'amount' => $amount, 'is_debit' => true],
             ['account_code' => '113', 'amount' => $amount, 'is_debit' => false],
         ], $createdBy);
@@ -239,7 +242,7 @@ class CashService
 
     public function reverseTransit(string $transitId, string $createdBy): array
     {
-        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
+        
 
         if ($this->pdo) {
             $stmt = $this->pdo->prepare('SELECT amount FROM cash_transit WHERE id = ? AND status = ?');
@@ -251,7 +254,7 @@ class CashService
                     'UPDATE cash_transit SET status=? WHERE id=?'
                 )->execute(['reversed', $transitId]);
 
-                $txn = $journal->postEntry("Transit reversed", "REV-{$transitId}", [
+                $txn = $this->journal->postEntry("Transit reversed", "REV-{$transitId}", [
                     ['account_code' => '111', 'amount' => $amount, 'is_debit' => true],
                     ['account_code' => '113', 'amount' => $amount, 'is_debit' => false],
                 ], $createdBy);
@@ -313,136 +316,6 @@ class CashService
         return $entries;
     }
 
-    // ── Petty Cash ──
-
-    public function establishPettyCash(string $fundName, float $imprestAmount, string $createdBy): array
-    {
-        if ($imprestAmount <= 0) throw new \InvalidArgumentException('Imprest amount must be positive');
-
-        $fundId = uniqid('pc_');
-        if ($this->pdo) {
-            $this->pdo->prepare(
-                'INSERT INTO petty_cash_funds (id, fund_name, imprest_amount, current_balance, status, created_by)
-                 VALUES (?, ?, ?, ?, ?, ?)'
-            )->execute([$fundId, $fundName, $imprestAmount, $imprestAmount, 'active', $createdBy]);
-        }
-
-        return ['fund_id' => $fundId, 'fund_name' => $fundName, 'imprest_amount' => $imprestAmount, 'current_balance' => $imprestAmount];
-    }
-
-    public function disbursePettyCash(string $fundId, float $amount, string $description, string $reference, string $createdBy): array
-    {
-        if ($amount <= 0) throw new \InvalidArgumentException('Amount must be positive');
-
-        $fund = $this->getPettyCashFundById($fundId);
-        if (!$fund) throw new \InvalidArgumentException("Petty cash fund not found: {$fundId}");
-        if ($fund['status'] !== 'active') throw new \InvalidArgumentException('Fund is not active');
-        if ($fund['current_balance'] < $amount) {
-            throw new \InvalidArgumentException("Insufficient fund balance: have {$fund['current_balance']}, need {$amount}");
-        }
-
-        $txId = uniqid('pctx_');
-        if ($this->pdo) {
-            $this->pdo->prepare(
-                'INSERT INTO petty_cash_transactions (id, fund_id, amount, type, description, reference, created_by)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)'
-            )->execute([$txId, $fundId, $amount, 'disbursement', $description, $reference, $createdBy]);
-
-            $this->pdo->prepare(
-                'UPDATE petty_cash_funds SET current_balance = current_balance - ? WHERE id = ?'
-            )->execute([$amount, $fundId]);
-        }
-
-        return ['transaction_id' => $txId, 'amount' => $amount, 'type' => 'disbursement'];
-    }
-
-    public function replenishPettyCash(string $fundId, string $expenseAccount, float $totalAmount, string $description, string $reference, string $createdBy): array
-    {
-        $fund = $this->getPettyCashFundById($fundId);
-        if (!$fund) throw new \InvalidArgumentException("Petty cash fund not found: {$fundId}");
-        if ($fund['status'] !== 'active') throw new \InvalidArgumentException('Fund is not active');
-
-        $disbursed = $fund['imprest_amount'] - $fund['current_balance'];
-        if ($totalAmount <= 0) throw new \InvalidArgumentException('Amount must be positive');
-
-        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
-        $txn = $journal->postEntry("Petty cash replenishment: {$description}", $reference, [
-            ['account_code' => $expenseAccount, 'amount' => $totalAmount, 'is_debit' => true],
-            ['account_code' => '111', 'amount' => $totalAmount, 'is_debit' => false],
-        ], $createdBy);
-
-        if ($this->pdo) {
-            $txId = uniqid('pctx_');
-            $this->pdo->prepare(
-                'INSERT INTO petty_cash_transactions (id, fund_id, amount, type, description, reference, expense_account, created_by)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-            )->execute([$txId, $fundId, $totalAmount, 'replenishment', $description, $reference, $expenseAccount, $createdBy]);
-
-            $this->pdo->prepare(
-                'UPDATE petty_cash_funds SET current_balance = imprest_amount WHERE id = ?'
-            )->execute([$fundId]);
-        }
-
-        return ['transaction_id' => $txn->getId(), 'amount' => $totalAmount, 'type' => 'replenishment'];
-    }
-
-    public function closePettyCash(string $fundId, float $returnAmount, string $createdBy): array
-    {
-        $fund = $this->getPettyCashFundById($fundId);
-        if (!$fund) throw new \InvalidArgumentException("Petty cash fund not found: {$fundId}");
-        if ($fund['status'] !== 'active') throw new \InvalidArgumentException('Fund is not active');
-
-        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
-        $txn = $journal->postEntry("Petty cash fund closure: {$fund['fund_name']}", "CLOSE-{$fundId}", [
-            ['account_code' => '111', 'amount' => $returnAmount, 'is_debit' => true],
-            ['account_code' => '111', 'amount' => $returnAmount, 'is_debit' => false],
-        ], $createdBy);
-
-        if ($this->pdo) {
-            $txId = uniqid('pctx_');
-            $this->pdo->prepare(
-                'INSERT INTO petty_cash_transactions (id, fund_id, amount, type, description, created_by)
-                 VALUES (?, ?, ?, ?, ?, ?)'
-            )->execute([$txId, $fundId, $returnAmount, 'closure', 'Fund closed, cash returned', $createdBy]);
-
-            $this->pdo->prepare(
-                'UPDATE petty_cash_funds SET current_balance = 0, status = ? WHERE id = ?'
-            )->execute(['closed', $fundId]);
-        }
-
-        return ['transaction_id' => $txn->getId(), 'fund_id' => $fundId, 'type' => 'closure'];
-    }
-
-    public function getPettyCashFunds(): array
-    {
-        if (!$this->pdo) return [];
-        $rows = $this->pdo->query('SELECT * FROM petty_cash_funds ORDER BY created_at DESC')->fetchAll(\PDO::FETCH_ASSOC);
-        return array_map(fn($r) => [
-            'id' => $r['id'], 'fund_name' => $r['fund_name'],
-            'imprest_amount' => (float)$r['imprest_amount'],
-            'current_balance' => (float)$r['current_balance'],
-            'status' => $r['status'], 'created_by' => $r['created_by'],
-            'created_at' => $r['created_at'],
-        ], $rows);
-    }
-
-    public function getPettyCashTransactions(string $fundId): array
-    {
-        if (!$this->pdo) return [];
-        $stmt = $this->pdo->prepare('SELECT * FROM petty_cash_transactions WHERE fund_id = ? ORDER BY created_at DESC');
-        $stmt->execute([$fundId]);
-        return $stmt->fetchAll(\PDO::FETCH_ASSOC);
-    }
-
-    private function getPettyCashFundById(string $id): ?array
-    {
-        if (!$this->pdo) return null;
-        $stmt = $this->pdo->prepare('SELECT * FROM petty_cash_funds WHERE id = ?');
-        $stmt->execute([$id]);
-        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
-        return $row ? $row : null;
-    }
-
     // ── Foreign Currency ──
 
     public function recordReceiptFC(float $fcAmount, string $creditAccountCode, string $currencyCode, float $exchangeRate, string $description, string $reference, string $createdBy): array
@@ -455,8 +328,8 @@ class CashService
         $creditAccount = $this->accountRepo->findByCode($creditAccountCode);
         if (!$creditAccount) throw new \InvalidArgumentException("Account not found: {$creditAccountCode}");
 
-        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
-        $txn = $journal->postEntry("FC receipt: {$description}", $reference, [
+        
+        $txn = $this->journal->postEntry("FC receipt: {$description}", $reference, [
             ['account_code' => '112', 'amount' => $vndAmount, 'is_debit' => true],
             ['account_code' => $creditAccountCode, 'amount' => $vndAmount, 'is_debit' => false],
         ], $createdBy);
@@ -481,8 +354,8 @@ class CashService
         $debitAccount = $this->accountRepo->findByCode($debitAccountCode);
         if (!$debitAccount) throw new \InvalidArgumentException("Account not found: {$debitAccountCode}");
 
-        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
-        $txn = $journal->postEntry("FC payment: {$description}", $reference, [
+        
+        $txn = $this->journal->postEntry("FC payment: {$description}", $reference, [
             ['account_code' => $debitAccountCode, 'amount' => $vndAmount, 'is_debit' => true],
             ['account_code' => '112', 'amount' => $vndAmount, 'is_debit' => false],
         ], $createdBy);
@@ -536,18 +409,18 @@ class CashService
             return ['transaction_id' => null, 'gain_loss' => 0, 'message' => 'No gain/loss'];
         }
 
-        $journal = new JournalService($this->accountRepo, $this->txnRepo, $this->pdo);
+        
 
         if ($gainLoss > 0) {
             // Unrealized gain: Dr 112 — Cr 413
-            $txn = $journal->postEntry("FC revaluation: {$currencyCode} gain", "REV-{$currencyCode}-{$asOfDate}", [
+            $txn = $this->journal->postEntry("FC revaluation: {$currencyCode} gain", "REV-{$currencyCode}-{$asOfDate}", [
                 ['account_code' => $accountCode, 'amount' => $gainLoss, 'is_debit' => true],
                 ['account_code' => '413', 'amount' => $gainLoss, 'is_debit' => false],
             ], $createdBy);
         } else {
             // Unrealized loss: Dr 413 — Cr 112
             $loss = abs($gainLoss);
-            $txn = $journal->postEntry("FC revaluation: {$currencyCode} loss", "REV-{$currencyCode}-{$asOfDate}", [
+            $txn = $this->journal->postEntry("FC revaluation: {$currencyCode} loss", "REV-{$currencyCode}-{$asOfDate}", [
                 ['account_code' => '413', 'amount' => $loss, 'is_debit' => true],
                 ['account_code' => $accountCode, 'amount' => $loss, 'is_debit' => false],
             ], $createdBy);
