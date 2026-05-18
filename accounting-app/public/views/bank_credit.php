@@ -13,7 +13,8 @@
 <form id="creditForm">
 <div class="modal-header"><h5 class="modal-title">Giấy báo Có</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
 <div class="modal-body">
-    <div class="row g-2"><div class="col-6 mb-2"><label>Số tiền</label><input type="number" class="form-control" id="amount" step="1000" min="1" required></div><div class="col-6 mb-2"><label>TK Có (đối ứng)</label><select class="form-select" id="creditAccount" required></select></div></div>
+    <div class="row g-2"><div class="col-4 mb-2"><label>Loại thu</label><select class="form-select" id="receiptType"><option value="">-- Chọn loại --</option></select></div><div class="col-4 mb-2"><label>TK Có (đối ứng)</label><select class="form-select" id="creditAccount" required></select></div><div class="col-4 mb-2"><label>Số tiền</label><input type="number" class="form-control" id="amount" step="1" min="1" required></div></div>
+    <div class="row g-2"><div class="col-2 mb-2" id="vatRateGroup" style="display:none"><label>VAT %</label><select class="form-select" id="vatRate"><option value="0">0%</option><option value="5">5%</option><option value="8">8%</option><option value="10" selected>10%</option></select></div><div class="col-2 mb-2" id="vatAmountGroup" style="display:none"><label>Tiền VAT</label><input type="number" class="form-control" id="vatAmount" readonly step="1" style="background:#f5f5f5"></div><div class="col-4 mb-2" id="netAmountGroup" style="display:none"><label>Tiền chưa thuế</label><input type="number" class="form-control" id="netAmount" readonly step="1" style="background:#f5f5f5"></div></div>
     <div class="mb-2"><label>Diễn giải</label><input class="form-control" id="description" placeholder="Khách hàng chuyển khoản..."></div>
 </div>
 <div class="modal-footer"><button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Hủy</button><button type="submit" class="btn btn-sm btn-primary">Ghi nhận</button></div>
@@ -41,11 +42,29 @@ function loadData(){
         });
     });
 }
-function loadAccounts(){
+function loadTemplates(){
+    $.get('/api/cash/templates?type=receipt&_='+Date.now(),function(tpls){
+        var sel=$('#receiptType');sel.html('<option value="">-- Chọn loại --</option>');
+        tpls.forEach(function(t){sel.append('<option value="'+esc(t.id)+'" data-account="'+esc(t.default_account)+'" data-vat="'+t.has_vat+'" data-vat-rate="'+t.vat_rate+'">'+esc(t.name)+'</option>');});
+    });
     $.get('/api/cash/accounts?for=receipt&_='+Date.now(),function(l){var o='';l.forEach(function(a){o+='<option value="'+esc(a.code)+'">'+esc(a.code)+' - '+esc(a.name)+'</option>';});$('#creditAccount').html(o);});
 }
+$('#receiptType').on('change',function(){
+    var opt=$(this).find(':selected');
+    var hasVat=opt.data('vat')===true;
+    $('#vatRateGroup,#vatAmountGroup,#netAmountGroup').toggle(hasVat);
+    if(opt.data('account')){$('#creditAccount').val(opt.data('account'));}
+    if(hasVat){$('#vatRate').val(opt.data('vat-rate')||10);calcVAT();}
+});
+function calcVAT(){
+    var total=parseFloat($('#amount').val())||0;
+    var rate=parseInt($('#vatRate').val())||0;
+    if(rate>0){var vat=Math.round(total*rate/(100+rate));$('#vatAmount').val(vat);$('#netAmount').val(total-vat);}
+    else{$('#vatAmount').val(0);$('#netAmount').val(total);}
+}
+$('#amount,#vatRate').on('input',function(){if($('#vatRateGroup').is(':visible'))calcVAT();});
 $('#creditForm').submit(function(e){e.preventDefault();
-    $.ajax({url:'/api/bank/receipt',method:'POST',contentType:'application/json',headers:{'X-CSRF-Token':csrf},data:JSON.stringify({amount:parseFloat($('#amount').val()),credit_account_code:$('#creditAccount').val(),description:$('#description').val()}),
+    $.ajax({url:'/api/bank/receipt',method:'POST',contentType:'application/json',headers:{'X-CSRF-Token':csrf},data:JSON.stringify({amount:parseFloat($('#amount').val()),credit_account_code:$('#creditAccount').val(),description:$('#description').val(),vat_amount:$('#vatRateGroup').is(':visible')?parseInt($('#vatAmount').val())||0:0,vat_rate:$('#vatRateGroup').is(':visible')?parseInt($('#vatRate').val())||0:0,}),
         success:function(){$('#creditModal').modal('hide');$('#creditForm')[0].reset();showToast('Ghi nhận báo Có thành công','success');loadData();},
         error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}
     });
@@ -56,6 +75,6 @@ $('#interestForm').submit(function(e){e.preventDefault();
         error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}
     });
 });
-$(document).ready(function(){loadAccounts();loadData();});
+$(document).ready(function(){loadTemplates();loadData();});
 </script>
 <?php $content = ob_get_clean(); require __DIR__ . '/layout.php'; ?>

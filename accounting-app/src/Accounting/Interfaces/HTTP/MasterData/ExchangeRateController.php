@@ -4,6 +4,8 @@ namespace Accounting\Interfaces\HTTP\MasterData;
 use Accounting\Domain\Model\ExchangeRate;
 use Accounting\Domain\Repository\ExchangeRateRepositoryInterface;
 
+use \Accounting\Interfaces\HTTP\CrudControllerTrait;
+
 class ExchangeRateController
 {
     use CrudControllerTrait;

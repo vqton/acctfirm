@@ -4,6 +4,8 @@ namespace Accounting\Interfaces\HTTP\Inventory;
 use Accounting\Domain\Model\Item;
 use Accounting\Domain\Repository\ItemRepositoryInterface;
 
+use \Accounting\Interfaces\HTTP\CrudControllerTrait;
+
 class ItemController
 {
     use CrudControllerTrait;

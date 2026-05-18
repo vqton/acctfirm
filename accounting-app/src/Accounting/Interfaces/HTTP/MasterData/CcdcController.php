@@ -4,6 +4,8 @@ namespace Accounting\Interfaces\HTTP\MasterData;
 use Accounting\Domain\Model\Ccdc;
 use Accounting\Domain\Repository\CcdcRepositoryInterface;
 
+use \Accounting\Interfaces\HTTP\CrudControllerTrait;
+
 class CcdcController
 {
     use CrudControllerTrait;

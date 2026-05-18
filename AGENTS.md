@@ -29,7 +29,7 @@ for f in tests/*.php; do php "$f"; done            # Run all tests
 │   │   ├── Auth.php        isAuthenticated, hasPermission, requirePermission, csrfToken, checkCsrf
 │   │   ├── Helpers.php     fmt, e, isValidAccountCode, nextVoucherNo, paginate (delegates json/auth/VnWords)
 │   │   ├── JsonResponse.php ok($data,$code), error($message,$code)
-│   │   ├── Logging/        Logger.php, LoggingPDO.php (Django-style SQL + request logging)
+│   │   ├── Logging/        Logger.php, LoggingPDO.php, ActionJournal.php (request/SQL log + action journal)
 │   │   ├── SessionMiddleware.php  open/close/authGuard, session_write_close for API
 │   │   ├── VnWords.php     toWords($amount)
 │   │   └── Repository/     PDO* implementations
@@ -98,6 +98,10 @@ SessionMiddleware::close();           // session_write_close() — release lock 
 Logger::printRequest($method, $uri, $status, $duration, $size);  // Django-style HTTP
 Logger::printSQL($sql, $params, $ms);                             // Django-style SQL
 
+// Action journal: record user actions to JSON Lines files
+ActionJournal::record($method, $uri, $status, $reqBody, $resBody, $ms, $userId);
+ActionJournal::setAction('auth.login');  // Override auto-generated action name
+
 // Test: global assertEq/assertTrue with counter
 assertEq($result['closing_balance'], 7000000, '111 closing = 7M');
 assertTrue(count($entries) >= 2, 'At least 2 entries');
@@ -136,6 +140,10 @@ JsonResponse::error($msg, $code); // same with ['error' => $msg] structure
 | ~~COA seed in controller~~ | ~~209-line inline array in AccountController~~ | ~~AccountController.php~~ | ✅ Extracted to `data/coa_circular_99.json` |
 | ~~God object CashController~~ | ~~602 lines, 9 responsibilities~~ | ~~CashController/CashService~~ | ✅ PettyCash extracted (126/130 lines removed). More to do. |
 | ~~No shared test bootstrap~~ | ~~Autoloader + asserts duplicated 29x~~ | ~~tests/~~ | ✅ `tests/bootstrap.php` created, HelpersTest uses it |
+| **Login page in layout** | Login page renders inside sidebar | `login.php` | ✅ Standalone HTML, no layout inclusion |
+| **Logout session persist** | Session file not destroyed after logout | `index.php`, `AuthController`, `layout.php` | ✅ session_write_close removed, manual unlink, form POST instead of AJAX |
+| ~~Root path publicly accessible~~ | ~~`/` in `$publicPaths` allows unauthenticated access to dashboard~~ | ~~index.php~~ | ✅ `/` removed from `$publicPaths` → redirects to `/dang-nhap` |
+| **No session GC / timeout** | `session.gc_probability=0` → old session files persist forever; browser PHPSESSID cookie restores old admin session in new tabs | Server PHP config + no code timeout | ⚠️ Needs `session_set_cookie_params()` + inactivity timeout check |
 
 ## To Add a New Entity
 
@@ -184,6 +192,7 @@ results();
 | Treasury Templates | CashController::transactionTemplates() | — | ✅ |
 | Petty Cash (Tạm ứng) | `PettyCashService` | 6 | ✅ |
 | General Ledger (Sổ Cái) | `GlService` | 12 | ✅ |
+| Action Journal | `ActionJournal` | — | ✅ |
 
 **Total:** 29 test files, ~410 tests, 0 failures.
 

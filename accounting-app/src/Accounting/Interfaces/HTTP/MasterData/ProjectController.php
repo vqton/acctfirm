@@ -4,6 +4,8 @@ namespace Accounting\Interfaces\HTTP\MasterData;
 use Accounting\Domain\Model\Project;
 use Accounting\Domain\Repository\ProjectRepositoryInterface;
 
+use \Accounting\Interfaces\HTTP\CrudControllerTrait;
+
 class ProjectController
 {
     use CrudControllerTrait;

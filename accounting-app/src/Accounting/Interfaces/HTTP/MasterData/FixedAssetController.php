@@ -4,6 +4,8 @@ namespace Accounting\Interfaces\HTTP\MasterData;
 use Accounting\Domain\Model\FixedAsset;
 use Accounting\Domain\Repository\FixedAssetRepositoryInterface;
 
+use \Accounting\Interfaces\HTTP\CrudControllerTrait;
+
 class FixedAssetController
 {
     use CrudControllerTrait;

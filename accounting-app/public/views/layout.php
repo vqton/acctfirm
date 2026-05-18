@@ -206,16 +206,16 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
         <div class="nav-section">Tổng hợp</div>
         <div class="nav-item">
             <a class="nav-link-s" data-bs-toggle="collapse" href="#menuGL"><i class="bi bi-journal"></i> Tổng hợp <i class="bi bi-chevron-right ms-auto" style="width:auto;font-size:10px;"></i></a>
-            <div class="collapse sub-menu<?= isActive(['projects','so_cai'],$activeMenu)?' show':'' ?>" id="menuGL">
+            <div class="collapse sub-menu<?= isActive(['projects','so_cai','journal','trial_balance','period_close'],$activeMenu)?' show':'' ?>" id="menuGL">
                 <a href="/danh-muc/he-thong-tai-khoan" class="nav-link-s<?= $activeMenu==='coa'?' active':'' ?>"><i class="bi bi-circle-fill"></i> Hệ thống tài khoản</a>
                 <a href="/danh-muc/du-an" class="nav-link-s<?= isActive('projects',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Dự án / Công trình</a>
-                <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Chứng từ ghi sổ</a>
+                <a href="/tong-hop/chung-tu-ghi-so" class="nav-link-s<?= isActive('journal',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Chứng từ ghi sổ</a>
                 <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Bút toán điều chỉnh</a>
                 <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Bút toán kết chuyển</a>
-                <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Khóa sổ cuối kỳ</a>
-                <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> BCĐ số phát sinh</a>
+                <a href="/tong-hop/khoa-so-cuoi-ky" class="nav-link-s<?= isActive('period_close',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Khóa sổ cuối kỳ</a>
+                <a href="/tong-hop/bang-can-doi-so-phat-sinh" class="nav-link-s<?= isActive('trial_balance',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> BCĐ số phát sinh</a>
                 <a href="/bao-cao/so-cai" class="nav-link-s<?= isActive('so_cai',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Sổ cái</a>
-                <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Báo cáo tài chính</a>
+                <a href="/bao-cao/tinh-hinh-tai-chinh" class="nav-link-s<?= isActive('fs_bc01',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Báo cáo tài chính</a>
             </div>
         </div>
 
@@ -250,7 +250,11 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
         <span class="text-muted" style="font-size:12px;">/ <?= $title ?></span>
         <div class="ms-auto d-flex align-items-center gap-3">
             <span class="text-muted" style="font-size:13px;"><i class="bi bi-person-circle me-1"></i><?= \Accounting\Infrastructure\Helpers::e($_SESSION['user']['full_name'] ?? '') ?></span>
-            <a href="/api/auth/logout" class="text-muted" style="font-size:13px;text-decoration:none;" onclick="event.preventDefault();$.post('/api/auth/logout',function(){window.location.href='/dang-nhap';});"><i class="bi bi-box-arrow-right"></i> Đăng xuất</a>
+            <form method="POST" action="/api/auth/logout" style="display:inline;margin:0;padding:0;">
+                <button type="submit" class="btn btn-link text-muted p-0 border-0 align-baseline" style="font-size:13px;text-decoration:none;vertical-align:baseline;">
+                    <i class="bi bi-box-arrow-right"></i> Đăng xuất
+                </button>
+            </form>
         </div>
     </div>
     <div class="page-content">

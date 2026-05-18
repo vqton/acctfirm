@@ -4,6 +4,8 @@ namespace Accounting\Interfaces\HTTP\MasterData;
 use Accounting\Domain\Model\Uom;
 use Accounting\Domain\Repository\UomRepositoryInterface;
 
+use \Accounting\Interfaces\HTTP\CrudControllerTrait;
+
 class UomController
 {
     use CrudControllerTrait;

@@ -4,6 +4,8 @@ namespace Accounting\Interfaces\HTTP\MasterData;
 use Accounting\Domain\Model\Employee;
 use Accounting\Domain\Repository\EmployeeRepositoryInterface;
 
+use \Accounting\Interfaces\HTTP\CrudControllerTrait;
+
 class EmployeeController
 {
     use CrudControllerTrait;

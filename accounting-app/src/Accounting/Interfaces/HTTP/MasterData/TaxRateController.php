@@ -4,6 +4,8 @@ namespace Accounting\Interfaces\HTTP\MasterData;
 use Accounting\Domain\Model\TaxRate;
 use Accounting\Domain\Repository\TaxRateRepositoryInterface;
 
+use \Accounting\Interfaces\HTTP\CrudControllerTrait;
+
 class TaxRateController
 {
     use CrudControllerTrait;

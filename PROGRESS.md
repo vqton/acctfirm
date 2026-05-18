@@ -118,6 +118,7 @@ GlService → Ledger entries (date, ref, Dr, Cr, running balance, contra account
 |---|---|---|
 | **Logger** | `src/Accounting/Infrastructure/Logging/Logger.php` | Django-style structured logging: HTTP requests + SQL queries |
 | **LoggingPDO** | `src/Accounting/Infrastructure/Logging/LoggingPDO.php` | PDO decorator capturing all queries with params + timing |
+| **ActionJournal** | `src/Accounting/Infrastructure/Logging/ActionJournal.php` | Daily JSON Lines user action journal (`logs/actions/YYYY-MM-DD.jsonl`) |
 | **Request logging** | `public/index.php` (shutdown function) | Captures all requests even on exit/error via `register_shutdown_function` |
 
 **Features:**
@@ -127,6 +128,15 @@ GlService → Ledger entries (date, ref, Dr, Cr, running balance, contra account
 - Error response body logging for 4xx/5xx responses
 - `[Cash]` tag on cash/bank routes for easy `grep`
 - Session lock automatically released after auth check (`session_write_close()`)
+
+**ActionJournal features:**
+- Records every request to daily JSON Lines files in `logs/actions/`
+- Auto-generates action name from URI (e.g., `auth.login`, `cash.accounts`)
+- Sanitizes sensitive fields (password/token/secret → `***`)
+- Only logs response body for `/api/` routes; truncates >10000 chars, arrays >50 items
+- Captures user ID at request start (`$GLOBALS['_req_user_id']`) for accurate attribution
+- Periodic cleanup: deletes files >30 days on ~1% of writes
+- Integrated via `register_shutdown_function` in `public/index.php`
 
 ## Helpers & Utilities
 
@@ -374,7 +384,7 @@ GlService → Ledger entries (date, ref, Dr, Cr, running balance, contra account
 |---|---|---|
 | GET | `/api/auth/csrf` | Get CSRF token (no auth required) |
 | POST | `/api/auth/login` | Login with username/password (returns csrf) |
-| POST | `/api/auth/logout` | Destroy session |
+| POST | `/api/auth/logout` | Destroy session + 302 redirect to `/dang-nhap` |
 | GET | `/api/auth/me` | Current user info + permissions |
 
 ### Utilities
@@ -478,4 +488,6 @@ for f in tests/*.php; do php "$f"; done
 | `src/.../Infrastructure/Database/AuditLogger.php` | Audit trail logger |
 | `src/.../Service/GlService.php` | General Ledger (Sổ Cái) |
 | `database/migrate.php` | Migration runner |
-| `database/migrations/*.php` | 40 migration files |
+| `database/migrations/*.php` | 41 migration files |
+| `src/.../Logging/ActionJournal.php` | User action journal (JSON Lines, daily files) |
+| `public/views/login.php` | Standalone login page (no layout.php) |

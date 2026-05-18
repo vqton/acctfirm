@@ -1,4 +1,5 @@
 *.log
+accounting-app/logs/
 .env
 .DS_Store
 node_modules/

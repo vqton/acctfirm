@@ -145,6 +145,34 @@ class PeriodService
         return $this->getPeriod($id);
     }
 
+    public function archivePeriod(int $id, string $archivedBy): array
+    {
+        $period = $this->getPeriod($id);
+        if ($period['status'] !== 'closed') {
+            throw new \InvalidArgumentException("Period {$id} is not closed");
+        }
+
+        // Snapshot all account balances
+        $accounts = $this->accountRepo->findAll();
+        $snapshot = [];
+        foreach ($accounts as $a) {
+            $snapshot[] = ['code' => $a->getCode(), 'name' => $a->getName(), 'balance' => $a->getBalance()];
+        }
+
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO fs_snapshots (statement, period_code, period_end_date, data, created_by)
+             VALUES (?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE data = VALUES(data), created_at = NOW()'
+        );
+        $stmt->execute(['ARCHIVE', $period['period_code'], $period['end_date'], json_encode($snapshot), $archivedBy]);
+
+        $this->auditLogger?->log('period.archive', 'accounting_period', (string)$id,
+            null, ['period_code' => $period['period_code'], 'accounts' => count($snapshot)],
+            $archivedBy);
+
+        return ['message' => 'Archived', 'accounts' => count($snapshot)];
+    }
+
     public function reOpenPeriod(int $id, string $reOpenedBy): array
     {
         $period = $this->getPeriod($id);
@@ -188,7 +216,7 @@ class PeriodService
         $expenseLines = [];
         $totalExpense = 0;
 
-        foreach ($revenueAccounts as $a) {
+        foreach ($this->accountRepo->findAll() as $a) {
             if (!in_array($a->getType(), ['expense'])) continue;
             $bal = $a->getBalance();
             if (abs($bal) < 1) continue;

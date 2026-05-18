@@ -4,6 +4,8 @@ namespace Accounting\Interfaces\HTTP\MasterData;
 use Accounting\Domain\Model\BankAccount;
 use Accounting\Domain\Repository\BankAccountRepositoryInterface;
 
+use \Accounting\Interfaces\HTTP\CrudControllerTrait;
+
 class BankAccountController
 {
     use CrudControllerTrait;

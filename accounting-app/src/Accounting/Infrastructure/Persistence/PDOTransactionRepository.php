@@ -164,6 +164,22 @@ class PDOTransactionRepository implements TransactionRepositoryInterface
         return $this->buildTransactions($stmt->fetchAll(PDO::FETCH_ASSOC));
     }
 
+    public function getTransactionsByPeriod(string $periodCode): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT t.id, t.date, t.description, t.reference, t.status, t.created_by,
+                    le.id AS le_id, le.account_id, le.amount AS le_amount, le.is_debit, le.note
+             FROM transactions t
+             LEFT JOIN ledger_entries le ON le.transaction_id = t.id
+             WHERE DATE_FORMAT(t.date, \'%Y-%m\') = ? OR
+                   (t.date >= (SELECT start_date FROM accounting_periods WHERE period_code = ?)
+                    AND t.date <= (SELECT end_date FROM accounting_periods WHERE period_code = ?))
+             ORDER BY t.date DESC, t.id DESC, le.id'
+        );
+        $stmt->execute([$periodCode, $periodCode, $periodCode]);
+        return $this->buildTransactions($stmt->fetchAll(\PDO::FETCH_ASSOC));
+    }
+
     private function buildTransactions(array $rows): array
     {
         $transactions = [];

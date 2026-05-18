@@ -1,4 +1,3 @@
-<?php $title = 'Đăng nhập'; ob_start(); ?>
 <!DOCTYPE html>
 <html lang="vi">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -33,4 +32,3 @@ $('#loginForm').submit(function(e){
 });
 </script>
 </body></html>
-<?php $content = ob_get_clean(); require __DIR__ . '/layout.php'; ?>

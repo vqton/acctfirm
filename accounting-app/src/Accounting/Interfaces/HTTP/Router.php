@@ -29,9 +29,12 @@ class Router
                 continue;
             }
 
-            $regex = preg_quote($route['pattern'], '/');
-            $regex = preg_replace('/\\:([a-zA-Z0-9_]+)/', '([^/]+)', $regex);
-            $regex = '/^' . $regex . '$/';
+            $parts = preg_split('/:([a-zA-Z0-9_]+)/', $route['pattern'], -1, PREG_SPLIT_DELIM_CAPTURE);
+            $regex = '';
+            foreach ($parts as $i => $part) {
+                $regex .= $i % 2 === 0 ? preg_quote($part, '~') : '([^/]+)';
+            }
+            $regex = '~^' . $regex . '$~';
 
             if (preg_match($regex, $uri, $matches)) {
                 array_shift($matches);

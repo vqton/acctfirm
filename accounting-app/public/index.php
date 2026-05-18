@@ -11,10 +11,12 @@ spl_autoload_register(function ($class) {
 });
 
 use Accounting\Infrastructure\Logging\Logger;
+use Accounting\Infrastructure\Logging\ActionJournal;
 use Accounting\Infrastructure\JsonResponse;
 
 $GLOBALS['request_start'] = microtime(true);
 Logger::init();
+ActionJournal::init();
 Logger::startRequest();
 $GLOBALS['request_id'] = uniqid('req_', true);
 $GLOBALS['_logged'] = false;
@@ -55,6 +57,19 @@ register_shutdown_function(function () {
         }
     }
 
+    if (!($GLOBALS['_logged'] ?? false)) {
+        ActionJournal::record(
+            $method,
+            $uri,
+            $status,
+            $GLOBALS['_req_body'] ?? null,
+            $output,
+            $duration,
+            $GLOBALS['_req_user_id'] ?? $_SESSION['user']['id'] ?? null,
+            $GLOBALS['request_id'] ?? null
+        );
+    }
+
     if ($output !== false && $output !== '') {
         echo $output;
     }
@@ -84,9 +99,10 @@ set_exception_handler(function (\Throwable $e) {
 use Accounting\Infrastructure\SessionMiddleware;
 
 SessionMiddleware::open();
+$GLOBALS['_req_user_id'] = $_SESSION['user']['id'] ?? null;
 
 // Auth guard: /api/* and view pages require login, except login page and auth API
-$publicPaths = ['/', '/dang-nhap', '/api/auth/login', '/api/utils/to-words'];
+$publicPaths = ['/dang-nhap', '/api/auth/login', '/api/utils/to-words'];
 if (!isset($_SESSION['user']) && !in_array($uri, $publicPaths) && !str_starts_with($uri, '/api/auth/')) {
     SessionMiddleware::close();
     if (str_starts_with($uri, '/api/')) {
@@ -100,7 +116,7 @@ if (!isset($_SESSION['user']) && !in_array($uri, $publicPaths) && !str_starts_wi
 
 // Release session lock for API routes — concurrent AJAX calls no longer block
 // Exclude auth endpoints that need write access (login, csrf)
-$writeEndpoints = ['/api/auth/login', '/api/auth/csrf'];
+$writeEndpoints = ['/api/auth/login', '/api/auth/csrf', '/api/auth/logout'];
 if (str_starts_with($uri, '/api/') && !in_array($uri, $writeEndpoints)) {
     SessionMiddleware::close();
 }

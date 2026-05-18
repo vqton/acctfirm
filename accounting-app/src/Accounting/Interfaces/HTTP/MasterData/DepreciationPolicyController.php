@@ -4,6 +4,8 @@ namespace Accounting\Interfaces\HTTP\MasterData;
 use Accounting\Domain\Model\DepreciationPolicy;
 use Accounting\Domain\Repository\DepreciationPolicyRepositoryInterface;
 
+use \Accounting\Interfaces\HTTP\CrudControllerTrait;
+
 class DepreciationPolicyController
 {
     use CrudControllerTrait;

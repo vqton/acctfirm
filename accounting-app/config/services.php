@@ -137,7 +137,7 @@ function createContainer(): array
     $impairmentController = new ImpairmentController($inventoryService, $pdo);
     $inventoryTransitController = new InventoryTransitController($inventoryService, $itemRepository, $pdo);
     $itemController = new ItemController($itemRepository);
-    $journalController = new JournalController($journalService, $accountRepository);
+    $journalController = new JournalController($journalService, $accountRepository, $transactionRepository);
     $periodController = new PeriodController($periodService);
     $periodicController = new PeriodicController($inventoryService, $itemRepository, $pdo);
     $physicalCountController = new PhysicalCountController($inventoryService, $itemRepository, $pdo);

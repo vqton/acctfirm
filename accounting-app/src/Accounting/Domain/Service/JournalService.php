@@ -27,6 +27,100 @@ class JournalService
     }
 
     /**
+     * Create a draft journal entry: validates Dr=Cr, saves as 'pending' without balance changes.
+     */
+    public function createDraft(string $description, string $reference, array $lines, string $createdBy, bool $allowControl = false): Transaction
+    {
+        if (count($lines) < 2) {
+            throw new \InvalidArgumentException('Journal entry must have at least 2 lines');
+        }
+
+        $totalDr = 0.0;
+        $totalCr = 0.0;
+        $entryLines = [];
+
+        foreach ($lines as $line) {
+            if ($line['amount'] <= 0) {
+                throw new \InvalidArgumentException('Amount must be positive');
+            }
+            $account = $this->accountRepo->findByCode($line['account_code']);
+            if (!$account) {
+                throw new \InvalidArgumentException("Account not found: {$line['account_code']}");
+            }
+            if ($account->isControl() && !$allowControl) {
+                throw new \InvalidArgumentException(
+                    "Account {$line['account_code']} ({$account->getName()}) is a control account"
+                );
+            }
+            if ($line['is_debit']) $totalDr += $line['amount'];
+            else $totalCr += $line['amount'];
+            $entryLines[] = new LedgerEntry(uniqid('led_'), $account->getId(), $line['amount'], $line['is_debit']);
+        }
+
+        if (abs($totalDr - $totalCr) > 10) {
+            throw new \InvalidArgumentException("Debit ($totalDr) does not equal Credit ($totalCr)");
+        }
+
+        $txn = new Transaction(uniqid('jrn_'), new \DateTimeImmutable(), $description, $reference);
+        foreach ($entryLines as $e) $txn->addLedgerEntry($e);
+        $txn->setCreatedBy($createdBy);
+        $this->txnRepo->save($txn);
+
+        $this->auditLogger?->log('journal.draft', 'transaction', $txn->getId(), null, [
+            'reference' => $reference, 'description' => $description,
+            'total_dr' => $totalDr, 'total_cr' => $totalCr,
+        ], $createdBy);
+
+        return $txn;
+    }
+
+    /**
+     * Approve and post a draft: applies balance changes atomically.
+     */
+    public function approveDraft(string $txnId, string $approvedBy): Transaction
+    {
+        $txn = $this->txnRepo->findById($txnId);
+        if (!$txn || $txn->getStatus() !== 'pending') {
+            throw new \InvalidArgumentException('Draft not found or already posted');
+        }
+
+        if (!PeriodService::isPeriodOpen(date('Y-m-d'), $this->pdo)) {
+            throw new \RuntimeException('Cannot post: current date is in a closed period');
+        }
+
+        $inTransaction = $this->pdo !== null;
+        if ($inTransaction) $this->pdo->beginTransaction();
+
+        try {
+            foreach ($txn->getLedgerEntries() as $entry) {
+                $account = $this->accountRepo->findById($entry->getAccountId());
+                if (!$account) continue;
+                if ($entry->isDebit()) {
+                    if (in_array($account->getType(), ['asset', 'expense'])) $account->credit($entry->getAmount());
+                    else $account->debit($entry->getAmount());
+                } else {
+                    if (in_array($account->getType(), ['liability', 'equity', 'revenue'])) $account->credit($entry->getAmount());
+                    else $account->debit($entry->getAmount());
+                }
+                $this->accountRepo->save($account);
+            }
+
+            $txn->post($approvedBy);
+            $this->txnRepo->save($txn);
+
+            if ($inTransaction) $this->pdo->commit();
+
+            $this->auditLogger?->log('journal.approve', 'transaction', $txn->getId(),
+                ['status' => 'pending'], ['status' => 'posted'], $approvedBy);
+
+            return $txn;
+        } catch (\Exception $e) {
+            if ($inTransaction) $this->pdo->rollBack();
+            throw $e;
+        }
+    }
+
+    /**
      * Post a journal entry: validates Dr=Cr first, then applies balance changes atomically.
      * Control accounts (Level 1 parent accounts with sub-accounts) are blocked.
      * Set $allowControl to true for Chief Accountant override.

@@ -3,6 +3,7 @@ namespace Accounting\Interfaces\HTTP\Financial;
 
 use Accounting\Domain\Service\FsService;
 use Accounting\Infrastructure\JsonResponse;
+use Accounting\Infrastructure\Auth;
 
 class FsController
 {
@@ -32,6 +33,28 @@ class FsController
             'period' => $period,
             'errors' => $this->fs->validateBC02($data),
             'net_profit' => $this->findValue($data, '60'),
+        ]);
+    }
+
+    public function tt99(): void
+    {
+        Auth::requirePermission('report', 'read');
+        $period = $_GET['period'] ?? date('Y');
+        $bc01 = $this->fs->generateBC01($period);
+        $bc02 = $this->fs->generateBC02($period);
+        $errors = array_merge($this->fs->validateBC01($bc01), $this->fs->validateBC02($bc02));
+        $prior = $this->fs->getPriorPeriodValues('BC01', $period);
+        $priorIncome = $this->fs->getPriorPeriodValues('BC02', $period);
+        JsonResponse::ok([
+            'period' => $period,
+            'items' => array_merge(
+                array_map(fn($r) => ['ma_so' => 'BC01_'.$r['ma_so'], 'name_vi' => $r['name_vi'], 'value' => $r['value'], 'prior' => $prior[$r['ma_so']] ?? 0], $bc01),
+                array_map(fn($r) => ['ma_so' => 'BC02_'.$r['ma_so'], 'name_vi' => $r['name_vi'], 'value' => $r['value'], 'prior' => $priorIncome[$r['ma_so']] ?? 0], $bc02)
+            ),
+            'errors' => $errors,
+            'total_assets' => $this->findValue($bc01, '280'),
+            'total_equity' => $this->findValue($bc01, '440'),
+            'net_profit' => $this->findValue($bc02, '60'),
         ]);
     }
 

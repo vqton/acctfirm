@@ -4,6 +4,8 @@ namespace Accounting\Interfaces\HTTP\MasterData;
 use Accounting\Domain\Model\Warehouse;
 use Accounting\Domain\Repository\WarehouseRepositoryInterface;
 
+use \Accounting\Interfaces\HTTP\CrudControllerTrait;
+
 class WarehouseController
 {
     use CrudControllerTrait;

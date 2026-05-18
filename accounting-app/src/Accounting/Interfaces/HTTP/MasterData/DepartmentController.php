@@ -4,6 +4,8 @@ namespace Accounting\Interfaces\HTTP\MasterData;
 use Accounting\Domain\Model\Department;
 use Accounting\Domain\Repository\DepartmentRepositoryInterface;
 
+use \Accounting\Interfaces\HTTP\CrudControllerTrait;
+
 class DepartmentController
 {
     use CrudControllerTrait;

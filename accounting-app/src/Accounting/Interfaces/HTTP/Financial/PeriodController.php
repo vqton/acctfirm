@@ -70,4 +70,13 @@ class PeriodController
             JsonResponse::ok(['message' => 'Closing entries executed']);
         } catch (\InvalidArgumentException $e) { JsonResponse::error($e->getMessage()); }
     }
+
+    public function archive(int $id): void
+    {
+        Auth::requirePermission('system', 'edit');
+        try {
+            $result = $this->period->archivePeriod($id, $_SESSION['user']['username'] ?? 'system');
+            JsonResponse::ok($result);
+        } catch (\InvalidArgumentException $e) { JsonResponse::error($e->getMessage()); }
+    }
 }

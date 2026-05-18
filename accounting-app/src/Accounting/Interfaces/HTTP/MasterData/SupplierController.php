@@ -4,6 +4,8 @@ namespace Accounting\Interfaces\HTTP\MasterData;
 use Accounting\Domain\Model\Supplier;
 use Accounting\Domain\Repository\SupplierRepositoryInterface;
 
+use \Accounting\Interfaces\HTTP\CrudControllerTrait;
+
 class SupplierController
 {
     use CrudControllerTrait;

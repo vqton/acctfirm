@@ -18,8 +18,14 @@ $title = 'Phiếu chi'; $activeMenu = 'cash_payments'; ob_start(); ?>
 <div class="modal-body">
     <div class="row g-2">
         <div class="col-4 mb-2"><label>Ngày</label><input type="date" class="form-control" id="txnDate"></div>
-        <div class="col-4 mb-2"><label>Số tiền</label><input type="number" class="form-control" id="amount" step="1" min="1" required></div>
+        <div class="col-4 mb-2"><label>Loại chi</label><select class="form-select" id="paymentType"><option value="">-- Chọn loại --</option></select></div>
         <div class="col-4 mb-2"><label>TK Nợ (đối ứng)</label><select class="form-select" id="debitAccount" required></select></div>
+    </div>
+    <div class="row g-2">
+        <div class="col-4 mb-2"><label>Số tiền</label><input type="number" class="form-control" id="amount" step="1" min="1" required></div>
+        <div class="col-2 mb-2" id="vatRateGroup" style="display:none"><label>VAT %</label><select class="form-select" id="vatRate"><option value="0">0%</option><option value="5">5%</option><option value="8">8%</option><option value="10" selected>10%</option></select></div>
+        <div class="col-2 mb-2" id="vatAmountGroup" style="display:none"><label>Tiền VAT</label><input type="number" class="form-control" id="vatAmount" readonly step="1" style="background:#f5f5f5"></div>
+        <div class="col-4 mb-2" id="netAmountGroup" style="display:none"><label>Tiền chưa thuế</label><input type="number" class="form-control" id="netAmount" readonly step="1" style="background:#f5f5f5"></div>
     </div>
     <div class="mb-2" id="amountWords" style="font-size:12px;color:#6d7a8a;min-height:20px"></div>
     <div class="mb-2"><label>Người nhận</label>
@@ -47,24 +53,32 @@ function loadData(){
         });
     }});
 }
-function loadAccounts(){
-    console.log('[Cash] loadAccounts START', new Date().toISOString());
-    var timedOut=false;var timer=setTimeout(function(){console.log('[Cash] TIMEOUT fired');timedOut=true;$('#loadStatus').text('TIMEOUT - Kiểm tra server').css('color','red');$('#debitAccount').html('<option>Không phản hồi (>5s)</option>');},5000);
-    $('#debitAccount').html('<option>Đang tải...</option>');
+function loadTemplates(){
+    $.get('/api/cash/templates?type=payment&_='+Date.now(),function(tpls){
+        var sel=$('#paymentType');sel.html('<option value="">-- Chọn loại chi --</option>');
+        tpls.forEach(function(t){sel.append('<option value="'+esc(t.id)+'" data-account="'+esc(t.default_account)+'" data-vat="'+t.has_vat+'" data-vat-rate="'+t.vat_rate+'">'+esc(t.name)+'</option>');});
+    });
     $.get('/api/cash/accounts?for=payment&_='+Date.now(),function(l){
-        if(timedOut)return;clearTimeout(timer);
         var o='<option value="">-- Chọn tài khoản --</option>';
-        l.forEach(function(a){
-            o+='<option value="'+esc(a.code)+'">'+esc(a.code)+' - '+esc(a.name)+' ('+parseFloat(a.balance).toLocaleString()+' VND)</option>';
-        });
+        l.forEach(function(a){o+='<option value="'+esc(a.code)+'">'+esc(a.code)+' - '+esc(a.name)+' ('+parseFloat(a.balance).toLocaleString()+' VND)</option>';});
         $('#debitAccount').html(o);
         $('#loadStatus').text('OK: '+l.length+' tài khoản').css('color','');
-    }).fail(function(x){
-        if(timedOut)return;clearTimeout(timer);
-        $('#debitAccount').html('<option>Lỗi tải: '+x.status+'</option>');
-        $('#loadStatus').text('LỖI: '+x.status).css('color','red');
-    });
+    }).fail(function(x){$('#debitAccount').html('<option>Lỗi: '+x.status+'</option>');$('#loadStatus').text('LỖI: '+x.status).css('color','red');});
 }
+$('#paymentType').on('change',function(){
+    var opt=$(this).find(':selected');
+    var hasVat=opt.data('vat')===true;
+    $('#vatRateGroup,#vatAmountGroup,#netAmountGroup').toggle(hasVat);
+    if(opt.data('account')){$('#debitAccount').val(opt.data('account'));}
+    if(hasVat){$('#vatRate').val(opt.data('vat-rate')||10);calcVAT();}
+});
+function calcVAT(){
+    var total=parseFloat($('#amount').val())||0;
+    var rate=parseInt($('#vatRate').val())||0;
+    if(rate>0){var vat=Math.round(total*rate/(100+rate));$('#vatAmount').val(vat);$('#netAmount').val(total-vat);}
+    else{$('#vatAmount').val(0);$('#netAmount').val(total);}
+}
+$('#amount,#vatRate').on('input',function(){if($('#vatRateGroup').is(':visible'))calcVAT();});
 // Amount in words
 $('#amount').on('input',function(){
     var v=parseFloat($(this).val())||0;
@@ -105,12 +119,14 @@ $('#paymentForm').submit(function(e){e.preventDefault();
         payer_name: $('#payerSearch').val()||null,
         payer_type: $('#payerType').val()||null,
         payer_id: $('#payerId').val()||null,
+        vat_amount: $('#vatRateGroup').is(':visible')?parseInt($('#vatAmount').val())||0:0,
+        vat_rate: $('#vatRateGroup').is(':visible')?parseInt($('#vatRate').val())||0:0,
     };
     $.ajax({url:'/api/cash/payments',method:'POST',contentType:'application/json',headers:{'X-CSRF-Token':csrf},data:JSON.stringify(data),
         success:function(){$('#paymentModal').modal('hide');$('#paymentForm')[0].reset();showToast('Phiếu chi tạo thành công','success');loadData();},
         error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}
     });
 });
-$(document).ready(function(){loadAccounts();loadData();$('#txnDate').val(new Date().toISOString().substring(0,10));});
+$(document).ready(function(){loadTemplates();loadData();$('#txnDate').val(new Date().toISOString().substring(0,10));});
 </script>
 <?php $content = ob_get_clean(); require __DIR__ . '/layout.php'; ?>

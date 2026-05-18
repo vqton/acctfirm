@@ -4,6 +4,8 @@ namespace Accounting\Interfaces\HTTP\MasterData;
 use Accounting\Domain\Model\ValuationMethod;
 use Accounting\Domain\Repository\ValuationMethodRepositoryInterface;
 
+use \Accounting\Interfaces\HTTP\CrudControllerTrait;
+
 class ValuationMethodController
 {
     use CrudControllerTrait;
