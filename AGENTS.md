@@ -181,7 +181,7 @@ results();
 | Module | Service | Tests | Status |
 |---|---|---|---|
 | Cash & Bank | `CashService` | ~100 | ✅ 9 UCs |
-| Inventory (10 phases) | `InventoryService` | 77 | ✅ |
+| Inventory (12 files) | `InventoryService` | 80 | ✅ |
 | Period Engine | `PeriodService` | 18 | ✅ |
 | Financial Statements (BC 01, BC 02) | `FsService` | 18 | ✅ |
 | Accounts Payable (TK 331) | `ApService` | 22 | ✅ |
@@ -194,7 +194,7 @@ results();
 | General Ledger (Sổ Cái) | `GlService` | 12 | ✅ |
 | Action Journal | `ActionJournal` | — | ✅ |
 
-**Total:** 29 test files, ~410 tests, 0 failures.
+**Total:** 29 test files, ~420 tests, 0 failures.
 
 ## Skill Selection
 
