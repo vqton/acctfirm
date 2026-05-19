@@ -121,11 +121,31 @@ function defineRoutes(Router $router): void
 
     // Fixed Assets
     $router->get('/danh-muc/tai-san-co-dinh', function() { require __DIR__ . '/../public/views/fixed_assets.php'; });
+    $router->get('/danh-muc/tai-san-co-dinh/tinh-khau-hao', function() { require __DIR__ . '/../public/views/fixed_asset_depreciation.php'; });
     $router->get('/api/fixed-assets', function() use ($c) { $c['FixedAssetController']->list(); });
     $router->get('/api/fixed-assets/:id', function($id) use ($c) { $c['FixedAssetController']->get($id); });
     $router->post('/api/fixed-assets', function() use ($c) { $c['FixedAssetController']->create(); });
     $router->put('/api/fixed-assets/:id', function($id) use ($c) { $c['FixedAssetController']->update($id); });
     $router->delete('/api/fixed-assets/:id', function($id) use ($c) { $c['FixedAssetController']->delete($id); });
+
+    // Fixed Asset Depreciation
+    $router->post('/api/fixed-assets/depreciate', function() use ($c) {
+        $input = json_decode(file_get_contents('php://input'), true);
+        $period = $input['period'] ?? date('Y-m');
+        $results = $c['fixedAssetService']->postMonthlyDepreciation($period, $_SESSION['user_id'] ?? 'system');
+        JsonResponse::ok(['posted' => count($results), 'entries' => $results]);
+    });
+    $router->get('/api/fixed-assets/:id/depreciation', function($id) use ($c) {
+        JsonResponse::ok($c['fixedAssetService']->getDepreciationHistory($id));
+    });
+    $router->get('/api/fixed-assets/depreciation/period/:period', function($period) use ($c) {
+        JsonResponse::ok($c['fixedAssetService']->getDepreciationByPeriod($period));
+    });
+    $router->get('/api/fixed-assets/:id/schedule', function($id) use ($c) {
+        $asset = $c['fixedAssetRepository']->findById($id);
+        if (!$asset) { JsonResponse::error('Asset not found', 404); return; }
+        JsonResponse::ok($c['fixedAssetService']->calculateSchedule($asset));
+    });
 
     // Valuation Methods
     $router->get('/danh-muc/phuong-phap-tinh-gia', function() { require __DIR__ . '/../public/views/valuation_methods.php'; });
@@ -338,6 +358,8 @@ function defineRoutes(Router $router): void
     $router->get('/api/fs/bc01', function() use ($c) { $c['FsController']->bc01(); });
     $router->get('/api/fs/bc02', function() use ($c) { $c['FsController']->bc02(); });
     $router->get('/api/fs/tt99', function() use ($c) { $c['FsController']->tt99(); });
+    $router->get('/bao-cao/luu-chuyen-tien-te', function() use ($c) { $c['FsController']->viewBC03(); });
+    $router->get('/api/fs/bc03', function() use ($c) { $c['FsController']->bc03(); });
 
     // Period Management
     $router->get('/he-thong/quan-ly-ky', function() { require __DIR__ . '/../public/views/periods.php'; });

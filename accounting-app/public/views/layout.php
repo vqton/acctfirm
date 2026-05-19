@@ -163,11 +163,11 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
         <div class="nav-section">TSCĐ & CCDC</div>
         <div class="nav-item">
             <a class="nav-link-s" data-bs-toggle="collapse" href="#menuFA"><i class="bi bi-building"></i> TSCĐ & CCDC <i class="bi bi-chevron-right ms-auto" style="width:auto;font-size:10px;"></i></a>
-            <div class="collapse sub-menu<?= isActive(['fixed_assets','depreciation_policies'],$activeMenu)?' show':'' ?>" id="menuFA">
+            <div class="collapse sub-menu<?= isActive(['fixed_assets','depreciation_policies','depreciation'],$activeMenu)?' show':'' ?>" id="menuFA">
                 <a href="/danh-muc/tai-san-co-dinh" class="nav-link-s<?= isActive('fixed_assets',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Tài sản cố định</a>
                 <a href="/danh-muc/chinh-sach-khau-hao" class="nav-link-s<?= isActive('depreciation_policies',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> CS khấu hao</a>
                 <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Ghi tăng TSCĐ</a>
-                <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Tính khấu hao</a>
+                <a href="/danh-muc/tai-san-co-dinh/tinh-khau-hao" class="nav-link-s<?= isActive('depreciation',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Tính khấu hao</a>
                 <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Điều chuyển TSCĐ</a>
                 <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Giảm / Thanh lý</a>
             </div>
@@ -226,7 +226,7 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
         <div class="collapse sub-menu<?= isActive(['fs_bc01','fs_bc02'],$activeMenu)?' show':'' ?>" id="menuReports">
             <a href="/bao-cao/tinh-hinh-tai-chinh" class="nav-link-s<?= isActive('fs_bc01',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> BC CĐKT (BC 01)</a>
             <a href="/bao-cao/ket-qua-kinh-doanh" class="nav-link-s<?= isActive('fs_bc02',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> KQKD (BC 02)</a>
-            <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> LCTT (BC 03)</a>
+            <a href="/bao-cao/luu-chuyen-tien-te" class="nav-link-s<?= isActive('fs_bc03',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> LCTT (BC 03)</a>
             <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Thuyết minh BCTC</a>
             <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Báo cáo thuế</a>
             <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Báo cáo quản trị</a>

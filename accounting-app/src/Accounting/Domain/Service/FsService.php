@@ -34,6 +34,191 @@ class FsService
         return $this->generateStatement('BC02', $periodCode);
     }
 
+    public function generateBC03(?string $periodCode = null): array
+    {
+        $periodCode = $periodCode ?? date('Y');
+        $prevPeriod = (string)((int)$periodCode - 1);
+
+        $items = $this->getLineItems('BC03');
+
+        // Get supporting data
+        $bc02 = $this->generateBC02($periodCode);
+        $bc02Values = [];
+        foreach ($bc02 as $r) $bc02Values[$r['ma_so']] = $r['value'];
+
+        $bc01 = $this->generateBC01($periodCode);
+        $bc01Prev = $this->getPriorPeriodValues('BC01', $periodCode);
+
+        $bc01Values = [];
+        foreach ($bc01 as $r) $bc01Values[$r['ma_so']] = $r['value'];
+
+        $values = [];
+
+        foreach ($items as $item) {
+            $maSo = $item['ma_so'];
+
+            switch ($item['formula_type']) {
+                case 'from_bc02':
+                    $values[$maSo] = $bc02Values['50'] ?? 0;
+                    break;
+
+                case 'from_bc02_24':
+                    $values[$maSo] = $bc02Values['24'] ?? 0;
+                    break;
+
+                case 'account_delta':
+                    $accounts = array_map('trim', explode(',', $item['formula_detail'] ?? ''));
+                    $total = 0;
+                    foreach ($accounts as $code) {
+                        $a = $this->accountRepo->findByCode($code);
+                        if ($a) {
+                            $endBal = $a->getBalance();
+                            $startBal = 0;
+                            if ($bc01Prev && isset($bc01Prev[$code])) {
+                                $startBal = $bc01Prev[$code];
+                            }
+                            $total += ($endBal - $startBal);
+                        }
+                    }
+                    $values[$maSo] = round($total);
+                    break;
+
+                case 'investment_adjust':
+                    $ms22 = $bc02Values['22'] ?? 0;
+                    $ms23 = $bc02Values['23'] ?? 0;
+                    $ms24 = $bc02Values['24'] ?? 0;
+                    $ms21 = $bc02Values['21'] ?? 0;
+                    $values[$maSo] = round(-($ms22 - ($ms23 - $ms24) + $ms21));
+                    break;
+
+                case 'delta_neg':
+                    $accounts = array_map('trim', explode(',', $item['formula_detail'] ?? ''));
+                    $total = 0;
+                    foreach ($accounts as $code) {
+                        $a = $this->accountRepo->findByCode($code);
+                        if ($a) {
+                            $endBal = $a->getBalance();
+                            $startBal = 0;
+                            if ($bc01Prev && isset($bc01Prev[$code])) {
+                                $startBal = $bc01Prev[$code];
+                            }
+                            $total += ($endBal - $startBal);
+                        }
+                    }
+                    $values[$maSo] = round(-$total);
+                    break;
+
+                case 'delta_pos':
+                    $accounts = array_map('trim', explode(',', $item['formula_detail'] ?? ''));
+                    $total = 0;
+                    foreach ($accounts as $code) {
+                        $a = $this->accountRepo->findByCode($code);
+                        if ($a) {
+                            $endBal = $a->getBalance();
+                            $startBal = 0;
+                            if ($bc01Prev && isset($bc01Prev[$code])) {
+                                $startBal = $bc01Prev[$code];
+                            }
+                            $total += ($endBal - $startBal);
+                        }
+                    }
+                    $values[$maSo] = round($total);
+                    break;
+
+                case 'delta_neg_only':
+                    $accounts = array_map('trim', explode(',', $item['formula_detail'] ?? ''));
+                    $total = 0;
+                    foreach ($accounts as $code) {
+                        $a = $this->accountRepo->findByCode($code);
+                        if ($a) {
+                            $endBal = $a->getBalance();
+                            $startBal = 0;
+                            if ($bc01Prev && isset($bc01Prev[$code])) {
+                                $startBal = $bc01Prev[$code];
+                            }
+                            $total += ($endBal - $startBal);
+                        }
+                    }
+                    $values[$maSo] = round(min(0, $total));
+                    break;
+
+                case 'cash_begin':
+                    if ($bc01Prev && isset($bc01Prev['110'])) {
+                        $values[$maSo] = round($bc01Prev['110']);
+                    } else {
+                        $values[$maSo] = 0;
+                    }
+                    break;
+
+                case 'sum':
+                    $children = array_map('trim', explode(',', $item['formula_detail'] ?? ''));
+                    $total = 0;
+                    foreach ($children as $c) {
+                        $total += $values[$c] ?? 0;
+                    }
+                    $values[$maSo] = round($total);
+                    break;
+
+                case 'calculated':
+                    $expr = $item['formula_detail'] ?? '';
+                    $result = $this->evaluateExpression($expr, $values);
+                    $values[$maSo] = round($result);
+                    break;
+
+                case 'manual':
+                default:
+                    $values[$maSo] = 0;
+                    break;
+            }
+        }
+
+        // Build result rows
+        $result = [];
+        foreach ($items as $item) {
+            $maSo = $item['ma_so'];
+            $val = $values[$maSo] ?? 0;
+            $result[] = [
+                'ma_so' => $maSo,
+                'parent_ma_so' => $item['parent_ma_so'],
+                'name_vi' => $item['name_vi'],
+                'value' => $val,
+                'is_control' => (bool)$item['is_control'],
+                'is_total' => (bool)$item['is_total'],
+                'display_order' => (int)$item['display_order'],
+            ];
+        }
+
+        // Save snapshot
+        $data = json_encode($values);
+        $this->pdo->prepare(
+            'INSERT INTO fs_snapshots (statement, period_code, period_end_date, data, created_by)
+             VALUES (?, ?, CURDATE(), ?, ?)
+             ON DUPLICATE KEY UPDATE data = VALUES(data), created_at = NOW()'
+        )->execute(['BC03', $periodCode, $data, $_SESSION['user']['username'] ?? 'system']);
+
+        $this->auditLogger?->log('fs.generate', 'fs_statement', "BC03_{$periodCode}",
+            null, ['statement' => 'BC03', 'period' => $periodCode, 'items' => count($result)],
+            $_SESSION['user']['username'] ?? 'system');
+
+        return $result;
+    }
+
+    public function validateBC03(array $bc03Data): array
+    {
+        $values = [];
+        foreach ($bc03Data as $r) $values[$r['ma_so']] = $r['value'];
+
+        $errors = [];
+        // 70 = 50+60+61
+        $calc70 = ($values[50] ?? 0) + ($values[60] ?? 0) + ($values[61] ?? 0);
+        if (abs(($values[70] ?? 0) - $calc70) > 1) {
+            $errors[] = "Closing cash (70) should be {$calc70}, got {$values[70]}";
+        }
+        // BC 01 cross-check: MS70 should equal BC01 MS110 (cash + equivalents)
+        // This validation happens in controller level since we need BC01 data
+        return $errors;
+    }
+
     private function generateStatement(string $statement, ?string $periodCode = null): array
     {
         $periodCode = $periodCode ?? date('Y');
@@ -161,7 +346,7 @@ class FsService
     {
         $evalStr = $expr;
         foreach ($values as $k => $v) {
-            $evalStr = str_replace($k, (string)$v, $evalStr);
+            $evalStr = preg_replace('/\b' . preg_quote((string)$k, '/') . '\b/', (string)$v, $evalStr);
         }
         return $this->safeEval($evalStr);
     }

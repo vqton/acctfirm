@@ -33,6 +33,7 @@ use Accounting\Domain\Service\ApService;
 use Accounting\Domain\Service\ArService;
 use Accounting\Domain\Service\GlService;
 use Accounting\Domain\Service\JournalBookService;
+use Accounting\Domain\Service\FixedAssetService;
 use Accounting\Interfaces\HTTP\Cash\BankReconciliationController;
 use Accounting\Interfaces\HTTP\Cash\CashController;
 use Accounting\Interfaces\HTTP\Cash\CashReportController;
@@ -118,6 +119,7 @@ function createContainer(): array
     $arService = new ArService($pdo, $accountRepository, $journalService, $auditLogger);
     $glService = new GlService($pdo, $accountRepository);
     $journalBookService = new JournalBookService($pdo);
+    $fixedAssetService = new FixedAssetService($fixedAssetRepository, $accountRepository, $transactionRepository, $journalService, $pdo, $auditLogger);
 
     $accountController = new AccountController($accountRepository, $auditLogger);
     $apController = new ApController($apService);
@@ -188,6 +190,7 @@ function createContainer(): array
         'arService' => $arService,
         'glService' => $glService,
         'journalBookService' => $journalBookService,
+        'fixedAssetService' => $fixedAssetService,
 
         'AccountController' => $accountController,
         'ApController' => $apController,
