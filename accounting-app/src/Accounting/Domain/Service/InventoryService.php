@@ -17,7 +17,7 @@ class InventoryService
     private JournalService $journal;
 
     private array $inventoryAccountMap = [
-        'material' => '152', 'tool' => '152',
+        'material' => '152', 'tool' => '153',
         'product' => '155', 'merchandise' => '156',
         'other' => '152',
     ];
