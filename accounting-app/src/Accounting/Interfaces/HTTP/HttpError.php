@@ -28,7 +28,7 @@ class HttpError
             500 => 'Internal Server Error',
             default => 'Error',
         };
-        require __DIR__ . '/../../../public/views/error.php';
+        require __DIR__ . '/../../../../public/views/error.php';
         exit;
     }
 

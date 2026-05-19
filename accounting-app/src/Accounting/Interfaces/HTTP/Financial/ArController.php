@@ -67,7 +67,7 @@ class ArController
     public function aging(): void { JsonResponse::ok($this->ar->getAgingReport()); }
     public function statement(string $customerId): void { JsonResponse::ok($this->ar->getCustomerStatement($customerId)); }
 
-    public function viewInvoices(): void { require __DIR__ . '/../../../../public/views/ar_invoices.php'; }
-    public function viewAging(): void { require __DIR__ . '/../../../../public/views/ar_aging.php'; }
-    public function viewStatement(): void { require __DIR__ . '/../../../../public/views/ar_statement.php'; }
+    public function viewInvoices(): void { require __DIR__ . '/../../../../../public/views/ar_invoices.php'; }
+    public function viewAging(): void { require __DIR__ . '/../../../../../public/views/ar_aging.php'; }
+    public function viewStatement(): void { require __DIR__ . '/../../../../../public/views/ar_statement.php'; }
 }

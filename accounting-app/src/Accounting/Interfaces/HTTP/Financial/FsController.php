@@ -60,12 +60,12 @@ class FsController
 
     public function viewBC01(): void
     {
-        require __DIR__ . '/../../../../public/views/fs_bc01.php';
+        require __DIR__ . '/../../../../../public/views/fs_bc01.php';
     }
 
     public function viewBC02(): void
     {
-        require __DIR__ . '/../../../../public/views/fs_bc02.php';
+        require __DIR__ . '/../../../../../public/views/fs_bc02.php';
     }
 
     private function findValue(array $items, string $maSo): float

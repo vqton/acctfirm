@@ -69,7 +69,7 @@ class ApController
     public function aging(): void { JsonResponse::ok($this->ap->getAgingReport()); }
     public function statement(string $supplierId): void { JsonResponse::ok($this->ap->getSupplierStatement($supplierId)); }
 
-    public function viewInvoices(): void { require __DIR__ . '/../../../../public/views/ap_invoices.php'; }
-    public function viewAging(): void { require __DIR__ . '/../../../../public/views/ap_aging.php'; }
-    public function viewStatement(): void { require __DIR__ . '/../../../../public/views/ap_statement.php'; }
+    public function viewInvoices(): void { require __DIR__ . '/../../../../../public/views/ap_invoices.php'; }
+    public function viewAging(): void { require __DIR__ . '/../../../../../public/views/ap_aging.php'; }
+    public function viewStatement(): void { require __DIR__ . '/../../../../../public/views/ap_statement.php'; }
 }

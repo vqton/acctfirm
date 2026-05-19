@@ -32,6 +32,7 @@ use Accounting\Domain\Service\FsService;
 use Accounting\Domain\Service\ApService;
 use Accounting\Domain\Service\ArService;
 use Accounting\Domain\Service\GlService;
+use Accounting\Domain\Service\JournalBookService;
 use Accounting\Interfaces\HTTP\Cash\BankReconciliationController;
 use Accounting\Interfaces\HTTP\Cash\CashController;
 use Accounting\Interfaces\HTTP\Cash\CashReportController;
@@ -48,6 +49,7 @@ use Accounting\Interfaces\HTTP\Financial\ApController;
 use Accounting\Interfaces\HTTP\Financial\ArController;
 use Accounting\Interfaces\HTTP\Financial\FsController;
 use Accounting\Interfaces\HTTP\Financial\GlController;
+use Accounting\Interfaces\HTTP\Financial\JournalBookController;
 use Accounting\Interfaces\HTTP\Financial\JournalController;
 use Accounting\Interfaces\HTTP\Financial\PeriodController;
 use Accounting\Interfaces\HTTP\MasterData\AccountController;
@@ -112,6 +114,7 @@ function createContainer(): array
     $apService = new ApService($pdo, $supplierRepository, $accountRepository, $journalService, $auditLogger);
     $arService = new ArService($pdo, $accountRepository, $journalService, $auditLogger);
     $glService = new GlService($pdo, $accountRepository);
+    $journalBookService = new JournalBookService($pdo);
 
     $accountController = new AccountController($accountRepository, $auditLogger);
     $apController = new ApController($apService);
@@ -134,6 +137,7 @@ function createContainer(): array
     $fixedAssetController = new FixedAssetController($fixedAssetRepository);
     $fsController = new FsController($fsService);
     $glController = new GlController($glService);
+    $journalBookController = new JournalBookController($journalBookService);
     $impairmentController = new ImpairmentController($inventoryService, $pdo);
     $inventoryTransitController = new InventoryTransitController($inventoryService, $itemRepository, $pdo);
     $itemController = new ItemController($itemRepository);
@@ -177,6 +181,7 @@ function createContainer(): array
         'apService' => $apService,
         'arService' => $arService,
         'glService' => $glService,
+        'journalBookService' => $journalBookService,
 
         'AccountController' => $accountController,
         'ApController' => $apController,
@@ -199,6 +204,7 @@ function createContainer(): array
         'FixedAssetController' => $fixedAssetController,
         'FsController' => $fsController,
         'GlController' => $glController,
+        'JournalBookController' => $journalBookController,
         'ImpairmentController' => $impairmentController,
         'InventoryTransitController' => $inventoryTransitController,
         'ItemController' => $itemController,

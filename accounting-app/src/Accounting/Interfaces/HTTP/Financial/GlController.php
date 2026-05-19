@@ -15,8 +15,12 @@ class GlController
         $account = $_GET['account'] ?? '111';
         $from = $_GET['from'] ?? null;
         $to = $_GET['to'] ?? null;
+        $mode = $_GET['mode'] ?? 'detail';
         try {
-            JsonResponse::ok($this->gl->getGeneralLedger($account, $from, $to));
+            $data = $mode === 'monthly'
+                ? $this->gl->getMonthlyLedger($account, $from, $to)
+                : $this->gl->getGeneralLedger($account, $from, $to);
+            JsonResponse::ok($data);
         } catch (\InvalidArgumentException $e) {
             JsonResponse::error($e->getMessage(), 404);
         }
@@ -29,6 +33,6 @@ class GlController
 
     public function view(): void
     {
-        require __DIR__ . '/../../../../public/views/so_cai.php';
+        require __DIR__ . '/../../../../../public/views/so_cai.php';
     }
 }

@@ -337,6 +337,10 @@ function defineRoutes(Router $router): void
     $router->get('/api/gl/ledger', function() use ($c) { $c['GlController']->ledger(); });
     $router->get('/api/gl/accounts', function() use ($c) { $c['GlController']->accounts(); });
 
+    // Sổ Nhật ký chung (S03a-DN)
+    $router->get('/bao-cao/nhat-ky-chung', function() use ($c) { $c['JournalBookController']->view(); });
+    $router->get('/api/general-journal', function() use ($c) { $c['JournalBookController']->journal(); });
+
     // Audit Log
     $router->get('/he-thong/nhat-ky-hoat-dong', function() { require __DIR__ . '/../public/views/audit_log.php'; });
     $router->get('/api/audit-log', function() use ($c) { $c['AuditLogController']->list(); });

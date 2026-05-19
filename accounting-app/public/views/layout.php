@@ -214,6 +214,7 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
                 <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Bút toán kết chuyển</a>
                 <a href="/tong-hop/khoa-so-cuoi-ky" class="nav-link-s<?= isActive('period_close',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Khóa sổ cuối kỳ</a>
                 <a href="/tong-hop/bang-can-doi-so-phat-sinh" class="nav-link-s<?= isActive('trial_balance',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> BCĐ số phát sinh</a>
+                <a href="/bao-cao/nhat-ky-chung" class="nav-link-s<?= isActive('general_journal',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Sổ Nhật ký chung</a>
                 <a href="/bao-cao/so-cai" class="nav-link-s<?= isActive('so_cai',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Sổ cái</a>
                 <a href="/bao-cao/tinh-hinh-tai-chinh" class="nav-link-s<?= isActive('fs_bc01',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Báo cáo tài chính</a>
             </div>

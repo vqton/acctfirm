@@ -27,9 +27,16 @@ function assertTrue($c, $m) { global $total, $failed;
     $total++; if(!$c){echo"FAIL: {$m}\n";$failed++;}else echo "PASS: {$m}\n";
 }
 
+// Ensure current period is open for posting test transactions
+$pdo->prepare("UPDATE accounting_periods SET status = 'open' WHERE period_code = ?")->execute([date('Y-m')]);
+
 $pdo->exec('UPDATE accounts SET balance = 0');
 $pdo->exec('DELETE FROM ledger_entries');
 $pdo->exec('DELETE FROM transactions');
+
+// Clean up monthly test data if it exists from previous runs
+$pdo->exec("DELETE FROM ledger_entries WHERE transaction_id IN ('txn-monthly-1','txn-monthly-2')");
+$pdo->exec("DELETE FROM transactions WHERE id IN ('txn-monthly-1','txn-monthly-2')");
 
 echo "\n=== Test 1: GL account list ===\n";
 $accounts = $gl->getAccounts();
@@ -68,6 +75,66 @@ assertTrue($result2['closing_balance'] > 0, 'Revenue (511) has credit balance');
 echo "\n=== Test 6: Filtered by date ===\n";
 $r2 = $gl->getGeneralLedger('111', '2026-01-01', '2026-12-31');
 assertEq(7000000, $r2['closing_balance'], 'Filtered by year: closing = 7M');
+
+echo "\n=== Test 7: Monthly ledger (S05-DN) — empty account ===\n";
+$monthly = $gl->getMonthlyLedger('111');
+assertEq('monthly', $monthly['mode'], 'Monthly mode indicator');
+assertTrue(count($monthly['entries']) >= 12, '12 months returned for full year');
+
+echo "\n=== Test 8: Monthly ledger with transactions in different months ===\n";
+// Insert controlled-dated transactions
+$pdo->prepare("INSERT INTO transactions (id, date, description, reference, status, created_by, created_at) VALUES (?, ?, ?, ?, 'posted', 'tester', ?)")->execute([
+    'txn-monthly-1', '2026-01-15 10:00:00', 'January sale', 'GL-M01', '2026-01-15 10:00:00'
+]);
+$pdo->prepare("INSERT INTO ledger_entries (id, transaction_id, account_id, amount, is_debit) VALUES (?, ?, ?, ?, ?)")->execute([
+    'le-m1-111', 'txn-monthly-1', (new PDOAccountRepository($pdo))->findByCode('111')->getId(), 5000000, 1
+]);
+$pdo->prepare("INSERT INTO ledger_entries (id, transaction_id, account_id, amount, is_debit) VALUES (?, ?, ?, ?, ?)")->execute([
+    'le-m1-511', 'txn-monthly-1', (new PDOAccountRepository($pdo))->findByCode('511')->getId(), 5000000, 0
+]);
+
+$pdo->prepare("INSERT INTO transactions (id, date, description, reference, status, created_by, created_at) VALUES (?, ?, ?, ?, 'posted', 'tester', ?)")->execute([
+    'txn-monthly-2', '2026-02-20 14:00:00', 'February expense', 'GL-M02', '2026-02-20 14:00:00'
+]);
+$pdo->prepare("INSERT INTO ledger_entries (id, transaction_id, account_id, amount, is_debit) VALUES (?, ?, ?, ?, ?)")->execute([
+    'le-m2-642', 'txn-monthly-2', (new PDOAccountRepository($pdo))->findByCode('642')->getId(), 2000000, 1
+]);
+$pdo->prepare("INSERT INTO ledger_entries (id, transaction_id, account_id, amount, is_debit) VALUES (?, ?, ?, ?, ?)")->execute([
+    'le-m2-111', 'txn-monthly-2', (new PDOAccountRepository($pdo))->findByCode('111')->getId(), 2000000, 0
+]);
+
+$monthly111 = $gl->getMonthlyLedger('111', '2026-01-01', '2026-12-31');
+$janEntry = null;
+$febEntry = null;
+foreach ($monthly111['entries'] as $e) {
+    if ($e['period'] === '2026-01') $janEntry = $e;
+    if ($e['period'] === '2026-02') $febEntry = $e;
+}
+
+assertTrue($janEntry !== null, 'January entry exists');
+assertEq(5000000, $janEntry['total_debit'], 'Jan 111 Dr = 5M');
+assertEq(0, $janEntry['total_credit'], 'Jan 111 Cr = 0');
+assertEq(5000000, $janEntry['closing_balance'], 'Jan 111 closing = 5M');
+
+assertTrue($febEntry !== null, 'February entry exists');
+assertEq(0, $febEntry['total_debit'], 'Feb 111 Dr = 0');
+assertEq(2000000, $febEntry['total_credit'], 'Feb 111 Cr = 2M');
+assertEq(3000000, $febEntry['closing_balance'], 'Feb 111 closing = 5M - 2M = 3M');
+
+echo "\n=== Test 9: Monthly contra account detail ===\n";
+assertTrue(count($janEntry['contra_debit_items']) > 0, 'Jan has contra items');
+assertEq('511', $janEntry['contra_debit_items'][0]['contra_account_code'], 'Contra account is 511');
+assertEq(5000000, $janEntry['contra_debit_items'][0]['amount'], 'Contra amount = 5M');
+
+echo "\n=== Test 10: Monthly ledger for revenue account ===\n";
+$monthly511 = $gl->getMonthlyLedger('511', '2026-01-01', '2026-12-31');
+$jan511 = null;
+foreach ($monthly511['entries'] as $e) {
+    if ($e['period'] === '2026-01') $jan511 = $e;
+}
+assertTrue($jan511 !== null, 'Jan 511 entry exists');
+assertEq(0, $jan511['total_debit'], 'Jan 511 Dr = 0');
+assertEq(5000000, $jan511['total_credit'], 'Jan 511 Cr = 5M (revenue = credit normal)');
 
 echo "\n=== Trial balance after GL ===\n";
 $all = $accountRepo->findAll();
