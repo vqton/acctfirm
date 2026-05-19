@@ -3,6 +3,7 @@ namespace Accounting\Interfaces\HTTP\Inventory;
 
 use Accounting\Domain\Service\InventoryService;
 use Accounting\Domain\Repository\ItemRepositoryInterface;
+use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
 
 class ConsignmentController
@@ -28,6 +29,8 @@ class ConsignmentController
 
     public function consign(): void
     {
+        Auth::checkCsrf();
+        Auth::requirePermission('inventory', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['item_id'], $data['qty'], $data['consignee'])) {
             JsonResponse::error('item_id, qty, consignee required');
@@ -46,6 +49,8 @@ class ConsignmentController
 
     public function sell(): void
     {
+        Auth::checkCsrf();
+        Auth::requirePermission('inventory', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['consignment_id'], $data['qty'])) {
             JsonResponse::error('consignment_id, qty required');
@@ -64,6 +69,8 @@ class ConsignmentController
     
     public function returnConsignment(): void
     {
+        Auth::checkCsrf();
+        Auth::requirePermission('inventory', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['consignment_id'], $data['qty'])) {
             JsonResponse::error('consignment_id, qty required');

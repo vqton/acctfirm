@@ -142,15 +142,15 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
         <div class="nav-section">Hàng tồn kho</div>
         <div class="nav-item">
             <a class="nav-link-s" data-bs-toggle="collapse" href="#menuInventory"><i class="bi bi-box"></i> Hàng tồn kho <i class="bi bi-chevron-right ms-auto" style="width:auto;font-size:10px;"></i></a>
-            <div class="collapse sub-menu<?= isActive(['items','ccdc','warehouses','uoms','valuation_methods','transfers','transit','consignment','physical_count','periodic','impairment'],$activeMenu)?' show':'' ?>" id="menuInventory">
+            <div class="collapse sub-menu<?= isActive(['items','ccdc','warehouses','uoms','valuation_methods','receipt','issue','transfers','transit','consignment','physical_count','periodic','impairment'],$activeMenu)?' show':'' ?>" id="menuInventory">
                 <a href="/danh-muc/vat-tu" class="nav-link-s<?= isActive('items',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Vật tư, hàng hóa</a>
                 <a href="/danh-muc/cong-cu-dung-cu" class="nav-link-s<?= isActive('ccdc',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> CCDC</a>
                 <a href="/danh-muc/kho" class="nav-link-s<?= isActive('warehouses',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Kho</a>
                 <a href="/danh-muc/don-vi-tinh" class="nav-link-s<?= isActive('uoms',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Đơn vị tính</a>
                 <a href="/danh-muc/phuong-phap-tinh-gia" class="nav-link-s<?= isActive('valuation_methods',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> PP tính giá</a>
                 <a href="/kho/du-phong-giam-gia" class="nav-link-s<?= isActive('impairment',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Dự phòng giảm giá</a>
-                <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Nhập kho</a>
-                <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Xuất kho</a>
+                <a href="/kho/nhap-kho" class="nav-link-s<?= isActive('receipt',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Nhập kho</a>
+                <a href="/kho/xuat-kho" class="nav-link-s<?= isActive('issue',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Xuất kho</a>
                 <a href="/kho/dieu-chuyen" class="nav-link-s<?= isActive('transfers',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Điều chuyển kho</a>
                 <a href="/kho/kiem-ke" class="nav-link-s<?= isActive('physical_count',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Kiểm kê</a>
                 <a href="/kho/kiem-ke-dinh-ky" class="nav-link-s<?= isActive('periodic',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Tính giá xuất kho (Định kỳ)</a>

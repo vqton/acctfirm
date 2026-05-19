@@ -3,6 +3,7 @@ namespace Accounting\Interfaces\HTTP\Inventory;
 
 use Accounting\Domain\Service\InventoryService;
 use Accounting\Domain\Repository\ItemRepositoryInterface;
+use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
 
 class PhysicalCountController
@@ -34,6 +35,8 @@ class PhysicalCountController
 
     public function createSession(): void
     {
+        Auth::checkCsrf();
+        Auth::requirePermission('inventory', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['lines']) || count($data['lines']) === 0) {
             JsonResponse::error('lines required');
@@ -52,6 +55,8 @@ class PhysicalCountController
 
     public function adjust(): void
     {
+        Auth::checkCsrf();
+        Auth::requirePermission('inventory', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['item_id'], $data['actual_qty'])) {
             JsonResponse::error('item_id, actual_qty required');

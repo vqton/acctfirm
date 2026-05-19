@@ -126,7 +126,7 @@ JsonResponse::error($msg, $code); // same with ['error' => $msg] structure
 | ~~Session fixation~~ | ~~No `session_regenerate_id()` after login~~ | ~~AuthController.php~~ | ✅ `session_regenerate_id(true)` |
 | ~~Path traversal~~ | ~~Static file serving doesn't normalize URI~~ | ~~index.php~~ | ✅ `realpath()` check |
 | ~~Encapsulation~~ | ~~Reflection to extract private PDO~~ | ~~8 controllers + InventoryService~~ | ✅ Constructor injection |
-| ~~Transactions~~ | ~~Multi-step ops not wrapped~~ | ~~JournalService, InventoryService, CashService~~ | ✅ `beginTransaction/commit/rollback` |
+| ~~Transactions~~ | ~~Multi-step ops not wrapped throughout~~ | ~~InventoryService~~ | ✅ All 16 InventoryService methods wrapped in `beginTransaction/commit/rollback` + JournalService handles nested via `inTransaction()` |
 | ~~Dead code~~ | ~~AccountingService, TransactionController~~ | ~~2 files~~ | ✅ Deleted |
 | ~~CRUD duplication~~ | ~~12 identical controllers~~ | ~~Master data controllers~~ | ✅ `CrudControllerTrait` |
 | ~~N+1 queries~~ | ~~Separate query per transaction~~ | ~~PDOTransactionRepository::getAll()~~ | ✅ Single JOIN |

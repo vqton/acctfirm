@@ -266,6 +266,18 @@ function defineRoutes(Router $router): void
     $router->post('/api/bank-reconciliation/:id/complete', function($id) use ($c) { $c['BankReconciliationController']->complete($id); });
     $router->get('/api/bank-reconciliation/bank-accounts', function() use ($c) { $c['BankReconciliationController']->bankAccounts(); });
 
+    // Receipt
+    $router->get('/kho/nhap-kho', function() { require __DIR__ . '/../public/views/receipt.php'; });
+    $router->post('/api/inventory/receive', function() use ($c) { $c['ReceiptController']->receive(); });
+    $router->get('/api/inventory/receipts', function() use ($c) { $c['ReceiptController']->list(); });
+    $router->get('/api/inventory/receive/items', function() use ($c) { $c['ReceiptController']->items(); });
+
+    // Issue
+    $router->get('/kho/xuat-kho', function() { require __DIR__ . '/../public/views/issue.php'; });
+    $router->post('/api/inventory/issue', function() use ($c) { $c['IssueController']->issue(); });
+    $router->get('/api/inventory/issues', function() use ($c) { $c['IssueController']->list(); });
+    $router->get('/api/inventory/issue/items', function() use ($c) { $c['IssueController']->items(); });
+
     // Transfer
     $router->get('/kho/dieu-chuyen', function() { require __DIR__ . '/../public/views/transfers.php'; });
 

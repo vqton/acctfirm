@@ -4,6 +4,7 @@ namespace Accounting\Interfaces\HTTP\Inventory;
 use Accounting\Domain\Service\InventoryService;
 use Accounting\Domain\Repository\ItemRepositoryInterface;
 use Accounting\Domain\Repository\WarehouseRepositoryInterface;
+use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
 
 class TransferController
@@ -36,6 +37,8 @@ class TransferController
 
     public function transfer(): void
     {
+        Auth::checkCsrf();
+        Auth::requirePermission('inventory', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['item_id'], $data['qty'], $data['to_warehouse_id'])) {
             JsonResponse::error('item_id, qty, to_warehouse_id required');

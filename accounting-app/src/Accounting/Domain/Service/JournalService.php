@@ -88,7 +88,7 @@ class JournalService
             throw new \RuntimeException('Cannot post: current date is in a closed period');
         }
 
-        $inTransaction = $this->pdo !== null;
+        $inTransaction = $this->pdo !== null && !$this->pdo->inTransaction();
         if ($inTransaction) $this->pdo->beginTransaction();
 
         try {
@@ -135,7 +135,7 @@ class JournalService
             throw new \RuntimeException('Cannot post: current date is in a closed period');
         }
 
-        $inTransaction = $this->pdo !== null;
+        $inTransaction = $this->pdo !== null && !$this->pdo->inTransaction();
         if ($inTransaction) $this->pdo->beginTransaction();
 
         try {

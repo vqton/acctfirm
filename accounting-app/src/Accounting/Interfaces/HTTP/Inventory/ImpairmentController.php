@@ -2,6 +2,7 @@
 namespace Accounting\Interfaces\HTTP\Inventory;
 
 use Accounting\Domain\Service\InventoryService;
+use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
 
 class ImpairmentController
@@ -24,6 +25,8 @@ class ImpairmentController
 
     public function record(): void
     {
+        Auth::checkCsrf();
+        Auth::requirePermission('inventory', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['item_id'], $data['amount'])) {
             JsonResponse::error('item_id, amount required');
@@ -43,6 +46,8 @@ class ImpairmentController
 
     public function reverse(): void
     {
+        Auth::checkCsrf();
+        Auth::requirePermission('inventory', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['impairment_id'], $data['amount'])) {
             JsonResponse::error('impairment_id, amount required');

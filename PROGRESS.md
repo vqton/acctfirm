@@ -179,23 +179,29 @@ GlService → Ledger entries (date, ref, Dr, Cr, running balance, contra account
 
 ---
 
-## Inventory Module — All 10 phases
+## Inventory Module — Phase 1 Complete (Critical Fixes)
 
-| Phase | Service methods | Tests |
-|---|---|---|
-| P1: Valuation Engine | `calculateWeightedAverage()` | 4 |
-| P2: Goods Receipt | `receiveGoods()` | 9 |
-| P3: Goods Issue / COGS | `issueGoods()` | 6 |
-| P4: Warehouse Transfer | `transferGoods()` | 11 |
-| P5: In Transit (TK 151) | `recordInTransit()`, `receiveFromTransit()` | 10 |
-| P6: Consignment (TK 157) | `consignGoods()`, `sellConsigned()`, `returnConsigned()` | 10 |
-| P7: Physical Count | `adjustPhysicalCount()`, `createCountSession()` | 10 |
-| P8: Impairment (TK 229) | `recordImpairment()`, `reverseImpairment()` | 6 |
-| P9: Promotional | `issuePromotional()` | 4 |
-| P10: Periodic System | `closePeriodicInventory()` | 7 |
-| **Total** | | **77** |
+| Phase | Service methods | Controllers/Tests | Status |
+|---|---|---|---|
+| P1: Valuation Engine | `calculateWeightedAverage()` | 4 tests | ✅ |
+| P2: Goods Receipt | `receiveGoods()` | `ReceiptController`, 9 tests | ✅ **NEW: UI + API** |
+| P3: Goods Issue / COGS | `issueGoods()` | `IssueController`, 6 tests | ✅ **NEW: UI + API** |
+| P4: Warehouse Transfer | `transferGoods()` | `TransferController`, 11 tests | ✅ |
+| P5: In Transit (TK 151) | `recordInTransit()`, `receiveFromTransit()` | `InventoryTransitController`, 10 tests | ✅ |
+| P6: Consignment (TK 157) | `consignGoods()`, `sellConsigned()`, `returnConsigned()` | `ConsignmentController`, 10 tests | ✅ |
+| P7: Physical Count | `adjustPhysicalCount()`, `createCountSession()` | `PhysicalCountController`, 10 tests | ✅ |
+| P8: Impairment (TK 229) | `recordImpairment()`, `reverseImpairment()` | `ImpairmentController`, 6 tests | ✅ |
+| P9: Promotional | `issuePromotional()` | `PromotionalController`, 4 tests | ✅ |
+| P10: Periodic System | `closePeriodicInventory()` | `PeriodicController`, 7 tests | ✅ |
+| **Phase 1.1** | Transaction wrapping | All 16 methods | ✅ `beginTransaction/commit/rollback` |
+| **Phase 1.2** | FIFO cost calc fix | `issueGoods`, `consignGoods`, `issuePromotional`, `adjustPhysicalCount` | ✅ Uses actual layer cost instead of `purchasePrice` |
+| **Phase 1.3** | Receive/Issue UI | `ReceiptController` + `IssueController` + views | ✅ 8 new routes, 2 views |
+| **Phase 1.4** | CSRF + Permission | All 11 inventory POST endpoints | ✅ `checkCsrf()` + `requirePermission()` |
+| **Total tests** | | **73** | ✅ 0 failures |
 
-**Service:** `InventoryService` (500+ lines)
+**Service:** `InventoryService` (800+ lines with transaction wrapping)
+**Controllers (10):** `ItemController`, `ReceiptController`, `IssueController`, `TransferController`, `InventoryTransitController`, `ConsignmentController`, `PhysicalCountController`, `ImpairmentController`, `PromotionalController`, `PeriodicController`
+**Views (9):** items, receipt, issue, transfers, transit, consignment, physical_count, impairment, periodic
 **Inventory Account Mapping:** material/tool/other → 152, product → 155, merchandise → 156
 
 ---
@@ -360,6 +366,12 @@ GlService → Ledger entries (date, ref, Dr, Cr, running balance, contra account
 | Method | Path | Purpose |
 |---|---|---|
 | GET/POST/PUT/DELETE | `/api/items`, `/api/customers`, etc. | 16 master data CRUDs |
+| POST | `/api/inventory/receive` | **NEW** Receive goods into warehouse |
+| GET | `/api/inventory/receipts` | **NEW** List goods receipts |
+| GET | `/api/inventory/receive/items` | **NEW** Items picker for receipt |
+| POST | `/api/inventory/issue` | **NEW** Issue goods from warehouse |
+| GET | `/api/inventory/issues` | **NEW** List goods issues |
+| GET | `/api/inventory/issue/items` | **NEW** Items picker for issue |
 | POST | `/api/transfers` | Warehouse transfer |
 | GET/POST | `/api/inventory-transit` | Goods in transit |
 | POST | `/api/inventory-transit/receive` | Receive from transit |
@@ -421,7 +433,9 @@ GlService → Ledger entries (date, ref, Dr, Cr, running balance, contra account
 | `/thu/so-quy-tien-mat` | Cash book (Sổ quỹ) |
 | `/thu/tam-ung` | Petty cash (Tạm ứng) |
 | `/thu/doi-chieu-ngan-hang` | Bank reconciliation |
-| `/kho/*` | Inventory views (receipt, issue, transfer, count, etc.) |
+| `/kho/nhap-kho` | **NEW** Goods receipt (Nhập kho) |
+| `/kho/xuat-kho` | **NEW** Goods issue (Xuất kho) |
+| `/kho/*` | Inventory views (transfer, count, transit, consignment, etc.) |
 | `/he-thong/nhat-ky-hoat-dong` | Audit log |
 | `/he-thong/quan-ly-ky` | Period management |
 | `/he-thong/nguoi-dung` | User management |
@@ -480,7 +494,7 @@ for f in tests/*.php; do php "$f"; done
 | `config/database.php` | DB credentials (dev/123456) |
 | `src/.../Service/JournalService.php` | Double-entry engine |
 | `src/.../Service/CashService.php` | Cash & bank operations (435 lines) |
-| `src/.../Service/InventoryService.php` | All 10 inventory phases (500+ lines) |
+| `src/.../Service/InventoryService.php` | All 10 inventory phases + transaction wrapping (800+ lines) |
 | `src/.../Service/BankReconciliationService.php` | Reconciliation matching engine |
 | `src/.../Service/PeriodService.php` | Period open/close/closing entries |
 | `src/.../Infrastructure/Helpers.php` | Utility functions (auth, format, etc.) |

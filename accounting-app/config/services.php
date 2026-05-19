@@ -44,6 +44,8 @@ use Accounting\Interfaces\HTTP\Inventory\ItemController;
 use Accounting\Interfaces\HTTP\Inventory\PeriodicController;
 use Accounting\Interfaces\HTTP\Inventory\PhysicalCountController;
 use Accounting\Interfaces\HTTP\Inventory\PromotionalController;
+use Accounting\Interfaces\HTTP\Inventory\ReceiptController;
+use Accounting\Interfaces\HTTP\Inventory\IssueController;
 use Accounting\Interfaces\HTTP\Inventory\TransferController;
 use Accounting\Interfaces\HTTP\Financial\ApController;
 use Accounting\Interfaces\HTTP\Financial\ArController;
@@ -150,6 +152,8 @@ function createContainer(): array
     $roleController = new RoleController($pdo);
     $supplierController = new SupplierController($supplierRepository);
     $taxRateController = new TaxRateController($taxRateRepository);
+    $receiptController = new ReceiptController($inventoryService, $itemRepository, $pdo);
+    $issueController = new IssueController($inventoryService, $itemRepository, $pdo);
     $transferController = new TransferController($inventoryService, $itemRepository, $warehouseRepository, $pdo);
     $uomController = new UomController($uomRepository);
     $userController = new UserController($pdo);
@@ -214,6 +218,8 @@ function createContainer(): array
         'PhysicalCountController' => $physicalCountController,
         'ProjectController' => $projectController,
         'PromotionalController' => $promotionalController,
+        'ReceiptController' => $receiptController,
+        'IssueController' => $issueController,
         'RoleController' => $roleController,
         'SupplierController' => $supplierController,
         'TaxRateController' => $taxRateController,

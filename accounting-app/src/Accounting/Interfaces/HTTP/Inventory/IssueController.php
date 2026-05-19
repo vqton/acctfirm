@@ -3,10 +3,10 @@ namespace Accounting\Interfaces\HTTP\Inventory;
 
 use Accounting\Domain\Service\InventoryService;
 use Accounting\Domain\Repository\ItemRepositoryInterface;
-use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
+use Accounting\Infrastructure\Auth;
 
-class PeriodicController
+class IssueController
 {
     private InventoryService $inventory;
     private ItemRepositoryInterface $itemRepo;
@@ -21,24 +21,32 @@ class PeriodicController
 
     public function list(): void
     {
-        $pdo = $this->getPdo();
-        $stmt = $pdo->query("SELECT p.*, i.code as item_code, i.name as item_name FROM periodic_inventory p JOIN items i ON i.id = p.item_id ORDER BY p.created_at DESC");
+        $pdo = $this->pdo;
+        $stmt = $pdo->query("SELECT t.id, t.description, t.reference, t.status, t.created_at
+            FROM transactions t WHERE t.description LIKE 'Goods issue:%' ORDER BY t.created_at DESC");
         JsonResponse::ok($stmt->fetchAll(\PDO::FETCH_ASSOC));
     }
 
-    public function close(): void
+    public function issue(): void
     {
         Auth::checkCsrf();
         Auth::requirePermission('inventory', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
-        if (!$data || !isset($data['item_id'], $data['closing_qty'], $data['closing_unit_cost'])) {
-            JsonResponse::error('item_id, closing_qty, closing_unit_cost required');
+        if (!$data || !isset($data['item_id'], $data['qty'])) {
+            JsonResponse::error('item_id, qty required');
+            return;
+        }
+        $qty = (float)$data['qty'];
+        if ($qty <= 0) {
+            JsonResponse::error('qty must be positive');
             return;
         }
         try {
-            $result = $this->inventory->closePeriodicInventory(
-                $data['item_id'], (float)$data['closing_qty'], (float)$data['closing_unit_cost'],
-                $data['reference'] ?? uniqid('prd_'), $data['created_by'] ?? 'system'
+            $result = $this->inventory->issueGoods(
+                $data['item_id'], $qty,
+                $data['issue_type'] ?? 'sale',
+                $data['reference'] ?? uniqid('iss_'),
+                $data['created_by'] ?? 'system'
             );
             JsonResponse::ok($result, 201);
         } catch (\InvalidArgumentException $e) {
@@ -46,8 +54,8 @@ class PeriodicController
         }
     }
 
-    private function getPdo(): \PDO
+    public function items(): void
     {
-        return $this->pdo;
+        JsonResponse::ok(array_map(fn($x) => $x->toArray(), $this->itemRepo->findAll()));
     }
 }

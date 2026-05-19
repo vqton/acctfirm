@@ -3,6 +3,7 @@ namespace Accounting\Interfaces\HTTP\Inventory;
 
 use Accounting\Domain\Service\InventoryService;
 use Accounting\Domain\Repository\ItemRepositoryInterface;
+use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
 
 class InventoryTransitController
@@ -28,6 +29,8 @@ class InventoryTransitController
 
     public function record(): void
     {
+        Auth::checkCsrf();
+        Auth::requirePermission('inventory', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['item_id'], $data['qty'], $data['unit_price'])) {
             JsonResponse::error('item_id, qty, unit_price required');
@@ -46,6 +49,8 @@ class InventoryTransitController
 
     public function receive(): void
     {
+        Auth::checkCsrf();
+        Auth::requirePermission('inventory', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['transit_id'], $data['qty'])) {
             JsonResponse::error('transit_id, qty required');
