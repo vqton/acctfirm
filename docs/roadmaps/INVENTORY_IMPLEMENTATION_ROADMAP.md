@@ -96,14 +96,22 @@ Implementation followed a different phasing than originally drafted. Below is th
 | 1381 | Tài sản thiếu chờ xử lý | Asset deficit | ✅ (physical count) |
 | 3381 | Tài sản thừa chờ xử lý | Asset surplus | ✅ (physical count) |
 
+## Completed Enhancements
+
+| Feature | Description | Tests |
+|---|---|---|
+| Auto Weighted Average | `receiveGoods()` auto-calls `calculateAndUpdateUnitCost()` — item.purchasePrice updates after every receipt | ✅ |
+| Batch tracking | `batch_code` + `expiry_date` on cost layers. `receiveGoods()` accepts batch params. `issueFromBatch()` consumes from specific batch. | ✅ 19 enhancement tests |
+| Foreign currency purchase | `receiveGoodsFC()` converts FC to VND at exchange rate, records `fc_transactions` details. Falls back to `exchange_rates` table. | ✅ 19 enhancement tests |
+| Landed cost allocation | Multiple addon costs per receipt. Already worked — sum distributed as `addon_per_unit` across cost layers. | ✅ (existing Test 2) |
+
 ## Forward Plan
 
-| Next | Priority | Notes |
-|---|---|---|
-| Batch/Serial tracking | Medium | Phase 3 of original draft — not yet implemented |
-| Landed cost allocation (multiple add-on costs per receipt) | Low | Current `receiveGoods` accepts `$addonCosts` array |
-| Foreign currency purchase | Low | Requires FX sub-module |
-| Weighted Average (periodic) recalculation on every receipt | Low | Currently FIFO only; user can call `calculateAndUpdateUnitCost` manually |
+All inventory roadmap items complete. Next module candidates:
+- Purchase Order / Sales Order (order-to-cash cycle)
+- Fixed Assets (asset lifecycle)
+- Production (BOM, WIP, finished goods)
+- Tax (VAT, CIT)
 
 ## InventoryService Methods (16 total)
 
@@ -143,4 +151,5 @@ Implementation followed a different phasing than originally drafted. Below is th
 | CustomerReturnTest.php | 4 | ✅ |
 | Tk153Test.php | 7 | ✅ |
 | Tk241Test.php | 6 | ✅ |
-| **Total** | **80** | **✅ 0 failures** |
+| InventoryServiceEnhancementsTest.php | 19 | ✅ |
+| **Total** | **99** | **✅ 0 failures** |
