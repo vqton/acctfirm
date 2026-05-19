@@ -35,10 +35,8 @@ for f in tests/*.php; do php "$f"; done            # Run all tests
 │   │   └── Repository/     PDO* implementations
 │   └── Interfaces/HTTP/  Controllers
 ├── docs/
-│   ├── specs/            10 use case specifications
-│   ├── roadmaps/         7 implementation roadmaps
-│   └── research/         3 supporting docs
-└── tests/                29 files, ~410 tests
+│   └── analysis/         Consolidated business spec + gap analysis
+└── tests/                30 files, ~430 tests
 
 ## Architecture
 
