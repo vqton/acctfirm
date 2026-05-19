@@ -52,9 +52,10 @@ class InventoryService
     }
 
     public function receiveGoods(string $itemId, float $qty, float $unitPrice,
-        array $addonCosts, string $reference, string $createdBy): array
+        array $addonCosts, string $reference, string $createdBy,
+        ?string $batchCode = null, ?string $expiryDate = null): array
     {
-        return $this->wrapInTransaction(function () use ($itemId, $qty, $unitPrice, $addonCosts, $reference, $createdBy) {
+        return $this->wrapInTransaction(function () use ($itemId, $qty, $unitPrice, $addonCosts, $reference, $createdBy, $batchCode, $expiryDate) {
             $item = $this->itemRepo->findById($itemId);
             if (!$item) throw new \InvalidArgumentException("Item not found: {$itemId}");
 
@@ -73,7 +74,8 @@ class InventoryService
             $item->setStockQty($item->getStockQty() + $qty);
             $this->itemRepo->save($item);
 
-            $this->saveCostLayer($itemId, $qty, $unitPrice, $totalAddon / max($qty, 1), null);
+            $this->saveCostLayer($itemId, $qty, $unitPrice, $totalAddon / max($qty, 1), null, $batchCode, $expiryDate);
+            $this->calculateAndUpdateUnitCost($itemId);
 
             return ['transaction_id' => $txn->getId(), 'total_cost' => $totalCost];
         });
@@ -530,6 +532,102 @@ class InventoryService
         });
     }
 
+    public function issueFromBatch(string $itemId, float $qty, string $batchCode, string $issueType,
+        string $reference, string $createdBy): array
+    {
+        return $this->wrapInTransaction(function () use ($itemId, $qty, $batchCode, $issueType, $reference, $createdBy) {
+            $item = $this->itemRepo->findById($itemId);
+            if (!$item) throw new \InvalidArgumentException("Item not found: {$itemId}");
+
+            $pdo = $this->getPdo();
+            $stmt = $pdo->prepare("SELECT COALESCE(SUM(qty),0) FROM inventory_cost_layers WHERE item_id = ? AND batch_code = ? AND qty > 0");
+            $stmt->execute([$itemId, $batchCode]);
+            $available = (float)$stmt->fetchColumn();
+            if ($available < $qty) {
+                throw new \InvalidArgumentException("Insufficient stock in batch {$batchCode}: have {$available}, need {$qty}");
+            }
+
+            $stmt = $pdo->prepare("SELECT id, qty, unit_cost, addon_per_unit FROM inventory_cost_layers WHERE item_id = ? AND batch_code = ? AND qty > 0 ORDER BY created_at ASC");
+            $stmt->execute([$itemId, $batchCode]);
+            $remaining = $qty;
+            $totalCost = 0.0;
+            while (($row = $stmt->fetch(\PDO::FETCH_ASSOC)) && $remaining > 0) {
+                $consume = min($row['qty'], $remaining);
+                $layerUnitCost = (float)$row['unit_cost'] + (float)$row['addon_per_unit'];
+                $totalCost += $consume * $layerUnitCost;
+                $update = $pdo->prepare("UPDATE inventory_cost_layers SET qty = qty - ? WHERE id = ?");
+                $update->execute([$consume, $row['id']]);
+                $remaining -= $consume;
+            }
+
+            $inventoryCode = $this->inventoryAccountMap[$item->getItemType()] ?? '152';
+            $expenseCode = match($issueType) {
+                'production' => '154',
+                'construction' => '241',
+                'sale' => '632',
+                default => throw new \InvalidArgumentException("Invalid issue type: {$issueType}"),
+            };
+
+            $txn = $this->journal->postEntry("Goods issue: {$item->getName()}", $reference, [
+                ['account_code' => $expenseCode, 'amount' => $totalCost, 'is_debit' => true],
+                ['account_code' => $inventoryCode, 'amount' => $totalCost, 'is_debit' => false],
+            ], $createdBy, $issueType === 'construction');
+
+            $item->setStockQty($item->getStockQty() - $qty);
+            $this->itemRepo->save($item);
+
+            return ['transaction_id' => $txn->getId(), 'total_cost' => $totalCost, 'qty' => $qty, 'batch_code' => $batchCode];
+        });
+    }
+
+    public function getExchangeRate(string $currencyCode): float
+    {
+        $pdo = $this->getPdo();
+        $stmt = $pdo->prepare("SELECT rate FROM exchange_rates WHERE currency_code = ? ORDER BY rate_date DESC LIMIT 1");
+        $stmt->execute([$currencyCode]);
+        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+        if (!$row) throw new \InvalidArgumentException("Exchange rate not found for: {$currencyCode}");
+        return (float)$row['rate'];
+    }
+
+    public function receiveGoodsFC(string $itemId, float $qty, float $unitPriceFC,
+        array $addonCosts, string $currencyCode, ?float $exchangeRate,
+        string $reference, string $createdBy): array
+    {
+        return $this->wrapInTransaction(function () use ($itemId, $qty, $unitPriceFC, $addonCosts, $currencyCode, $exchangeRate, $reference, $createdBy) {
+            $item = $this->itemRepo->findById($itemId);
+            if (!$item) throw new \InvalidArgumentException("Item not found: {$itemId}");
+
+            $rate = $exchangeRate ?? $this->getExchangeRate($currencyCode);
+            $inventoryCode = $this->inventoryAccountMap[$item->getItemType()] ?? '152';
+
+            $itemCostFC = $qty * $unitPriceFC;
+            $totalAddonFC = array_sum(array_column($addonCosts, 'amount'));
+            $totalFC = $itemCostFC + $totalAddonFC;
+            $totalVND = $totalFC * $rate;
+            $unitPriceVND = $unitPriceFC * $rate;
+
+            $lines = [
+                ['account_code' => $inventoryCode, 'amount' => $totalVND, 'is_debit' => true],
+                ['account_code' => '331', 'amount' => $totalVND, 'is_debit' => false],
+            ];
+
+            $txn = $this->journal->postEntry("FC receipt: {$item->getName()}", $reference, $lines, $createdBy);
+
+            $pdo = $this->getPdo();
+            $pdo->prepare("INSERT INTO fc_transactions (transaction_id, account_code, currency_code, fc_amount, exchange_rate, vnd_amount, type, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+                ->execute([$txn->getId(), $inventoryCode, $currencyCode, $totalFC, $rate, $totalVND, 'receipt', "FC purchase {$reference}"]);
+
+            $item->setStockQty($item->getStockQty() + $qty);
+            $this->itemRepo->save($item);
+
+            $this->saveCostLayer($itemId, $qty, $unitPriceVND, 0, null);
+            $this->calculateAndUpdateUnitCost($itemId);
+
+            return ['transaction_id' => $txn->getId(), 'total_cost' => $totalVND, 'fc_total' => $totalFC, 'rate' => $rate];
+        });
+    }
+
     public function returnFromCustomer(string $itemId, float $qty, string $reference, string $createdBy): array
     {
         return $this->wrapInTransaction(function () use ($itemId, $qty, $reference, $createdBy) {
@@ -626,13 +724,14 @@ class InventoryService
         }
     }
 
-    private function saveCostLayer(string $itemId, float $qty, float $unitCost, float $addonPerUnit, ?string $warehouseId): void
+    private function saveCostLayer(string $itemId, float $qty, float $unitCost, float $addonPerUnit, ?string $warehouseId,
+        ?string $batchCode = null, ?string $expiryDate = null): void
     {
         $pdo = $this->getPdo();
         $stmt = $pdo->prepare(
-            "INSERT INTO inventory_cost_layers (id, item_id, warehouse_id, qty, unit_cost, addon_per_unit, created_at) VALUES (?, ?, ?, ?, ?, ?, NOW())"
+            "INSERT INTO inventory_cost_layers (id, item_id, warehouse_id, batch_code, expiry_date, qty, unit_cost, addon_per_unit, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())"
         );
-        $stmt->execute([uniqid('cst_'), $itemId, $warehouseId, $qty, $unitCost, $addonPerUnit]);
+        $stmt->execute([uniqid('cst_'), $itemId, $warehouseId, $batchCode, $expiryDate, $qty, $unitCost, $addonPerUnit]);
     }
 
     private function consumeCostLayers(string $itemId, float $qty, ?string $warehouseId): array
