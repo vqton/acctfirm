@@ -4,6 +4,45 @@
 
 Vietnamese enterprise accounting webapp. PHP 8.4, no framework, no Composer. MySQL/MariaDB via PDO. Bootstrap 5 + jQuery for UI. API returns JSON. Frontend consumes API via jQuery AJAX.
 
+## Golden Rules
+
+### Rule #1: Never Code Without a Spec
+
+**Do NOT implement any feature unless the use case specification has enough detail to build it correctly.**
+
+If docs are insufficient → **stop**, tell the user exactly what's missing and why, and wait for complete use case docs before writing code.
+
+### Rule #2: Detect Vague Early
+
+"Enough detail" means: given only this doc, an accountant who has never seen the codebase could verify the output is correct.
+
+If you find yourself thinking "I think it should work like..." or "probably" or "assume" — that's vague. Stop and escalate.
+
+### Rule #3: Use the Right Skill for the Gap
+
+| If the gap is… | Use this skill | To produce… |
+|---|---|---|
+| No spec exists at all | `spec-driven-development` | Acceptance criteria document |
+| Spec exists but vague/ambiguous | `interview-me` | Clarified, precise requirements |
+| Multiple conflicting interpretations | `idea-refine` | Sharpened, single-direction spec |
+| Spec is clear but unfamiliar domain | `doubt-driven-development` | Adversarial review of assumptions |
+| Spec is clear and familiar | `karpathy-guidelines` | Surgical implementation |
+
+### Rule #4: One Feature, One Verifiable End State
+
+Every implementation must answer: "How will we prove this works?"
+
+Minimum: a passing test that covers the happy path + at least one failure case.
+Better: the test encodes the exact accounting entry (Dr/Cr, accounts, amounts) from the spec.
+
+If you cannot write the test, you do not understand the spec well enough to code.
+
+### Rule #5: Accounting Has No "Close Enough"
+
+Wrong account code = wrong FS line item = wrong tax return = regulatory penalty.
+
+When in doubt about account mapping, journal entry structure, or tax treatment → **stop and get written clarification**. Do not infer. Do not guess. Do not "follow the same pattern as X" unless you can prove X is semantically identical.
+
 ## Quick Commands
 
 ```sh
@@ -36,7 +75,8 @@ for f in tests/*.php; do php "$f"; done            # Run all tests
 │   └── Interfaces/HTTP/  Controllers
 ├── docs/
 │   └── analysis/         Consolidated business spec + gap analysis
-└── tests/                30 files, ~430 tests
+├── public/               index.php
+└── tests/                31 files, ~450 tests
 
 ## Architecture
 
@@ -181,7 +221,8 @@ results();
 | Cash & Bank | `CashService` | ~100 | ✅ 9 UCs |
 | Inventory (13 files) | `InventoryService` | 99 | ✅ |
 | Period Engine | `PeriodService` | 18 | ✅ |
-| Financial Statements (BC 01, BC 02) | `FsService` | 18 | ✅ |
+| Financial Statements (BC 01, BC 02, BC 03) | `FsService` | 38 | ✅ |
+| Cash Flow Statement (BC 03) | `FsService::generateBC03()` | 20 | ✅ |
 | Accounts Payable (TK 331) | `ApService` | 22 | ✅ |
 | Accounts Receivable (TK 131) | `ArService` | 19 | ✅ |
 | Bank Reconciliation | `BankReconciliationService` | 24 | ✅ |
@@ -192,7 +233,7 @@ results();
 | General Ledger (Sổ Cái) | `GlService` | 12 | ✅ |
 | Action Journal | `ActionJournal` | — | ✅ |
 
-**Total:** 30 test files, ~430 tests, 0 failures.
+**Total:** 31 test files, ~450 tests, 0 failures.
 
 ## Skill Selection
 

@@ -62,10 +62,11 @@ index.php → autoloader → config/services.php (DI) → config/routes.php
 |---|---|---|---|
 | Balance Sheet | BC 01 (B01-DN) | Point-in-time | ✅ Implemented |
 | Income Statement | BC 02 (B02-DN) | Period | ✅ Implemented |
-| Cash Flow Statement | BC 03 (B03-DN) | Period | ❌ Not implemented |
+| Cash Flow Statement | BC 03 (B03-DN) | Period | ✅ Implemented |
 | Notes to FS | BC 09 (B09-DN) | Period | ❌ Not implemented |
 
 BC 01 formula: `280 (Total Assets) = 440 (Total Liabilities + Equity)`. 8 account classes mapped to mã số line items. BC 02 formula chain: `01 Revenue → 10 Net → 11 COGS → 20 Gross → 30 Operating → 50 Pre-tax → 60 Net`.
+BC 03 (Cash Flow, indirect method): operating section from BC 02 profit + working capital deltas; investing/financing sections from balance sheet account deltas. Validation: `MS70 = MS50+MS60+MS61` and `MS70 = BC01 MS110`.
 
 ### 2.3 State Machines
 
@@ -93,7 +94,8 @@ BC 01 formula: `280 (Total Assets) = 440 (Total Liabilities + Equity)`. 8 accoun
 | AP (TK 331) | ✅ Complete | 22 | ApService — 10 UCs per spec |
 | AR (TK 131) | ✅ Complete | 19 | ArService — 10 UCs per spec |
 | FS — BC 01/02 | ✅ Complete | 18 | FsService |
-| FS — BC 03/09 | ❌ Missing | 0 | Not implemented |
+| FS — BC 03 | ✅ Complete | 20 | Bc03Test — indirect method, 3 activity sections, BC 01 cross-validation |
+| FS — BC 09 | ❌ Missing | 0 | Not implemented |
 | Period Engine | ✅ Complete | 18 | PeriodService — open/close/lock |
 | GL (Sổ Cái) | ✅ Complete | 12 | GlService — ledger with running balance |
 | RBAC | ✅ Complete | — | AuthController, Auth helper, roles/permissions tables |
