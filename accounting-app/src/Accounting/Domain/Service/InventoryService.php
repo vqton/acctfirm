@@ -530,6 +530,36 @@ class InventoryService
         });
     }
 
+    public function returnFromCustomer(string $itemId, float $qty, string $reference, string $createdBy): array
+    {
+        return $this->wrapInTransaction(function () use ($itemId, $qty, $reference, $createdBy) {
+            $item = $this->itemRepo->findById($itemId);
+            if (!$item) throw new \InvalidArgumentException("Item not found: {$itemId}");
+            if ($qty <= 0) throw new \InvalidArgumentException("Qty must be positive");
+
+            $inventoryCode = $this->inventoryAccountMap[$item->getItemType()] ?? '152';
+
+            $pdo = $this->getPdo();
+            $stmt = $pdo->prepare("SELECT COALESCE(SUM(qty),0) as qty, COALESCE(SUM(qty * unit_cost + qty * addon_per_unit),0) as val FROM inventory_cost_layers WHERE item_id = ?");
+            $stmt->execute([$itemId]);
+            $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+            $avgUnitCost = ($row['qty'] > 0) ? $row['val'] / $row['qty'] : ($item->getPurchasePrice() ?: 0);
+            $totalCost = $qty * $avgUnitCost;
+
+            $txn = $this->journal->postEntry("Customer return: {$item->getName()}", $reference, [
+                ['account_code' => $inventoryCode, 'amount' => $totalCost, 'is_debit' => true],
+                ['account_code' => '632', 'amount' => $totalCost, 'is_debit' => false],
+            ], $createdBy);
+
+            $item->setStockQty($item->getStockQty() + $qty);
+            $this->itemRepo->save($item);
+
+            $this->saveCostLayer($itemId, $qty, $avgUnitCost, 0, null);
+
+            return ['transaction_id' => $txn->getId(), 'total_cost' => $totalCost, 'qty' => $qty];
+        });
+    }
+
     public function closePeriodicInventory(string $itemId, float $closingQty, float $closingUnitCost, string $reference, string $createdBy): array
     {
         return $this->wrapInTransaction(function () use ($itemId, $closingQty, $closingUnitCost, $reference, $createdBy) {

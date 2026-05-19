@@ -9,6 +9,7 @@ spl_autoload_register(function ($class) {
 });
 
 use Accounting\Domain\Service\InventoryService;
+use Accounting\Domain\Service\JournalService;
 use Accounting\Infrastructure\Persistence\PDOAccountRepository;
 use Accounting\Infrastructure\Persistence\PDOTransactionRepository;
 use Accounting\Infrastructure\Persistence\PDOItemRepository;
@@ -21,8 +22,9 @@ $accountRepo = new PDOAccountRepository($pdo);
 $txnRepo = new PDOTransactionRepository($pdo);
 $itemRepo = new PDOItemRepository($pdo);
 $warehouseRepo = new PDOWarehouseRepository($pdo);
+$journal = new JournalService($accountRepo, $txnRepo, $pdo);
 
-$svc = new InventoryService($accountRepo, $txnRepo, $itemRepo, $warehouseRepo, $pdo);
+$svc = new InventoryService($accountRepo, $txnRepo, $itemRepo, $warehouseRepo, $journal, $pdo);
 
 $failed = 0; $total = 0;
 function assertEq($a, $b, $m) { global $total, $failed;

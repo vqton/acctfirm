@@ -1,4 +1,5 @@
 <?php
+// Test: Customer Returns — restore inventory and reverse COGS
 spl_autoload_register(function ($class) {
     $prefix = 'Accounting\\';
     $baseDir = __DIR__ . '/../src/Accounting/';
@@ -40,29 +41,33 @@ if (!$item) { echo "FAIL: VT001 not found\n"; exit(1); }
 $item->setStockQty(0);
 $itemRepo->save($item);
 
-// Receive goods
-$svc->receiveGoods($item->getId(), 100, 50000, [], 'PO-PROMO-001', 'tester');
+// Receive 100 units at 50,000
+$svc->receiveGoods($item->getId(), 100, 50000, [], 'PO-RET-001', 'tester');
+// Issue 30 units as sale (COGS recorded)
+$svc->issueGoods($item->getId(), 30, 'sale', 'SALE-RET-001', 'tester');
 
-echo "\n=== Test 1: Issue promotional goods ===\n";
-$result = $svc->issuePromotional($item->getId(), 20, 'PROMO-TET-2026', 'tester');
+echo "\n=== Test 1: Return goods from customer ===\n";
+$result = $svc->returnFromCustomer($item->getId(), 10, 'RET-001', 'tester');
 
+// Stock should be 80 (100 - 30 + 10)
 $itemAfter = $itemRepo->findById($item->getId());
-assertEq(80, $itemAfter->getStockQty(), 'Stock decreased by 20 (100 → 80)');
+assertEq(80, $itemAfter->getStockQty(), 'Stock restored to 80 (100-30+10)');
 
-// Dr 641 (selling expense) — Cr 152 = 20 × 50000
-$sellingExp = $accountRepo->findByCode('641')->getBalance();
+// COGS reversed by 10×50K = 500K
+$cogs = $accountRepo->findByCode('632')->getBalance();
+assertEq(1000000, $cogs, 'COGS (632) = 1,000,000 (30×50K - 10×50K)');
+
+// Inventory increased by 10×50K = 500K
 $inv = $accountRepo->findByCode('152')->getBalance();
-$expected = 20 * 50000;
-assertEq($expected, $sellingExp, "Selling expense (641) increased by {$expected}");
-assertEq(80 * 50000, $inv, "Inventory (152) = 4,000,000");
+assertEq(4000000, $inv, 'Inventory (152) = 4,000,000 (70×50K remaining + 10×50K returned)');
 
-echo "\n=== Test 2: Insufficient stock rejection ===\n";
+echo "\n=== Test 2: Return non-existent item ===\n";
 try {
-    $svc->issuePromotional($item->getId(), 999, 'BAD-PROMO', 'tester');
-    echo "FAIL: Insufficient stock not rejected\n";
+    $svc->returnFromCustomer('nonexistent', 1, 'BAD-RET', 'tester');
+    echo "FAIL: Non-existent item not rejected\n";
     $failed++;
 } catch (\InvalidArgumentException $e) {
-    assertTrue(true, 'Insufficient stock rejected');
+    assertTrue(true, 'Non-existent item rejected');
 }
 
 echo "\n=== Results: {$total} tests, {$failed} failed ===\n";

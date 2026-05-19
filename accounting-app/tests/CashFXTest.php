@@ -7,6 +7,7 @@ spl_autoload_register(function ($class) {
 });
 
 use Accounting\Domain\Service\CashService;
+use Accounting\Domain\Service\JournalService;
 use Accounting\Infrastructure\Persistence\PDOAccountRepository;
 use Accounting\Infrastructure\Persistence\PDOTransactionRepository;
 
@@ -15,7 +16,8 @@ $pdo = new PDO("mysql:host=127.0.0.1;dbname=accounting_db;charset=utf8mb4","dev"
 
 $accountRepo = new PDOAccountRepository($pdo);
 $txnRepo = new PDOTransactionRepository($pdo);
-$cash = new CashService($accountRepo, $txnRepo, $pdo);
+$journal = new JournalService($accountRepo, $txnRepo, $pdo);
+$cash = new CashService($accountRepo, $txnRepo, $journal, $pdo);
 
 $failed = 0; $total = 0;
 function assertEq($a, $b, $m) { global $total, $failed;

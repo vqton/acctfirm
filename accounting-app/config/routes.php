@@ -278,6 +278,12 @@ function defineRoutes(Router $router): void
     $router->get('/api/inventory/issues', function() use ($c) { $c['IssueController']->list(); });
     $router->get('/api/inventory/issue/items', function() use ($c) { $c['IssueController']->items(); });
 
+    // Customer return
+    $router->get('/kho/hang-ban-tra-lai', function() { require __DIR__ . '/../public/views/customer_return.php'; });
+    $router->post('/api/inventory/customer-return', function() use ($c) { $c['CustomerReturnController']->return(); });
+    $router->get('/api/inventory/customer-returns', function() use ($c) { $c['CustomerReturnController']->list(); });
+    $router->get('/api/inventory/customer-return/items', function() use ($c) { $c['CustomerReturnController']->items(); });
+
     // Transfer
     $router->get('/kho/dieu-chuyen', function() { require __DIR__ . '/../public/views/transfers.php'; });
 

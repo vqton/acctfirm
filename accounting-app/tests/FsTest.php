@@ -78,7 +78,7 @@ $journal->postEntry('Test expense', 'FS-EXP-001', [
 ], 'tester');
 
 // Run closing entries so BC 01 shows retained earnings
-$periodSvc = new Accounting\Domain\Service\PeriodService($pdo, $accountRepo, $txnRepo);
+$periodSvc = new Accounting\Domain\Service\PeriodService($pdo, $accountRepo, $txnRepo, $journal);
 $periodSvc->executeClosingEntries('tester');
 
 $bc01b = $fs->generateBC01('2026');

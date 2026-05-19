@@ -1,11 +1,11 @@
-<?php $title = 'Xuất kho'; $activeMenu = 'issue'; ob_start(); ?>
+<?php $title = 'Hàng bán trả lại'; $activeMenu = 'customer_return'; ob_start(); ?>
 <div class="toolbar">
-    <h5>Xuất kho</h5>
+    <h5>Hàng bán trả lại</h5>
     <div>
         <select class="form-select form-select-sm d-inline-block w-auto me-2" id="filterItem">
             <option value="">-- Tất cả vật tư --</option>
         </select>
-        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#issueModal"><i class="bi bi-plus-lg"></i> Tạo phiếu xuất</button>
+        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#returnModal"><i class="bi bi-plus-lg"></i> Nhập hàng trả lại</button>
     </div>
 </div>
 
@@ -25,12 +25,12 @@
     </table>
 </div>
 
-<!-- Issue Modal -->
-<div class="modal fade" id="issueModal" tabindex="-1">
+<!-- Return Modal -->
+<div class="modal fade" id="returnModal" tabindex="-1">
 <div class="modal-dialog">
 <div class="modal-content">
-<form id="issueForm">
-<div class="modal-header"><h5 class="modal-title">Phiếu xuất kho</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+<form id="returnForm">
+<div class="modal-header"><h5 class="modal-title">Nhập hàng bán trả lại</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
 <div class="modal-body">
     <div class="mb-3">
         <label>Vật tư / Hàng hóa</label>
@@ -41,21 +41,13 @@
         <input type="number" class="form-control" id="qty" step="0.01" min="0.01" required>
     </div>
     <div class="mb-3">
-        <label>Loại xuất</label>
-        <select class="form-select" id="issueType">
-            <option value="sale">Bán hàng (giá vốn)</option>
-            <option value="production">Sản xuất (chuyển WIP)</option>
-            <option value="construction">XDCB (TK 241)</option>
-        </select>
-    </div>
-    <div class="mb-3">
         <label>Số chứng từ</label>
-        <input type="text" class="form-control" id="reference" placeholder="XK-2026-...">
+        <input type="text" class="form-control" id="reference" placeholder="TRA-2026-...">
     </div>
 </div>
 <div class="modal-footer">
     <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Hủy</button>
-    <button type="submit" class="btn btn-sm btn-primary">Lưu & Xuất kho</button>
+    <button type="submit" class="btn btn-sm btn-primary">Lưu & Nhập lại</button>
 </div>
 </form>
 </div></div>
@@ -63,7 +55,7 @@
 
 <script>
 function loadData() {
-    $.get('/api/inventory/issues', function(data) {
+    $.get('/api/inventory/customer-returns', function(data) {
         var tbody = $('#dataBody'), search = $('#searchInput').val().toLowerCase();
         tbody.empty();
         var filtered = data.filter(function(r) {
@@ -71,7 +63,7 @@ function loadData() {
         });
         $('#recordCount').text(filtered.length + ' bản ghi');
         if (filtered.length === 0) {
-            tbody.append('<tr><td colspan="4" class="text-center text-muted py-4">Chưa có phiếu xuất nào</td></tr>');
+            tbody.append('<tr><td colspan="4" class="text-center text-muted py-4">Chưa có phiếu trả lại nào</td></tr>');
             return;
         }
         filtered.forEach(function(r) {
@@ -80,35 +72,34 @@ function loadData() {
     });
 }
 
-$.get('/api/inventory/issue/items', function(items) {
+$.get('/api/inventory/customer-return/items', function(items) {
     items.forEach(function(it) {
         $('#itemId').append('<option value="' + esc(it.id) + '">' + esc(it.code) + ' - ' + esc(it.name) + '</option>');
     });
 });
 
-$('#issueForm').submit(function(e) {
+$('#returnForm').submit(function(e) {
     e.preventDefault();
     var data = {
         item_id: $('#itemId').val(),
         qty: parseFloat($('#qty').val()),
-        issue_type: $('#issueType').val(),
         reference: $('#reference').val() || undefined
     };
     if (!data.item_id) { showToast('Vui lòng chọn vật tư', 'error'); return; }
     if (!data.qty || data.qty <= 0) { showToast('Số lượng phải lớn hơn 0', 'error'); return; }
     $.ajax({
-        url: '/api/inventory/issue',
+        url: '/api/inventory/customer-return',
         method: 'POST',
         contentType: 'application/json',
         data: JSON.stringify(data),
         success: function() {
-            $('#issueModal').modal('hide');
-            $('#issueForm')[0].reset();
-            showToast('Xuất kho thành công', 'success');
+            $('#returnModal').modal('hide');
+            $('#returnForm')[0].reset();
+            showToast('Nhập hàng trả lại thành công', 'success');
             loadData();
         },
         error: function(xhr) {
-            var msg = 'Lỗi xuất kho';
+            var msg = 'Lỗi xử lý';
             try { msg = JSON.parse(xhr.responseText).error; } catch(e) {}
             showToast(msg, 'error');
         }
