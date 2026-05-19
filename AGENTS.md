@@ -143,7 +143,7 @@ JsonResponse::error($msg, $code); // same with ['error' => $msg] structure
 | **Login page in layout** | Login page renders inside sidebar | `login.php` | ✅ Standalone HTML, no layout inclusion |
 | **Logout session persist** | Session file not destroyed after logout | `index.php`, `AuthController`, `layout.php` | ✅ session_write_close removed, manual unlink, form POST instead of AJAX |
 | ~~Root path publicly accessible~~ | ~~`/` in `$publicPaths` allows unauthenticated access to dashboard~~ | ~~index.php~~ | ✅ `/` removed from `$publicPaths` → redirects to `/dang-nhap` |
-| **No session GC / timeout** | `session.gc_probability=0` → old session files persist forever; browser PHPSESSID cookie restores old admin session in new tabs | Server PHP config + no code timeout | ⚠️ Needs `session_set_cookie_params()` + inactivity timeout check |
+| ~~No session GC / timeout~~ | ~~`session.gc_probability=0` → old session files persist forever; browser PHPSESSID cookie restores old admin session in new tabs~~ | ~~SessionMiddleware.php, AuthController.php~~ | ✅ `session_set_cookie_params(httpOnly, SameSite=Lax)` + inactivity timeout (8h) + `SessionMiddleware::destroy()` extracted |
 
 ## To Add a New Entity
 

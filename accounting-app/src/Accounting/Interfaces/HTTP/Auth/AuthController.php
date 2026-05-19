@@ -3,6 +3,7 @@ namespace Accounting\Interfaces\HTTP\Auth;
 
 use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
+use Accounting\Infrastructure\SessionMiddleware;
 
 class AuthController
 {
@@ -82,15 +83,10 @@ class AuthController
     {
         $oldSid = session_id();
         $savePath = session_save_path() ?: sys_get_temp_dir();
-        $_SESSION = [];
-        session_destroy();
+        SessionMiddleware::destroy();
         $oldFile = $savePath . '/sess_' . $oldSid;
         if (file_exists($oldFile)) {
             @unlink($oldFile);
-        }
-        if (ini_get('session.use_cookies')) {
-            $p = session_get_cookie_params();
-            setcookie(session_name(), '', time() - 42000, $p['path'], $p['domain'], $p['secure'], $p['httponly']);
         }
         header('Location: /dang-nhap', true, 302);
         exit;
