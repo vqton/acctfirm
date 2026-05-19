@@ -94,14 +94,19 @@ class InventoryService
             $inventoryCode = $this->inventoryAccountMap[$item->getItemType()] ?? '152';
             $costResult = $this->consumeCostLayers($itemId, $qty, null);
             $totalCost = $costResult['total_cost'];
-            $expenseCode = ($issueType === 'production') ? '154' : '632';
+            $expenseCode = match($issueType) {
+                'production' => '154',
+                'construction' => '241',
+                'sale' => '632',
+                default => throw new \InvalidArgumentException("Invalid issue type: {$issueType}"),
+            };
 
             $lines = [
                 ['account_code' => $expenseCode, 'amount' => $totalCost, 'is_debit' => true],
                 ['account_code' => $inventoryCode, 'amount' => $totalCost, 'is_debit' => false],
             ];
 
-            $txn = $this->journal->postEntry("Goods issue: {$item->getName()}", $reference, $lines, $createdBy);
+            $txn = $this->journal->postEntry("Goods issue: {$item->getName()}", $reference, $lines, $createdBy, $issueType === 'construction');
 
             $item->setStockQty($item->getStockQty() - $qty);
             $this->itemRepo->save($item);
