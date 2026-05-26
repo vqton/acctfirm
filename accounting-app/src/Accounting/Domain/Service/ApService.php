@@ -51,44 +51,38 @@ class ApService
     //
     public function recordInvoice(string $supplierId, string $invoiceNumber, string $invoiceDate, string $dueDate, float $netAmount, float $vatAmount, float $vatRate, string $description, string $inventoryAccount, string $createdBy, float $vatRatePct = null): array
     {
-        $supplier = $this->supplierRepo->findById($supplierId);
-        if (!$supplier) throw new \InvalidArgumentException("Supplier not found: {$supplierId}");
+        $this->pdo->beginTransaction();
+        try {
+            $supplier = $this->supplierRepo->findById($supplierId);
+            if (!$supplier) throw new \InvalidArgumentException("Supplier not found: {$supplierId}");
 
-        $totalAmount = $netAmount + $vatAmount;
-        $vatRatePct = $vatRatePct ?? $vatRate;
+            $totalAmount = $netAmount + $vatAmount;
+            $vatRatePct = $vatRatePct ?? $vatRate;
 
-        // GIAO DỊCH: Multi-step write — journal post + INSERT invoice + UPDATE supplier.
-        // KHÔNG wrap trong transaction → nếu INSERT hoặc UPDATE thất bại sau khi postEntry thành công,
-        // GL đã ghi nhận bút toán nhưng sub-ledger AP không có hóa đơn → số dư 331 lệch.
-        //
-        // THUẾ: VAT 1331 chỉ được khấu trừ nếu có hóa đơn đỏ hợp lệ (TT 78/2021/TT-BTC).
-        // Nhập sai VAT → sai tờ khai GTGT tháng/quý → phạt chậm nộp + thiếu thuế.
-        //
-        // Post journal entry: Dr Inventory — Dr 133 — Cr 331
-        $lines = [['account_code' => $inventoryAccount, 'amount' => $netAmount, 'is_debit' => true]];
-        if ($vatAmount > 0) {
-            $lines[] = ['account_code' => '1331', 'amount' => $vatAmount, 'is_debit' => true];
-        }
-        $lines[] = ['account_code' => '331', 'amount' => $totalAmount, 'is_debit' => false];
+            $lines = [['account_code' => $inventoryAccount, 'amount' => $netAmount, 'is_debit' => true]];
+            if ($vatAmount > 0) {
+                $lines[] = ['account_code' => '1331', 'amount' => $vatAmount, 'is_debit' => true];
+            }
+            $lines[] = ['account_code' => '331', 'amount' => $totalAmount, 'is_debit' => false];
 
-        $txn = $this->journal->postEntry("AP invoice: {$description}", "INV-{$invoiceNumber}", $lines, $createdBy);
+            $txn = $this->journal->postEntry("AP invoice: {$description}", "INV-{$invoiceNumber}", $lines, $createdBy);
 
-        // Create invoice record
-        $stmt = $this->pdo->prepare(
-            'INSERT INTO ap_invoices (supplier_id, invoice_number, invoice_date, due_date, gross_amount, net_amount, vat_amount, vat_rate, balance, status, description, created_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-        );
-        $stmt->execute([$supplierId, $invoiceNumber, $invoiceDate, $dueDate, $totalAmount, $netAmount, $vatAmount, $vatRatePct, $totalAmount, 'unpaid', $description, $createdBy]);
-        $invoiceId = (int)$this->pdo->lastInsertId();
+            $stmt = $this->pdo->prepare(
+                'INSERT INTO ap_invoices (supplier_id, invoice_number, invoice_date, due_date, gross_amount, net_amount, vat_amount, vat_rate, balance, status, description, created_by)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            );
+            $stmt->execute([$supplierId, $invoiceNumber, $invoiceDate, $dueDate, $totalAmount, $netAmount, $vatAmount, $vatRatePct, $totalAmount, 'unpaid', $description, $createdBy]);
+            $invoiceId = (int)$this->pdo->lastInsertId();
 
-        // Update supplier balance
-        $supplier->setBalance($supplier->getBalance() + $totalAmount);
-        $this->supplierRepo->save($supplier);
+            $supplier->setBalance($supplier->getBalance() + $totalAmount);
+            $this->supplierRepo->save($supplier);
 
-        $this->auditLogger?->log('ap.invoice', 'ap_invoice', (string)$invoiceId, null,
-            ['supplier' => $supplierId, 'amount' => $totalAmount, 'invoice' => $invoiceNumber], $createdBy);
+            $this->auditLogger?->log('ap.invoice', 'ap_invoice', (string)$invoiceId, null,
+                ['supplier' => $supplierId, 'amount' => $totalAmount, 'invoice' => $invoiceNumber], $createdBy);
 
-        return ['invoice_id' => $invoiceId, 'transaction_id' => $txn->getId(), 'amount' => $totalAmount];
+            $this->pdo->commit();
+            return ['invoice_id' => $invoiceId, 'transaction_id' => $txn->getId(), 'amount' => $totalAmount];
+        } catch (\Throwable $e) { $this->pdo->rollBack(); throw $e; }
     }
 
     // ── Payment ──
@@ -101,50 +95,47 @@ class ApService
     //
     public function recordPayment(int $invoiceId, float $amount, string $createdBy): array
     {
-        // RỦI RO DOUBLE PAYMENT: Không có SELECT FOR UPDATE trên ap_invoices.
-        // Nếu 2 request đến đồng thời: cả 2 đều đọc balance chưa thay đổi → cả 2 đều cho phép thanh toán
-        // → thanh toán vượt quá số dư hóa đơn (overpayment).
-        // Giải pháp: Bắt đầu PDO transaction, SELECT ... FOR UPDATE, sau đó mới đọc balance.
-        //
-        // THANH TOÁN TỪNG PHẦN: Method hỗ trợ partial payment (thanh toán 1 phần).
-        // Khoản thanh toán bị cắt tại min(amount, balance) — không báo lỗi nếu amount > balance.
-        // Rủi ro: Người dùng không biết chỉ thanh toán 1 phần → tưởng đã tất toán → aging sai.
-        // Cần warning/log khi amount bị cắt.
-        //
-        // ẢNH HƯỞNG BCTC: Giảm số dư 331 (BC01 MS 310), giảm tiền 111/112 (BC01 MS 110/111).
-        // Không ảnh hưởng BC02 (P&L) vì thanh toán công nợ không phải chi phí.
-        //
-        $invoice = $this->getInvoice($invoiceId);
-        if ($invoice['status'] === 'paid') throw new \InvalidArgumentException("Invoice already paid");
+        $this->pdo->beginTransaction();
+        try {
+            // SELECT FOR UPDATE: Khóa hàng ap_invoices để chống double payment dưới concurrent.
+            // Nếu 2 request đến cùng lúc, request thứ 2 chờ request thứ 1 commit mới đọc được
+            // balance đã cập nhật → thanh toán không vượt quá số dư.
+            $stmt = $this->pdo->prepare('SELECT * FROM ap_invoices WHERE id = ? FOR UPDATE');
+            $stmt->execute([$invoiceId]);
+            $invoice = $stmt->fetch(\PDO::FETCH_ASSOC);
+            if (!$invoice) throw new \InvalidArgumentException("Invoice not found: {$invoiceId}");
+            if ($invoice['status'] === 'paid') throw new \InvalidArgumentException("Invoice already paid");
 
-        $payAmount = min($amount, $invoice['balance']);
-        if ($payAmount <= 0) throw new \InvalidArgumentException("No balance to pay");
+            $payAmount = min($amount, $invoice['balance']);
+            if ($payAmount <= 0) throw new \InvalidArgumentException("No balance to pay");
 
-        $txn = $this->journal->postEntry("AP payment: {$invoice['invoice_number']}", "PAY-{$invoiceId}", [
-            ['account_code' => '331', 'amount' => $payAmount, 'is_debit' => true],
-            ['account_code' => '112', 'amount' => $payAmount, 'is_debit' => false],
-        ], $createdBy);
+            $txn = $this->journal->postEntry("AP payment: {$invoice['invoice_number']}", "PAY-{$invoiceId}", [
+                ['account_code' => '331', 'amount' => $payAmount, 'is_debit' => true],
+                ['account_code' => '112', 'amount' => $payAmount, 'is_debit' => false],
+            ], $createdBy);
 
-        $newPaid = $invoice['paid_amount'] + $payAmount;
-        $newBalance = $invoice['gross_amount'] - $newPaid;
-        $newStatus = $newBalance <= 1 ? 'paid' : ($newPaid > 0 ? 'partial' : 'unpaid');
+            $newPaid = $invoice['paid_amount'] + $payAmount;
+            $newBalance = $invoice['gross_amount'] - $newPaid;
+            $newStatus = $newBalance <= 1 ? 'paid' : ($newPaid > 0 ? 'partial' : 'unpaid');
 
-        $this->pdo->prepare('UPDATE ap_invoices SET paid_amount = ?, balance = ?, status = ? WHERE id = ?')
-            ->execute([$newPaid, max(0, $newBalance), $newStatus, $invoiceId]);
+            $this->pdo->prepare('UPDATE ap_invoices SET paid_amount = ?, balance = ?, status = ? WHERE id = ?')
+                ->execute([$newPaid, max(0, $newBalance), $newStatus, $invoiceId]);
 
-        $this->pdo->prepare('INSERT INTO ap_payments (ap_invoice_id, transaction_id, amount, payment_type) VALUES (?, ?, ?, ?)')
-            ->execute([$invoiceId, $txn->getId(), $payAmount, 'payment']);
+            $this->pdo->prepare('INSERT INTO ap_payments (ap_invoice_id, transaction_id, amount, payment_type) VALUES (?, ?, ?, ?)')
+                ->execute([$invoiceId, $txn->getId(), $payAmount, 'payment']);
 
-        $supplier = $this->supplierRepo->findById($invoice['supplier_id']);
-        if ($supplier) {
-            $supplier->setBalance(max(0, $supplier->getBalance() - $payAmount));
-            $this->supplierRepo->save($supplier);
-        }
+            $supplier = $this->supplierRepo->findById($invoice['supplier_id']);
+            if ($supplier) {
+                $supplier->setBalance(max(0, $supplier->getBalance() - $payAmount));
+                $this->supplierRepo->save($supplier);
+            }
 
-        $this->auditLogger?->log('ap.payment', 'ap_invoice', (string)$invoiceId,
-            ['balance_before' => $invoice['balance']], ['payment' => $payAmount, 'balance_after' => max(0, $newBalance)], $createdBy);
+            $this->auditLogger?->log('ap.payment', 'ap_invoice', (string)$invoiceId,
+                ['balance_before' => $invoice['balance']], ['payment' => $payAmount, 'balance_after' => max(0, $newBalance)], $createdBy);
 
-        return ['invoice_id' => $invoiceId, 'transaction_id' => $txn->getId(), 'amount' => $payAmount, 'balance' => max(0, $newBalance)];
+            $this->pdo->commit();
+            return ['invoice_id' => $invoiceId, 'transaction_id' => $txn->getId(), 'amount' => $payAmount, 'balance' => max(0, $newBalance)];
+        } catch (\Throwable $e) { $this->pdo->rollBack(); throw $e; }
     }
 
     //
@@ -155,36 +146,28 @@ class ApService
     //
     public function recordPrepayment(string $supplierId, float $amount, string $description, string $createdBy): array
     {
-        // NGHIỆP VỤ TẠM ỨNG NCC: Thanh toán trước khi nhận hàng.
-        // Hạch toán Nợ 331 / Có 112 tạo số dư âm (-) trên chi tiết NCC → thể hiện "khoản phải thu NCC".
-        // Khi nhận hàng: hóa đơn ghi Có 331 → bù trừ với số âm → số dư về 0 hoặc dương.
-        //
-        // RỦI RO ĐỐI SOÁT: Số dư âm 331 trên sub-ledger không hiển thị riêng trên BC01.
-        // Chuẩn mực kế toán: Dư Nợ 331 phải trình bày vào bên Tài sản (Phải thu khác).
-        // Nếu không tách → sai BC01 → sai chỉ tiêu đánh giá thanh khoản.
-        //
-        // RỦI RO TÍN DỤNG: NCC có thể không giao hàng sau khi nhận tạm ứng.
-        // Cần quy định: chỉ tạm ứng cho NCC có uy tín, có hợp đồng rõ ràng.
-        //
-        $supplier = $this->supplierRepo->findById($supplierId);
-        if (!$supplier) throw new \InvalidArgumentException("Supplier not found");
+        $this->pdo->beginTransaction();
+        try {
+            $supplier = $this->supplierRepo->findById($supplierId);
+            if (!$supplier) throw new \InvalidArgumentException("Supplier not found");
 
-        $txn = $this->journal->postEntry("AP prepayment: {$description}", "PRE-{$supplierId}", [
-            ['account_code' => '331', 'amount' => $amount, 'is_debit' => true],
-            ['account_code' => '112', 'amount' => $amount, 'is_debit' => false],
-        ], $createdBy);
+            $txn = $this->journal->postEntry("AP prepayment: {$description}", "PRE-{$supplierId}", [
+                ['account_code' => '331', 'amount' => $amount, 'is_debit' => true],
+                ['account_code' => '112', 'amount' => $amount, 'is_debit' => false],
+            ], $createdBy);
 
-        // Create a prepayment invoice record (negative balance)
-        $this->pdo->prepare(
-            'INSERT INTO ap_invoices (supplier_id, invoice_number, invoice_date, due_date, gross_amount, net_amount, balance, status, description, created_by)
-             VALUES (?, ?, CURDATE(), CURDATE(), ?, 0, ?, ?, ?, ?)'
-        )->execute([$supplierId, "PRE-{$txn->getId()}", -$amount, -$amount, 'prepayment', $description, $createdBy]);
-        $invId = (int)$this->pdo->lastInsertId();
+            $this->pdo->prepare(
+                'INSERT INTO ap_invoices (supplier_id, invoice_number, invoice_date, due_date, gross_amount, net_amount, balance, status, description, created_by)
+                 VALUES (?, ?, CURDATE(), CURDATE(), ?, 0, ?, ?, ?, ?)'
+            )->execute([$supplierId, "PRE-{$txn->getId()}", -$amount, -$amount, 'prepayment', $description, $createdBy]);
+            $invId = (int)$this->pdo->lastInsertId();
 
-        $supplier->setBalance($supplier->getBalance() - $amount);
-        $this->supplierRepo->save($supplier);
+            $supplier->setBalance($supplier->getBalance() - $amount);
+            $this->supplierRepo->save($supplier);
 
-        return ['invoice_id' => $invId, 'transaction_id' => $txn->getId(), 'amount' => $amount];
+            $this->pdo->commit();
+            return ['invoice_id' => $invId, 'transaction_id' => $txn->getId(), 'amount' => $amount];
+        } catch (\Throwable $e) { $this->pdo->rollBack(); throw $e; }
     }
 
     // ── Return ──
@@ -197,42 +180,36 @@ class ApService
     //
     public function recordReturn(int $invoiceId, float $returnAmount, string $inventoryAccount, string $createdBy): array
     {
-        // NGHIỆP VỤ TRẢ LẠI HÀNG MUA: Xử lý khi hàng mua bị trả lại NCC.
-        // Hạch toán: Nợ 331 (giảm công nợ) / Có Hàng tồn kho (giảm giá trị hàng) / Có 1331 (giảm VAT đầu vào)
-        //
-        // THUẾ: VAT hoàn lại tính từ vat_rate của hóa đơn gốc (round toán học).
-        // Yêu cầu chứng từ: Biên bản trả hàng + hóa đơn điều chỉnh giảm (theo TT 78/2021/TT-BTC).
-        // Nếu không có hóa đơn điều chỉnh → cơ quan thuế không chấp nhận giảm VAT đầu vào.
-        //
-        // RỦI RO: Nếu hóa đơn đã được thanh toán 1 phần, việc trả lại làm thay đổi cơ cấu thanh toán.
-        // Trường hợp đã thanh toán > giá trị hàng còn lại sau trả → phải thu hồi tiền từ NCC.
-        //
-        $invoice = $this->getInvoice($invoiceId);
-        if ($invoice['balance'] <= 0) throw new \InvalidArgumentException("Invoice fully paid, adjust via separate entry");
+        $this->pdo->beginTransaction();
+        try {
+            $invoice = $this->getInvoice($invoiceId);
+            if ($invoice['balance'] <= 0) throw new \InvalidArgumentException("Invoice fully paid, adjust via separate entry");
 
-        $vatReverse = $invoice['vat_rate'] > 0 ? round($returnAmount * $invoice['vat_rate'] / (100 + $invoice['vat_rate']), 0) : 0;
-        $netReturn = $returnAmount - $vatReverse;
+            $vatReverse = $invoice['vat_rate'] > 0 ? round($returnAmount * $invoice['vat_rate'] / (100 + $invoice['vat_rate']), 0) : 0;
+            $netReturn = $returnAmount - $vatReverse;
 
-        $txn = $this->journal->postEntry("AP return: {$invoice['invoice_number']}", "RET-{$invoiceId}", [
-            ['account_code' => '331', 'amount' => $returnAmount, 'is_debit' => true],
-            ['account_code' => $inventoryAccount, 'amount' => $netReturn, 'is_debit' => false],
-            ['account_code' => '1331', 'amount' => $vatReverse, 'is_debit' => false],
-        ], $createdBy);
+            $txn = $this->journal->postEntry("AP return: {$invoice['invoice_number']}", "RET-{$invoiceId}", [
+                ['account_code' => '331', 'amount' => $returnAmount, 'is_debit' => true],
+                ['account_code' => $inventoryAccount, 'amount' => $netReturn, 'is_debit' => false],
+                ['account_code' => '1331', 'amount' => $vatReverse, 'is_debit' => false],
+            ], $createdBy);
 
-        $newBalance = $invoice['balance'] - $returnAmount;
-        $this->pdo->prepare('UPDATE ap_invoices SET balance = ? WHERE id = ?')
-            ->execute([max(0, $newBalance), $invoiceId]);
+            $newBalance = $invoice['balance'] - $returnAmount;
+            $this->pdo->prepare('UPDATE ap_invoices SET balance = ? WHERE id = ?')
+                ->execute([max(0, $newBalance), $invoiceId]);
 
-        $this->pdo->prepare('INSERT INTO ap_payments (ap_invoice_id, transaction_id, amount, payment_type) VALUES (?, ?, ?, ?)')
-            ->execute([$invoiceId, $txn->getId(), $returnAmount, 'return']);
+            $this->pdo->prepare('INSERT INTO ap_payments (ap_invoice_id, transaction_id, amount, payment_type) VALUES (?, ?, ?, ?)')
+                ->execute([$invoiceId, $txn->getId(), $returnAmount, 'return']);
 
-        $supplier = $this->supplierRepo->findById($invoice['supplier_id']);
-        if ($supplier) {
-            $supplier->setBalance(max(0, $supplier->getBalance() - $returnAmount));
-            $this->supplierRepo->save($supplier);
-        }
+            $supplier = $this->supplierRepo->findById($invoice['supplier_id']);
+            if ($supplier) {
+                $supplier->setBalance(max(0, $supplier->getBalance() - $returnAmount));
+                $this->supplierRepo->save($supplier);
+            }
 
-        return ['invoice_id' => $invoiceId, 'transaction_id' => $txn->getId(), 'amount' => $returnAmount];
+            $this->pdo->commit();
+            return ['invoice_id' => $invoiceId, 'transaction_id' => $txn->getId(), 'amount' => $returnAmount];
+        } catch (\Throwable $e) { $this->pdo->rollBack(); throw $e; }
     }
 
     // ── Discount ──
@@ -245,39 +222,32 @@ class ApService
     //
     public function recordDiscount(int $invoiceId, float $discountAmount, string $createdBy): array
     {
-        // NGHIỆP VỤ CHIẾT KHẤU THANH TOÁN: NCC giảm giá khi DN thanh toán sớm.
-        // Hạch toán: Nợ 331 / Có 515 (Doanh thu hoạt động tài chính).
-        //
-        // PHÂN BIỆT QUAN TRỌNG:
-        // - Chiết khấu thanh toán (hạch toán 515): giảm giá do trả tiền sớm → tăng doanh thu tài chính.
-        // - Chiết khấu thương mại (hạch toán giảm giá mua): giảm giá do mua số lượng lớn → giảm giá vốn.
-        // Method này chỉ xử lý chiết khấu thanh toán. Chiết khấu thương mại cần xử lý riêng.
-        //
-        // RỦI RO: Nếu hóa đơn đã được chiết khấu 1 phần → số dư còn lại nhỏ hơn discountAmount.
-        // Validation: kiểm tra discountAmount <= balance để tránh âm balance.
-        //
-        $invoice = $this->getInvoice($invoiceId);
-        if ($discountAmount > $invoice['balance']) throw new \InvalidArgumentException("Discount exceeds balance");
+        $this->pdo->beginTransaction();
+        try {
+            $invoice = $this->getInvoice($invoiceId);
+            if ($discountAmount > $invoice['balance']) throw new \InvalidArgumentException("Discount exceeds balance");
 
-        $txn = $this->journal->postEntry("AP discount: {$invoice['invoice_number']}", "DISC-{$invoiceId}", [
-            ['account_code' => '331', 'amount' => $discountAmount, 'is_debit' => true],
-            ['account_code' => '515', 'amount' => $discountAmount, 'is_debit' => false],
-        ], $createdBy);
+            $txn = $this->journal->postEntry("AP discount: {$invoice['invoice_number']}", "DISC-{$invoiceId}", [
+                ['account_code' => '331', 'amount' => $discountAmount, 'is_debit' => true],
+                ['account_code' => '515', 'amount' => $discountAmount, 'is_debit' => false],
+            ], $createdBy);
 
-        $newBalance = $invoice['balance'] - $discountAmount;
-        $this->pdo->prepare('UPDATE ap_invoices SET balance = ? WHERE id = ?')
-            ->execute([max(0, $newBalance), $invoiceId]);
+            $newBalance = $invoice['balance'] - $discountAmount;
+            $this->pdo->prepare('UPDATE ap_invoices SET balance = ? WHERE id = ?')
+                ->execute([max(0, $newBalance), $invoiceId]);
 
-        $this->pdo->prepare('INSERT INTO ap_payments (ap_invoice_id, transaction_id, amount, payment_type) VALUES (?, ?, ?, ?)')
-            ->execute([$invoiceId, $txn->getId(), $discountAmount, 'discount']);
+            $this->pdo->prepare('INSERT INTO ap_payments (ap_invoice_id, transaction_id, amount, payment_type) VALUES (?, ?, ?, ?)')
+                ->execute([$invoiceId, $txn->getId(), $discountAmount, 'discount']);
 
-        $supplier = $this->supplierRepo->findById($invoice['supplier_id']);
-        if ($supplier) {
-            $supplier->setBalance(max(0, $supplier->getBalance() - $discountAmount));
-            $this->supplierRepo->save($supplier);
-        }
+            $supplier = $this->supplierRepo->findById($invoice['supplier_id']);
+            if ($supplier) {
+                $supplier->setBalance(max(0, $supplier->getBalance() - $discountAmount));
+                $this->supplierRepo->save($supplier);
+            }
 
-        return ['invoice_id' => $invoiceId, 'transaction_id' => $txn->getId(), 'amount' => $discountAmount];
+            $this->pdo->commit();
+            return ['invoice_id' => $invoiceId, 'transaction_id' => $txn->getId(), 'amount' => $discountAmount];
+        } catch (\Throwable $e) { $this->pdo->rollBack(); throw $e; }
     }
 
     // ── Write-off ──
@@ -303,26 +273,30 @@ class ApService
         //
         // ẢNH HƯỞNG BC02: MS 31 (Thu nhập khác - 711) tăng → lợi nhuận tăng → thuế TNDN tăng.
         //
-        $invoice = $this->getInvoice($invoiceId);
-        if ($invoice['balance'] <= 0) throw new \InvalidArgumentException("Invoice has no balance to write off");
+        $this->pdo->beginTransaction();
+        try {
+            $invoice = $this->getInvoice($invoiceId);
+            if ($invoice['balance'] <= 0) throw new \InvalidArgumentException("Invoice has no balance to write off");
 
-        $amount = $invoice['balance'];
+            $amount = $invoice['balance'];
 
-        $txn = $this->journal->postEntry("AP write-off: {$invoice['invoice_number']}", "WO-{$invoiceId}", [
-            ['account_code' => '331', 'amount' => $amount, 'is_debit' => true],
-            ['account_code' => '711', 'amount' => $amount, 'is_debit' => false],
-        ], $createdBy);
+            $txn = $this->journal->postEntry("AP write-off: {$invoice['invoice_number']}", "WO-{$invoiceId}", [
+                ['account_code' => '331', 'amount' => $amount, 'is_debit' => true],
+                ['account_code' => '711', 'amount' => $amount, 'is_debit' => false],
+            ], $createdBy);
 
-        $this->pdo->prepare('UPDATE ap_invoices SET balance = 0, status = ? WHERE id = ?')
-            ->execute(['written_off', $invoiceId]);
+            $this->pdo->prepare('UPDATE ap_invoices SET balance = 0, status = ? WHERE id = ?')
+                ->execute(['written_off', $invoiceId]);
 
-        $supplier = $this->supplierRepo->findById($invoice['supplier_id']);
-        if ($supplier) {
-            $supplier->setBalance(max(0, $supplier->getBalance() - $amount));
-            $this->supplierRepo->save($supplier);
-        }
+            $supplier = $this->supplierRepo->findById($invoice['supplier_id']);
+            if ($supplier) {
+                $supplier->setBalance(max(0, $supplier->getBalance() - $amount));
+                $this->supplierRepo->save($supplier);
+            }
 
-        return ['invoice_id' => $invoiceId, 'transaction_id' => $txn->getId(), 'amount' => $amount];
+            $this->pdo->commit();
+            return ['invoice_id' => $invoiceId, 'transaction_id' => $txn->getId(), 'amount' => $amount];
+        } catch (\Throwable $e) { $this->pdo->rollBack(); throw $e; }
     }
 
     // ── Reports ──

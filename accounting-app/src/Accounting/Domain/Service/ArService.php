@@ -3,6 +3,7 @@ namespace Accounting\Domain\Service;
 
 use Accounting\Domain\Contract\AuditLoggerInterface;
 use Accounting\Domain\Repository\AccountRepositoryInterface;
+use Accounting\Domain\Repository\CustomerRepositoryInterface;
 
 //
 // CÔNG NỢ PHẢI THU (TK 131): Quản lý toàn bộ nghiệp vụ bán hàng và thu tiền từ khách hàng
@@ -28,13 +29,15 @@ class ArService
     private AccountRepositoryInterface $accountRepo;
     private JournalService $journal;
     private ?AuditLoggerInterface $auditLogger;
+    private ?CustomerRepositoryInterface $customerRepo;
 
-    public function __construct(\PDO $pdo, AccountRepositoryInterface $accountRepo, JournalService $journal, ?AuditLoggerInterface $auditLogger = null)
+    public function __construct(\PDO $pdo, AccountRepositoryInterface $accountRepo, JournalService $journal, ?AuditLoggerInterface $auditLogger = null, ?CustomerRepositoryInterface $customerRepo = null)
     {
         $this->pdo = $pdo;
         $this->accountRepo = $accountRepo;
         $this->journal = $journal;
         $this->auditLogger = $auditLogger;
+        $this->customerRepo = $customerRepo;
     }
 
     //
@@ -45,47 +48,38 @@ class ArService
     //
     public function recordInvoice(string $customerId, string $invoiceNumber, string $invoiceDate, string $dueDate, float $netAmount, float $vatAmount, float $vatRate, string $description, string $createdBy, string $revenueAccount = '511'): array
     {
-        $customer = $this->getCustomer($customerId);
-        if (!$customer) throw new \InvalidArgumentException("Customer not found: {$customerId}");
+        $this->pdo->beginTransaction();
+        try {
+            $customer = $this->getCustomer($customerId);
+            if (!$customer) throw new \InvalidArgumentException("Customer not found: {$customerId}");
 
-        $totalAmount = $netAmount + $vatAmount;
+            $totalAmount = $netAmount + $vatAmount;
 
-        // Dr 131 (total) — Cr 511 (net) — Cr 33311 (VAT)
-        $lines = [
-            ['account_code' => '131', 'amount' => $totalAmount, 'is_debit' => true],
-            ['account_code' => $revenueAccount, 'amount' => $netAmount, 'is_debit' => false],
-        ];
-        if ($vatAmount > 0) {
-            $lines[] = ['account_code' => '33311', 'amount' => $vatAmount, 'is_debit' => false];
-        }
+            $lines = [
+                ['account_code' => '131', 'amount' => $totalAmount, 'is_debit' => true],
+                ['account_code' => $revenueAccount, 'amount' => $netAmount, 'is_debit' => false],
+            ];
+            if ($vatAmount > 0) {
+                $lines[] = ['account_code' => '33311', 'amount' => $vatAmount, 'is_debit' => false];
+            }
 
-        // GIAO DỊCH: Multi-step — journal post + INSERT invoice + UPDATE customer balance.
-        // KHÔNG wrap trong transaction → nếu INSERT/UPDATE thất bại, GL đã ghi bút toán.
-        // Số dư 131 GL không khớp sub-ledger → mất đối chiếu.
-        //
-        // DOANH THU: TK 511 ghi nhận doanh thu chưa thuế (netAmount).
-        // Nguyên tắc thận trọng: Chỉ ghi nhận doanh thu khi chắc chắn thu được tiền.
-        // Nếu KH có rủi ro tín dụng cao → cần xem xét ghi nhận doanh thu hay tạm ghi nhận.
-        //
-        // THUẾ GTGT: 33311 ghi thuế đầu ra phải nộp.
-        // Nếu hóa đơn xuất sai → phải lập hóa đơn điều chỉnh trong kỳ.
-        // Ảnh hưởng tờ khai thuế GTGT tháng/quý.
-        //
-        $txn = $this->journal->postEntry("AR invoice: {$description}", "INV-{$invoiceNumber}", $lines, $createdBy);
+            $txn = $this->journal->postEntry("AR invoice: {$description}", "INV-{$invoiceNumber}", $lines, $createdBy);
 
-        $stmt = $this->pdo->prepare(
-            'INSERT INTO ar_invoices (customer_id, invoice_number, invoice_date, due_date, gross_amount, net_amount, vat_amount, vat_rate, balance, status, description, created_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-        );
-        $stmt->execute([$customerId, $invoiceNumber, $invoiceDate, $dueDate, $totalAmount, $netAmount, $vatAmount, $vatRate, $totalAmount, 'unpaid', $description, $createdBy]);
-        $invId = (int)$this->pdo->lastInsertId();
+            $stmt = $this->pdo->prepare(
+                'INSERT INTO ar_invoices (customer_id, invoice_number, invoice_date, due_date, gross_amount, net_amount, vat_amount, vat_rate, balance, status, description, created_by)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            );
+            $stmt->execute([$customerId, $invoiceNumber, $invoiceDate, $dueDate, $totalAmount, $netAmount, $vatAmount, $vatRate, $totalAmount, 'unpaid', $description, $createdBy]);
+            $invId = (int)$this->pdo->lastInsertId();
 
-        $this->updateCustomerBalance($customerId, $totalAmount);
+            $this->updateCustomerBalance($customerId, $totalAmount);
 
-        $this->auditLogger?->log('ar.invoice', 'ar_invoice', (string)$invId, null,
-            ['customer' => $customerId, 'amount' => $totalAmount, 'invoice' => $invoiceNumber], $createdBy);
+            $this->auditLogger?->log('ar.invoice', 'ar_invoice', (string)$invId, null,
+                ['customer' => $customerId, 'amount' => $totalAmount, 'invoice' => $invoiceNumber], $createdBy);
 
-        return ['invoice_id' => $invId, 'transaction_id' => $txn->getId(), 'amount' => $totalAmount];
+            $this->pdo->commit();
+            return ['invoice_id' => $invId, 'transaction_id' => $txn->getId(), 'amount' => $totalAmount];
+        } catch (\Throwable $e) { $this->pdo->rollBack(); throw $e; }
     }
 
     //
@@ -96,44 +90,40 @@ class ArService
     //
     public function recordPayment(int $invoiceId, float $amount, string $createdBy): array
     {
-        // RỦI RO DOUBLE PAYMENT: Không có SELECT FOR UPDATE.
-        // Cùng lúc 2 request thanh toán → cả 2 đọc balance chưa cập nhật
-        // → thu tiền 2 lần cho cùng hóa đơn → dư Có 131 (nợ KH).
-        // Cần xử lý: SELECT ... FOR UPDATE trước khi đọc balance.
-        //
-        // THANH TOÁN TỪNG PHẦN: amount bị cắt tại balance hiện tại.
-        // Nếu amount > balance → chỉ thu balance → KH còn nợ 0.
-        // Cơ chế này bảo vệ khỏi over-collection nhưng không thông báo người dùng.
-        //
-        // ẢNH HƯỞNG BCTC: Giảm số dư 131 (BC01 MS 131), tăng tiền 111/112 (BC01 MS 110/111).
-        // Không ảnh hưởng BC02 vì thu tiền không phải doanh thu.
-        //
-        $inv = $this->getInvoice($invoiceId);
-        if ($inv['status'] === 'paid') throw new \InvalidArgumentException("Invoice already paid");
-        $payAmt = min($amount, $inv['balance']);
-        if ($payAmt <= 0) throw new \InvalidArgumentException("No balance to pay");
+        $this->pdo->beginTransaction();
+        try {
+            // SELECT FOR UPDATE: Khóa hàng ar_invoices để chống double collection dưới concurrent.
+            $stmt = $this->pdo->prepare('SELECT * FROM ar_invoices WHERE id = ? FOR UPDATE');
+            $stmt->execute([$invoiceId]);
+            $inv = $stmt->fetch(\PDO::FETCH_ASSOC);
+            if (!$inv) throw new \InvalidArgumentException("Invoice not found");
+            if ($inv['status'] === 'paid') throw new \InvalidArgumentException("Invoice already paid");
+            $payAmt = min($amount, $inv['balance']);
+            if ($payAmt <= 0) throw new \InvalidArgumentException("No balance to pay");
 
-        $txn = $this->journal->postEntry("AR payment: {$inv['invoice_number']}", "PAY-{$invoiceId}", [
-            ['account_code' => '112', 'amount' => $payAmt, 'is_debit' => true],
-            ['account_code' => '131', 'amount' => $payAmt, 'is_debit' => false],
-        ], $createdBy);
+            $txn = $this->journal->postEntry("AR payment: {$inv['invoice_number']}", "PAY-{$invoiceId}", [
+                ['account_code' => '112', 'amount' => $payAmt, 'is_debit' => true],
+                ['account_code' => '131', 'amount' => $payAmt, 'is_debit' => false],
+            ], $createdBy);
 
-        $newPaid = $inv['paid_amount'] + $payAmt;
-        $newBal = $inv['gross_amount'] - $newPaid;
-        $newStatus = $newBal <= 1 ? 'paid' : ($newPaid > 0 ? 'partial' : 'unpaid');
+            $newPaid = $inv['paid_amount'] + $payAmt;
+            $newBal = $inv['gross_amount'] - $newPaid;
+            $newStatus = $newBal <= 1 ? 'paid' : ($newPaid > 0 ? 'partial' : 'unpaid');
 
-        $this->pdo->prepare('UPDATE ar_invoices SET paid_amount = ?, balance = ?, status = ? WHERE id = ?')
-            ->execute([$newPaid, max(0, $newBal), $newStatus, $invoiceId]);
+            $this->pdo->prepare('UPDATE ar_invoices SET paid_amount = ?, balance = ?, status = ? WHERE id = ?')
+                ->execute([$newPaid, max(0, $newBal), $newStatus, $invoiceId]);
 
-        $this->pdo->prepare('INSERT INTO ar_payments (ar_invoice_id, transaction_id, amount, payment_type) VALUES (?, ?, ?, ?)')
-            ->execute([$invoiceId, $txn->getId(), $payAmt, 'payment']);
+            $this->pdo->prepare('INSERT INTO ar_payments (ar_invoice_id, transaction_id, amount, payment_type) VALUES (?, ?, ?, ?)')
+                ->execute([$invoiceId, $txn->getId(), $payAmt, 'payment']);
 
-        $this->updateCustomerBalance($inv['customer_id'], -$payAmt);
+            $this->updateCustomerBalance($inv['customer_id'], -$payAmt);
 
-        $this->auditLogger?->log('ar.payment', 'ar_invoice', (string)$invoiceId,
-            ['balance_before' => $inv['balance']], ['payment' => $payAmt, 'balance_after' => max(0, $newBal)], $createdBy);
+            $this->auditLogger?->log('ar.payment', 'ar_invoice', (string)$invoiceId,
+                ['balance_before' => $inv['balance']], ['payment' => $payAmt, 'balance_after' => max(0, $newBal)], $createdBy);
 
-        return ['invoice_id' => $invoiceId, 'transaction_id' => $txn->getId(), 'amount' => $payAmt, 'balance' => max(0, $newBal)];
+            $this->pdo->commit();
+            return ['invoice_id' => $invoiceId, 'transaction_id' => $txn->getId(), 'amount' => $payAmt, 'balance' => max(0, $newBal)];
+        } catch (\Throwable $e) { $this->pdo->rollBack(); throw $e; }
     }
 
     //
@@ -144,33 +134,26 @@ class ArService
     //
     public function recordPrepayment(string $customerId, float $amount, string $description, string $createdBy): array
     {
-        // NGHIỆP VỤ KHÁCH HÀNG ỨNG TRƯỚC: KH trả tiền trước khi nhận hàng/dịch vụ.
-        // Hạch toán: Nợ 112 / Có 131 — tạo số dư âm (-) trên chi tiết KH.
-        // Khi xuất hóa đơn sau đó: Nợ 131 / Có 511+33311 → bù trừ với số âm.
-        //
-        // TRÌNH BÀY BC01: Dư Có 131 (khách hàng trả thừa/ứng trước) phải trình bày
-        // vào bên Nợ phải trả (Phải trả khách hàng), không được bù trừ với dư Nợ 131.
-        // Chuẩn mực kế toán VAS 22: Không được bù trừ tài sản và nợ phải trả.
-        //
-        // RỦI RO: Nếu không giao hàng đúng cam kết → KH có quyền đòi lại tiền.
-        // Cần quản lý riêng các khoản ứng trước để tránh nhầm lẫn.
-        //
-        $customer = $this->getCustomer($customerId);
-        if (!$customer) throw new \InvalidArgumentException("Customer not found");
+        $this->pdo->beginTransaction();
+        try {
+            $customer = $this->getCustomer($customerId);
+            if (!$customer) throw new \InvalidArgumentException("Customer not found");
 
-        $txn = $this->journal->postEntry("AR prepayment: {$description}", "PRE-{$customerId}", [
-            ['account_code' => '112', 'amount' => $amount, 'is_debit' => true],
-            ['account_code' => '131', 'amount' => $amount, 'is_debit' => false],
-        ], $createdBy);
+            $txn = $this->journal->postEntry("AR prepayment: {$description}", "PRE-{$customerId}", [
+                ['account_code' => '112', 'amount' => $amount, 'is_debit' => true],
+                ['account_code' => '131', 'amount' => $amount, 'is_debit' => false],
+            ], $createdBy);
 
-        $this->pdo->prepare(
-            'INSERT INTO ar_invoices (customer_id, invoice_number, invoice_date, due_date, gross_amount, net_amount, balance, status, description, created_by)
-             VALUES (?, ?, CURDATE(), CURDATE(), ?, 0, ?, ?, ?, ?)'
-        )->execute([$customerId, "PRE-{$txn->getId()}", -$amount, -$amount, 'prepayment', $description, $createdBy]);
-        $invId = (int)$this->pdo->lastInsertId();
+            $this->pdo->prepare(
+                'INSERT INTO ar_invoices (customer_id, invoice_number, invoice_date, due_date, gross_amount, net_amount, balance, status, description, created_by)
+                 VALUES (?, ?, CURDATE(), CURDATE(), ?, 0, ?, ?, ?, ?)'
+            )->execute([$customerId, "PRE-{$txn->getId()}", -$amount, -$amount, 'prepayment', $description, $createdBy]);
+            $invId = (int)$this->pdo->lastInsertId();
 
-        $this->updateCustomerBalance($customerId, -$amount);
-        return ['invoice_id' => $invId, 'transaction_id' => $txn->getId(), 'amount' => $amount];
+            $this->updateCustomerBalance($customerId, -$amount);
+            $this->pdo->commit();
+            return ['invoice_id' => $invId, 'transaction_id' => $txn->getId(), 'amount' => $amount];
+        } catch (\Throwable $e) { $this->pdo->rollBack(); throw $e; }
     }
 
     //
@@ -181,46 +164,34 @@ class ArService
     //
     public function recordReturn(int $invoiceId, float $returnAmount, string $createdBy): array
     {
-        // NGHIỆP VỤ HÀNG BÁN TRẢ LẠI: KH trả lại hàng do lỗi/kém chất lượng/sai đơn hàng.
-        // Hạch toán: Nợ 521 (Giảm trừ doanh thu) / Nợ 33311 (giảm VAT đầu ra) / Có 131 (giảm công nợ)
-        //
-        // PHÂN BIỆT VỚI CHIẾT KHẤU THƯƠNG MẠI: Trả lại hàng → giảm doanh thu gốc (521).
-        // Chiết khấu thương mại → hạch toán riêng qua 521 nhưng khác bản chất.
-        // Giảm giá hàng bán → có thể ghi giảm trực tiếp doanh thu hoặc qua 521.
-        //
-        // ẢNH HƯỞNG BC02: MS 02 (Các khoản giảm trừ doanh thu) tăng.
-        // Doanh thu thuần (MS 10) = MS 01 - MS 02.
-        // Lợi nhuận gộp giảm tương ứng.
-        //
-        // THUẾ: Phải lập hóa đơn điều chỉnh giảm (theo NĐ 123/2020/NĐ-CP).
-        // Nếu xuất hóa đơn điều chỉnh > kỳ thuế → phải kê khai điều chỉnh tăng/giảm.
-        //
-        $inv = $this->getInvoice($invoiceId);
-        if ($inv['balance'] <= 0) throw new \InvalidArgumentException("Invoice fully paid");
-        if ($returnAmount > $inv['gross_amount']) throw new \InvalidArgumentException("Return exceeds invoice total");
+        $this->pdo->beginTransaction();
+        try {
+            $inv = $this->getInvoice($invoiceId);
+            if ($inv['balance'] <= 0) throw new \InvalidArgumentException("Invoice fully paid");
+            if ($returnAmount > $inv['gross_amount']) throw new \InvalidArgumentException("Return exceeds invoice total");
 
-        $vatReverse = $inv['vat_rate'] > 0 ? round($returnAmount * $inv['vat_rate'] / (100 + $inv['vat_rate']), 0) : 0;
-        $netReturn = $returnAmount - $vatReverse;
+            $vatReverse = $inv['vat_rate'] > 0 ? round($returnAmount * $inv['vat_rate'] / (100 + $inv['vat_rate']), 0) : 0;
+            $netReturn = $returnAmount - $vatReverse;
 
-        // Dr 521 (revenue deduction) + Dr 33311 (tax reverse) — Cr 131
-        $lines = [
-            ['account_code' => '521', 'amount' => $netReturn, 'is_debit' => true],
-            ['account_code' => '131', 'amount' => $returnAmount, 'is_debit' => false],
-        ];
-        if ($vatReverse > 0) {
-            // Insert 33311 line before Cr 131
-            array_splice($lines, 1, 0, [['account_code' => '33311', 'amount' => $vatReverse, 'is_debit' => true]]);
-        }
+            $lines = [
+                ['account_code' => '521', 'amount' => $netReturn, 'is_debit' => true],
+                ['account_code' => '131', 'amount' => $returnAmount, 'is_debit' => false],
+            ];
+            if ($vatReverse > 0) {
+                array_splice($lines, 1, 0, [['account_code' => '33311', 'amount' => $vatReverse, 'is_debit' => true]]);
+            }
 
-        $txn = $this->journal->postEntry("AR return: {$inv['invoice_number']}", "RET-{$invoiceId}", $lines, $createdBy);
+            $txn = $this->journal->postEntry("AR return: {$inv['invoice_number']}", "RET-{$invoiceId}", $lines, $createdBy);
 
-        $newBal = $inv['balance'] - $returnAmount;
-        $this->pdo->prepare('UPDATE ar_invoices SET balance = ? WHERE id = ?')->execute([max(0, $newBal), $invoiceId]);
-        $this->pdo->prepare('INSERT INTO ar_payments (ar_invoice_id, transaction_id, amount, payment_type) VALUES (?, ?, ?, ?)')
-            ->execute([$invoiceId, $txn->getId(), $returnAmount, 'return']);
-        $this->updateCustomerBalance($inv['customer_id'], -$returnAmount);
+            $newBal = $inv['balance'] - $returnAmount;
+            $this->pdo->prepare('UPDATE ar_invoices SET balance = ? WHERE id = ?')->execute([max(0, $newBal), $invoiceId]);
+            $this->pdo->prepare('INSERT INTO ar_payments (ar_invoice_id, transaction_id, amount, payment_type) VALUES (?, ?, ?, ?)')
+                ->execute([$invoiceId, $txn->getId(), $returnAmount, 'return']);
+            $this->updateCustomerBalance($inv['customer_id'], -$returnAmount);
 
-        return ['invoice_id' => $invoiceId, 'transaction_id' => $txn->getId(), 'amount' => $returnAmount];
+            $this->pdo->commit();
+            return ['invoice_id' => $invoiceId, 'transaction_id' => $txn->getId(), 'amount' => $returnAmount];
+        } catch (\Throwable $e) { $this->pdo->rollBack(); throw $e; }
     }
 
     //
@@ -231,35 +202,25 @@ class ArService
     //
     public function recordSettlementDiscount(int $invoiceId, float $discountAmount, string $createdBy): array
     {
-        // NGHIỆP VỤ CHIẾT KHẤU THANH TOÁN: Giảm giá cho KH thanh toán sớm hơn thời hạn.
-        // Hạch toán: Nợ 635 (Chi phí tài chính) / Có 131 (giảm công nợ KH).
-        //
-        // PHÂN BIỆT: Chiết khấu thanh toán (635) ≠ Chiết khấu thương mại (521).
-        // - 635: KH thanh toán trước hạn → DN mất 1 phần doanh thu tài chính → chi phí.
-        // - 521: Giảm giá do mua số lượng lớn → giảm doanh thu thuần.
-        //
-        // ẢNH HƯỞNG BC02: MS 23 (Chi phí tài chính - 635) tăng → LNTT giảm.
-        // Ảnh hưởng đến thuế TNDN: Chi phí 635 là chi phí hợp lý, được trừ khi tính thuế.
-        //
-        // RỦI RO: Nếu discount > balance → không thể giảm thêm → throw exception.
-        // Trường hợp discount = balance → hóa đơn tất toán hoàn toàn.
-        //
-        $inv = $this->getInvoice($invoiceId);
-        if ($discountAmount > $inv['balance']) throw new \InvalidArgumentException("Discount exceeds balance");
+        $this->pdo->beginTransaction();
+        try {
+            $inv = $this->getInvoice($invoiceId);
+            if ($discountAmount > $inv['balance']) throw new \InvalidArgumentException("Discount exceeds balance");
 
-        // Dr 635 (finance cost) — Cr 131
-        $txn = $this->journal->postEntry("AR settlement discount: {$inv['invoice_number']}", "DISC-{$invoiceId}", [
-            ['account_code' => '635', 'amount' => $discountAmount, 'is_debit' => true],
-            ['account_code' => '131', 'amount' => $discountAmount, 'is_debit' => false],
-        ], $createdBy);
+            $txn = $this->journal->postEntry("AR settlement discount: {$inv['invoice_number']}", "DISC-{$invoiceId}", [
+                ['account_code' => '635', 'amount' => $discountAmount, 'is_debit' => true],
+                ['account_code' => '131', 'amount' => $discountAmount, 'is_debit' => false],
+            ], $createdBy);
 
-        $newBal = $inv['balance'] - $discountAmount;
-        $this->pdo->prepare('UPDATE ar_invoices SET balance = ? WHERE id = ?')->execute([max(0, $newBal), $invoiceId]);
-        $this->pdo->prepare('INSERT INTO ar_payments (ar_invoice_id, transaction_id, amount, payment_type) VALUES (?, ?, ?, ?)')
-            ->execute([$invoiceId, $txn->getId(), $discountAmount, 'discount']);
-        $this->updateCustomerBalance($inv['customer_id'], -$discountAmount);
+            $newBal = $inv['balance'] - $discountAmount;
+            $this->pdo->prepare('UPDATE ar_invoices SET balance = ? WHERE id = ?')->execute([max(0, $newBal), $invoiceId]);
+            $this->pdo->prepare('INSERT INTO ar_payments (ar_invoice_id, transaction_id, amount, payment_type) VALUES (?, ?, ?, ?)')
+                ->execute([$invoiceId, $txn->getId(), $discountAmount, 'discount']);
+            $this->updateCustomerBalance($inv['customer_id'], -$discountAmount);
 
-        return ['invoice_id' => $invoiceId, 'transaction_id' => $txn->getId(), 'amount' => $discountAmount];
+            $this->pdo->commit();
+            return ['invoice_id' => $invoiceId, 'transaction_id' => $txn->getId(), 'amount' => $discountAmount];
+        } catch (\Throwable $e) { $this->pdo->rollBack(); throw $e; }
     }
 
     //
@@ -272,47 +233,30 @@ class ArService
     //
     public function writeOff(int $invoiceId, string $createdBy): array
     {
-        // NGHIỆP VỤ XÓA NỢ PHẢI THU KHÓ ĐÒI: Xóa khoản không có khả năng thu hồi.
-        // Hạch toán: Nợ 2293 (sử dụng dự phòng) / Nợ 642 (phần vượt dự phòng) / Có 131 (xóa nợ).
-        //
-        // CƠ SỞ TRÍCH LẬP: TT 48/2019/TT-BTC quy định tỷ lệ trích lập theo thời gian quá hạn:
-        //   - 6-12 tháng: 30%
-        //   - 12-18 tháng: 50%
-        //   - 18-36 tháng: 70%
-        //   - >36 tháng: 100%
-        //   - Đã giải thể/phá sản: 100%
-        //
-        // PHƯƠNG PHÁP: Sử dụng dự phòng (2293) trước, phần còn lại ghi vào chi phí (642).
-        // Nếu dự phòng đủ → không ảnh hưởng P&L. Nếu thiếu → ảnh hưởng lợi nhuận.
-        //
-        // RỦI RO PHÁP LÝ: Sau khi xóa nợ, DN mất quyền đòi nợ hợp pháp.
-        // Cần phê duyệt của Hội đồng xóa nợ (có biên bản, quyết định).
-        // Kiểm toán yêu cầu xem biên bản này khi kiểm toán cuối năm.
-        //
-        // THUẾ: Khoản xóa nợ có dự phòng đã được tính vào chi phí được trừ trước đó.
-        // Nếu xóa nợ không đúng điều kiện → chi phí 642 bị loại khi tính thuế TNDN.
-        //
-        $inv = $this->getInvoice($invoiceId);
-        if ($inv['balance'] <= 0) throw new \InvalidArgumentException("No balance to write off");
+        $this->pdo->beginTransaction();
+        try {
+            $inv = $this->getInvoice($invoiceId);
+            if ($inv['balance'] <= 0) throw new \InvalidArgumentException("No balance to write off");
 
-        $amount = $inv['balance'];
-        $provision = $this->accountRepo->findByCode('2293');
-        $provisionBal = $provision ? $provision->getBalance() : 0;
-        $useProvision = min(abs($provisionBal), $amount);
-        $excess = $amount - $useProvision;
+            $amount = $inv['balance'];
+            $provision = $this->accountRepo->findByCode('2293');
+            $provisionBal = $provision ? $provision->getBalance() : 0;
+            $useProvision = min(abs($provisionBal), $amount);
+            $excess = $amount - $useProvision;
 
-        // Dr 2293 (provision) + Dr 642 (excess) — Cr 131
-        $lines = [];
-        if ($useProvision > 0) $lines[] = ['account_code' => '2293', 'amount' => $useProvision, 'is_debit' => true];
-        if ($excess > 0) $lines[] = ['account_code' => '642', 'amount' => $excess, 'is_debit' => true];
-        $lines[] = ['account_code' => '131', 'amount' => $amount, 'is_debit' => false];
+            $lines = [];
+            if ($useProvision > 0) $lines[] = ['account_code' => '2293', 'amount' => $useProvision, 'is_debit' => true];
+            if ($excess > 0) $lines[] = ['account_code' => '642', 'amount' => $excess, 'is_debit' => true];
+            $lines[] = ['account_code' => '131', 'amount' => $amount, 'is_debit' => false];
 
-        $txn = $this->journal->postEntry("AR write-off: {$inv['invoice_number']}", "WO-{$invoiceId}", $lines, $createdBy);
+            $txn = $this->journal->postEntry("AR write-off: {$inv['invoice_number']}", "WO-{$invoiceId}", $lines, $createdBy);
 
-        $this->pdo->prepare('UPDATE ar_invoices SET balance = 0, status = ? WHERE id = ?')->execute(['written_off', $invoiceId]);
-        $this->updateCustomerBalance($inv['customer_id'], -$amount);
+            $this->pdo->prepare('UPDATE ar_invoices SET balance = 0, status = ? WHERE id = ?')->execute(['written_off', $invoiceId]);
+            $this->updateCustomerBalance($inv['customer_id'], -$amount);
 
-        return ['invoice_id' => $invoiceId, 'transaction_id' => $txn->getId(), 'amount' => $amount, 'used_provision' => $useProvision, 'excess_expense' => $excess];
+            $this->pdo->commit();
+            return ['invoice_id' => $invoiceId, 'transaction_id' => $txn->getId(), 'amount' => $amount, 'used_provision' => $useProvision, 'excess_expense' => $excess];
+        } catch (\Throwable $e) { $this->pdo->rollBack(); throw $e; }
     }
 
     // ── Reports ──

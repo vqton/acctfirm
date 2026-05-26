@@ -162,7 +162,7 @@ function createContainer(): array
     $periodService = new PeriodService($pdo, $accountRepository, $transactionRepository, $journalService, $auditLogger, $inventoryService, $reconciliationService);
     $fsService = new FsService($pdo, $accountRepository, $auditLogger);
     $apService = new ApService($pdo, $supplierRepository, $accountRepository, $journalService, $auditLogger);
-    $arService = new ArService($pdo, $accountRepository, $journalService, $auditLogger);
+    $arService = new ArService($pdo, $accountRepository, $journalService, $auditLogger, $customerRepository);
     $glService = new GlService($pdo, $accountRepository);
     $journalBookService = new JournalBookService($pdo);
     $fixedAssetService = new FixedAssetService($fixedAssetRepository, $accountRepository, $transactionRepository, $journalService, $pdo, $auditLogger);
