@@ -1,4 +1,5 @@
 <?php
+// Quản lý dữ liệu: danh mục dự án
 namespace Accounting\Infrastructure\Persistence;
 
 use Accounting\Domain\Model\Project;

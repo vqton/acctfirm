@@ -1,4 +1,5 @@
 <?php
+// Màn hình: Danh mục công cụ dụng cụ
 $title = 'Công cụ dụng cụ';
 $activeMenu = 'ccdc';
 ob_start();

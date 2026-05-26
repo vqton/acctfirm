@@ -1,4 +1,5 @@
-<?php $title = 'Hàng gửi đi bán'; $activeMenu = 'consignment'; ob_start(); ?>
+<?php // Màn hình: Quản lý hàng gửi đi bán (TK 157)
+$title = 'Hàng gửi đi bán'; $activeMenu = 'consignment'; ob_start(); ?>
 <div class="toolbar">
     <h5>Hàng gửi đi bán <span class="stats">(TK 157)</span></h5>
     <div>

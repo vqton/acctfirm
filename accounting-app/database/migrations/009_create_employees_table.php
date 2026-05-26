@@ -1,4 +1,5 @@
 <?php
+// Bảng danh mục nhân viên — quản lý lương, tạm ứng, bảo hiểm
 return function (PDO $pdo) {
     $pdo->exec('CREATE TABLE IF NOT EXISTS employees (
         id VARCHAR(50) PRIMARY KEY,

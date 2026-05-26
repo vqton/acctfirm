@@ -1,4 +1,5 @@
 <?php
+// Màn hình: Danh mục phòng ban
 $title = 'Danh mục phòng ban';
 $activeMenu = 'departments';
 ob_start();

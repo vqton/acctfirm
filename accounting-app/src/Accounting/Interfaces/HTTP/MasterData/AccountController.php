@@ -6,6 +6,35 @@ use Accounting\Domain\Model\Account;
 use Accounting\Domain\Repository\AccountRepositoryInterface;
 use Accounting\Infrastructure\JsonResponse;
 
+/**
+ * MODULE: Danh mục Hệ thống Tài khoản (Chart of Accounts)
+ *
+ * Mục đích nghiệp vụ:
+ *   - CRUD tài khoản kế toán theo Circular 99/2025/TT-BTC
+ *   - Quản lý cấu trúc tài khoản: tài khoản tổng hợp (control) và tài khoản chi tiết
+ *   - Xác định tính chất: normal_balance (D/N), account_class, parent
+ *   - Kiểm soát tài khoản tổng hợp (control account) — không cho post trực tiếp
+ *   - Audit trail cho mọi thay đổi tài khoản
+ *
+ * API endpoints:
+ *   GET    /api/accounts       — Danh sách tài khoản
+ *   GET    /api/accounts/{id}  — Chi tiết tài khoản
+ *   POST   /api/accounts       — Tạo tài khoản mới
+ *   PUT    /api/accounts/{id}  — Cập nhật tài khoản
+ *   DELETE /api/accounts/{id}  — Xóa tài khoản (chỉ khi chưa phát sinh)
+ *   GET    /api/accounts/tree  — Cây tài khoản phân cấp
+ *
+ * Rủi ro:
+ *   - R005 (HIGH): Sai tài khoản → sai BC01/BC02/BC03
+ *   - Xóa tài khoản đã phát sinh → mất dữ liệu lịch sử
+ *   - Tài khoản tổng hợp không có tài khoản con → không post được
+ *   - Trùng mã tài khoản → nhầm lẫn trong hạch toán
+ *
+ * Tích hợp:
+ *   - AccountRepository được mọi service (JournalService, CashService, ...) dùng
+ *   - PostingRuleService kiểm tra posting rules dựa trên account_code
+ *   - Control account check trong PostingRuleService
+ */
 class AccountController
 {
     private AccountRepositoryInterface $repo;
@@ -71,6 +100,16 @@ class AccountController
         JsonResponse::ok(['message' => 'Deleted']);
     }
 
+    // NGHIỆP VỤ: Seed (khởi tạo/cập nhật) toàn bộ Hệ thống Tài khoản Circular 99
+    // Input: none (đọc từ data/coa_circular_99.json)
+    // Output: { message: 'Seeded', new: N, updated: M }
+    // Service: Tự gọi AccountRepository — không qua JournalService (đây là master data)
+    // Permission: Không check CSRF (có thể gọi nội bộ)
+    // Quy trình: (1) Đọc JSON → (2) Upsert từng tài khoản (thêm mới/cập nhật tên nếu thay đổi)
+    // (3) Đánh dấu control account cho TK tổng hợp (có TK con)
+    // Rủi ro: R005 — Thay đổi tên/cấu trúc TK đã phát sinh → sai BC lịch sử. Chạy lại không ảnh hưởng dữ liệu cũ
+    // Audit trail: Ghi log 'account.seed' với số lượng thêm mới và cập nhật
+    // Idempotent: Chạy nhiều lần không gây lỗi (upsert = findByCode + save nếu có thay đổi)
     public function seed(): void
     {
         $path = __DIR__ . '/../../../../data/coa_circular_99.json';

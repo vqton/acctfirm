@@ -1,4 +1,9 @@
-<?php header('Cache-Control: no-cache, no-store, must-revalidate'); header('Pragma: no-cache'); header('Expires: 0');
+<?php // Màn hình: Lập và quản lý phiếu chi tiền mặt
+// API: GET /api/cash/payments, GET /api/cash/templates?type=payment, GET /api/cash/accounts?for=payment, POST /api/cash/payments, GET /api/payers/search, GET /api/utils/to-words
+// Nghiệp vụ: Chi tiền mặt — Nợ TK đối ứng (131, 331, 641, 642...)/Có 1111
+// Tuân thủ: Chỉ post vào TK con 1111; kiểm tra số dư quỹ trước khi chi (nếu có)
+// Rủi ro: Chi vượt quá số dư tiền mặt sẽ dẫn đến số dư âm — backend cần kiểm tra
+header('Cache-Control: no-cache, no-store, must-revalidate'); header('Pragma: no-cache'); header('Expires: 0');
 $title = 'Phiếu chi'; $activeMenu = 'cash_payments'; ob_start(); ?>
 <div class="toolbar">
     <h5>Phiếu chi tiền mặt <span class="stats">(TK 111)</span></h5>
@@ -43,6 +48,8 @@ $title = 'Phiếu chi'; $activeMenu = 'cash_payments'; ob_start(); ?>
 </div></div></div>
 
 <script>
+// Tải danh sách phiếu chi — GET /api/cash/payments
+// Hiển thị: số CT, người nhận, diễn giải, số tiền, TK Nợ, ngày, trạng thái
 function loadData(){
     $.ajax({url:'/api/cash/payments',headers:{'X-CSRF-Token':csrf},success:function(data){
         var tbody=$('#dataBody'); tbody.empty();
@@ -65,6 +72,9 @@ function loadTemplates(){
         $('#loadStatus').text('OK: '+l.length+' tài khoản').css('color','');
     }).fail(function(x){$('#debitAccount').html('<option>Lỗi: '+x.status+'</option>');$('#loadStatus').text('LỖI: '+x.status).css('color','red');});
 }
+// Khi chọn loại chi — tự động điền TK Nợ mặc định và hiển thị VAT nếu có
+// Nghiệp vụ: Nếu loại chi có VAT (ví dụ mua hàng), phân tách tiền hàng và VAT đầu vào
+// Hạch toán: Nợ 156 (tiền hàng) + Nợ 1331 (VAT)/Có 1111 (tổng)
 $('#paymentType').on('change',function(){
     var opt=$(this).find(':selected');
     var hasVat=opt.data('vat')===true;
@@ -109,7 +119,10 @@ $(document).on('click','.payer-item',function(){
     $('#payerResults').hide();
 });
 $(document).on('click',function(e){if(!$(e.target).closest('#payerSearch,#payerResults').length)$('#payerResults').hide();});
-// Submit
+// Submit tạo phiếu chi — POST /api/cash/payments
+// Nghiệp vụ: Nợ debit_account_code (ví dụ 331, 641, 642)/Có 1111
+// Nếu có VAT: Nợ 1331 (thuế GTGT đầu vào được khấu trừ)
+// RỦI RO: Chi tiền cho NCC phải ghi nhận đúng supplier_id để theo dõi công nợ 331
 $('#paymentForm').submit(function(e){e.preventDefault();
     var data={
         amount: parseFloat($('#amount').val()),

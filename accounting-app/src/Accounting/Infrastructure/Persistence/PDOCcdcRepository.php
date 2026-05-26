@@ -1,4 +1,5 @@
 <?php
+// Quản lý dữ liệu: danh mục công cụ dụng cụ
 namespace Accounting\Infrastructure\Persistence;
 
 use Accounting\Domain\Model\Ccdc;

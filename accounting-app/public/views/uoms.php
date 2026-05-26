@@ -1,4 +1,5 @@
 <?php
+// Màn hình: Danh mục đơn vị tính
 $title = 'Đơn vị tính';
 $activeMenu = 'uoms';
 ob_start();

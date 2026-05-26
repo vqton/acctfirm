@@ -1,4 +1,5 @@
 <?php
+// Quản lý dữ liệu: danh mục phòng ban
 namespace Accounting\Infrastructure\Persistence;
 
 use Accounting\Domain\Model\Department;

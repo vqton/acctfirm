@@ -1,4 +1,5 @@
-<?php use Accounting\Infrastructure\Auth; ?>
+<?php // Màn hình: Khung bố cục chung của toàn bộ ứng dụng
+use Accounting\Infrastructure\Auth; ?>
 <?php
 header('Content-Type: text/html; charset=utf-8');
 $title = $title ?? 'BookWise';
@@ -179,12 +180,12 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
             <div class="collapse sub-menu<?= isActive(['employees','departments'],$activeMenu)?' show':'' ?>" id="menuPayroll">
                 <a href="/danh-muc/nhan-vien" class="nav-link-s<?= isActive('employees',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Nhân viên</a>
                 <a href="/danh-muc/phong-ban" class="nav-link-s<?= isActive('departments',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Phòng ban</a>
-                <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Bảng lương</a>
-                <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Tính lương</a>
-                <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Trích bảo hiểm</a>
-                <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Tính thuế TNCN</a>
-                <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Phiếu lương</a>
-                <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Kê khai BHXH</a>
+                <a href="/tien-luong/bang-luong" class="nav-link-s<?= isActive('payroll_entries',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Bảng lương</a>
+                <a href="/tien-luong/tinh-luong" class="nav-link-s<?= isActive('payroll_calculate',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Tính lương</a>
+                <a href="/tien-luong/bao-hiem" class="nav-link-s<?= isActive('payroll_insurance',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Trích bảo hiểm</a>
+                <a href="/tien-luong/thue-tncn" class="nav-link-s<?= isActive('payroll_tax',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Tính thuế TNCN</a>
+                <a href="/tien-luong/phieu-luong" class="nav-link-s<?= isActive('payroll_payslip',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Phiếu lương</a>
+                <a href="/tien-luong/ke-khai-bhxh" class="nav-link-s<?= isActive('payroll_bhxh',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Kê khai BHXH</a>
             </div>
         </div>
 
@@ -207,13 +208,11 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
         <div class="nav-section">Tổng hợp</div>
         <div class="nav-item">
             <a class="nav-link-s" data-bs-toggle="collapse" href="#menuGL"><i class="bi bi-journal"></i> Tổng hợp <i class="bi bi-chevron-right ms-auto" style="width:auto;font-size:10px;"></i></a>
-            <div class="collapse sub-menu<?= isActive(['projects','so_cai','journal','trial_balance','period_close'],$activeMenu)?' show':'' ?>" id="menuGL">
-                <a href="/danh-muc/he-thong-tai-khoan" class="nav-link-s<?= $activeMenu==='coa'?' active':'' ?>"><i class="bi bi-circle-fill"></i> Hệ thống tài khoản</a>
-                <a href="/danh-muc/du-an" class="nav-link-s<?= isActive('projects',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Dự án / Công trình</a>
-                <a href="/tong-hop/chung-tu-ghi-so" class="nav-link-s<?= isActive('journal',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Chứng từ ghi sổ</a>
-                <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Bút toán điều chỉnh</a>
-                <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Bút toán kết chuyển</a>
-                <a href="/tong-hop/khoa-so-cuoi-ky" class="nav-link-s<?= isActive('period_close',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Khóa sổ cuối kỳ</a>
+            <div class="collapse sub-menu<?= isActive(['projects','so_cai','journal','trial_balance','period_close','fx_revaluation','intercompany'],$activeMenu)?' show':'' ?>" id="menuGL">
+
+            <a href="/tong-hop/khoa-so-cuoi-ky" class="nav-link-s<?= isActive('period_close',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Khóa sổ cuối kỳ</a>
+            <a href="/bao-cao/ty-gia" class="nav-link-s<?= isActive('fx_revaluation',$activeMenu)?' active':'' ?>"><i class="bi bi-currency-exchange"></i> Đánh giá lại ngoại tệ</a>
+            <a href="/he-thong/noi-bo" class="nav-link-s<?= isActive('intercompany',$activeMenu)?' active':'' ?>"><i class="bi bi-diagram-3"></i> Giao dịch nội bộ</a>
                 <a href="/tong-hop/bang-can-doi-so-phat-sinh" class="nav-link-s<?= isActive('trial_balance',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> BCĐ số phát sinh</a>
                 <a href="/bao-cao/nhat-ky-chung" class="nav-link-s<?= isActive('general_journal',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Sổ Nhật ký chung</a>
                 <a href="/bao-cao/so-cai" class="nav-link-s<?= isActive('so_cai',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Sổ cái</a>

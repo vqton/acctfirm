@@ -1,4 +1,5 @@
 <?php
+// Test: Sổ quỹ tiền mặt — kiểm tra số dư và phát sinh
 spl_autoload_register(function ($class) {
     $prefix = 'Accounting\\';
     $baseDir = __DIR__ . '/../src/Accounting/';
@@ -30,6 +31,9 @@ function assertTrue($c, $m) { global $total, $failed;
 
 $pdo->exec('UPDATE accounts SET balance = 0');
 
+// Nghiệp vụ: Sổ quỹ hiển thị các phát sinh thu/chi sau khi hạch toán
+// Kiểm tra: CashService::getCashBook() trả về danh sách giao dịch
+// Nếu fail → sổ quỹ không hiển thị được dữ liệu
 echo "\n=== Test 1: Cash book shows entries after receipt and payment ===\n";
 $svc->recordReceipt(10000000, '511', 'Revenue', 'PT-CB-01', 'tester');
 $svc->recordPayment(3000000, '642', 'Rent', 'PC-CB-01', 'tester');
@@ -38,6 +42,8 @@ $book = $svc->getCashBook();
 assertTrue(count($book) >= 2, 'Cash book has at least 2 entries');
 assertTrue($book[0]['balance'] > 0, 'Running balance after first entry is positive');
 
+// Nghiệp vụ: Số dư lũy kế trong sổ quỹ phải = tổng thu - tổng chi
+// Nếu fail → số dư cuối kỳ sai → báo cáo quỹ không chính xác
 echo "\n=== Test 2: Running balance calculated correctly ===\n";
 $receiptTotal = 0; $paymentTotal = 0;
 foreach ($book as $e) {
@@ -48,15 +54,21 @@ $lastBalance = $book[count($book)-1]['balance'];
 $expectedLast = $receiptTotal - $paymentTotal;
 assertEq($expectedLast, $lastBalance, 'Last running balance = total receipts - total payments');
 
+// Nghiệp vụ: Lọc sổ quỹ theo khoảng thời gian → chỉ hiển thị giao dịch trong kỳ
+// Nếu fail → không tra cứu được số liệu quỹ theo kỳ
 echo "\n=== Test 3: Cash book filtered by date range ===\n";
 $filtered = $svc->getCashBook('2020-01-01', '2099-12-31');
 assertTrue(count($filtered) > 0, 'Filtered cash book returns entries');
 
+// Nghiệp vụ: Sổ quỹ sắp xếp theo thứ tự thời gian tăng dần
+// Nếu fail → thứ tự xuất hiện sai → khó kiểm tra và đối chiếu
 echo "\n=== Test 4: Cash book entries sorted chronologically ===\n";
 for ($i = 1; $i < count($book); $i++) {
     assertTrue(strtotime($book[$i]['date']) >= strtotime($book[$i-1]['date']), 'Entries sorted by date');
 }
 
+// Kiểm tra: Số dư đầu sổ quỷ = 0, số dư cuối = tổng thu - tổng chi
+// Nếu fail → thuật toán tính balance lũy kế sai
 echo "\n=== Test 5: Running balance starts from 0 and ends at account balance ===\n";
 assertEq(0, $book[0]['balance'] - $book[0]['receipt_amount'] + $book[0]['payment_amount'], 'First entry: start balance + receipt - payment = running');
 

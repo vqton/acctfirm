@@ -1,4 +1,5 @@
 <?php
+// Test: Tạm ứng tiền mặt — quản lý quỹ nhỏ
 spl_autoload_register(function ($class) {
     $prefix = 'Accounting\\';
     $baseDir = __DIR__ . '/../src/Accounting/';
@@ -75,6 +76,8 @@ assertEq(1500000, $expense, 'Expense (642) recorded = 1,500,000');
 $cash2 = $accountRepo->findByCode('111')->getBalance();
 assertEq(3500000, $cash2, 'Cash (111) decreased by 1,500,000');
 
+// Ràng buộc: Chi tạm ứng vượt quá số dư quỹ → từ chối
+// Nếu fail → quỹ tạm ứng có thể âm → mất kiểm soát
 echo "\n=== Test 5: Disbursement exceeding fund balance rejected ===\n";
 try {
     $pettyCash->disbursePettyCash($fundId, 99999999, 'Over-limit', 'PC-BAD', 'tester');
@@ -92,6 +95,7 @@ $funds4 = $pettyCash->getPettyCashFunds();
 $f4 = current(array_filter($funds4, fn($f) => $f['id'] === $fundId));
 assertEq('closed', $f4['status'], 'Fund status = closed');
 
+// Kiểm tra ràng buộc Dr = Cr sau các giao dịch tạm ứng
 echo "\n=== Test 7: Trial balance after petty cash transactions ===\n";
 $all = $accountRepo->findAll();
 $totalDr = 0; $totalCr = 0;

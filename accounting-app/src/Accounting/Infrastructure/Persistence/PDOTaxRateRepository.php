@@ -1,4 +1,5 @@
 <?php
+// Quản lý dữ liệu: biểu thuế và thuế suất
 namespace Accounting\Infrastructure\Persistence;
 
 use Accounting\Domain\Model\TaxRate;

@@ -1,4 +1,5 @@
 <?php
+// Test: Kiểm kê định kỳ — ghi nhận tồn kho cuối kỳ
 spl_autoload_register(function ($class) {
     $prefix = 'Accounting\\';
     $baseDir = __DIR__ . '/../src/Accounting/';
@@ -62,6 +63,9 @@ assertEq(1480000, $cogs, "COGS = 1,480,000 (5M+2.6M-6.12M)");
 assertEq(6120000, $inv, "Inventory = 6,120,000 (120×51,000)");
 assertTrue($result['cogs'] > 0, 'Periodic record has COGS');
 
+// Nghiệp vụ: Kỳ tiếp theo không có mua hàng — COGS chỉ dựa trên tồn đầu kỳ và kiểm kê cuối kỳ
+// Tồn đầu 120×51K, Mua: 0, Tồn cuối 100×50K → COGS = 1,120,000
+// Nếu fail → sai giá vốn trong kỳ không có mua hàng
 echo "\n=== Test 2: Second period with no purchases ===\n";
 // Opening: 120×51,000=6,120,000, Purchases: 0, Closing: 100×50,000=5,000,000
 // COGS = 6,120,000 + 0 - 5,000,000 = 1,120,000

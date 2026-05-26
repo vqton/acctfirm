@@ -6,6 +6,27 @@ use Accounting\Domain\Repository\ExchangeRateRepositoryInterface;
 
 use \Accounting\Interfaces\HTTP\CrudControllerTrait;
 
+/**
+ * MODULE: Tỷ giá Ngoại tệ (Exchange Rate)
+ *
+ * Mục đích nghiệp vụ:
+ *   - CRUD tỷ giá ngoại tệ theo ngày
+ *   - Cập nhật tỷ giá mua/bán cho từng loại ngoại tệ
+ *   - Cơ sở để quy đổi giao dịch ngoại tệ và đánh giá lại cuối kỳ
+ *
+ * API endpoints:
+ *   (Sử dụng CrudControllerTrait — CRUD chuẩn)
+ *
+ * Rủi ro:
+ *   - Sai tỷ giá → sai giá trị quy đổi → sai BC01/BC02
+ *   - Tỷ giá không được cập nhật kịp thời → đánh giá lại sai
+ *   - Chênh lệch tỷ giá cuối kỳ cần hạch toán vào 515 (lãi) hoặc 635 (lỗ)
+ *
+ * Tích hợp:
+ *   - FxController dùng tỷ giá để đánh giá lại cuối kỳ
+ *   - CashController dùng khi ghi nhận giao dịch ngoại tệ
+ *   - Báo cáo tài chính cần quy đổi ngoại tệ theo tỷ giá cuối kỳ
+ */
 class ExchangeRateController
 {
     use CrudControllerTrait;

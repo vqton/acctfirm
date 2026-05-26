@@ -1,4 +1,8 @@
-<?php $title = 'Điều chuyển kho'; $activeMenu = 'transfers'; ob_start(); ?>
+<?php // Màn hình: Điều chuyển hàng giữa các kho
+// API: GET /api/transfers, GET /api/transfers/items, GET /api/transfers/warehouses, POST /api/transfers
+// Nghiệp vụ: Điều chuyển kho — Nợ 156 (kho đích)/Có 156 (kho nguồn) — không ảnh hưởng KQKD
+// Rủi ro: Chọn kho nguồn = kho đích sẽ không làm thay đổi tồn kho — đã có validation frontend
+$title = 'Điều chuyển kho'; $activeMenu = 'transfers'; ob_start(); ?>
 <div class="toolbar">
     <h5>Điều chuyển kho</h5>
     <div>
@@ -95,7 +99,8 @@ $.get('/api/transfers/warehouses', function(warehouses) {
     });
 });
 
-// Prevent same source and destination
+// Ngăn chọn kho nguồn = kho đích — validation frontend bắt buộc
+// RỦI RO: Nếu backend không kiểm tra, điều chuyển cùng kho sẽ không làm thay đổi tồn kho
 $('#toWarehouseId').change(function() {
     var from = $('#fromWarehouseId').val();
     var to = $(this).val();
@@ -113,6 +118,9 @@ $('#fromWarehouseId').change(function() {
     }
 });
 
+// Submit phiếu điều chuyển kho — POST /api/transfers
+// Validate: item_id bắt buộc, to_warehouse_id bắt buộc, không được chuyển cùng kho
+// Nghiệp vụ: Nợ 156 (kho đích)/Có 156 (kho nguồn) — chỉ thay đổi vị trí, không thay đổi giá trị
 $('#transferForm').submit(function(e) {
     e.preventDefault();
     var data = {

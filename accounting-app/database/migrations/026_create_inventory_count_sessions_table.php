@@ -1,4 +1,5 @@
 <?php
+// Bảng phiếu kiểm kê — quản lý số lượng tồn kho thực tế
 return function (PDO $pdo) {
     $pdo->exec('CREATE TABLE IF NOT EXISTS inventory_count_sessions (
         id VARCHAR(50) PRIMARY KEY,

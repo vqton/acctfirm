@@ -1,4 +1,5 @@
 <?php
+// Thêm cột code vào accounts — chuẩn hóa mã tài khoản
 return function (PDO $pdo) {
     $r = $pdo->query("SHOW COLUMNS FROM accounts LIKE 'code'");
     if (!$r->fetch()) {

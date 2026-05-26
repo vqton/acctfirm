@@ -1,4 +1,5 @@
 <?php
+// Test: Kiểm kê thực tế — so sánh sổ sách và thực tế
 spl_autoload_register(function ($class) {
     $prefix = 'Accounting\\';
     $baseDir = __DIR__ . '/../src/Accounting/';
@@ -74,6 +75,8 @@ $expectedShortage = 30 * 50000;
 assertEq(90 * 50000, $inv2, "Inventory (152) = 4,500,000");
 assertEq($expectedShortage, $cogs, "COGS (632) = {$expectedShortage}");
 
+// Biên: Kiểm kê khớp (thực tế = sổ sách) → không cần điều chỉnh
+// Nếu fail → hệ thống tạo bút toán điều chỉnh không cần thiết
 echo "\n=== Test 3: Physical count exact match (no adjustment) ===\n";
 $result3 = $svc->adjustPhysicalCount($item->getId(), 90, 'COUNT-003', 'tester');
 

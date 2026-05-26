@@ -1,4 +1,5 @@
-<?php $title = 'Người dùng'; $activeMenu = 'users'; ob_start(); ?>
+<?php // Màn hình: Quản lý người dùng hệ thống
+$title = 'Người dùng'; $activeMenu = 'users'; ob_start(); ?>
 <div class="toolbar">
     <h5>Quản lý người dùng</h5>
     <div><button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#userModal"><i class="bi bi-plus-lg"></i> Thêm người dùng</button></div>

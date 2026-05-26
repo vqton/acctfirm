@@ -1,4 +1,5 @@
 <?php
+// Bảng hàng gửi bán/ký gửi — theo dõi hàng gửi đại lý
 return function (PDO $pdo) {
     $pdo->exec('CREATE TABLE IF NOT EXISTS inventory_consignment (
         id VARCHAR(50) PRIMARY KEY,

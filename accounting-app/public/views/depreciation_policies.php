@@ -1,4 +1,5 @@
 <?php
+// Màn hình: Chính sách khấu hao tài sản cố định
 $title = 'Chính sách khấu hao';
 $activeMenu = 'depreciation_policies';
 ob_start();

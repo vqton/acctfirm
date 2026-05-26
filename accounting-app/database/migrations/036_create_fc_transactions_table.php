@@ -1,4 +1,5 @@
 <?php
+// Bảng giao dịch ngoại tệ — quản lý chênh lệch tỷ giá
 return function (PDO $pdo) {
     $pdo->exec('CREATE TABLE IF NOT EXISTS fc_transactions (
         id INT AUTO_INCREMENT PRIMARY KEY,

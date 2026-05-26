@@ -1,4 +1,5 @@
-<?php $title = 'Hàng mua đang đi đường'; $activeMenu = 'transit'; ob_start(); ?>
+<?php // Màn hình: Hàng mua đang đi đường (TK 151)
+$title = 'Hàng mua đang đi đường'; $activeMenu = 'transit'; ob_start(); ?>
 <div class="toolbar">
     <h5>Hàng mua đang đi đường <span class="stats">(TK 151)</span></h5>
     <div>

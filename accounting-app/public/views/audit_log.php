@@ -1,4 +1,5 @@
-<?php $title = 'Nhật ký hoạt động'; $activeMenu = 'audit_log'; ob_start(); ?>
+<?php // Màn hình: Nhật ký kiểm toán và vết hoạt động
+$title = 'Nhật ký hoạt động'; $activeMenu = 'audit_log'; ob_start(); ?>
 <div class="toolbar">
     <h5>Nhật ký hoạt động <span class="stats">(Audit Log)</span></h5>
     <div>

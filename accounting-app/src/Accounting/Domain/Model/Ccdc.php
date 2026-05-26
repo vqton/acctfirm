@@ -1,6 +1,23 @@
 <?php
 namespace Accounting\Domain\Model;
 
+/**
+ * Công cụ dụng cụ (CCDC) — Quản lý tài sản ngắn hạn (TK 153).
+ *
+ * CCDC là những tư liệu lao động không đủ tiêu chuẩn là TSCĐ:
+ * - Giá trị nhỏ (dưới 30 triệu đồng)
+ * - Thời gian sử dụng ngắn (dưới 1 năm)
+ *
+ * NGHIỆP VỤ:
+ * - $allocationType: 'direct' (phân bổ 1 lần) hoặc 'period' (phân bổ nhiều kỳ)
+ * - $totalCost: tổng giá trị CCDC khi nhập kho
+ * - $allocated: giá trị đã phân bổ vào chi phí
+ * - Phân bổ CCDC: Nợ 627/641/642 / Có 153 (hoặc 242 nếu phân bổ nhiều kỳ)
+ *
+ * LIÊN KẾT:
+ * - InventoryService → quản lý nhập/xuất CCDC như Item
+ * - FixedAssetService → CCDC có thể chuyển thành TSCĐ nếu đủ điều kiện
+ */
 class Ccdc
 {
     private string $id;
@@ -50,6 +67,11 @@ class Ccdc
     public function setAllocated(float $allocated): void { $this->allocated = $allocated; }
     public function setStatus(bool $status): void { $this->status = $status; }
 
+    // Chuyển đổi model thành mảng để response API.
+    // 'allocation_type': 'direct' (phân bổ 1 lần — Nợ 627/641/642 / Có 153),
+    //   'period' (phân bổ nhiều kỳ — Nợ 242 / Có 153, sau đó phân bổ dần).
+    // 'total_cost' - 'allocated': giá trị còn lại chưa phân bổ.
+    // RỦI RO: CCDC giá trị nhỏ nhưng số lượng nhiều → sai chi phí nếu không phân bổ đúng.
     public function toArray(): array
     {
         return [

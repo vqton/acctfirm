@@ -1,4 +1,5 @@
 <?php
+// Thêm cột is_control vào accounts — đánh dấu tài khoản tổng hợp
 return function (PDO $pdo) {
     $res = $pdo->query("SHOW COLUMNS FROM accounts LIKE 'is_control'");
     if (!$res->fetch()) {

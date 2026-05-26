@@ -1,4 +1,5 @@
 <?php
+// Test: Cash & Bank — tổng hợp thu chi tiền mặt và tiền gửi
 spl_autoload_register(function ($class) {
     $prefix = 'Accounting\\';
     $baseDir = __DIR__ . '/../src/Accounting/';
@@ -63,6 +64,8 @@ $ap = $accountRepo->findByCode('331')->getBalance();
 assertEq(3000000, $bank4, 'Bank (112) decreased to 3,000,000');
 assertEq(-4000000, $ap, 'AP (331) decreased by 4,000,000');
 
+// Nghiệp vụ: Lãi ngân hàng — Dr 112 (TGNH) / Cr 515 (Doanh thu HĐTC)
+// Nếu fail → không ghi nhận được lãi ngân hàng → sai BC02
 echo "\n=== Test 5: Bank interest credited (Dr 112 — Cr 515) ===\n";
 $svc->recordBankInterest(50000, 'Interest income August', 'BC-003', 'tester');
 
@@ -71,6 +74,8 @@ $interest = $accountRepo->findByCode('515')->getBalance();
 assertEq(3050000, $bank5, 'Bank (112) increased to 3,050,000');
 assertEq(50000, $interest, 'Interest income (515) = 50,000');
 
+// Nghiệp vụ: Phí ngân hàng — Dr 642 (CP QLDN) / Cr 112 (TGNH)
+// Nếu fail → phí NH không được hạch toán → sai chi phí
 echo "\n=== Test 6: Bank charges debited (Dr 642 — Cr 112) ===\n";
 $svc->recordBankCharge(220000, 'Service fee', 'BN-003', 'tester');
 
@@ -79,6 +84,8 @@ $expense = $accountRepo->findByCode('642')->getBalance();
 assertEq(2830000, $bank6, 'Bank (112) decreased to 2,830,000');
 assertEq(220000, $expense, 'Expense (642) = 220,000');
 
+// Ràng buộc: Số dư ngân hàng không đủ → từ chối
+// Nếu fail → chi trả vượt số dư ngân hàng → âm tài khoản 112
 echo "\n=== Test 7: Insufficient bank balance rejected ===\n";
 try {
     $svc->recordBankPayment(99999999, '331', 'Over-limit payment', 'BN-BAD', 'tester');
@@ -88,6 +95,7 @@ try {
     assertTrue(true, 'Insufficient bank balance rejected');
 }
 
+// Kiểm tra ràng buộc kế toán: Dr = Cr sau giao dịch ngân hàng
 echo "\n=== Test 8: Trial balance after bank transactions ===\n";
 $all = $accountRepo->findAll();
 $totalDr = 0; $totalCr = 0;

@@ -6,6 +6,27 @@ use Accounting\Domain\Repository\CustomerRepositoryInterface;
 
 use \Accounting\Interfaces\HTTP\CrudControllerTrait;
 
+/**
+ * MODULE: Danh mục Khách hàng (Customer Master)
+ *
+ * Mục đích nghiệp vụ:
+ *   - CRUD khách hàng: thông tin liên hệ, mã số thuế, địa chỉ
+ *   - Quản lý điều khoản thanh toán (payment_terms) và hạn mức tín dụng
+ *   - Cơ sở để quản lý công nợ phải thu (TK 131)
+ *
+ * API endpoints:
+ *   (Sử dụng CrudControllerTrait — CRUD chuẩn)
+ *
+ * Rủi ro:
+ *   - Trùng mã số thuế → nhầm lẫn giữa 2 khách hàng khác nhau
+ *   - Sai hạn mức tín dụng → bán hàng vượt quá khả năng thanh toán
+ *   - Khách hàng không còn hoạt động (status = inactive) vẫn có công nợ
+ *
+ * Tích hợp:
+ *   - ArController tham chiếu customer_id để ghi nhận hóa đơn
+ *   - Báo cáo AR aging dùng thông tin customer
+ *   - ProjectController gán khách hàng cho dự án
+ */
 class CustomerController
 {
     use CrudControllerTrait;

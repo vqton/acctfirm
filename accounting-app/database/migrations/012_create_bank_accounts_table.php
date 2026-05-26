@@ -1,4 +1,5 @@
 <?php
+// Bảng tài khoản ngân hàng — quản lý số dư tiền gửi (TK 112)
 return function (PDO $pdo) {
     $pdo->exec('CREATE TABLE IF NOT EXISTS bank_accounts (
         id VARCHAR(50) PRIMARY KEY, code VARCHAR(50) NOT NULL UNIQUE, bank_name VARCHAR(200) NOT NULL,

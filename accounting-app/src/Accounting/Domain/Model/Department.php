@@ -1,6 +1,24 @@
 <?php
 namespace Accounting\Domain\Model;
 
+/**
+ * Phòng ban — Đơn vị tổ chức trong doanh nghiệp.
+ *
+ * Phòng ban là đối tượng tập hợp chi phí (cost center) và là cơ sở để
+ * phân bổ chi phí khấu hao, lương, và các chi phí chung khác.
+ *
+ * NGHIỆP VỤ:
+ * - Cấu trúc cây: $parentId cho phép phân cấp phòng ban
+ *   (VD: Khối Văn phòng → Phòng Kế toán → Tổ thanh toán)
+ * - Chi phí phát sinh ở phòng ban nào ghi nhận chi phí ở phòng ban đó
+ * - Dùng trong báo cáo chi phí theo bộ phận (segment reporting)
+ *
+ * LIÊN KẾT:
+ * - Employee → nhân viên thuộc phòng ban
+ * - FixedAsset → TSCĐ do phòng ban quản lý
+ * - Các chi phí (lương, khấu hao, CCDC) được phân bổ vào TK 627/641/642
+ *   theo phòng ban
+ */
 class Department
 {
     private string $id;
@@ -29,6 +47,10 @@ class Department
     public function setParentId(?string $v): void { $this->parentId = $v; }
     public function setStatus(bool $v): void { $this->status = $v; }
 
+    // Chuyển đổi model thành mảng để response API.
+    // Phòng ban là cost center — chi phí lương (TK 334), khấu hao (TK 214), CCDC (TK 153)
+    // được phân bổ vào TK 627/641/642 theo phòng ban sử dụng.
+    // 'parent_id': cấu trúc cây cho phép báo cáo chi phí theo bộ phận (segment reporting).
     public function toArray(): array
     {
         return [

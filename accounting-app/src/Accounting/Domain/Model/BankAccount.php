@@ -1,6 +1,28 @@
 <?php
 namespace Accounting\Domain\Model;
 
+/**
+ * Tài khoản ngân hàng — Sổ chi tiết TK 112 "Tiền gửi ngân hàng".
+ *
+ * Mỗi tài khoản ngân hàng là một tài khoản con của TK 112, phản ánh số dư
+ * tiền gửi tại từng ngân hàng. Số dư khớp với sao kê ngân hàng sau khi
+ * đối chiếu (Bank Reconciliation).
+ *
+ * NGHIỆP VỤ:
+ * - $code: mã tài khoản ngân hàng theo hệ thống (VD: "1121-VCB")
+ * - $accountNumber: số tài khoản thực tế tại ngân hàng
+ * - $currency: loại tiền — mỗi tài khoản chỉ quản lý một loại tiền
+ * - $openingBalance: số dư đầu kỳ khi thiết lập tài khoản
+ *
+ * LIÊN KẾT:
+ * - CashService → ghi nhận thu/chi qua ngân hàng (qua JournalService)
+ * - BankReconciliationService → đối chiếu sao kê cuối kỳ
+ *
+ * RỦI RO:
+ * - Số dư trên hệ thống phải khớp với số dư sao kê ngân hàng sau đối chiếu
+ * - Chênh lệch tỷ giá cho TK 112 ngoại tệ phải được hạch toán cuối kỳ
+ * - Phí ngân hàng thường trừ trực tiếp vào tài khoản — cần ghi nhận kịp thời
+ */
 class BankAccount
 {
     private string $id;
@@ -51,6 +73,10 @@ class BankAccount
     public function setOpeningBalance(float $balance): void { $this->openingBalance = $balance; }
     public function setStatus(bool $status): void { $this->status = $status; }
 
+    // Chuyển đổi model thành mảng để response API.
+    // Mỗi BankAccount tương ứng một TK con của TK 112 (VD: 1121-VCB, 1121-CTG).
+    // 'currency': mỗi tài khoản chỉ quản lý một loại tiền — ảnh hưởng đánh giá chênh lệch tỷ giá.
+    // 'opening_balance': số dư đầu kỳ khi thiết lập, khớp với sao kê ngân hàng.
     public function toArray(): array
     {
         return [

@@ -5,6 +5,22 @@ use Accounting\Domain\Contract\AuditLoggerInterface;
 use Accounting\Domain\Repository\AccountRepositoryInterface;
 use Accounting\Domain\Repository\TransactionRepositoryInterface;
 
+// Dịch vụ đối chiếu ngân hàng (Bank Reconciliation)
+//
+// Nghiệp vụ: Cuối mỗi kỳ, kế toán phải đối chiếu số dư TK 112 (Tiền gửi ngân hàng)
+// trên sổ kế toán với sao kê ngân hàng. Mục đích:
+//   - Phát hiện chênh lệch do séc chưa thanh toán, tiền gửi đang chuyển
+//   - Phát hiện sai sót hạch toán (ghi nhầm số tiền, tài khoản)
+//   - Điều chỉnh bút toán nếu có chênh lệch thực tế
+//
+// Quy trình: startSession → (manualMatch | autoMatch | addAdjustingEntry) → complete
+//   - startSession: tạo phiên đối chiếu, load dữ liệu từ sổ phụ và hệ thống
+//   - autoMatch: tự động so khớp dựa trên số tiền, số tham chiếu, ngày tháng
+//   - addAdjustingEntry: ghi nhận chênh lệch và tạo bút toán điều chỉnh
+//   - complete: kiểm tra cân đối và đóng phiên
+//
+// RỦI RO: Nếu không đối chiếu định kỳ, sai số dư tiền gửi → BC01 chỉ tiêu 112 sai
+// → quyết toán thuế sai lệch. Sai lệch kéo dài có thể là dấu hiệu gian lận.
 class BankReconciliationService
 {
     private AccountRepositoryInterface $accountRepo;
@@ -27,6 +43,25 @@ class BankReconciliationService
         $this->auditLogger = $auditLogger;
     }
 
+    // Khởi tạo phiên đối chiếu ngân hàng mới
+    //
+    // Input: bankAccountCode (TK 112*), statementDate, statementBalance (từ sao kê NH)
+    // Output: Session object với book_balance và statement_balance
+    //
+    // Quy trình:
+    //   1. Lấy số dư trên sổ (bookBalance) từ AccountRepository
+    //   2. Lưu session với status = 'in_progress'
+    //   3. Load tất cả giao dịch sổ (ledger entries) vào bảng reconciliation_items
+    //
+    // RỦI RO: Không kiểm tra session đã tồn tại cho cùng kỳ/tk
+    //   - Có thể tạo nhiều session cho cùng bank account + cùng ngày
+    //   - Dẫn đến nhầm lẫn: không biết phiên nào là phiên cuối cùng
+    //   - Cần check: "đã có session in_progress cho account này chưa?"
+    //
+    // RỦI RO DỮ LIỆU LỚN:
+    //   loadBookItems load TOÀN BỘ ledger_entries cho tài khoản
+    //   Với tài khoản có 10,000+ giao dịch → có thể memory overflow
+    //   Cần giới hạn theo kỳ/tháng hoặc pagination
     public function startSession(string $bankAccountCode, string $statementDate, float $statementBalance, string $createdBy): array
     {
         $bank = $this->accountRepo->findByCode($bankAccountCode);
@@ -46,6 +81,17 @@ class BankReconciliationService
         return $this->getSession($sessionId);
     }
 
+    // Load giao dịch từ sổ kế toán (ledger_entries) vào phiên đối chiếu
+    //
+    // Internal — gọi từ startSession
+    // Chuyển đổi: ledger_entry (is_debit) → reconciliation_item (receipt/payment)
+    //
+    // HẠN CHẾ: Load TOÀN BỘ giao dịch từ đầu, không filter theo kỳ
+    //   - Mỗi phiên mới load lại tất cả → không phân biệt đã đối chiếu ở phiên trước
+    //   - Cần filter theo ngày hoặc đánh dấu reconciled từ phiên trước
+    //
+    // RỦI RO TRÙNG LẶP: Nếu startSession gọi nhiều lần → items bị duplicate
+    //   → autoMatch match sai (match với duplicate) → complete tính sai
     private function loadBookItems(int $sessionId, string $bankAccountCode): void
     {
         $bank = $this->accountRepo->findByCode($bankAccountCode);
@@ -92,6 +138,21 @@ class BankReconciliationService
         return (int)$this->pdo->lastInsertId();
     }
 
+    // Tự động so khớp giao dịch sổ và sao kê ngân hàng
+    //
+    // Input: sessionId | Output: { matched, unmatched }
+    //
+    // Thuật toán matching:
+    //   1. Lấy book items & statement items (unmatched)
+    //   2. Với mỗi statement item, tìm book item theo:
+    //      a. BẮT BUỘC: amount ±1 VND + type trùng
+    //      b. ƯU TIÊN: reference trùng
+    //      c. DATE window: ±3 ngày nếu date trùng hoặc reference trùng
+    //   3. Nếu (a) + (b hoặc c) → match
+    //
+    // FALSE POSITIVE: amount + type + date gần giống nhưng khác giao dịch
+    // FALSE NEGATIVE: amount lệch do phí NH, tỷ giá
+    // HIỆU NĂNG: O(n*m) — chậm nếu >1000 items mỗi bên
     public function autoMatch(int $sessionId): array
     {
         $session = $this->getSessionRaw($sessionId);
@@ -115,6 +176,21 @@ class BankReconciliationService
             'UPDATE bank_reconciliation_items SET match_status = ?, matched_item_id = ? WHERE id = ?'
         );
 
+        // Vòng lặp matching: mỗi statement item so với tất cả book item
+        //
+        // Điều kiện match:
+        //   1. amount ±1 VND (dung sai do phí NH, làm tròn)
+        //   2. Cùng type (receipt/payment)
+        //   3. reference trùng khớp (ưu tiên cao — số tham chiếu từ NH)
+        //      HOẶC date trùng khớp (chính xác)
+        //      HOẶC date trong vòng 3 ngày (chênh lệch NH báo)
+        //
+        // Sau khi match: cập nhật match_status='matched' + matched_item_id
+        // Cập nhật cả 2 chiều (statement item + book item)
+        //
+        // RỦI RO: Nếu book item không liên tiếp trong vòng lặp lồng
+        // (statement items order không khớp book items order)
+        // → false negative tạm thời — nhưng item sẽ được match ở vòng lặp tiếp theo
         foreach ($stmtRows as $s) {
             foreach ($bookRows as $bk) {
                 if ($bk['match_status'] !== 'unmatched') continue;
@@ -157,6 +233,29 @@ class BankReconciliationService
         )->execute(['matched', $statementItemId, $bookItemId, $sessionId]);
     }
 
+    // Thêm bút toán điều chỉnh trong phiên đối chiếu
+    //
+    // Input: sessionId, debitAccount, creditAccount, amount, description
+    // Output: { transaction_id, amount }
+    //
+    // Sử dụng khi: Phát hiện chênh lệch cần điều chỉnh trên sổ kế toán
+    //   - Phí ngân hàng chưa hạch toán (Nợ 6425/Có 112)
+    //   - Lãi tiền gửi chưa ghi nhận (Nợ 112/Có 515)
+    //   - Sai sót hạch toán (ghi sai số tiền, nhầm tài khoản)
+    //
+    // Quy trình:
+    //   1. postEntry qua JournalService — ghi nhận bút toán kép
+    //   2. Thêm item vào cả 2 bên: book + statement (đều matched)
+    //      → Đảm bảo chênh lệch được loại bỏ khi complete
+    //
+    // RỦI RO: Không xác thực debitAccount/creditAccount
+    //   Có thể nhập account_code không tồn tại → postEntry throw exception
+    //   Tuy nhiên nếu nhập account_code sai nhưng tồn tại → hạch toán sai
+    //
+    // Hạch toán phổ biến:
+    //   - Phí NH: Nợ 6425 / Có 112
+    //   - Lãi NH: Nợ 112 / Có 515
+    //   - Điều chỉnh tỷ giá: Nợ/Có 112 / Có/Nợ 413
     public function addAdjustingEntry(int $sessionId, string $debitAccount, string $creditAccount, float $amount, string $description, string $createdBy): array
     {
         $session = $this->getSessionRaw($sessionId);
@@ -180,6 +279,33 @@ class BankReconciliationService
         return ['transaction_id' => $txn->getId(), 'amount' => $amount];
     }
 
+    // Hoàn tất phiên đối chiếu — kiểm tra cân đối và đóng phiên
+    //
+    // Input: sessionId
+    // Output: { completed, balanced, book_balance, statement_balance, adjusted_book, ... }
+    //
+    // Công thức đối chiếu:
+    //   Adjusted Book Balance = Book Balance + Unmatched Receipts - Unmatched Payments
+    //   Yêu cầu: |Adjusted Book - Statement Balance| ≤ 1 VND
+    //
+    // Nếu cân đối:
+    //   - Set status = 'completed'
+    //   - Ghi audit log với đầy đủ thông tin (balances, chênh lệch)
+    //
+    // Nếu KHÔNG cân đối:
+    //   - Throw InvalidArgumentException — không đóng phiên
+    //   - Kế toán phải xử lý unmatched items, thêm adjusting entries
+    //     hoặc kiểm tra lại sao kê ngân hàng
+    //
+    // RỦI RO KHÔNG THẤY:
+    //   - Chỉ kiểm tra unmatched từ statement items
+    //   - KHÔNG kiểm tra unmatched book items có ảnh hưởng không
+    //   - Nếu có book item unmatched nhưng không ảnh hưởng đến adjusted_book
+    //     → phiên vẫn đóng (đúng) nhưng không thông báo cho kế toán
+    //
+    // RỦI RO COMPLETE NHIỀU LẦN:
+    //   - Nếu gọi complete lần 2 → throw (vì status !== 'in_progress')
+    //   → OK, idempotent
     public function complete(int $sessionId): array
     {
         $session = $this->getSessionRaw($sessionId);

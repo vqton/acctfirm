@@ -1,4 +1,5 @@
 <?php
+// Quản lý dữ liệu: chính sách khấu hao TSCĐ
 namespace Accounting\Infrastructure\Persistence;
 
 use Accounting\Domain\Model\DepreciationPolicy;

@@ -1,6 +1,6 @@
 <?php
 // src/Accounting/Infrastructure/Repository/PDOTransactionRepository.php
-
+// Quản lý dữ liệu: chứng từ và bút toán kế toán
 namespace Accounting\Infrastructure\Persistence;
 
 use Accounting\Domain\Model\LedgerEntry;
@@ -19,7 +19,10 @@ class PDOTransactionRepository implements TransactionRepositoryInterface
 
     public function findById(string $id): ?Transaction
     {
-        $stmt = $this->pdo->prepare('SELECT id, date, description, reference, status, created_by FROM transactions WHERE id = ?');
+        $stmt = $this->pdo->prepare(
+            'SELECT id, date, description, reference, status, created_by, voucher_type, source_module, currency, exchange_rate
+             FROM transactions WHERE id = ?'
+        );
         $stmt->execute([$id]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -31,14 +34,21 @@ class PDOTransactionRepository implements TransactionRepositoryInterface
             $row['id'],
             new \DateTimeImmutable($row['date']),
             $row['description'],
-            $row['reference']
+            $row['reference'],
+            $row['voucher_type'] ?? null,
+            $row['source_module'] ?? null,
+            $row['currency'] ?? 'VND',
+            (float)($row['exchange_rate'] ?? 1.0)
         );
         
          $transaction->setStatus($row['status']);
          $transaction->setCreatedBy($row['created_by']);
 
         // Load ledger entries
-        $stmt = $this->pdo->prepare('SELECT id, account_id, amount, is_debit, note FROM ledger_entries WHERE transaction_id = ? ORDER BY id');
+        $stmt = $this->pdo->prepare(
+            'SELECT id, account_id, amount, is_debit, note, currency, exchange_rate, fc_amount, line_order
+             FROM ledger_entries WHERE transaction_id = ? ORDER BY line_order, id'
+        );
         $stmt->execute([$id]);
         
         while ($entryRow = $stmt->fetch(PDO::FETCH_ASSOC)) {
@@ -47,7 +57,11 @@ class PDOTransactionRepository implements TransactionRepositoryInterface
                 $entryRow['account_id'],
                 (float) $entryRow['amount'],
                 (bool) $entryRow['is_debit'],
-                $entryRow['note']
+                $entryRow['note'],
+                $entryRow['currency'] ?? 'VND',
+                (float)($entryRow['exchange_rate'] ?? 1.0),
+                (float)($entryRow['fc_amount'] ?? 0.0),
+                (int)($entryRow['line_order'] ?? 0)
             );
             $transaction->addLedgerEntry($ledgerEntry);
         }
@@ -57,7 +71,10 @@ class PDOTransactionRepository implements TransactionRepositoryInterface
 
     public function findByReference(string $reference): ?Transaction
     {
-        $stmt = $this->pdo->prepare('SELECT id, date, description, reference, status, created_by FROM transactions WHERE reference = ?');
+        $stmt = $this->pdo->prepare(
+            'SELECT id, date, description, reference, status, created_by, voucher_type, source_module, currency, exchange_rate
+             FROM transactions WHERE reference = ?'
+        );
         $stmt->execute([$reference]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -69,14 +86,21 @@ class PDOTransactionRepository implements TransactionRepositoryInterface
             $row['id'],
             new \DateTimeImmutable($row['date']),
             $row['description'],
-            $row['reference']
+            $row['reference'],
+            $row['voucher_type'] ?? null,
+            $row['source_module'] ?? null,
+            $row['currency'] ?? 'VND',
+            (float)($row['exchange_rate'] ?? 1.0)
         );
         
          $transaction->setStatus($row['status']);
          $transaction->setCreatedBy($row['created_by']);
 
         // Load ledger entries
-        $stmt = $this->pdo->prepare('SELECT id, account_id, amount, is_debit, note FROM ledger_entries WHERE transaction_id = ? ORDER BY id');
+        $stmt = $this->pdo->prepare(
+            'SELECT id, account_id, amount, is_debit, note, currency, exchange_rate, fc_amount, line_order
+             FROM ledger_entries WHERE transaction_id = ? ORDER BY line_order, id'
+        );
         $stmt->execute([$row['id']]);
         
         while ($entryRow = $stmt->fetch(PDO::FETCH_ASSOC)) {
@@ -85,7 +109,11 @@ class PDOTransactionRepository implements TransactionRepositoryInterface
                 $entryRow['account_id'],
                 (float) $entryRow['amount'],
                 (bool) $entryRow['is_debit'],
-                $entryRow['note']
+                $entryRow['note'],
+                $entryRow['currency'] ?? 'VND',
+                (float)($entryRow['exchange_rate'] ?? 1.0),
+                (float)($entryRow['fc_amount'] ?? 0.0),
+                (int)($entryRow['line_order'] ?? 0)
             );
             $transaction->addLedgerEntry($ledgerEntry);
         }
@@ -97,8 +125,11 @@ class PDOTransactionRepository implements TransactionRepositoryInterface
     {
         // Save transaction
         $stmt = $this->pdo->prepare(
-            'INSERT INTO transactions (id, date, description, reference, status, created_by) VALUES (?, ?, ?, ?, ?, ?) ' .
-            'ON DUPLICATE KEY UPDATE date = ?, description = ?, reference = ?, status = ?, created_by = ?'
+            'INSERT INTO transactions (id, date, description, reference, status, created_by, voucher_type, source_module, currency, exchange_rate)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE
+               date = ?, description = ?, reference = ?, status = ?, created_by = ?,
+               voucher_type = ?, source_module = ?, currency = ?, exchange_rate = ?'
         );
         $stmt->execute([
             $transaction->getId(),
@@ -107,11 +138,19 @@ class PDOTransactionRepository implements TransactionRepositoryInterface
             $transaction->getReference(),
             $transaction->getStatus(),
             $transaction->getCreatedBy(),
+            $transaction->getVoucherType(),
+            $transaction->getSourceModule(),
+            $transaction->getCurrency(),
+            $transaction->getExchangeRate(),
             $transaction->getDate()->format('Y-m-d H:i:s'),
             $transaction->getDescription(),
             $transaction->getReference(),
             $transaction->getStatus(),
-            $transaction->getCreatedBy()
+            $transaction->getCreatedBy(),
+            $transaction->getVoucherType(),
+            $transaction->getSourceModule(),
+            $transaction->getCurrency(),
+            $transaction->getExchangeRate()
         ]);
 
         // Delete existing ledger entries for this transaction
@@ -120,17 +159,22 @@ class PDOTransactionRepository implements TransactionRepositoryInterface
 
         // Insert new ledger entries
         $stmt = $this->pdo->prepare(
-            'INSERT INTO ledger_entries (id, transaction_id, account_id, amount, is_debit, note) VALUES (?, ?, ?, ?, ?, ?)'
+            'INSERT INTO ledger_entries (id, transaction_id, account_id, amount, is_debit, note, currency, exchange_rate, fc_amount, line_order)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
 
-        foreach ($transaction->getLedgerEntries() as $entry) {
+        foreach ($transaction->getLedgerEntries() as $i => $entry) {
             $stmt->execute([
                 $entry->getId(),
                 $transaction->getId(),
                 $entry->getAccountId(),
                 $entry->getAmount(),
                 $entry->isDebit() ? 1 : 0,
-                $entry->getNote()
+                $entry->getNote(),
+                $entry->getCurrency(),
+                $entry->getExchangeRate(),
+                $entry->getFcAmount(),
+                $entry->getLineOrder() ?: ($i + 1)
             ]);
         }
     }
@@ -139,10 +183,13 @@ class PDOTransactionRepository implements TransactionRepositoryInterface
     {
         $stmt = $this->pdo->query(
             'SELECT t.id, t.date, t.description, t.reference, t.status, t.created_by,
-                    le.id AS le_id, le.account_id, le.amount AS le_amount, le.is_debit, le.note
+                    t.voucher_type, t.source_module, t.currency, t.exchange_rate,
+                    le.id AS le_id, le.account_id, le.amount AS le_amount, le.is_debit, le.note,
+                    le.currency AS le_currency, le.exchange_rate AS le_exchange_rate,
+                    le.fc_amount, le.line_order
              FROM transactions t
              LEFT JOIN ledger_entries le ON le.transaction_id = t.id
-             ORDER BY t.date DESC, t.id DESC, le.id'
+             ORDER BY t.date DESC, t.id DESC, le.line_order, le.id'
         );
         return $this->buildTransactions($stmt->fetchAll(PDO::FETCH_ASSOC));
     }
@@ -151,11 +198,14 @@ class PDOTransactionRepository implements TransactionRepositoryInterface
     {
         $stmt = $this->pdo->prepare(
             'SELECT t.id, t.date, t.description, t.reference, t.status, t.created_by,
-                    le.id AS le_id, le.account_id, le.amount AS le_amount, le.is_debit, le.note
+                    t.voucher_type, t.source_module, t.currency, t.exchange_rate,
+                    le.id AS le_id, le.account_id, le.amount AS le_amount, le.is_debit, le.note,
+                    le.currency AS le_currency, le.exchange_rate AS le_exchange_rate,
+                    le.fc_amount, le.line_order
              FROM transactions t
              LEFT JOIN ledger_entries le ON le.transaction_id = t.id
              WHERE t.date >= ? AND t.date <= ?
-             ORDER BY t.date DESC, t.id DESC, le.id'
+             ORDER BY t.date DESC, t.id DESC, le.line_order, le.id'
         );
         $stmt->execute([
             $start->format('Y-m-d H:i:s'),
@@ -168,13 +218,16 @@ class PDOTransactionRepository implements TransactionRepositoryInterface
     {
         $stmt = $this->pdo->prepare(
             'SELECT t.id, t.date, t.description, t.reference, t.status, t.created_by,
-                    le.id AS le_id, le.account_id, le.amount AS le_amount, le.is_debit, le.note
+                    t.voucher_type, t.source_module, t.currency, t.exchange_rate,
+                    le.id AS le_id, le.account_id, le.amount AS le_amount, le.is_debit, le.note,
+                    le.currency AS le_currency, le.exchange_rate AS le_exchange_rate,
+                    le.fc_amount, le.line_order
              FROM transactions t
              LEFT JOIN ledger_entries le ON le.transaction_id = t.id
              WHERE DATE_FORMAT(t.date, \'%Y-%m\') = ? OR
                    (t.date >= (SELECT start_date FROM accounting_periods WHERE period_code = ?)
                     AND t.date <= (SELECT end_date FROM accounting_periods WHERE period_code = ?))
-             ORDER BY t.date DESC, t.id DESC, le.id'
+             ORDER BY t.date DESC, t.id DESC, le.line_order, le.id'
         );
         $stmt->execute([$periodCode, $periodCode, $periodCode]);
         return $this->buildTransactions($stmt->fetchAll(\PDO::FETCH_ASSOC));
@@ -192,7 +245,11 @@ class PDOTransactionRepository implements TransactionRepositoryInterface
                         $current['id'],
                         new \DateTimeImmutable($current['date']),
                         $current['description'],
-                        $current['reference']
+                        $current['reference'],
+                        $current['voucher_type'] ?? null,
+                        $current['source_module'] ?? null,
+                        $current['currency'] ?? 'VND',
+                        (float)($current['exchange_rate'] ?? 1.0)
                     );
                     $txn->setStatus($current['status']);
                     $txn->setCreatedBy($current['created_by']);
@@ -208,6 +265,10 @@ class PDOTransactionRepository implements TransactionRepositoryInterface
                     'reference' => $row['reference'],
                     'status' => $row['status'],
                     'created_by' => $row['created_by'],
+                    'voucher_type' => $row['voucher_type'] ?? null,
+                    'source_module' => $row['source_module'] ?? null,
+                    'currency' => $row['currency'] ?? 'VND',
+                    'exchange_rate' => $row['exchange_rate'] ?? 1.0,
                     'entries' => [],
                 ];
             }
@@ -217,7 +278,11 @@ class PDOTransactionRepository implements TransactionRepositoryInterface
                     $row['account_id'],
                     (float) $row['le_amount'],
                     (bool) $row['is_debit'],
-                    $row['note']
+                    $row['note'],
+                    $row['le_currency'] ?? 'VND',
+                    (float)($row['le_exchange_rate'] ?? 1.0),
+                    (float)($row['fc_amount'] ?? 0.0),
+                    (int)($row['line_order'] ?? 0)
                 );
             }
         }
@@ -227,7 +292,11 @@ class PDOTransactionRepository implements TransactionRepositoryInterface
                 $current['id'],
                 new \DateTimeImmutable($current['date']),
                 $current['description'],
-                $current['reference']
+                $current['reference'],
+                $current['voucher_type'] ?? null,
+                $current['source_module'] ?? null,
+                $current['currency'] ?? 'VND',
+                (float)($current['exchange_rate'] ?? 1.0)
             );
             $txn->setStatus($current['status']);
             $txn->setCreatedBy($current['created_by']);

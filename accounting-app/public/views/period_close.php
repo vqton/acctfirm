@@ -1,4 +1,9 @@
-<?php $title = 'Khóa sổ cuối kỳ'; $activeMenu = 'period_close'; ob_start(); ?>
+<?php // Màn hình: Quy trình khóa sổ cuối kỳ kế toán
+// API: GET /api/periods, GET /api/periods/{id}/can-close, POST /api/periods/{id}/execute-closing, POST /api/periods/{id}/close, POST /api/periods/{id}/archive, GET /api/fs/tt99
+// Nghiệp vụ: Quy trình 5 bước — Kiểm tra → Kết chuyển P&L → Khóa sổ → Xuất BCTC → Lưu trữ
+// Tuân thủ: Thông tư 99 — Kỳ đã đóng là read-only, không thể ghi nhận giao dịch mới
+// Rủi ro: Bỏ qua kiểm tra trước khi khóa có thể dẫn đến mất cân đối số liệu
+$title = 'Khóa sổ cuối kỳ'; $activeMenu = 'period_close'; ob_start(); ?>
 <style>
 .step-indicator { display:flex; gap:0; margin-bottom:24px; }
 .step { flex:1; text-align:center; padding:12px 8px; background:#e9ecef; position:relative; font-size:13px; }
@@ -95,6 +100,9 @@ function goToStep(n){
     for(i=1;i<=5;i++){if(i!==n)$('#step'+i+'Content').hide();}
 }
 
+// Bước 1: Kiểm tra điều kiện khóa sổ — GET /api/periods/{id}/can-close
+// Kiểm tra: Dr=Cr toàn hệ thống, không có bút toán nháp, đã kết chuyển đầy đủ
+// Nếu tất cả checks passed → tự động chuyển sang Bước 2
 function runChecks(){
     $.get('/api/periods/'+selectedPeriodId+'/can-close',function(d){
         var html='';
@@ -105,6 +113,9 @@ function runChecks(){
     });
 }
 
+// Bước 2: Kết chuyển lãi/lỗ — POST /api/periods/{id}/execute-closing
+// Nghiệp vụ: Kết chuyển doanh thu (511, 515) và chi phí (632, 635, 641, 642) sang TK 421
+// Bút toán: Nợ 511/Có 911, Nợ 911/Có 632..., Nợ 911/Có 421 (lãi) hoặc Nợ 421/Có 911 (lỗ)
 function executeClosing(){
     $('#executeBtn').prop('disabled',true).text('Đang xử lý...');
     $('#closingStatus').html('<div class="text-info"><i class="bi bi-hourglass"></i> Đang kết chuyển...</div>');
@@ -119,6 +130,9 @@ function executeClosing(){
     });
 }
 
+// Bước 3: Khóa sổ kỳ kế toán — POST /api/periods/{id}/close
+// RỦI RO: Sau khi khóa, kỳ này trở thành read-only — không thể thêm/sửa/xóa bút toán
+// Ngoại lệ: Chỉ Kế toán trưởng mới có quyền mở lại kỳ đã khóa
 function closePeriodNow(){
     if(!confirm('Xác nhận khóa sổ kỳ kế toán này?'))return;
     $('#closeBtn').prop('disabled',true).text('Đang khóa...');
@@ -141,6 +155,9 @@ function setupFSLinks(){
     $('#viewBC02Link').attr('href','/bao-cao/ket-qua-kinh-doanh?period='+code);
 }
 
+// Bước 4: Xuất báo cáo tài chính TT99 — GET /api/fs/tt99
+// Hiển thị BC01 (CĐKT), BC02 (KQKD), BC03 (LCTT) theo Thông tư 99
+// Nếu có lỗi (mất cân đối, thiếu dữ liệu) → hiển thị cảnh báo đỏ
 function exportTT99(){
     $.get('/api/fs/tt99?period='+(selectedPeriodCode||''),function(d){
         var html='<div class="fw-bold mb-1">BÁO CÁO TÀI CHÍNH TT99 - Kỳ '+esc(selectedPeriodCode)+'</div>';
@@ -157,6 +174,8 @@ function exportTT99(){
     });
 }
 
+// Bước 5: Lưu trữ số dư cuối kỳ — POST /api/periods/{id}/archive
+// Chụp ảnh số dư tài khoản tại thời điểm khóa sổ, phục vụ đối chiếu và kiểm toán sau này
 function archivePeriod(){
     $.ajax({url:'/api/periods/'+selectedPeriodId+'/archive',method:'POST',
         success:function(){

@@ -1,4 +1,5 @@
 <?php
+// Bảng đối chiếu ngân hàng — kiểm tra chênh lệch số dư
 return function (PDO $pdo) {
     $pdo->exec('CREATE TABLE IF NOT EXISTS bank_reconciliation_sessions (
         id INT AUTO_INCREMENT PRIMARY KEY,

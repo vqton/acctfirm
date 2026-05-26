@@ -6,6 +6,33 @@ use Accounting\Domain\Repository\ItemRepositoryInterface;
 
 use \Accounting\Interfaces\HTTP\CrudControllerTrait;
 
+/**
+ * MODULE: Danh mục Hàng hóa - Vật tư (Item Master)
+ *
+ * Mục đích nghiệp vụ:
+ *   - CRUD danh mục hàng hóa, nguyên vật liệu, thành phẩm, công cụ
+ *   - Quản lý thông tin: mã, tên, loại, đơn vị tính, giá mua/bán
+ *   - Theo dõi tồn kho tối thiểu (min_stock) để cảnh báo tái đặt hàng
+ *   - Gán phương pháp tính giá (valuation_method_id)
+ *
+ * API endpoints:
+ *   (Sử dụng CrudControllerTrait — CRUD chuẩn)
+ *   GET    /api/items       — Danh sách items
+ *   GET    /api/items/{id}  — Chi tiết item
+ *   POST   /api/items       — Tạo item mới
+ *   PUT    /api/items/{id}  — Cập nhật item
+ *   DELETE /api/items/{id}  — Xóa item
+ *
+ * Rủi ro:
+ *   - Xóa item đã có giao dịch → mất dữ liệu lịch sử (chỉ soft delete)
+ *   - Mã item trùng lặp → nhầm lẫn trong nhập/xuất kho
+ *   - Sai phương pháp tính giá → sai giá vốn hàng bán
+ *
+ * Tích hợp:
+ *   - ItemRepository được dùng bởi tất cả Inventory controllers
+ *   - ReceiptController, IssueController tham chiếu item_id
+ *   - ValuationMethodController xác định phương pháp tính giá
+ */
 class ItemController
 {
     use CrudControllerTrait;

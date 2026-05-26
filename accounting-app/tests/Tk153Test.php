@@ -48,6 +48,9 @@ assertEq('tool', $item->getItemType(), 'Item is tool type');
 $item->setStockQty(0);
 $itemRepo->save($item);
 
+// Nghiệp vụ: Nhập công cụ dụng cụ (item_type = 'tool') → TK 153 (không phải TK 152)
+// Circular 99 quy định CCDC hạch toán riêng TK 153
+// Nếu fail → hạch toán sai TK → sai số dư hàng tồn kho
 echo "\n=== Test 1: Receive tool → posts to TK 153 (not TK 152) ===\n";
 $receipt = $svc->receiveGoods($item->getId(), 10, 100000, [], 'PO-TOOL-001', 'tester');
 

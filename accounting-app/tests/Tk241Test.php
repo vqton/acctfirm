@@ -64,6 +64,7 @@ $inv2 = $accountRepo->findByCode('152')->getBalance();
 assertEq(1000000, $wip, 'WIP (154) = 1,000,000 (20×50K)');
 assertEq(2500000, $inv2, 'Inventory (152) = 2,500,000 (50×50K)');
 
+// Ràng buộc: Loại xuất không hợp lệ (không phải sale/production/construction) → từ chối
 echo "\n=== Test 3: Invalid issue type rejected ===\n";
 try {
     $svc->issueGoods($item->getId(), 1, 'invalid_type', 'BAD-ISSUE', 'tester');

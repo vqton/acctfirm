@@ -1,4 +1,5 @@
 <?php
+// Test: Báo cáo tiền mặt — tổng hợp số dư và phát sinh
 spl_autoload_register(function ($class) {
     $prefix = 'Accounting\\';
     $baseDir = __DIR__ . '/../src/Accounting/';
@@ -33,6 +34,9 @@ $pdo->exec('UPDATE accounts SET balance = 0');
 $pdo->exec('DELETE FROM ledger_entries');
 $pdo->exec('DELETE FROM transactions');
 
+// Nghiệp vụ: Báo cáo vị thế tiền — tổng hợp số dư tiền mặt và ngân hàng
+// CashReportService::getCashPosition() trả về cash_balance, bank_balance, total
+// Nếu fail → không xem được tổng quan tiền mặt/ngân hàng
 echo "\n=== Test 1: Cash position report ===\n";
 $cash->recordReceipt(5000000, '511', 'Cash sale', 'PT-001', 'tester');
 $cash->recordBankDeposit(3000000, 'Deposit to bank', 'BC-001', 'tester');
@@ -44,6 +48,9 @@ assertTrue($pos['cash_balance'] >= 1000000, 'Cash (111) has balance');
 assertTrue($pos['bank_balance'] >= 3100000, 'Bank (112) has balance');
 assertTrue($pos['total'] > 0, 'Total cash + bank > 0');
 
+// Nghiệp vụ: Sổ phụ ngân hàng — chi tiết phát sinh theo TK 112
+// Kiểm tra các trường bắt buộc: date, description, amount
+// Nếu fail → không đối chiếu được số dư ngân hàng
 echo "\n=== Test 2: Bank ledger ===\n";
 $ledger = $report->getBankLedger();
 assertTrue(count($ledger) >= 2, 'Bank ledger has entries');
@@ -51,16 +58,21 @@ assertTrue(isset($ledger[0]['date']), 'Ledger has date');
 assertTrue(isset($ledger[0]['description']), 'Ledger has description');
 assertTrue(isset($ledger[0]['amount']), 'Ledger has amount');
 
+// Nghiệp vụ: Dòng tiền hàng ngày — tổng thu/chi theo ngày
+// Nếu fail → quản lý dòng tiền không chính xác
 echo "\n=== Test 3: Daily cash flow ===\n";
 $flow = $report->getDailyCashFlow(date('Y-m-d'), date('Y-m-d'));
 assertTrue(count($flow) >= 1, 'Cash flow has entries');
 assertTrue($flow[0]['receipts'] > 0, 'Has receipts');
 assertTrue($flow[0]['payments'] > 0, 'Has payments');
 
+// Nghiệp vụ: Tập trung tiền — chi tiết theo từng tài khoản ngân hàng
 echo "\n=== Test 4: Cash concentration (bank detail by account) ===\n";
 $conc = $report->getCashConcentration();
 assertTrue(count($conc) >= 1, 'Concentration has entries');
 
+// Nghiệp vụ: Xu hướng dòng tiền 7 ngày — dự báo thu/chi
+// Nếu fail → báo cáo quản trị dòng tiền không chính xác
 echo "\n=== Test 5: Cash flow trend (7-day) ===\n";
 $trend = $report->getCashFlowTrend(7);
 assertTrue(count($trend) >= 1, 'Trend has entries');

@@ -6,6 +6,26 @@ use Accounting\Domain\Repository\WarehouseRepositoryInterface;
 
 use \Accounting\Interfaces\HTTP\CrudControllerTrait;
 
+/**
+ * MODULE: Danh mục Kho (Warehouse Master)
+ *
+ * Mục đích nghiệp vụ:
+ *   - CRUD kho hàng, địa điểm lưu trữ hàng hóa
+ *   - Quản lý thông tin: mã kho, tên kho, địa chỉ
+ *   - Cơ sở để quản lý tồn kho chi tiết theo kho
+ *
+ * API endpoints:
+ *   (Sử dụng CrudControllerTrait — CRUD chuẩn)
+ *
+ * Rủi ro:
+ *   - Xóa kho đang có hàng → mất thông tin tồn kho chi tiết
+ *   - Sai thông tin kho → nhập/xuất sai vị trí
+ *
+ * Tích hợp:
+ *   - TransferController chuyển hàng giữa các kho
+ *   - ReceiptController và IssueController tham chiếu warehouse_id
+ *   - InventoryReportController báo cáo tồn kho theo kho
+ */
 class WarehouseController
 {
     use CrudControllerTrait;

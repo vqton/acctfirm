@@ -1,4 +1,8 @@
-<?php $title = 'Tiền đang chuyển'; $activeMenu = 'cash_transit'; ob_start(); ?>
+<?php // Màn hình: Quản lý tiền đang chuyển (TK 113)
+// API: GET /api/cash/transit, POST /api/cash/transit, POST /api/cash/transit/confirm, POST /api/cash/transit/reverse
+// Nghiệp vụ: Nộp tiền mặt vào ngân hàng — Nợ 113/Có 1111 (khi chuyển), Nợ 1121/Có 113 (khi NH xác nhận)
+// Rủi ro: Tiền đang chuyển chưa ghi nhận vào TK 112 — nếu không confirm kịp thời sẽ sai số dư NH
+$title = 'Tiền đang chuyển'; $activeMenu = 'cash_transit'; ob_start(); ?>
 <div class="toolbar">
     <h5>Tiền đang chuyển <span class="stats">(TK 113)</span></h5>
     <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#transitModal"><i class="bi bi-plus-lg"></i> Chuyển tiền</button>
@@ -31,12 +35,16 @@ function loadData(){
         });
     });
 }
+// Xác nhận tiền đã về tài khoản ngân hàng — POST /api/cash/transit/confirm
+// Nghiệp vụ: Nợ 1121/Có 113 — chuyển từ tiền đang chuyển sang tiền gửi NH
 function confirmTransit(id){
     $.ajax({url:'/api/cash/transit/confirm',method:'POST',contentType:'application/json',headers:{'X-CSRF-Token':csrf},data:JSON.stringify({id:id}),
         success:function(){showToast('Đã xác nhận tiền về NH','success');loadData();},
         error:function(x){showToast('Lỗi','error');}
     });
 }
+// Hủy giao dịch chuyển tiền — POST /api/cash/transit/reverse
+// Nghiệp vụ: Nợ 1111/Có 113 — hoàn nhập, tiền chưa về đến NH
 function reverseTransit(id){
     if(!confirm('Hủy giao dịch chuyển tiền này?'))return;
     $.ajax({url:'/api/cash/transit/reverse',method:'POST',contentType:'application/json',headers:{'X-CSRF-Token':csrf},data:JSON.stringify({id:id}),
@@ -44,6 +52,8 @@ function reverseTransit(id){
         error:function(x){showToast('Lỗi','error');}
     });
 }
+// Submit ghi nhận chuyển tiền — POST /api/cash/transit
+// Nghiệp vụ: Nợ 113/Có 1111 — rút tiền mặt để nộp vào ngân hàng
 $('#transitForm').submit(function(e){e.preventDefault();
     $.ajax({url:'/api/cash/transit',method:'POST',contentType:'application/json',headers:{'X-CSRF-Token':csrf},data:JSON.stringify({amount:parseFloat($('#amount').val()),description:$('#description').val()}),
         success:function(){$('#transitModal').modal('hide');$('#transitForm')[0].reset();showToast('Ghi nhận chuyển tiền thành công','success');loadData();},

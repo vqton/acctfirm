@@ -1,4 +1,5 @@
 <?php
+// Màn hình: Tỷ giá ngoại tệ
 $title = 'Tỷ giá ngoại tệ';
 $activeMenu = 'exchange_rates';
 ob_start();

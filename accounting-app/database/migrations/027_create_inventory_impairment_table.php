@@ -1,4 +1,5 @@
 <?php
+// Bảng giảm giá trị hàng tồn kho — trích lập dự phòng (TK 2294)
 return function (PDO $pdo) {
     $pdo->exec('CREATE TABLE IF NOT EXISTS inventory_impairment (
         id VARCHAR(50) PRIMARY KEY,

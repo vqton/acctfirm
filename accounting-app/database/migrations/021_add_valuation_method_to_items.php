@@ -1,4 +1,5 @@
 <?php
+// Thêm cột valuation_method vào items — gắn phương pháp tính giá cho từng mặt hàng
 return function (PDO $pdo) {
     $r = $pdo->query("SHOW COLUMNS FROM items LIKE 'valuation_method_id'");
     if (!$r->fetch()) {

@@ -1,4 +1,5 @@
-<?php $title = 'Dashboard'; $activeMenu = 'dashboard'; ob_start(); ?>
+<?php // Màn hình: Trang tổng quan hệ thống
+$title = 'Dashboard'; $activeMenu = 'dashboard'; ob_start(); ?>
 <div class="toolbar">
     <h5>Dashboard</h5>
 </div>

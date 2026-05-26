@@ -45,6 +45,9 @@ $pdo->exec('DELETE FROM fixed_asset_depreciation');
 $pdo->exec("DELETE FROM fixed_assets WHERE id LIKE 'test-fa-%'");
 
 // Create test assets
+// Nghiệp vụ: Khấu hao TSCĐ theo phương pháp đường thẳng (SL)
+// 120 triệu / 10 năm / 12 tháng = 1,000,000/tháng
+// Nếu fail → sai chi phí khấu hao → sai BC02
 echo "\n=== Test 1: Straight-line depreciation ===\n";
 $fa1 = new FixedAsset('test-fa-sl', 'TEST-SL', 'Test Straight Line', '2025-01-01',
     120000000, 'straight_line', 10, 0, 0, 0, 120000000,
@@ -61,6 +64,9 @@ $faRepo->save($fa2);
 $dep2 = $svc->calculateMonthlyDepreciation($fa2);
 assertEq(833333, $dep2, 'SL: (120M - 20M) / 10 / 12 = 833,333/month');
 
+// Nghiệp vụ: Khấu hao theo phương pháp số dư giảm dần (DB)
+// Rate = 1/5 × 2 = 40%, năm 1 = 100M × 40% / 12 = 3,333,333/tháng
+// Nếu fail → TSCĐ công nghệ cao khấu hao nhanh không đúng
 echo "\n=== Test 3: Declining balance method ===\n";
 $fa3 = new FixedAsset('test-fa-db', 'TEST-DB', 'Test Declining Balance', '2025-06-01',
     100000000, 'declining_balance', 5, 0, 0, 0, 100000000,
@@ -88,6 +94,8 @@ $dep5 = $svc->calculateMonthlyDepreciation($fa5, 14000);
 // Per unit = 450M / 2,400,000 = 187.5. Monthly = 14,000 * 187.5 = 2,625,000
 assertEq(2625000, $dep5, 'PROD: 14,000 units * 187.5 = 2,625,000');
 
+// Biên: TSCĐ đã khấu hao hết → không tính khấu hao nữa
+// Nếu fail → tiếp tục trích khấu hao → hao mòn vượt nguyên giá → sai BC01
 echo "\n=== Test 6: Fully depreciated asset returns 0 ===\n";
 $fa6 = new FixedAsset('test-fa-full', 'TEST-FULL', 'Fully Depreciated', '2020-01-01',
     60000000, 'straight_line', 5, 0, 0, 60000000, 0,
@@ -120,6 +128,8 @@ echo "\n=== Test 10: Period report ===\n";
 $report = $svc->getDepreciationByPeriod($periodCode);
 assertTrue(count($report) >= 1, 'Period report has 1+ entries');
 
+// Biên: TSCĐ không sử dụng (idle) → không tính khấu hao
+// Nếu fail → vẫn trích khấu hao cho tài sản không dùng → sai chi phí
 echo "\n=== Test 11: Asset not in_use returns 0 ===\n";
 $fa7 = new FixedAsset('test-fa-idle', 'TEST-IDLE', 'Idle Asset', '2025-01-01',
     60000000, 'straight_line', 5, 0, 0, 0, 60000000,

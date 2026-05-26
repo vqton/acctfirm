@@ -48,6 +48,9 @@ $svc->postEntry('Rent expense', 'TB-003', [
     ['account_code' => '111', 'amount' => 500000, 'is_debit' => false],
 ], 'tester');
 
+// Nghiệp vụ: Bảng cân đối tài khoản sau 3 bút toán
+// Phương trình kế toán: Tài sản (Cash 2.5M) = Doanh thu (3M) - Chi phí (0.5M)
+// Nếu fail → bảng cân đối không khớp → báo cáo tài chính sai
 echo "\n=== Test 1: Manual trial balance check ===\n";
 $cash = $accountRepo->findByCode('111')->getBalance();  // 1M+2M-0.5M = 2.5M
 $revenue = $accountRepo->findByCode('511')->getBalance(); // 1M+2M = 3M
@@ -62,6 +65,9 @@ assertEq(500000, $expense, 'Expense = 500,000');
 assertEq($cash, $revenue - $expense, 'Accounting equation: Assets = Revenue - Expense');
 
 // Trial balance: all accounts with non-zero balance
+// Kiểm tra: Tất cả tài khoản có số dư ≠ 0 xuất hiện trong bảng cân đối
+// Cash (111), Revenue (511), Expense (642) phải có trong danh sách
+// Tổng Dr (asset + expense) = Tổng Cr (liability + equity + revenue)
 echo "\n=== Test 2: Trial balance as array ===\n";
 $stmt = $pdo->query("SELECT code, name, type, balance FROM accounts WHERE balance != 0 ORDER BY code");
 $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);

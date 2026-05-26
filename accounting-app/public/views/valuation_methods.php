@@ -1,4 +1,5 @@
 <?php
+// Màn hình: Phương pháp tính giá xuất kho
 $title = 'Phương pháp tính giá';
 $activeMenu = 'valuation_methods';
 ob_start();

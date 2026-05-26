@@ -1,4 +1,5 @@
 <?php
+// Test: Báo cáo tài chính — BC01, BC02
 spl_autoload_register(function ($class) {
     $prefix = 'Accounting\\';
     $baseDir = __DIR__ . '/../src/Accounting/';
@@ -66,6 +67,9 @@ assertEq(0, $total60, 'Net profit = 0 (zero balances)');
 $errors2 = $fs->validateBC02($bc02);
 assertTrue(count($errors2) === 0, 'BC02 validation passes');
 
+// Nghiệp vụ: BC01 sau khi có giao dịch — kiểm tra Tài sản = Nợ phải trả + Vốn CSH
+// Ghi nhận doanh thu (511) và chi phí (642), thực hiện kết chuyển → số dư 421
+// Nếu fail → BC01 không cân đối → sai báo cáo tài chính
 echo "\n=== Test 4: BC 01 with transactions ===\n";
 $journal->postEntry('Test revenue', 'FS-REV-001', [
     ['account_code' => '112', 'amount' => 10000000, 'is_debit' => true],
@@ -118,6 +122,9 @@ assertEq(10000000, $profit, 'Net profit (60) = 10,000,000');
 $errors3 = $fs->validateBC02($bc02b);
 assertTrue(count($errors3) === 0, 'BC02 validation passes');
 
+// Nghiệp vụ: Số liệu kỳ trước (prior period) — BC01 cần hiển thị số liệu so sánh
+// Hệ thống phải lưu snapshot để so sánh năm nay với năm trước
+// Nếu fail → BC01 thiếu cột "Năm trước" → không đáp ứng TT99
 echo "\n=== Test 6: Prior period values ===\n";
 // Generate prior period snapshot (captures current balances under period 2025)
 $priorBc01 = $fs->generateBC01('2025');

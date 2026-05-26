@@ -1,4 +1,5 @@
-<?php $title = 'Báo cáo lưu chuyển tiền tệ'; $activeMenu = 'fs_bc03'; ob_start(); ?>
+<?php // Màn hình: Báo cáo lưu chuyển tiền tệ (B03-DN)
+$title = 'Báo cáo lưu chuyển tiền tệ'; $activeMenu = 'fs_bc03'; ob_start(); ?>
 <div class="toolbar">
     <h5>Báo cáo lưu chuyển tiền tệ <span class="stats">(Mẫu B03-DN, phương pháp gián tiếp)</span></h5>
     <div>

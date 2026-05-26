@@ -1,10 +1,14 @@
 <?php
 namespace Accounting\Interfaces\HTTP;
 
+// Điều hướng request HTTP — ánh xạ URL đến Controller xử lý nghiệp vụ kế toán
 class Router
 {
     private array $routes = [];
 
+    // Đăng ký route — method: GET/POST/PUT/DELETE, pattern: URL với :param, handler: closure
+    // pattern hỗ trợ tham số động: /api/users/:id → match /api/users/123
+    // handler là closure được gọi khi route match — nhận tham số từ URL làm đối số
     public function addRoute(string $method, string $pattern, $handler): void
     {
         $this->routes[] = [
@@ -14,6 +18,12 @@ class Router
         ];
     }
 
+    // Điều phối request đến xử lý — tìm route phù hợp, gọi handler tương ứng
+    // Nếu không tìm thấy route, trả về 404
+    // Cơ chế: Duyệt danh sách route → so khớp method + pattern (regex) → gọi handler
+    // Pattern :param được chuyển thành regex group ([^/]+) — bắt toàn bộ giá trị
+    // Xử lý URI: bỏ query string, chuẩn hóa trailing slash (/abc/ → /abc)
+    // RỦI RO: Nếu có 2 route match cùng URI, route nào đăng ký trước được chạy trước
     public function dispatch(): void
     {
         $method = $_SERVER['REQUEST_METHOD'];

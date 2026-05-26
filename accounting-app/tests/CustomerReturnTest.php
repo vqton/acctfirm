@@ -61,6 +61,7 @@ assertEq(1000000, $cogs, 'COGS (632) = 1,000,000 (30×50K - 10×50K)');
 $inv = $accountRepo->findByCode('152')->getBalance();
 assertEq(4000000, $inv, 'Inventory (152) = 4,000,000 (70×50K remaining + 10×50K returned)');
 
+// Ràng buộc: Trả hàng với item không tồn tại → từ chối
 echo "\n=== Test 2: Return non-existent item ===\n";
 try {
     $svc->returnFromCustomer('nonexistent', 1, 'BAD-RET', 'tester');

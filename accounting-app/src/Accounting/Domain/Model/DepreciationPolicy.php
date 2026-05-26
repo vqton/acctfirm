@@ -1,6 +1,30 @@
 <?php
 namespace Accounting\Domain\Model;
 
+/**
+ * Chính sách khấu hao — Quy định phương pháp và thông số khấu hao mặc định.
+ *
+ * Dùng làm khuôn mẫu khi ghi nhận TSCĐ mới. Mỗi TSCĐ có thể ghi đè
+ * chính sách mặc định nếu có đặc thù riêng.
+ *
+ * NGHIỆP VỤ:
+ * - $method: 'straight_line' (đường thẳng — thông dụng nhất),
+ *   'declining_balance' (số dư giảm dần),
+ *   'unit_of_production' (theo sản lượng)
+ * - $defaultLife: thời gian sử dụng mặc định (tháng)
+ * - $defaultSalvageRate: tỷ lệ giá trị thu hồi mặc định (%)
+ * - Chính sách khấu hao phải phù hợp với Circular 45/2013/TT-BTC và
+ *   Thông tư 99/2025/TT-BTC
+ *
+ * LIÊN KẾT:
+ * - FixedAsset → TSCĐ áp dụng chính sách khấu hao
+ * - FixedAssetService → tính khấu hao dựa trên chính sách
+ *
+ * RỦI RO:
+ * - Khấu hao nhanh (declining_balance) cho lợi ích thuế nhưng phải
+ *   thỏa mãn điều kiện của Luật Thuế TNDN
+ * - Sai thời gian khấu hao → sai chi phí hàng năm → sai BC02
+ */
 class DepreciationPolicy
 {
     private string $id;
@@ -42,6 +66,11 @@ class DepreciationPolicy
     public function setDefaultSalvageRate(float $rate): void { $this->defaultSalvageRate = $rate; }
     public function setStatus(bool $status): void { $this->status = $status; }
 
+    // Chuyển đổi model thành mảng để response API.
+    // Chính sách khấu hao là khuôn mẫu khi ghi nhận TSCĐ mới.
+    // 'method': 'straight_line' (đường thẳng), 'declining_balance' (số dư giảm dần).
+    // 'default_salvage_rate': tỷ lệ giá trị thu hồi (%) — ảnh hưởng mức khấu hao hàng tháng.
+    // RỦI RO: Khấu hao nhanh cho lợi ích thuế nhưng phải thỏa mãn điều kiện Luật TNDN.
     public function toArray(): array
     {
         return [

@@ -1,17 +1,27 @@
 <?php
 namespace Accounting\Infrastructure\Logging;
 
+// Bọc PDO để log tất cả câu SQL — giúp kiểm soát hiệu năng và debug
+// Decorator pattern: LoggingPDO extends PDO nhưng delegate toàn bộ cho $wrapped PDO thật
+// Cho phép bật/tắt SQL logging qua biến môi trường APP_LOG_SQL
+// RỦI RO: Logging mọi SQL có thể làm chậm hệ thống ở production — chỉ bật khi debug
 class LoggingPDO extends \PDO
 {
     private \PDO $wrapped;
     private bool $enabled = false;
 
+    // Nhận PDO thật làm đối số — ghi đè constructor để không tạo connection mới
+    // enabled = true nếu APP_LOG_SQL được set hoặc không set (mặc định bật)
+    // RỦI RO: getenv('APP_LOG_SQL') mặc định true — có thể vô tình bật log SQL trong production
     public function __construct(\PDO $wrapped)
     {
         $this->wrapped = $wrapped;
         $this->enabled = getenv('APP_LOG_SQL') ?: true;
     }
 
+    // Chuẩn bị câu lệnh SQL — bọc statement trong LoggingStatement để log execution
+    // LoggingStatement tự động ghi lại SQL + params + duration khi execute()
+    // LƯU Ý: Không log ở prepare — chỉ log ở execute để biết params thực tế
     public function prepare(string $query, array $options = []): \PDOStatement|false
     {
         $stmt = $this->wrapped->prepare($query, $options);
@@ -19,6 +29,9 @@ class LoggingPDO extends \PDO
         return $stmt;
     }
 
+    // Thực thi query trực tiếp (không prepared) — log SQL + duration
+    // Chỉ dùng cho các câu lệnh không có user input (EXPLAIN, SET NAMES, ...)
+    // RỦI RO: query() dễ bị SQL injection — ưu tiên dùng prepare()
     public function query(string $query, ?int $fetchMode = null, mixed ...$fetchModeArgs): \PDOStatement|false
     {
         $start = microtime(true);
@@ -30,6 +43,8 @@ class LoggingPDO extends \PDO
         return $result;
     }
 
+    // Thực thi câu lệnh không trả về kết quả (INSERT/UPDATE/DELETE) — log duration
+    // Dùng cho migration, seed data, các thao tác admin
     public function exec(string $statement): int|false
     {
         $start = microtime(true);
@@ -53,6 +68,9 @@ class LoggingPDO extends \PDO
     public function quote(string $string, int $type = \PDO::PARAM_STR): string { return $this->wrapped->quote($string, $type); }
 }
 
+// Log từng câu prepared statement — ghi lại SQL + params + thời gian chạy
+// Wrapper cho PDOStatement — tự động ghi log khi execute() được gọi
+// Lưu params để có thể debug: "Lỗi SQL với params: [123, 'ABC']"
 class LoggingStatement extends \PDOStatement
 {
     private \PDOStatement $wrapped;
@@ -60,6 +78,8 @@ class LoggingStatement extends \PDOStatement
     private bool $enabled;
     private array $params = [];
 
+    // Nhận PDOStatement thật + SQL template + enabled flag
+    // SQL template là câu SQL gốc với ? placeholder (chưa được bind params)
     public function __construct(\PDOStatement $wrapped, string $sql, bool $enabled)
     {
         $this->wrapped = $wrapped;
@@ -67,6 +87,9 @@ class LoggingStatement extends \PDOStatement
         $this->enabled = $enabled;
     }
 
+    // Thực thi prepared statement — log SQL + params + duration
+    // Lưu params trước execute để có thể trace dù execute thất bại
+    // Duration tính bằng milliseconds — giúp phát hiện slow query
     public function execute(?array $params = null): bool
     {
         $this->params = $params ?? [];

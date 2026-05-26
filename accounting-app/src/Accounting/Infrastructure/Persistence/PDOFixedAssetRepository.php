@@ -1,4 +1,5 @@
 <?php
+// Quản lý dữ liệu: danh mục tài sản cố định
 namespace Accounting\Infrastructure\Persistence;
 
 use Accounting\Domain\Model\FixedAsset;

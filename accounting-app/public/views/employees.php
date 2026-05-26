@@ -1,4 +1,5 @@
 <?php
+// Màn hình: Danh mục nhân viên
 $title = 'Danh mục nhân viên';
 $activeMenu = 'employees';
 ob_start();

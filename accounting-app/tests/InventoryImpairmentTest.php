@@ -1,4 +1,5 @@
 <?php
+// Test: Giảm giá trị hàng tồn kho — dự phòng (TK 2294)
 spl_autoload_register(function ($class) {
     $prefix = 'Accounting\\';
     $baseDir = __DIR__ . '/../src/Accounting/';
@@ -55,6 +56,8 @@ $provision2 = $accountRepo->findByCode('2294')->getBalance();
 assertEq(1500000, $cogs2, "COGS reduced to 1,500,000 after reversal");
 assertEq(-1500000, $provision2, "Provision (2294) reduced to -1,500,000 (contra-asset)");
 
+// Ràng buộc: Hoàn nhập dự phòng vượt quá số đã trích → từ chối
+// Nếu fail → có thể hoàn nhập âm → dự phòng sai
 echo "\n=== Test 3: Reverse exceeds provision ===\n";
 try {
     $svc->reverseImpairment($result['impairment_id'], 9999999, 'BAD', 'tester');

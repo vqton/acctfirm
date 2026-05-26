@@ -1,4 +1,5 @@
 <?php
+// Bảng kiểm kê định kỳ — ghi nhận tồn kho cuối kỳ
 return function (PDO $pdo) {
     $pdo->exec('CREATE TABLE IF NOT EXISTS periodic_inventory (
         id VARCHAR(50) PRIMARY KEY,

@@ -7,6 +7,29 @@ use Accounting\Domain\Repository\WarehouseRepositoryInterface;
 use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
 
+/**
+ * MODULE: Chuyển kho (Inventory Transfer)
+ *
+ * Mục đích nghiệp vụ:
+ *   - Chuyển hàng hóa giữa các kho trong cùng doanh nghiệp
+ *   - Xuất kho nguồn (giảm tồn) và nhập kho đích (tăng tồn)
+ *   - Không ảnh hưởng bút toán kế toán (nội bộ, cùng đơn vị)
+ *   - Hỗ trợ chuyển một phần hoặc toàn bộ lô hàng
+ *
+ * API endpoints:
+ *   GET  /api/transfers       — Danh sách chuyển kho
+ *   POST /api/transfers       — Tạo phiếu chuyển kho mới
+ *
+ * Rủi ro:
+ *   - R007: Xuất kho nguồn nhưng không nhập kho đích → mất hàng
+ *   - Chuyển kho giữa đơn vị hạch toán khác nhau cần bút toán điều chỉnh
+ *   - Sai kho đích → sai số dư chi tiết theo kho
+ *
+ * Tích hợp:
+ *   - InventoryService.transferGoods xử lý đồng thời xuất+nnhập
+ *   - WarehouseRepository kiểm tra kho tồn tại
+ *   - Nội bộ, không qua JournalService (trừ trường hợp khác đơn vị)
+ */
 class TransferController
 {
     private InventoryService $inventory;
@@ -35,6 +58,13 @@ class TransferController
         JsonResponse::ok($stmt->fetchAll(\PDO::FETCH_ASSOC));
     }
 
+    // NGHIỆP VỤ: Chuyển kho nội bộ — xuất kho nguồn, nhập kho đích
+    // Input: { item_id, qty, from_warehouse_id?, to_warehouse_id, reference?, created_by? }
+    // Output: { transfer_id, item_id, qty, from_warehouse, to_warehouse } — 201 Created
+    // Service: InventoryService.transferGoods() — xử lý đồng thời 2 side
+    // Hạch toán: Nội bộ, không ghi bút toán kế toán (cùng đơn vị hạch toán)
+    // Rủi ro: R007 — Xuất kho nguồn nhưng nhập kho đích thất bại → mất hàng (transaction rollback)
+    // Tích hợp: Nếu khác đơn vị hạch toán → cần qua JournalService
     public function transfer(): void
     {
         Auth::checkCsrf();

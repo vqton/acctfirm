@@ -1,4 +1,8 @@
-<?php $title = 'Sổ quỹ tiền mặt'; $activeMenu = 'cash_book'; ob_start(); ?>
+<?php // Màn hình: Sổ quỹ tiền mặt (TK 111)
+// API: GET /api/cash-book?from_date=&to_date=
+// Nghiệp vụ: Sổ quỹ — hiển thị dòng thu (Nợ), chi (Có) và tồn quỹ theo ngày
+// Tuân thủ: Số dư tồn quỹ cuối kỳ phải khớp với đối chiếu thực tế
+$title = 'Sổ quỹ tiền mặt'; $activeMenu = 'cash_book'; ob_start(); ?>
 <div class="toolbar">
     <h5>Sổ quỹ tiền mặt <span class="stats">(TK 111)</span></h5>
     <div><input type="date" class="form-control form-control-sm d-inline-block" style="width:160px" id="fromDate" value="<?=date('Y-m-01')?>"><span class="mx-1">→</span><input type="date" class="form-control form-control-sm d-inline-block" style="width:160px" id="toDate" value="<?=date('Y-m-d')?>">
@@ -12,6 +16,9 @@
 </div>
 
 <script>
+// Tải sổ quỹ theo khoảng ngày — GET /api/cash-book
+// Hiển thị dòng đặc biệt: opening_balance (tồn đầu) in đậm, closing_balance (tồn cuối) in đậm + viền
+// Công thức: Tồn cuối = Tồn đầu + Tổng thu - Tổng chi
 function loadData(){
     var p={from_date:$('#fromDate').val(),to_date:$('#toDate').val()};
     $.get('/api/cash-book',p,function(data){

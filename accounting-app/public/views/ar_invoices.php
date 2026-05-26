@@ -1,4 +1,8 @@
-<?php $title = 'Công nợ phải thu'; $activeMenu = 'ar_invoices'; ob_start(); ?>
+<?php // Màn hình: Quản lý công nợ phải thu khách hàng (TK 131)
+// API: GET /api/ar/customers, GET /api/ar/invoices, POST /api/ar/invoices, POST /api/ar/invoices/{id}/pay, POST /api/ar/prepay
+// Nghiệp vụ: Ghi nhận hóa đơn bán hàng (Nợ 131/Có 511+3331), thu tiền (Nợ 1111/Có 131), nhận tạm ứng (Nợ 1111/Có 131)
+// Rủi ro: Thu tiền vượt quá số dư phải thu sẽ dẫn đến số dư âm TK 131
+$title = 'Công nợ phải thu'; $activeMenu = 'ar_invoices'; ob_start(); ?>
 <div class="toolbar">
     <h5>Công nợ phải thu khách hàng <span class="stats">(TK 131)</span></h5>
     <div>
@@ -55,6 +59,9 @@ function loadCustomers(cb){
         $('#customerId,#prepayCust').html(o); if(cb)cb();
     });
 }
+// Tải danh sách hóa đơn phải thu — GET /api/ar/invoices
+// Hiển thị: số HĐ, KH, ngày, hạn, tổng, đã thu, còn lại, trạng thái
+// Nút thu tiền chỉ hiển thị khi HĐ chưa thanh toán và balance > 1
 function loadData(){
     $.get('/api/ar/invoices', function(data){
         var tbody=$('#dataBody'); tbody.empty();
@@ -66,6 +73,7 @@ function loadData(){
         });
     });
 }
+// Mở modal thu tiền — tự động điền số dư còn lại làm mặc định
 function openPay(id,bal){$('#payInvId').val(id);$('#payBalance').text(parseFloat(bal).toLocaleString());$('#payAmount').val(bal);$('#payModal').modal('show');}
 function calcVat(){var n=parseFloat($('#netAmount').val())||0;var r=parseFloat($('#vatRate').val())||0;$('#vatAmount').val(Math.round(n*r/100));}
 $('#netAmount,#vatRate').on('input',calcVat);

@@ -1,4 +1,5 @@
 <?php
+// Bảng danh mục khách hàng — theo dõi công nợ phải thu
 
 return function (PDO $pdo) {
     $pdo->exec('CREATE TABLE IF NOT EXISTS customers (

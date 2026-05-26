@@ -1,4 +1,5 @@
 <?php
+// Test: Kỳ kế toán — mở, đóng, kiểm tra kỳ
 spl_autoload_register(function ($class) {
     $prefix = 'Accounting\\';
     $baseDir = __DIR__ . '/../src/Accounting/';
@@ -51,6 +52,8 @@ try {
     assertTrue(true, 'Invalid period rejected');
 }
 
+// Nghiệp vụ kết chuyển cuối kỳ: zero doanh thu (511), chi phí (642) → TK 911 → TK 421
+// Nếu fail → lợi nhuận giữ lại không được cập nhật → BC01 sai
 echo "\n=== Test 4: Execute closing entries ===\n";
 // Create some revenue and expense transactions first
 $journal->postEntry('Service revenue', 'REV-001', [
@@ -81,6 +84,9 @@ $closed = $svc->closePeriod($p2['id'], 'admin');
 assertEq('closed', $closed['status'], 'Period status = closed');
 assertTrue($closed['closed_at'] !== null, 'closed_at set');
 
+// Nghiệp vụ: Mở lại kỳ kế toán đã đóng (cần quyền auditor đặc biệt)
+// Theo dõi số lần mở lại (re_open_count) để kiểm soát
+// Nếu fail → không thể điều chỉnh hồi tố khi cần thiết
 echo "\n=== Test 6: Re-open period ===\n";
 $reopened = $svc->reOpenPeriod($p2['id'], 'auditor');
 assertEq('open', $reopened['status'], 'Re-opened status = open');

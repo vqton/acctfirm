@@ -1,4 +1,8 @@
-<?php $title = 'Báo cáo vốn bằng tiền'; $activeMenu = 'cash_reports'; ob_start(); ?>
+<?php // Màn hình: Báo cáo tổng hợp vốn bằng tiền
+// API: GET /api/cash-reports/position, GET /api/cash-reports/concentration
+// Nghiệp vụ: Tổng hợp số dư các TK vốn bằng tiền: 111 (tiền mặt) + 112 (tiền gửi) + 113 (tiền đang chuyển)
+// Mục đích: Quản lý dòng tiền — hiển thị tổng vốn bằng tiền và chi tiết theo từng tài khoản
+$title = 'Báo cáo vốn bằng tiền'; $activeMenu = 'cash_reports'; ob_start(); ?>
 <div class="toolbar"><h5>Báo cáo vốn bằng tiền</h5></div>
 
 <div class="row g-3 mb-3">

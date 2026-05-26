@@ -1,4 +1,9 @@
-<?php $title = 'Sổ Nhật ký chung'; $activeMenu = 'general_journal'; ob_start(); ?>
+<?php // Màn hình: Sổ nhật ký chung (S03a-DN)
+// API: GET /api/general-journal?from=&to=
+// Nghiệp vụ: Sổ NKC — ghi chép tất cả bút toán theo thứ tự thời gian, mỗi bút toán ghi 2 dòng
+// Tuân thủ: Mẫu S03a-DN theo Thông tư 200 — nguyên tắc: Tổng PS Nợ = Tổng PS Có
+// Rủi ro: Nếu có bút toán lẻ (single entry) sẽ break nguyên tắc double-entry
+$title = 'Sổ Nhật ký chung'; $activeMenu = 'general_journal'; ob_start(); ?>
 <div class="toolbar">
     <h5>Sổ Nhật ký chung <span class="stats">(General Journal — Mẫu S03a-DN)</span></h5>
     <div class="d-flex gap-2">

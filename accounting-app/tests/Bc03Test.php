@@ -1,4 +1,5 @@
 <?php
+// Test: BC03 — Lưu chuyển tiền tệ
 require __DIR__ . '/bootstrap.php';
 
 use Accounting\Domain\Service\FsService;
@@ -109,6 +110,8 @@ foreach ($bc03d as $r) {
 assertFloatEq(200000000, $ms33, 'Loan proceeds (33) = 200M');
 assertFloatEq(200000000, $ms40, 'Financing flow (40) = 200M');
 
+// Ràng buộc liên báo cáo: Tiền cuối kỳ trên BC03 (MS 70) = Tiền mặt trên BC01 (MS 110)
+// Nếu fail → 2 báo cáo mâu thuẫn → cơ quan thuế không chấp nhận
 echo "\n=== Test 6: BC 03 closing cash matches BC 01 ===\n";
 $bc01 = $fs->generateBC01('2026');
 $bc01Cash = 0;
@@ -123,6 +126,9 @@ foreach ($bc03d as $r) {
 assertFloatEq(130000000, $bc01Cash, 'BC01 cash (110) = 130M');
 assertFloatEq($bc01Cash, $bc03ms70, 'BC03 closing cash (70) matches BC01 cash (110)');
 
+// Ràng buộc: Công thức BC03 — 50 (Lưu chuyển thuần) = 20 + 30 + 40
+// 70 (Tiền cuối kỳ) = 50 + 60 (Tiền đầu kỳ) + 61 (Ảnh hưởng tỷ giá)
+// Nếu fail → BC03 sai cấu trúc → không đúng mẫu quy định
 echo "\n=== Test 7: BC 03 summary formula ===\n";
 $ms20 = 0; $ms30 = 0; $ms40 = 0; $ms50 = 0; $ms60 = 0; $ms61 = 0; $ms70 = 0;
 foreach ($bc03d as $r) {

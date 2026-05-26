@@ -1,4 +1,5 @@
 <?php
+// Màn hình: Danh mục nhà cung cấp
 $title = 'Danh mục nhà cung cấp';
 $activeMenu = 'suppliers';
 ob_start();

@@ -1,4 +1,5 @@
-<?php $title = 'Sổ chi tiết công nợ'; $activeMenu = 'ap_statement'; ob_start(); ?>
+<?php // Màn hình: Sổ chi tiết công nợ nhà cung cấp
+$title = 'Sổ chi tiết công nợ'; $activeMenu = 'ap_statement'; ob_start(); ?>
 <div class="toolbar">
     <h5>Sổ chi tiết công nợ nhà cung cấp</h5>
     <div>

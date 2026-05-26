@@ -1,4 +1,5 @@
 <?php
+// Bảng chứng từ kế toán — ghi nhận mọi nghiệp vụ phát sinh
 
 return function (PDO $pdo) {
     $pdo->exec('CREATE TABLE IF NOT EXISTS transactions (

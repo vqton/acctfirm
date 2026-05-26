@@ -1,4 +1,5 @@
-<?php $title = 'Vai trò & Phân quyền'; $activeMenu = 'roles'; ob_start(); ?>
+<?php // Màn hình: Phân quyền người dùng hệ thống
+$title = 'Vai trò & Phân quyền'; $activeMenu = 'roles'; ob_start(); ?>
 <div class="toolbar">
     <h5>Vai trò & Phân quyền</h5>
     <div><button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#roleModal"><i class="bi bi-plus-lg"></i> Thêm vai trò</button></div>

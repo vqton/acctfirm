@@ -1,4 +1,5 @@
 <?php
+// Quản lý dữ liệu: danh mục hợp đồng
 namespace Accounting\Infrastructure\Persistence;
 
 use Accounting\Domain\Model\Contract;

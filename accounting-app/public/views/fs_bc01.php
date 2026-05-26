@@ -1,4 +1,5 @@
-<?php $title = 'Báo cáo tình hình tài chính'; $activeMenu = 'fs_bc01'; ob_start(); ?>
+<?php // Màn hình: Báo cáo tình hình tài chính (B01-DN — BC Cân đối)
+$title = 'Báo cáo tình hình tài chính'; $activeMenu = 'fs_bc01'; ob_start(); ?>
 <div class="toolbar">
     <h5>Báo cáo tình hình tài chính <span class="stats">(Mẫu B01-DN)</span></h5>
     <div>

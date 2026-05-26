@@ -1,4 +1,5 @@
 <?php
+// Màn hình: Danh mục hệ thống tài khoản kế toán (Circular 99)
 $title = 'Hệ thống tài khoản';
 $activeMenu = 'coa';
 ob_start();

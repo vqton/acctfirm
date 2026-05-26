@@ -1,4 +1,5 @@
 <?php
+// Bảng dự án — tập hợp chi phí và doanh thu theo dự án
 return function (PDO $pdo) {
     $pdo->exec('CREATE TABLE IF NOT EXISTS projects (
         id VARCHAR(50) PRIMARY KEY, code VARCHAR(50) NOT NULL UNIQUE, name VARCHAR(200) NOT NULL,

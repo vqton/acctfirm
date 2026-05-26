@@ -1,4 +1,5 @@
 <?php
+// Seed dữ liệu chỉ tiêu BC03 (Lưu chuyển tiền tệ)
 return function (PDO $pdo) {
     $bc03 = [
         // === SECTION I: HOẠT ĐỘNG KINH DOANH (Indirect Method) ===

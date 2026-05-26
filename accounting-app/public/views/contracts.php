@@ -1,4 +1,5 @@
 <?php
+// Màn hình: Danh mục hợp đồng kinh tế
 $title = 'Danh mục hợp đồng';
 $activeMenu = 'contracts';
 ob_start();

@@ -1,4 +1,5 @@
 <?php
+// Test: AR — công nợ phải thu khách hàng (TK 131)
 spl_autoload_register(function ($class) {
     $prefix = 'Accounting\\';
     $baseDir = __DIR__ . '/../src/Accounting/';
@@ -67,6 +68,9 @@ echo "\n=== Test 4: Prepayment ===\n";
 $pre = $ar->recordPrepayment($cid, 5000000, 'Advance for order', 'tester');
 assertTrue($pre['invoice_id'] > 0, 'Prepayment recorded');
 
+// Nghiệp vụ: Hàng bán bị trả lại — ghi nhận khoản giảm trừ doanh thu
+// TK 521 (Các khoản giảm trừ doanh thu) — bên Nợ
+// Nếu fail → doanh thu gộp không được điều chỉnh → sai BC02
 echo "\n=== Test 5: Sales return ===\n";
 $retInv = $ar->recordInvoice($cid, 'SI-RET-001', '2026-06-01', '2026-07-01', 5000000, 500000, 10, 'Return test', 'tester');
 $ret = $ar->recordReturn($retInv['invoice_id'], 2000000, 'tester');
@@ -75,6 +79,8 @@ assertTrue($ret['amount'] > 0, 'Return recorded');
 $deduction = $accountRepo->findByCode('521')->getBalance();
 assertTrue($deduction != 0, 'Revenue deduction (521) recorded (contra-revenue, debit-normal)');
 
+// Nghiệp vụ: Chiết khấu thanh toán cho khách hàng — ghi vào TK 635 (Chi phí tài chính)
+// Nếu fail → chiết khấu không được ghi nhận đúng → sai chi phí tài chính
 echo "\n=== Test 6: Settlement discount ===\n";
 $discInv = $ar->recordInvoice($cid, 'SI-DISC-001', '2026-07-01', '2026-08-01', 3000000, 300000, 10, 'Discount test', 'tester');
 $disc = $ar->recordSettlementDiscount($discInv['invoice_id'], 200000, 'tester');
@@ -83,6 +89,9 @@ assertTrue($disc['amount'] > 0, 'Discount recorded');
 $fc = $accountRepo->findByCode('635')->getBalance();
 assertTrue($fc > 0, 'Finance cost (635) recorded for discount');
 
+// Nghiệp vụ: Xóa sổ công nợ phải thu khó đòi
+// Chỉ áp dụng với hóa đơn quá hạn lâu ngày, được phê duyệt đặc biệt
+// Nếu fail → không xóa được nợ xấu → BC01 sai số dư 131
 echo "\n=== Test 7: Write-off ===\n";
 $woInv = $ar->recordInvoice($cid, 'SI-WO-001', '2025-03-01', '2025-03-15', 2000000, 200000, 10, 'Write-off test', 'tester');
 $wo = $ar->writeOff($woInv['invoice_id'], 'tester');

@@ -1,4 +1,5 @@
 <?php
+// Màn hình: Danh mục kho
 $title = 'Danh mục kho';
 $activeMenu = 'warehouses';
 ob_start();

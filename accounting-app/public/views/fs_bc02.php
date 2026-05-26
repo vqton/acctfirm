@@ -1,4 +1,5 @@
-<?php $title = 'Báo cáo KQ HĐKD'; $activeMenu = 'fs_bc02'; ob_start(); ?>
+<?php // Màn hình: Báo cáo kết quả hoạt động kinh doanh (B02-DN)
+$title = 'Báo cáo KQ HĐKD'; $activeMenu = 'fs_bc02'; ob_start(); ?>
 <div class="toolbar">
     <h5>Báo cáo kết quả hoạt động kinh doanh <span class="stats">(Mẫu B02-DN)</span></h5>
     <div>

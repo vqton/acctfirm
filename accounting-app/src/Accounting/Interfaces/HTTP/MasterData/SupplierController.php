@@ -6,6 +6,27 @@ use Accounting\Domain\Repository\SupplierRepositoryInterface;
 
 use \Accounting\Interfaces\HTTP\CrudControllerTrait;
 
+/**
+ * MODULE: Danh mục Nhà cung cấp (Supplier Master)
+ *
+ * Mục đích nghiệp vụ:
+ *   - CRUD nhà cung cấp: thông tin liên hệ, mã số thuế, địa chỉ
+ *   - Quản lý điều khoản thanh toán và hạn mức tín dụng
+ *   - Cơ sở để quản lý công nợ phải trả (TK 331)
+ *
+ * API endpoints:
+ *   (Sử dụng CrudControllerTrait — CRUD chuẩn)
+ *
+ * Rủi ro:
+ *   - Trùng mã số thuế → nhầm lẫn nhà cung cấp
+ *   - Sai thông tin thanh toán → chuyển tiền sai đích
+ *   - Nhà cung cấp ngừng hoạt động vẫn còn công nợ chưa thanh toán
+ *
+ * Tích hợp:
+ *   - ApController tham chiếu supplier_id để ghi nhận hóa đơn mua
+ *   - ReceiveGoodsController tham chiếu khi nhập kho
+ *   - Báo cáo AP aging dùng thông tin supplier
+ */
 class SupplierController
 {
     use CrudControllerTrait;

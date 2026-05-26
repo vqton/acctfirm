@@ -6,6 +6,26 @@ use Accounting\Domain\Repository\DepartmentRepositoryInterface;
 
 use \Accounting\Interfaces\HTTP\CrudControllerTrait;
 
+/**
+ * MODULE: Danh mục Phòng ban (Department Master)
+ *
+ * Mục đích nghiệp vụ:
+ *   - CRUD phòng ban trong doanh nghiệp
+ *   - Quản lý cấu trúc phân cấp (parent_id) — phòng ban cha/con
+ *   - Cơ sở để phân bổ chi phí và theo dõi ngân sách
+ *
+ * API endpoints:
+ *   (Sử dụng CrudControllerTrait — CRUD chuẩn)
+ *
+ * Rủi ro:
+ *   - Xóa phòng ban đang có nhân viên → mất thông tin tổ chức
+ *   - Sai cấu trúc phân cấp → sai báo cáo chi phí theo phòng ban
+ *
+ * Tích hợp:
+ *   - EmployeeController gán department_id cho nhân viên
+ *   - Phân bổ chi phí lương (334) và chi phí SXC (627) theo phòng ban
+ *   - FxController và báo cáo chi phí theo phòng ban
+ */
 class DepartmentController
 {
     use CrudControllerTrait;

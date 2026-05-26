@@ -1,4 +1,5 @@
-<?php $title = 'Quản lý kỳ kế toán'; $activeMenu = 'periods'; ob_start(); ?>
+<?php // Màn hình: Quản lý kỳ kế toán (mở/đóng kỳ)
+$title = 'Quản lý kỳ kế toán'; $activeMenu = 'periods'; ob_start(); ?>
 <div class="toolbar">
     <h5>Quản lý kỳ kế toán</h5>
     <div><button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#periodModal"><i class="bi bi-plus-lg"></i> Tạo kỳ</button></div>

@@ -1,4 +1,5 @@
 <?php
+// Bảng phương pháp định giá tồn kho — FIFO, bình quân, đích danh
 return function (PDO $pdo) {
     $pdo->exec('CREATE TABLE IF NOT EXISTS valuation_methods (
         id VARCHAR(50) PRIMARY KEY, code VARCHAR(50) NOT NULL UNIQUE, name VARCHAR(200) NOT NULL,

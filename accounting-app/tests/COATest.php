@@ -1,4 +1,5 @@
 <?php
+// Test: Hệ thống tài khoản (COA) — CRUD và kiểm tra cấu trúc
 spl_autoload_register(function ($class) {
     $prefix = 'Accounting\\';
     $baseDir = __DIR__ . '/../src/Accounting/';
@@ -67,6 +68,8 @@ assertEq('Thanh toán theo tiến độ hợp đồng XD', $repo->findByCode('33
 assertEq('Nhận ký quỹ, ký cược', $repo->findByCode('344')->getName(), '344 repurposed correctly');
 assertEq('Thuế TNDN hoãn lại phải trả', $repo->findByCode('347')->getName(), '347 repurposed correctly');
 
+// Nghiệp vụ: CRUD tài khoản — kiểm tra save/findByCode/delete hoạt động
+// Nếu fail → quản lý danh mục tài khoản kế toán không hoạt động
 echo "\n=== Test 2: Account CRUD ===\n";
 $a = new Account(uniqid('coa_'), '999', 'Test account', 'liability', null, 'C', '9');
 $repo->save($a);
@@ -83,6 +86,8 @@ $repo->delete($found->getId());
 $deleted = $repo->findByCode('999');
 assertTrue($deleted === null, 'Deleted account not found');
 
+// Nghiệp vụ: Cấu trúc phân cấp tài khoản — TK tổng hợp (128) → TK chi tiết (1281) → TK con (33311)
+// Nếu fail → cây tài khoản không đúng cấu trúc Circular 99
 echo "\n=== Test 3: Account hierarchy ===\n";
 $parent = $repo->findByCode('128');
 $child = $repo->findByCode('1281');
@@ -95,6 +100,10 @@ $sub = $repo->findByCode('33311');
 assertTrue($sub !== null, 'Level 3 account 33311 exists');
 assertEq('3331', $sub->getParentId(), '33311 parent is 3331');
 
+// Nghiệp vụ: Kiểm tra tính chất số dư (bên Nợ/bên Có) của từng loại tài khoản
+// Tài sản (111) = Dư Nợ, Nợ phải trả (331) = Dư Có, Doanh thu (511) = Dư Có
+// TK điều chỉnh giảm tài sản (229) = Dư Có
+// Nếu fail → bút toán đảo chiều → báo cáo tài chính sai
 echo "\n=== Test 4: Account types and normal balances ===\n";
 $cash = $repo->findByCode('111');
 assertEq('D', $cash->getNormalBalance(), 'Cash (111) is debit-normal');
@@ -109,6 +118,9 @@ assertEq('C', $equity->getNormalBalance(), 'Equity (411) is credit-normal');
 $expense = $repo->findByCode('632');
 assertEq('D', $expense->getNormalBalance(), 'Expense (632) is debit-normal');
 
+// Nghiệp vụ: TK tổng hợp (có TK con) được đánh dấu is_control = true
+// 128, 133, 333, 411 là control; 111, 632 không phải control
+// Nếu fail → không chặn được post vào TK tổng hợp → sai số dư chi tiết
 echo "\n=== Test 5: Control accounts marked correctly ===\n";
 assertTrue($repo->findByCode('128')->isControl(), '128 is control (has sub-accounts)');
 assertTrue($repo->findByCode('133')->isControl(), '133 is control (has sub-accounts)');

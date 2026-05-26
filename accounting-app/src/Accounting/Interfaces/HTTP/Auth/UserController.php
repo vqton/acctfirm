@@ -4,6 +4,31 @@ namespace Accounting\Interfaces\HTTP\Auth;
 use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
 
+/**
+ * MODULE: Quản lý Người dùng
+ *
+ * Mục đích nghiệp vụ:
+ *   - CRUD người dùng hệ thống kế toán
+ *   - Quản lý mật khẩu (hash bằng password_hash)
+ *   - Gán vai trò cho người dùng (liên kết user_roles)
+ *   - Theo dõi thời gian đăng nhập cuối
+ *
+ * API endpoints:
+ *   GET    /api/users          — Danh sách người dùng (kèm vai trò)
+ *   POST   /api/users          — Tạo người dùng mới
+ *   PUT    /api/users/{id}     — Cập nhật thông tin
+ *   DELETE /api/users/{id}     — Vô hiệu hóa người dùng
+ *   PUT    /api/users/{id}/password — Đổi mật khẩu
+ *
+ * Rủi ro:
+ *   - Lộ mật khẩu: không log password_hash, không trả về trong response
+ *   - Người dùng cuối cùng có quyền admin: không cho xóa
+ *   - Tài khoản bị vô hiệu hóa nhưng vẫn giữ session cũ (cần kiểm tra status mỗi request)
+ *
+ * Tích hợp:
+ *   - AuthController dùng bảng users để xác thực
+ *   - RoleController quản lý role, UserController gán user_roles
+ */
 class UserController
 {
     private \PDO $pdo;
@@ -24,6 +49,13 @@ class UserController
         $this->list();
     }
 
+    // NGHIỆP VỤ: Tạo người dùng mới — hash password + gán vai trò
+    // Input: { username, password, full_name, email?, role_ids?: [...] }
+    // Output: { id } — 201 Created
+    // Permission: system, create
+    // Rủi ro: FORBIDDEN — không log password_hash, không trả về trong response
+    // Bảo mật: password_hash() với PASSWORD_DEFAULT (bcrypt). username unique check
+    // Ràng buộc: User mới mặc định status = 'active'. Gán role_ids nếu có
     public function create(): void
     {
         Auth::requirePermission('system', 'create');
@@ -44,6 +76,13 @@ class UserController
         JsonResponse::ok(['id' => $id], 201);
     }
 
+    // NGHIỆP VỤ: Cập nhật thông tin người dùng — full_name, email, status, password, role_ids
+    // Input: { full_name?, email?, status?, password?, role_ids?: [...] }
+    // Output: { message: 'Updated' }
+    // Permission: system, edit
+    // Rủi ro: Chỉ update các field được gửi lên (partial update). Password được hash lại
+    // Khi role_ids thay đổi: DELETE + INSERT user_roles (không kiểm tra role tồn tại)
+    // Ràng buộc: Không cho đổi username (unique constraint). Status 'inactive' = vô hiệu hóa
     public function update(string $id): void
     {
         Auth::requirePermission('system', 'edit');
@@ -70,6 +109,13 @@ class UserController
         JsonResponse::ok(['message' => 'Updated']);
     }
 
+    // NGHIỆP VỤ: Vô hiệu hóa người dùng (soft delete) — không xóa khỏi DB
+    // Input: id (URL)
+    // Output: { message: 'Deactivated' }
+    // Permission: system, delete
+    // Rủi ro: FORBIDDEN — không DELETE vật lý (soft delete = status='inactive')
+    // Ràng buộc: Không cho vô hiệu hóa user 'admin' (last admin protection)
+    // Session cũ của user bị vô hiệu hóa vẫn tồn tại — index.php kiểm tra status mỗi request
     public function delete(string $id): void
     {
         Auth::requirePermission('system', 'delete');

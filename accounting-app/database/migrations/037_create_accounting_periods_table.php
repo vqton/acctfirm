@@ -1,4 +1,5 @@
 <?php
+// Bảng kỳ kế toán — quản lý mở/đóng kỳ, ngăn post vào kỳ đã đóng
 return function (PDO $pdo) {
     $pdo->exec('CREATE TABLE IF NOT EXISTS accounting_periods (
         id INT AUTO_INCREMENT PRIMARY KEY,

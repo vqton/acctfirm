@@ -1,4 +1,8 @@
-<?php $title = 'Phân tích tuổi nợ phải thu'; $activeMenu = 'ar_aging'; ob_start(); ?>
+<?php // Màn hình: Phân tích tuổi nợ phải thu khách hàng
+// API: GET /api/ar/aging
+// Nghiệp vụ: Phân tích công nợ 131 theo thời gian quá hạn: current, 1-30, 31-60, 61-90, 90+ ngày
+// Mục đích: Đánh giá rủi ro công nợ, trích lập dự phòng phải thu khó đòi
+$title = 'Phân tích tuổi nợ phải thu'; $activeMenu = 'ar_aging'; ob_start(); ?>
 <div class="toolbar"><h5>Phân tích tuổi nợ phải thu <span class="stats">(Aging)</span></h5>
 <div><button class="btn btn-outline-primary btn-sm" onclick="loadData()"><i class="bi bi-arrow-clockwise"></i> Làm mới</button></div></div>
 <div id="agingContainer"></div>

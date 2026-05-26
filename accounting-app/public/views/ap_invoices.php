@@ -1,4 +1,8 @@
-<?php $title = 'Công nợ phải trả'; $activeMenu = 'ap_invoices'; ob_start(); ?>
+<?php // Màn hình: Quản lý công nợ phải trả nhà cung cấp (TK 331)
+// API: GET /api/ap/suppliers, GET /api/ap/invoices, POST /api/ap/invoices, POST /api/ap/invoices/{id}/pay, POST /api/ap/prepay
+// Nghiệp vụ: Ghi nhận hóa đơn mua hàng (Nợ 156/152/211 + 1331/Có 331), thanh toán (Nợ 331/Có 1111/1121), tạm ứng (Nợ 331/Có 1111)
+// Rủi ro: Chọn sai inventory_account sẽ sai tài khoản hàng tồn kho và sai BC01
+$title = 'Công nợ phải trả'; $activeMenu = 'ap_invoices'; ob_start(); ?>
 <div class="toolbar">
     <h5>Công nợ phải trả nhà cung cấp <span class="stats">(TK 331)</span></h5>
     <div>

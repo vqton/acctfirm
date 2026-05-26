@@ -64,6 +64,9 @@ $ap = $accountRepo->findByCode('331')->getBalance();
 assertEq(850000, $rawMat, 'Raw materials (152) increased by 850,000');
 assertEq(850000, $ap, 'AP (331) increased by 850,000');
 
+// Nghiệp vụ: Nhập kho có chi phí vận chuyển (landed cost) — cộng vào giá vốn hàng nhập
+// 5 x 50,000 + 100,000 (freight) = 350,000
+// Nếu fail → giá trị hàng tồn kho không bao gồm chi phí → sai giá vốn
 echo "\n=== Test 2: Receipt with landed cost (freight) ===\n";
 $receipt2 = $svc->receiveGoods($item->getId(), 5, 50000, [
     ['description' => 'Freight', 'amount' => 100000],

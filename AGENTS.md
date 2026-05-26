@@ -1,279 +1,973 @@
-# AGENTS.md
+# AGENTS.md — Enterprise Engineering Governance Document
 
-## Project
+> **Phiên bản:** 2.0  
+> **Phạm vi:** Toàn bộ hệ thống kế toán doanh nghiệp Việt Nam  
+> **Đối tượng:** Developers, AI agents, Architects, DevOps, Auditors, Onboarding engineers  
+> **Nguyên tắc:** Mọi thay đổi phải đảm bảo **tính đúng đắn nghiệp vụ kế toán**, **không phá vỡ backward compatibility**, **có kiểm chứng bằng test**
 
-Vietnamese enterprise accounting webapp. PHP 8.4, no framework, no Composer. MySQL/MariaDB via PDO. Bootstrap 5 + jQuery for UI. API returns JSON. Frontend consumes API via jQuery AJAX.
+---
 
-## Golden Rules
+## Mục lục
 
-### Rule #1: Never Code Without a Spec
+1. [Tổng quan dự án & Business Context](#1-t%E1%BB%95ng-quan-d%E1%BB%B1-%C3%A1n--business-context)
+2. [Enterprise Governance Tiers](#2-enterprise-governance-tiers)
+3. [Kiến trúc hệ thống](#3-ki%E1%BA%BFn-tr%C3%BAc-h%E1%BB%87-th%E1%BB%91ng)
+4. [Công nghệ & Ràng buộc](#4-c%C3%B4ng-ngh%E1%BB%87--r%C3%A0ng-bu%E1%BB%99c)
+5. [Code Standards & Conventions](#5-code-standards--conventions)
+6. [Vietnamese Comment Standards](#6-vietnamese-comment-standards)
+7. [Business Rules Preservation Framework](#7-business-rules-preservation-framework)
+8. [Database & Migration Standards](#8-database--migration-standards)
+9. [API & Integration Standards](#9-api--integration-standards)
+10. [Security & Audit Standards](#10-security--audit-standards)
+11. [Testing & Quality Gates](#11-testing--quality-gates)
+12. [AI Agent Operational Policy](#12-ai-agent-operational-policy)
+13. [CI/CD & DevOps Standards](#13-cicd--devops-standards)
+14. [Operational Risk Register](#14-operational-risk-register)
+15. [Quick Commands](#15-quick-commands)
+16. [CodeGraph Reference](#16-codegraph-reference)
+17. [Directory Structure](#17-directory-structure)
+18. [New Entity Checklist](#18-new-entity-checklist)
+19. [Skill Selection Matrix](#19-skill-selection-matrix)
+20. [Changelog & ADR](#20-changelog--adr)
 
-**Do NOT implement any feature unless the use case specification has enough detail to build it correctly.**
+---
 
-If docs are insufficient → **stop**, tell the user exactly what's missing and why, and wait for complete use case docs before writing code.
+## 1. Tổng quan dự án & Business Context
 
-### Rule #2: Detect Vague Early
+Hệ thống kế toán doanh nghiệp Việt Nam — web application, PHP backend, MySQL/MariaDB.
 
-"Enough detail" means: given only this doc, an accountant who has never seen the codebase could verify the output is correct.
+### 1.1 Business Domain
 
-If you find yourself thinking "I think it should work like..." or "probably" or "assume" — that's vague. Stop and escalate.
+- **Chế độ kế toán:** Thông tư 99/2025/TT-BTC (Circular 99) — Hệ thống tài khoản kế toán doanh nghiệp Việt Nam
+- **Báo cáo tài chính:** BC 01 (Cân đối kế toán), BC 02 (Kết quả kinh doanh), BC 03 (Lưu chuyển tiền tệ)
+- **Nghiệp vụ:** Tiền mặt, tiền gửi ngân hàng, hàng tồn kho (FIFO/Weighted Average), công nợ phải thu/phải trả, tài sản cố định, thuế GTGT, lương, tạm ứng, kết chuyển cuối kỳ
+- **Thuế:** GTGT khấu trừ (133/3331), TNCN, TNDN
 
-### Rule #3: Use the Right Skill for the Gap
+### 1.2 Regulatory Compliance
 
-| If the gap is… | Use this skill | To produce… |
+| Yêu cầu | Bắt buộc | Hậu quả nếu sai |
 |---|---|---|
-| No spec exists at all | `spec-driven-development` | Acceptance criteria document |
-| Spec exists but vague/ambiguous | `interview-me` | Clarified, precise requirements |
-| Multiple conflicting interpretations | `idea-refine` | Sharpened, single-direction spec |
-| Spec is clear but unfamiliar domain | `doubt-driven-development` | Adversarial review of assumptions |
-| Spec is clear and familiar | `karpathy-guidelines` | Surgical implementation |
+| Hệ thống tài khoản đúng Circular 99 | ✅ | Báo cáo tài chính sai → phạt thuế |
+| Dr = Cr cho mọi bút toán | ✅ | Bảng cân đối không khớp → audit fail |
+| Không post vào tài khoản tổng hợp (control account) | ✅ | Sai số dư chi tiết → sai BC |
+| Số chứng từ tự động tăng | ✅ | Mất audit trail → rủi ro pháp lý |
+| Kỳ kế toán đóng là read-only | ✅ | Sai số liệu kỳ trước → restate |
+| Lưu audit trail đầy đủ | ✅ | Yêu cầu từ Kiểm toán độc lập |
+| Từng nghiệp vụ bằng tiếng Việt | ✅ | Yêu cầu của Kế toán trưởng |
 
-### Rule #4: One Feature, One Verifiable End State
+### 1.3 Key Architectural Decisions
 
-Every implementation must answer: "How will we prove this works?"
+| Decision | Rationale | ADR |
+|---|---|---|
+| No framework, pure PHP | Kiểm soát hoàn toàn, không dependency hell | `docs/decisions/adr-001.md` |
+| PDO prepared statements | Chống SQL injection, performance | `docs/decisions/adr-002.md` |
+| Domain-driven structure | Tách biệt nghiệp vụ khỏi infrastructure | `docs/decisions/adr-003.md` |
+| JSON API + jQuery AJAX | Đơn giản, đủ cho ERP nội bộ | `docs/decisions/adr-004.md` |
+| ActionJournal (JSON Lines) | Audit trail bất biến, dễ export | `docs/decisions/adr-005.md` |
 
-Minimum: a passing test that covers the happy path + at least one failure case.
-Better: the test encodes the exact accounting entry (Dr/Cr, accounts, amounts) from the spec.
+---
 
-If you cannot write the test, you do not understand the spec well enough to code.
+## 2. Enterprise Governance Tiers
 
-### Rule #5: Accounting Has No "Close Enough"
+Mọi quy tắc trong document này được phân loại theo mức độ bắt buộc:
 
-Wrong account code = wrong FS line item = wrong tax return = regulatory penalty.
+### Tier 1 — REQUIRED (BẮT BUỘC)
 
-When in doubt about account mapping, journal entry structure, or tax treatment → **stop and get written clarification**. Do not infer. Do not guess. Do not "follow the same pattern as X" unless you can prove X is semantically identical.
+Vi phạm = rejected code review, không được merge, rollback nếu phát hiện trong production.
 
-## Quick Commands
+- **REQUIRED:** Mọi POST/PUT/DELETE phải kiểm tra CSRF token
+- **REQUIRED:** Mọi SQL phải dùng prepared statements (PDO `?` placeholder)
+- **REQUIRED:** Mọi bút toán phải đảm bảo tổng Dr = tổng Cr
+- **REQUIRED:** Mọi migration phải idempotent (IF NOT EXISTS, ON DUPLICATE KEY, INSERT IGNORE)
+- **REQUIRED:** Mọi thay đổi DB phải có migration file, không sửa tay
+- **REQUIRED:** Mọi transaction multi-step phải wrap trong beginTransaction/commit/rollback
+- **REQUIRED:** Không hardcode account code trong controller — phải dùng AccountRepository
+- **REQUIRED:** Mọi API endpoint trả JSON phải có header `Content-Type: application/json`
+- **REQUIRED:** Không commit secret, password, token vào git
+- **REQUIRED:** Mọi model mới phải có Repository Interface + PDO Implementation
+- **REQUIRED:** Mọi nghiệp vụ mới phải có test — happy path + ít nhất 1 failure case
+- **REQUIRED:** Không dùng `eval()`, `extract()`, `create_function()`, `${}` interpolation
 
-```sh
-php -S 0.0.0.0:8080 -t public public/index.php   # Start server
-php database/migrate.php                           # Run migrations
-for f in tests/*.php; do php "$f"; done            # Run all tests
-```
+### Tier 2 — RECOMMENDED (KHUYẾN NGHỊ)
 
-## Directory Structure
+Không bắt buộc nhưng phải có lý do chính đáng nếu không tuân thủ.
 
-```
-├── config/            services.php (DI), routes.php, database.php
-├── data/              Static data files (coa_circular_99.json)
-├── database/          migrate.php runner + migrations/*.php
-├── public/            index.php (entry + auth guard), views/ (layout.php + *.php)
-├── src/Accounting/
-│   ├── Domain/
-│   │   ├── Model/        Plain PHP objects, getters/setters/toArray()
-│   │   ├── Repository/   Interfaces (suffix Interface)
-│   │   └── Service/      Business logic (JournalService, CashService, PettyCashService, GlService...)
-│   ├── Infrastructure/
-│   │   ├── Database/     DB.php (PDO helper), AuditLogger.php
-│   │   ├── Auth.php        isAuthenticated, hasPermission, requirePermission, csrfToken, checkCsrf
-│   │   ├── Helpers.php     fmt, e, isValidAccountCode, nextVoucherNo, paginate (delegates json/auth/VnWords)
-│   │   ├── JsonResponse.php ok($data,$code), error($message,$code)
-│   │   ├── Logging/        Logger.php, LoggingPDO.php, ActionJournal.php (request/SQL log + action journal)
-│   │   ├── SessionMiddleware.php  open/close/authGuard, session_write_close for API
-│   │   ├── VnWords.php     toWords($amount)
-│   │   └── Repository/     PDO* implementations
-│   └── Interfaces/HTTP/  Controllers
-├── docs/
-│   └── analysis/         Consolidated business spec + gap analysis
-├── public/               index.php
-└── tests/                31 files, ~450 tests
+- **RECOMMENDED:** Interface suffix `Interface`, PDO impl prefix `PDO`
+- **RECOMMENDED:** 4 spaces indent, không tabs
+- **RECOMMENDED:** Mọi class có constructor injection, không dùng static/global
+- **RECOMMENDED:** Mọi API error trả về cấu trúc `{"error": "message"}`
+- **RECOMMENDED:** Controller chỉ gọi service, không chứa business logic
+- **RECOMMENDED:** Mọi model có `toArray()` method
+- **RECOMMENDED:** Sử dụng `AuditLogger::log()` cho mọi thay đổi dữ liệu quan trọng
+- **RECOMMENDED:** Unauthorized routes trả về 401, forbidden trả về 403
+- **RECOMMENDED:** Sử dụng VoucherService thay vì tự sinh reference thủ công
 
-## Architecture
+### Tier 3 — FORBIDDEN (CẤM TUYỆT ĐỐI)
 
-```
-public/index.php → autoloader → config/services.php (DI container) → config/routes.php
-→ Router::dispatch() → Controller → Repository (PDO) → MySQL
+Không có ngoại lệ. Vi phạm = immediate rollback + escalate lên Engineering Lead.
 
-JournalService::postEntry() → Transaction + LedgerEntry → Account balance
-CashService → JournalService (all cash/bank operations)
-ApService/ArService → JournalService + sub-ledger tables
-FsService → account balances → BC 01/02
-GlService → ledger entries (date, ref, Dr, Cr, running balance, contra account)
-```
+- **FORBIDDEN:** String interpolation trong SQL — `"WHERE id = $id"` thay vì `WHERE id = ?`
+- **FORBIDDEN:** Gọi `session_start()` sau khi đã gọi `session_write_close()`
+- **FORBIDDEN:** Xóa dữ liệu gốc — chỉ soft delete hoặc status flag
+- **FORBIDDEN:** Sửa migration đã chạy — viết migration mới
+- **FORBIDDEN:** Hardcode user credentials, API keys, database passwords trong code
+- **FORBIDDEN:** Sử dụng `require`/`include` với đường dẫn từ user input
+- **FORBIDDEN:** Gọi `exit()` hoặc `die()` trong controller — phải throw exception
+- **FORBIDDEN:** Sửa balance account trực tiếp — phải qua JournalService
+- **FORBIDDEN:** Hardcode mã định danh (ID) — phải dùng generated ID (uniqid/UUID)
+- **FORBIDDEN:** Xóa audit trail hoặc action journal
 
-- **Autoloader**: custom PSR-4-like. `Accounting\` maps to `src/Accounting/`. No Composer.
-- **DI container**: plain array in `$GLOBALS['container']`. All repos/services singletons.
-- **Router**: custom regex-based. Accepts `callable|array|string`.
-- **Controllers**: instantiated inline in route closures. `JsonResponse::ok/error(...)` for output.
-- **Models**: plain PHP objects with getters/setters + `toArray()`.
-- **Views**: extend `layout.php` via output buffer pattern.
-- **Auth**: PHP sessions. `SessionMiddleware` manages open/close + session_write_close for API.
-- **Logging**: `Logger` + `LoggingPDO` wrap PDO for Django-style request/SQL logging.
+---
 
-## Code Patterns
+## 3. Kiến trúc hệ thống
 
-| Pattern | Convention |
-|---|---|
-| Interfaces | Suffix `Interface` |
-| PDO impl | Prefix `PDO` |
-| Indentation | 4 spaces, no tabs |
-| SQL | PDO prepared statements, `?` placeholders |
-| Controllers | `JsonResponse::ok/error(...)`, never return |
-| HTTP status | Pass code as 2nd arg to `JsonResponse::ok/error` |
-| Audit log | `AuditLogger::log(action, resource, id, old, new, actor)` |
-| Permissions | `Auth::requirePermission(module, action)` |
-| Auth/CSRF | `Auth::csrfToken()`, `Auth::checkCsrf()` |
-| VN words | `VnWords::toWords(float)` |
-
-## Key Patterns
+### 3.1 Request Flow
 
 ```
-// Route: $router->get/post/put/delete($path, callable)
+Browser (jQuery AJAX)
+  → public/index.php (entry + auth guard)
+    → autoloader (PSR-4-like, Accounting\ → src/Accounting/)
+      → config/services.php (DI container — $GLOBALS['container'])
+        → config/routes.php ($router->get/post/put/delete)
+          → Router::dispatch()
+            → Controller (Interfaces/HTTP/)
+              → Service (Domain/Service/) — business logic
+                → Repository Interface → PDO Repository
+                  → MySQL
+              → JsonResponse::ok/error()
+```
+
+### 3.2 Service Dependencies
+
+```
+JournalService — CORE: mọi bút toán đi qua service này
+├── PostingRuleService — validation Dr-Cr pairs
+├── VoucherService — sinh số chứng từ tự động
+└── AuditLoggerInterface — ghi audit trail
+
+CashService → JournalService (tất cả thu/chi)
+PettyCashService → CashService → JournalService
+ApService → JournalService + Tk331 sub-ledger
+ArService → JournalService + Tk131 sub-ledger
+InventoryService → JournalService (xuất/nhập kho → bút toán)
+FixedAssetService → JournalService (khấu hao, mua sắm)
+FsService → AccountRepository (đọc số dư → BC01/02/03)
+PeriodService → JournalService + InventoryService (kết chuyển cuối kỳ)
+GlService → AccountRepository + TransactionRepository (sổ cái)
+BankReconciliationService → JournalService (điều chỉnh ngân hàng)
+```
+
+### 3.3 Module Boundaries
+
+| Module | Service | Account Codes | Key Tables |
+|---|---|---|---|
+| Cash & Bank | CashService | 111, 112 | transactions, ledger_entries |
+| Accounts Payable | ApService | 331 | ap_transactions, ap_aging |
+| Accounts Receivable | ArService | 131 | ar_transactions, ar_aging |
+| Inventory | InventoryService | 152, 153, 155, 156, 157, 632 | items, inventory_layers, warehouse_stock |
+| Fixed Assets | FixedAssetService | 211, 213, 214, 241, 242 | fixed_assets, depreciation_schedules |
+| Payroll | (future) | 334, 3383, 3384 | employees |
+| Tax | (via journals) | 133, 3331, 33311 | tax_rates |
+| Financial Statements | FsService | All | accounting_period_snapshots |
+
+**Critical rule:** Modules chỉ giao tiếp qua JournalService. Không module nào ghi trực tiếp vào transaction/account balance.
+
+### 3.4 Posting Controls (GL Posting Engine)
+
+Phase 1 đã implement — validation matrix:
+
+```
+postEntry/createDraft → validatePostingRules → posting_rules table
+  → block: throw InvalidArgumentException (ví dụ: Dr 631/Cr 111 không hợp lệ)
+  → warn: cho phép nhưng log warning (severity = warn)
+  → pass: cho phép (no matching rule)
+```
+
+Control accounts (có sub-accounts: 111, 112, 131, 331, 333, 411...) bị block trừ khi `$allowControl = true`.
+
+---
+
+## 4. Công nghệ & Ràng buộc
+
+### 4.1 Stack
+
+| Layer | Technology | Ghi chú |
+|---|---|---|
+| Language | PHP 8.4 | Strict types RECOMMENDED |
+| Database | MySQL 8+ / MariaDB 10.6+ | InnoDB, utf8mb4 |
+| ORM | None | PDO trực tiếp + prepared statements |
+| Frontend | Bootstrap 5 + jQuery 3.x | No React/Vue — legacy decision |
+| API | JSON over HTTP | AJAX từ jQuery |
+| Auth | PHP Sessions + CSRF | SessionMiddleware |
+| DI | Manual — array in $GLOBALS | Không container library |
+| Logging | Custom Logger + LoggingPDO + ActionJournal | Django-style |
+
+### 4.2 Constraints
+
+- **No Composer:** Custom PSR-4 autoloader. `Accounting\` namespace maps to `src/Accounting/`.
+- **No framework:** Pure PHP. Router tự viết, DI tự viết.
+- **No ORM:** Raw PDO + prepared statements.
+- **No migration library:** Script `database/migrate.php` tự phát hiện file mới.
+- **No test framework:** `assertEq`/`assertTrue` helpers trong `tests/bootstrap.php`.
+
+---
+
+## 5. Code Standards & Conventions
+
+### 5.1 Naming
+
+| Pattern | Convention | Ví dụ |
+|---|---|---|
+| Interface | Suffix `Interface` | `AccountRepositoryInterface` |
+| PDO Implementation | Prefix `PDO` | `PDOAccountRepository` |
+| Service | Suffix `Service` | `CashService`, `JournalService` |
+| Controller | Suffix `Controller` | `CashController` |
+| Model | Plain class | `Transaction`, `LedgerEntry` |
+| Namespace | `Accounting\{Domain\|Infrastructure\|Interfaces}\{...}` | |
+| Method | camelCase | `postEntry()`, `createDraft()` |
+| Property | camelCase | `$ledgerEntries`, `$isDebit` |
+
+### 5.2 Formatting
+
+- **REQUIRED:** 4 spaces indent, no tabs
+- **REQUIRED:** PHP opening tag `<?php` — no closing tag `?>`
+- **RECOMMENDED:** Class braces on new line, method braces on new line
+- **RECOMMENDED:** Line length max 120 characters
+- **RECOMMENDED:** Strict types declaration `declare(strict_types=1);`
+
+### 5.3 SQL
+
+- **REQUIRED:** PDO prepared statements, `?` positional placeholders
+- **REQUIRED:** No string interpolation, no named placeholders
+- **REQUIRED:** Fetch mode `PDO::FETCH_ASSOC` mặc định
+- **RECOMMENDED:** Error mode `PDO::ERRMODE_EXCEPTION` mặc định
+- **RECOMMENDED:** Emulate prepares OFF (`PDO::ATTR_EMULATE_PREPARES => false`) để real prepared statement
+
+### 5.4 Controllers & API
+
+```php
+// REQUIRED pattern:
 $router->get('/api/cash/accounts', function () {
     Auth::requirePermission('cash', 'read');
     JsonResponse::ok((new CashController(...))->getAccounts());
 });
 
-// DI: $GLOBALS['container']['key'] = fn($c) => new Service($c['dep']);
-$GLOBALS['container'][JournalService::class] = fn($c) =>
-    new JournalService($c[AccountRepo::class], $c[TransactionRepo::class]);
+// REQUIRED: Content-Type header — JsonResponse tự set
+// REQUIRED: HTTP status code là tham số thứ 2
+JsonResponse::ok($data, 200);
+JsonResponse::error($message, 422);
 
-// Session: SessionMiddleware::open() / close() / authGuard()
-SessionMiddleware::authGuard();      // Opens session, checks auth, closes lock
-SessionMiddleware::close();           // session_write_close() — release lock for API
-
-// Logging: Logger + LoggingPDO
-Logger::printRequest($method, $uri, $status, $duration, $size);  // Django-style HTTP
-Logger::printSQL($sql, $params, $ms);                             // Django-style SQL
-
-// Action journal: record user actions to JSON Lines files
-ActionJournal::record($method, $uri, $status, $reqBody, $resBody, $ms, $userId);
-ActionJournal::setAction('auth.login');  // Override auto-generated action name
-
-// Test: global assertEq/assertTrue with counter
-assertEq($result['closing_balance'], 7000000, '111 closing = 7M');
-assertTrue(count($entries) >= 2, 'At least 2 entries');
-// Run: php tests/GlTest.php → "=== Results: 12 tests, 0 failed ==="
-
-// View: ob_start extends layout.php
-<?php ob_start(); ?>
-<div class="container">...content...</div>
-<?php $content = ob_get_clean(); require __DIR__ . '/layout.php'; ?>
-
-// API response: JsonResponse::ok($data, $code) / JsonResponse::error($msg, $code)
-JsonResponse::ok($data, $code);   // http_response_code + echo json_encode (JSON_UNESCAPED_UNICODE)
-JsonResponse::error($msg, $code); // same with ['error' => $msg] structure
+// FORBIDDEN: return trong controller
+// FORBIDDEN: exit/die trong controller
+// FORBIDDEN: echo/json_encode trực tiếp — phải qua JsonResponse
 ```
 
-## Critical Gotchas (Code Review Findings)
+### 5.5 Views
 
-| Severity | Issue | Location | Fix |
-|---|---|---|---|
-| ~~RCE~~ | ~~`eval()` in formula engine~~ | ~~FsService.php~~ | ✅ Safe recursive descent parser |
-| ~~SQLi~~ | ~~String interpolation in SQL~~ | ~~CashService.php~~ | ✅ Prepared statements |
-| ~~Session fixation~~ | ~~No `session_regenerate_id()` after login~~ | ~~AuthController.php~~ | ✅ `session_regenerate_id(true)` |
-| ~~Path traversal~~ | ~~Static file serving doesn't normalize URI~~ | ~~index.php~~ | ✅ `realpath()` check |
-| ~~Encapsulation~~ | ~~Reflection to extract private PDO~~ | ~~8 controllers + InventoryService~~ | ✅ Constructor injection |
-| ~~Transactions~~ | ~~Multi-step ops not wrapped throughout~~ | ~~InventoryService~~ | ✅ All 16 InventoryService methods wrapped in `beginTransaction/commit/rollback` + JournalService handles nested via `inTransaction()` |
-| ~~Dead code~~ | ~~AccountingService, TransactionController~~ | ~~2 files~~ | ✅ Deleted |
-| ~~CRUD duplication~~ | ~~12 identical controllers~~ | ~~Master data controllers~~ | ✅ `CrudControllerTrait` |
-| ~~N+1 queries~~ | ~~Separate query per transaction~~ | ~~PDOTransactionRepository::getAll()~~ | ✅ Single JOIN |
-| **No CSRF** | POST/PUT/DELETE accept JSON without token | All controllers | ✅ CSRF token in layout + login response + `/api/auth/csrf` endpoint |
-| **Session lock** | Concurrent AJAX blocked by session | `index.php`, all API routes | ✅ `SessionMiddleware::close()` releases lock after auth check |
-| **Missing Content-Type** | JSON APIs missing header | `CashController` | ✅ `Content-Type: application/json` on all endpoints |
-| **Circular 99 fields** | Missing date, payer, amount-in-words | cash forms, transactions table | ✅ Migration 041 added `transaction_date`, `payer_name/type/id` |
-| ~~Dual PDO~~ | ~~`DB::` static vs container PDO~~ | ~~no prod usage~~ | ✅ Deleted `DB.php` references; all PDO via constructor |
-| ~~Dead code~~ | ~~ValuationService never wired~~ | ~~Domain/Service/~~ | ✅ Deleted |
-| ~~No migration tracking~~ | ~~Every migration runs every time~~ | ~~migrate.php~~ | ✅ `_migrations` table tracks executed migrations |
-| ~~COA seed in controller~~ | ~~209-line inline array in AccountController~~ | ~~AccountController.php~~ | ✅ Extracted to `data/coa_circular_99.json` |
-| ~~God object CashController~~ | ~~602 lines, 9 responsibilities~~ | ~~CashController/CashService~~ | ✅ PettyCash extracted (126/130 lines removed). More to do. |
-| ~~No shared test bootstrap~~ | ~~Autoloader + asserts duplicated 29x~~ | ~~tests/~~ | ✅ `tests/bootstrap.php` created, HelpersTest uses it |
-| **Login page in layout** | Login page renders inside sidebar | `login.php` | ✅ Standalone HTML, no layout inclusion |
-| **Logout session persist** | Session file not destroyed after logout | `index.php`, `AuthController`, `layout.php` | ✅ session_write_close removed, manual unlink, form POST instead of AJAX |
-| ~~Root path publicly accessible~~ | ~~`/` in `$publicPaths` allows unauthenticated access to dashboard~~ | ~~index.php~~ | ✅ `/` removed from `$publicPaths` → redirects to `/dang-nhap` |
-| ~~No session GC / timeout~~ | ~~`session.gc_probability=0` → old session files persist forever; browser PHPSESSID cookie restores old admin session in new tabs~~ | ~~SessionMiddleware.php, AuthController.php~~ | ✅ `session_set_cookie_params(httpOnly, SameSite=Lax)` + inactivity timeout (8h) + `SessionMiddleware::destroy()` extracted |
+```php
+<?php ob_start(); ?>
+<div class="container">
+  <!-- Nội dung view -->
+</div>
+<?php $content = ob_get_clean(); require __DIR__ . '/layout.php'; ?>
+```
 
-## To Add a New Entity
+### 5.6 Dependency Injection
 
-1. Migration file in `database/migrations/`
-2. Model in `src/Accounting/Domain/Model/`
-3. RepositoryInterface in `src/Accounting/Domain/Repository/`
-4. PDO repo in `src/Accounting/Infrastructure/Repository/`
-5. Controller in `src/Accounting/Interfaces/HTTP/`
-6. Routes in `config/routes.php`
-7. DI entry in `config/services.php`
-8. View in `public/views/` (extends layout.php)
-9. Sidebar link in `public/views/layout.php`
-10. Tests in `tests/` (use `tests/bootstrap.php`)
+```php
+// RECOMMENDED pattern — constructor injection
+// FORBIDDEN: static, singleton, service locator pattern trừ DI container
+$GLOBALS['container'][JournalService::class] = fn($c) =>
+    new JournalService(
+        $c[AccountRepositoryInterface::class],
+        $c[TransactionRepositoryInterface::class],
+        $c['pdo'],
+        $c[AuditLoggerInterface::class],
+        $c[PostingRuleService::class],
+        $c[VoucherService::class]
+    );
+```
 
-## Database
+### 5.7 Audit Logging
 
-- **Config**: `config/database.php` — dev/123456, accounting_db.
-- **Migrations**: 41 files. Runner at `database/migrate.php`. Each returns `fn(PDO $pdo)`.
-- **Migration tracking** — `_migrations` table tracks executed migrations. Already-run migrations are skipped.
-- **No rollback** — one-way only. Schema changes need manual handling.
+```php
+// REQUIRED: mọi thay đổi dữ liệu quan trọng phải log
+AuditLogger::log(
+    action: 'journal.post',            // {module}.{action}
+    resource: 'transaction',           // tên entity
+    resourceId: $txn->getId(),
+    oldValue: null,                    // null nếu create
+    newValue: ['reference' => $ref],   // luôn include identifier
+    actor: $createdBy
+);
 
-## Test Bootstrap
+// ActionJournal — ghi mọi request
+ActionJournal::record($method, $uri, $status, $reqBody, $resBody, $ms, $userId);
+ActionJournal::setAction('auth.login');  // Ghi đè action name auto-generated
+```
 
-`tests/bootstrap.php` provides shared autoloader + assert helpers. Use in any test file:
+---
+
+## 6. Vietnamese Comment Standards
+
+### 6.1 Nguyên tắc Chung
+
+**REQUIRED:** Mọi comment trong code phải viết bằng tiếng Việt.
+
+Mục đích:
+- Kế toán trưởng, kiểm toán viên người Việt đọc hiểu được
+- Giảm hiểu nhầm về nghiệp vụ kế toán Việt Nam
+- Kiểm soát viên nội bộ review được business logic
+- Training nhân viên mới bằng tài liệu có sẵn trong code
+
+### 6.2 Comment Mô tả Nghiệp vụ (Business Logic Comments)
+
+**Comment phải giải thích WHY, không phải WHAT.**
+
+```php
+// TỐT — giải thích nghiệp vụ:
+// Nghiệp vụ: Xuất kho bán hàng
+// - Nợ 632 (Giá vốn hàng bán)
+// - Có 156 (Hàng hóa)
+//
+// Hệ thống phải xác định đơn giá xuất kho theo phương pháp bình quân gia quyền
+// tại thời điểm ghi nhận. Đơn giá = (Giá trị tồn đầu kỳ + Nhập trong kỳ) / (Số lượng tồn đầu kỳ + Nhập trong kỳ)
+//
+// Ảnh hưởng:
+// - BC02 chỉ tiêu 24 (Giá vốn hàng bán) thay đổi
+// - Thuế TNDN bị ảnh hưởng nếu tính sai giá vốn
+// - Audit trail bắt buộc phải trace được đơn giá tại thời điểm xuất
+
+// XẤU — chỉ lặp lại code:
+// Trừ số lượng tồn kho
+$stock -= $qty;
+```
+
+### 6.3 Comment Mô tả Rủi ro (Risk Comments)
+
+```php
+// RỦI RO: Nếu transfer này thất bại sau khi đã ghi nhận tồn kho tại kho đích,
+// hệ thống sẽ không khôi phục được tồn kho tại kho nguồn.
+//
+// Xử lý: Transaction wrap + rollback nếu bất kỳ bước nào lỗi.
+// Nếu rollback thất bại → tạo manual adjustment record để kế toán xử lý thủ công.
+```
+
+### 6.4 Comment Mô tả Tích hợp (Integration Comments)
+
+```php
+// TÍCH HỢP: API này được gọi từ module Bán hàng (SalesController::checkout)
+// Contract:
+//   Input: { items: [...], paymentMethod: 'cash'|'transfer'|'card' }
+//   Output: { transactionId, voucherNo, totalAmount }
+// Retry: Idempotent — nếu cùng requestId thì trả về kết quả cũ
+// Timeout: 30s, nếu quá thời gian coi như thất bại
+```
+
+### 6.5 Comment Mô tả Thuế (Tax Comments)
+
+```php
+// THUẾ: Nghiệp vụ mua hàng có VAT đầu vào
+// - Nợ 156: giá chưa thuế
+// - Nợ 1331: thuế GTGT đầu vào được khấu trừ (10%)
+// - Có 331: tổng giá thanh toán
+//
+// Lưu ý: Chỉ được khấu trừ thuế nếu có hóa đơn đỏ hợp lệ (TT 78/2021/TT-BTC)
+// Nếu chưa có hóa đơn → hạch toán tạm thời vào 331, không ghi nhận 1331
+```
+
+### 6.6 Comment Mô tả Kỳ Kế toán (Period Comments)
+
+```php
+// KỲ KẾ TOÁN: Bút toán này chỉ được post vào kỳ hiện tại (đang mở)
+// Nếu ngày chứng từ thuộc kỳ đã đóng → từ chối với lỗi "Kỳ kế toán đã đóng"
+// Exception: Bút toán điều chỉnh hồi tố (prior period adjustment) — cần kế toán trưởng duyệt
+```
+
+### 6.7 FORBIDDEN Comment Patterns
+
+```php
+// FORBIDDEN: Comment lặp lại code
+$total += $amount; // Cộng dồn tổng tiền  ← XẤU, code đã thể hiện điều này
+
+// FORBIDDEN: TODO để lâu ngày không xử lý
+// TODO: xử lý trường hợp ngoại lệ  ← PHẢI XỬ LÝ NGAY hoặc tạo ticket
+
+// FORBIDDEN: Comment-out code
+// $oldCalculation = $a + $b;  ← XÓA ĐI, git đã lưu history
+
+// FORBIDDEN: Comment tiếng Anh mô tả nghiệp vụ Việt Nam
+// This function processes inventory export  ← Dùng tiếng Việt
+```
+
+---
+
+## 7. Business Rules Preservation Framework
+
+### 7.1 Account Mapping (Circular 99)
+
+| TK | Tên | Loại | Control | Ghi chú |
+|---|---|---|---|---|
+| 111 | Tiền mặt | Asset | ✅ Có TK con 1111, 1112, 1113 | Chỉ post vào TK con |
+| 112 | Tiền gửi NH | Asset | ✅ | Chỉ post vào TK con |
+| 131 | Phải thu KH | Asset | ✅ | |
+| 133 | Thuế GTGT đc khấu trừ | Asset | ✅ | 1331 (hàng hóa), 1332 (TSCĐ) |
+| 152 | Nguyên liệu, vật liệu | Asset | ❌ | |
+| 153 | Công cụ, dụng cụ | Asset | ❌ | |
+| 154 | CPSXKD dở dang | Asset | ❌ | |
+| 155 | Thành phẩm | Asset | ❌ | |
+| 156 | Hàng hóa | Asset | ❌ | |
+| 211 | TSCĐ hữu hình | Asset | ✅ | |
+| 214 | Hao mòn TSCĐ | Asset (contra) | ✅ | |
+| 241 | XDCB dở dang | Asset | ❌ | |
+| 242 | Chi phí trả trước | Asset | ❌ | |
+| 331 | Phải trả NCC | Liability | ✅ | |
+| 333 | Thuế và các khoản nộp NN | Liability | ✅ | |
+| 334 | Phải trả NLĐ | Liability | ❌ | |
+| 335 | Chi phí phải trả | Liability | ❌ | |
+| 338 | Phải trả khác | Liability | ✅ | |
+| 411 | Vốn đầu tư CSH | Equity | ✅ | |
+| 421 | LN chưa phân phối | Equity | ❌ | |
+| 511 | Doanh thu bán hàng | Revenue | ❌ | |
+| 515 | Doanh thu HĐTC | Revenue | ❌ | |
+| 621 | Chi phí NVL trực tiếp | Expense | ❌ | |
+| 622 | Chi phí nhân công trực tiếp | Expense | ❌ | |
+| 627 | Chi phí SXC | Expense | ❌ | |
+| 632 | Giá vốn hàng bán | Expense | ❌ | |
+| 635 | Chi phí tài chính | Expense | ❌ | |
+| 641 | Chi phí bán hàng | Expense | ❌ | |
+| 642 | Chi phí QLDN | Expense | ❌ | |
+| 911 | Xác định KQKD | Revenue/Expense | ❌ | Temporary clearing |
+
+### 7.2 Posting Rules (GL Engine Phase 1)
+
+**75 rules seeded** trong `posting_rules` table. Mọi Dr-Cr pair được kiểm tra:
+
+- **block:** Pair không hợp lệ cho module đó (ví dụ: Dr 631/Cr 111 không có trong thực tế)
+- **warn:** Pair hiếm gặp hoặc cần xác nhận
+- **pass:** Không có rule → cho phép (new business scenarios)
+
+Module-scoped rules (ví dụ rule chỉ áp dụng cho module `purchase`).
+
+### 7.3 Control Account Protection
+
+**REQUIRED:** Không post trực tiếp vào control account (TK tổng hợp).
+
+```php
+// Đúng — post vào TK con:
+$line = ['account_code' => '1111', 'amount' => 100000, 'is_debit' => true];
+// Sai — post vào TK tổng hợp:
+$line = ['account_code' => '111', 'amount' => 100000, 'is_debit' => true];
+// => InvalidArgumentException: "Account 111 (Tiền mặt) is a control account"
+```
+
+Override: Post vào control account nếu `$allowControl = true` (chỉ Kế toán trưởng).
+
+### 7.4 Debit = Credit Invariant
+
+**REQUIRED:** Mọi bút toán phải thỏa mãn tổng Dr = tổng Cr.
+
+Tolerance: ±10 VND (làm tròn). Sai lệch > 10 → throw `InvalidArgumentException`.
+
+### 7.5 Period Locking
+
+- **REQUIRED:** Kỳ đã đóng = read-only. Không post, không sửa, không xóa.
+- **REQUIRED:** `PeriodService::isPeriodOpen()` kiểm tra trước mọi post.
+- **REQUIRED:** Sử dụng transaction date (không phải system date) để kiểm tra kỳ.
+- **Period Engine:** Chỉ Kế toán trưởng mới có quyền đóng/mở kỳ.
+
+### 7.6 Voucher Numbering
+
+- **REQUIRED:** Số chứng từ tự động tăng theo năm. Format: `{PREFIX}{YYYY}-{000000}`.
+- **REQUIRED:** Sử dụng `SELECT ... FOR UPDATE` để đảm bảo uniqueness dưới concurrent access.
+- **Prefix convention:** `PC` (Phiếu chi), `PT` (Phiếu thu), `JV` (Journal Voucher), `PNK` (Phiếu nhập kho), `PXK` (Phiếu xuất kho).
+
+---
+
+## 8. Database & Migration Standards
+
+### 8.1 Migration Rules
+
+- **REQUIRED:** Mọi thay đổi schema phải có migration file trong `database/migrations/`
+- **REQUIRED:** Migration file trả về `fn(PDO $pdo)` — closure nhận PDO connection
+- **REQUIRED:** Migration phải idempotent — `CREATE TABLE IF NOT EXISTS`, `INSERT IGNORE`, `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` (MySQL 8+)
+- **FORBIDDEN:** Sửa migration đã chạy. Viết migration mới.
+- **REQUIRED:** Migration tracking qua table `_migrations` — tự động bởi `database/migrate.php`
+- **FORBIDDEN:** Sửa tay database — mọi thay đổi qua migration
+- **RECOMMENDED:** Migration file đặt tên `NNN_description.php` (3-digit số thứ tự)
+
+```php
+// Example migration:
+<?php
+return function (PDO $pdo) {
+    $pdo->exec('CREATE TABLE IF NOT EXISTS example_table (
+        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
+};
+```
+
+### 8.2 Schema Standards
+
+- **REQUIRED:** `ENGINE=InnoDB` (transaction support)
+- **REQUIRED:** `CHARSET=utf8mb4` (full Unicode, bao gồm tiếng Việt)
+- **RECOMMENDED:** `UNSIGNED` cho integer primary keys
+- **RECOMMENDED:** `DECIMAL(15,2)` cho tiền tệ (đủ cho số đến 99 tỷ)
+- **RECOMMENDED:** `DECIMAL(15,4)` cho tỷ giá
+- **RECOMMENDED:** `VARCHAR(10)` cho currency code
+- **RECOMMENDED:** Timestamp fields: `created_at`, `updated_at`
+- **FORBIDDEN:** `FLOAT` cho tiền tệ (precision issue)
+- **FORBIDDEN:** `AUTO_INCREMENT` không có `UNSIGNED`
+
+### 8.3 Naming Conventions
+
+| Object | Convention | Example |
+|---|---|---|
+| Table | snake_case, plural | `ledger_entries`, `accounting_periods` |
+| Column | snake_case | `account_code`, `is_debit` |
+| Primary Key | `id` | |
+| Foreign Key | `{table}_id` | `transaction_id`, `account_id` |
+| Join Table | `{table1}_{table2}` | `role_permissions` |
+| Index | `idx_{column}` | `idx_transaction_date` |
+| Unique | `uq_{column1}_{column2}` | `uq_debit_credit_module` |
+
+---
+
+## 9. API & Integration Standards
+
+### 9.1 Response Format
+
+```json
+// Success:
+{ "data": { "id": "jrn_abc", "status": "posted" } }
+
+// Error:
+{ "error": "Account not found: 999" }
+
+// Validation error:
+{ "error": "Debit (100000) does not equal Credit (90000)" }
+```
+
+### 9.2 HTTP Status Codes
+
+| Code | Use |
+|---|---|
+| 200 | Success |
+| 201 | Created |
+| 400 | Bad request / validation error |
+| 401 | Unauthenticated |
+| 403 | Forbidden (no permission) |
+| 404 | Not found |
+| 409 | Conflict (duplicate, already posted) |
+| 422 | Unprocessable entity (Dr != Cr, closed period) |
+| 500 | Server error |
+
+### 9.3 Authentication
+
+```php
+// REQUIRED: API routes:
+SessionMiddleware::close();  // session_write_close — giải phóng lock cho AJAX concurrent
+
+// RECOMMENDED: Non-API routes:
+// Không cần close session vì PHP tự close sau response
+```
+
+### 9.4 CSRF Protection
+
+```php
+// REQUIRED: Mọi POST/PUT/DELETE từ browser phải có CSRF token
+// Trong layout: <meta name="csrf-token" content="<?= Auth::csrfToken() ?>">
+// Trong AJAX: headers: { 'X-CSRF-Token': token }
+// Trong controller: Auth::checkCsrf();
+```
+
+---
+
+## 10. Security & Audit Standards
+
+### 10.1 Authentication & Session
+
+- **REQUIRED:** `session_regenerate_id(true)` sau khi login (chống session fixation)
+- **REQUIRED:** `session_set_cookie_params(httpOnly, SameSite=Lax)` — chống XSS, CSRF
+- **REQUIRED:** Inactivity timeout — 8 giờ, sau đó destroy session
+- **REQUIRED:** Logout phải destroy session (`session_destroy() + unlink session file`)
+- **REQUIRED:** Logout bằng form POST, không dùng AJAX (tránh cached page)
+- **FORBIDDEN:** `session_start()` sau `session_write_close()`
+
+### 10.2 Authorization (RBAC)
+
+```php
+// REQUIRED: Kiểm tra permission trên mọi API endpoint
+Auth::requirePermission('cash', 'read');   // module = 'cash', action = 'read'
+Auth::requirePermission('journal', 'post'); // module = 'journal', action = 'post'
+
+// Available modules: cash, journal, inventory, ap, ar, fs, gl, admin, report
+// Available actions: read, create, update, delete, post, approve, export, close
+```
+
+### 10.3 Audit Trail
+
+- **REQUIRED:** `AuditLogger::log()` cho mọi thay đổi quan trọng
+- **REQUIRED:** ActionJournal ghi mọi HTTP request + response
+- **REQUIRED:** Audit log bất biến — không được sửa/xóa
+- **REQUIRED:** ActionJournal file format: JSON Lines (`.jsonl`) — dễ export, dễ parse
+- **REQUIRED:** Audit log phải bao gồm: timestamp, actor, action, resource, old value, new value, IP
+
+### 10.4 Input Validation
+
+- **REQUIRED:** Validate account code tồn tại trước khi post (qua AccountRepository)
+- **REQUIRED:** Validate amount > 0
+- **REQUIRED:** Sanitize output — `htmlspecialchars()` (e helper function)
+- **REQUIRED:** `realpath()` cho static file serving — chống path traversal
+
+---
+
+## 11. Testing & Quality Gates
+
+### 11.1 Test Architecture
+
+- **No test framework** — lightweight helpers
+- **Bootstrap:** `tests/bootstrap.php` cung cấp autoloader + assert helpers
+- **Pattern:** Mỗi file test = 1 module, chạy bằng `php tests/ModuleTest.php`
 
 ```php
 <?php
 require __DIR__ . '/bootstrap.php';
-// ... tests ...
-results();
+
+// Tests...
+assertEq($result['balance'], 1000000, 'Balance = 1M');
+assertTrue($txn->getStatus() === 'posted', 'Transaction posted');
+
+results(); // In kết quả: "=== Results: 12 tests, 0 failed ==="
 ```
 
-## Active Modules
+### 11.2 Coverage Requirements
 
-| Module | Service | Tests | Status |
+- **REQUIRED:** Mọi service method mới phải có test
+- **REQUIRED:** Happy path + ít nhất 1 failure case
+- **REQUIRED:** Test nghiệp vụ kế toán: Dr = Cr, balance after transaction
+- **REQUIRED:** Test control account protection (block khi post vào control account)
+- **REQUIRED:** Test posting rules validation (block/warn/pass)
+- **REQUIRED:** Test period locking (từ chối post vào kỳ đã đóng)
+- **RECOMMENDED:** Test trial balance (tổng Dr = tổng Cr toàn hệ thống)
+- **RECOMMENDED:** Test audit trail được ghi đầy đủ
+
+### 11.3 Quality Gates
+
+```
+Pre-commit checklist:
+[ ] php tests/ModuleTest.php — tất cả pass
+[ ] for f in tests/*.php; do php "$f"; done — 0 failures
+[ ] Code review: có tuân thủ AGENTS.md?
+[ ] Audit trail: có log đầy đủ?
+[ ] Migration: có idempotent?
+[ ] Backward compatible: có breaking change?
+```
+
+### 11.4 Trial Balance Pattern
+
+```php
+// Test mẫu — kiểm tra tổng Dr = Cr toàn hệ thống:
+$stmt = $pdo->query("
+    SELECT SUM(CASE WHEN is_debit = 1 THEN amount ELSE 0 END) AS total_dr,
+           SUM(CASE WHEN is_debit = 0 THEN amount ELSE 0 END) AS total_cr
+    FROM ledger_entries
+");
+$row = $stmt->fetch(PDO::FETCH_ASSOC);
+assertEq($row['total_dr'], $row['total_cr'], 'Trial balance: Dr = Cr');
+```
+
+---
+
+## 12. AI Agent Operational Policy
+
+### 12.1 Agent Behavior Rules
+
+1. **REQUIRED:** Never modify more than what the task specifies. Surgical changes only.
+2. **REQUIRED:** Never assume business rules. If unsure about accounting treatment → stop and ask.
+3. **REQUIRED:** Run full test suite after every change. 0 new failures.
+4. **REQUIRED:** Write in Vietnamese for business logic comments. Write in English for code (identifiers, strings).
+5. **REQUIRED:** Use CodeGraph for structural queries (find definitions, callers, callees) — not grep.
+6. **REQUIRED:** Sync CodeGraph index after editing (`codegraph sync`).
+7. **REQUIRED:** Verify all existing tests still pass before marking task complete.
+8. **REQUIRED:** Never introduce new dependencies (Composer, libraries) without explicit approval.
+9. **REQUIRED:** Never refactor code that isn't part of the task scope.
+10. **REQUIRED:** Never modify migration files that have already been executed.
+11. **RECOMMENDED:** Load skill `karpathy-guidelines` + `caveman` by default.
+12. **RECOMMENDED:** Use `incremental-implementation` for multi-file features.
+13. **RECOMMENDED:** Use `doubt-driven-development` for high-stakes accounting logic.
+14. **FORBIDDEN:** Never modify test assertions without verifying the expected value is correct.
+15. **FORBIDDEN:** Never disable validation (posting rules, control account checks) in production code.
+
+### 12.2 Decision Making Hierarchy
+
+```
+When in doubt:
+1. Check AGENTS.md (this document)
+2. Check docs/analysis/ for business specs
+3. Check existing code for patterns
+4. Check tests for expected behavior
+5. Ask the user — never infer accounting rules
+```
+
+### 12.3 Agent Handoff Protocol
+
+Khi kết thúc session:
+
+1. `codegraph sync` — cập nhật index
+2. Run full test suite
+3. Update AGENTS.md nếu có quy tắc mới
+4. Summary: những gì đã làm, những gì còn lại, known issues
+
+---
+
+## 13. CI/CD & DevOps Standards
+
+### 13.1 Development Server
+
+```sh
+php -S 0.0.0.0:8080 -t public public/index.php
+```
+
+### 13.2 Deployment Checklist
+
+```
+[ ] All migrations run (database/migrate.php)
+[ ] All tests pass
+[ ] CodeGraph synced
+[ ] ActionJournal directory writable
+[ ] Session directory writable
+[ ] PHP version ≥ 8.4
+[ ] MySQL version ≥ 8.0
+[ ] display_errors = Off
+[ ] error_reporting = E_ALL & ~E_DEPRECATED & ~E_STRICT
+```
+
+### 13.3 Rollback Procedure
+
+1. Revert code: `git revert <commit>`
+2. Reverse migration: Viết migration mới để rollback (không sửa migration cũ)
+3. Data fix: Nếu có dữ liệu sai → viết script fix data + test
+4. Verify: Run full test suite
+
+---
+
+## 14. Operational Risk Register
+
+| ID | Risk | Severity | Mitigation |
 |---|---|---|---|
-| Cash & Bank | `CashService` | ~100 | ✅ 9 UCs |
-| Inventory (13 files) | `InventoryService` | 99 | ✅ |
-| Period Engine | `PeriodService` | 18 | ✅ |
-| Financial Statements (BC 01, BC 02, BC 03) | `FsService` | 38 | ✅ |
-| Cash Flow Statement (BC 03) | `FsService::generateBC03()` | 20 | ✅ |
-| Accounts Payable (TK 331) | `ApService` | 22 | ✅ |
-| Accounts Receivable (TK 131) | `ArService` | 19 | ✅ |
-| Bank Reconciliation | `BankReconciliationService` | 24 | ✅ |
-| RBAC | AuthController + Auth | — | ✅ |
-| Audit Log | `AuditLogger` | — | ✅ |
-| Treasury Templates | CashController::transactionTemplates() | — | ✅ |
-| Petty Cash (Tạm ứng) | `PettyCashService` | 6 | ✅ |
-| General Ledger (Sổ Cái) | `GlService` | 12 | ✅ |
-| Action Journal | `ActionJournal` | — | ✅ |
+| R001 | Post vào kỳ đã đóng | Critical | Period lock check trước mọi post |
+| R002 | Dr ≠ Cr do race condition | Critical | DB transaction + check trước commit |
+| R003 | Mất audit trail | Critical | ActionJournal ghi bất biến, không cho xóa |
+| R004 | Xóa dữ liệu gốc | Critical | Soft delete, status flag, không DELETE |
+| R005 | Sai account code → sai FS | High | Posting rules + control account check |
+| R006 | Concurrent sinh trùng số CT | High | SELECT FOR UPDATE trong VoucherService |
+| R007 | Multi-step fail không rollback | High | beginTransaction/commit/rollback pattern |
+| R008 | Scale: DB query không index | Medium | Index trên date, reference, account_id |
+| R009 | Session hijack | Medium | httpOnly, SameSite=Lax, regenerate_id |
+| R010 | CSRF attack | Medium | CSRF token trên mọi POST/PUT/DELETE |
 
-**Total:** 31 test files, ~450 tests, 0 failures.
+### 14.1 Incident Response
 
-## Skill Selection
+1. **Stop the line:** Ngay lập tức dừng mọi thay đổi nếu phát hiện data integrity issue
+2. **Isolate:** Xác định scope — account nào, transaction nào, period nào bị ảnh hưởng
+3. **Assess:** Tính toán ảnh hưởng lên BC01/02/03 và tờ khai thuế
+4. **Fix:** Viết migration + script fix data
+5. **Verify:** So sánh trước/sau, kiểm tra trial balance
+6. **Document:** Ghi nhận incident + root cause + fix
+
+---
+
+## 15. Quick Commands
+
+```sh
+# Start development server
+php -S 0.0.0.0:8080 -t public public/index.php
+
+# Run all migrations
+php database/migrate.php
+
+# Run seed data (nếu cần)
+php database/seed_posting_rules.php
+
+# Run all tests
+for f in tests/*.php; do php "$f"; done
+
+# Run single test
+php tests/JournalServiceTest.php
+
+# Sync CodeGraph index
+codegraph sync
+
+# CodeGraph query
+codegraph context "journal posting flow"
+codegraph explore "JournalService postEntry createDraft"
+codegraph callers -s "JournalService::postEntry"
+codegraph impact -s "JournalService::postEntry"
+```
+
+---
+
+## 16. CodeGraph Reference
+
+### 16.1 When to Use
+
+| Question | Tool |
+|---|---|
+| "Where is X defined?" | `codegraph_search` |
+| "What calls function Y?" | `codegraph_callers` |
+| "What does Y call?" | `codegraph_callees` |
+| "How does X reach/become Y?" | `codegraph_trace` |
+| "What would break if I changed Z?" | `codegraph_impact` |
+| "Show me Y's signature / source" | `codegraph_node` |
+| "Give me focused context" | `codegraph_context` |
+| "See several related symbols" | `codegraph_explore` |
+| "What files exist under path/" | `codegraph_files` |
+| "Is the index healthy?" | `codegraph_status` |
+
+### 16.2 Rules
+
+- **Trust results** — full AST parse, không cần re-verify bằng grep
+- **Answer directly** — không chain search+node trong loop
+- **Sync after edits** — `codegraph sync` sau mỗi lần sửa file
+- **Don't grep first** — codegraph nhanh hơn grep cho structural queries
+
+---
+
+## 17. Directory Structure
+
+```
+├── config/               services.php (DI), routes.php, database.php
+├── data/                 Static data files (coa_circular_99.json)
+├── database/
+│   ├── migrate.php       Migration runner
+│   ├── migrations/       Migration files
+│   └── seed_posting_rules.php
+├── public/
+│   ├── index.php         Entry point + auth guard
+│   └── views/            View templates (extend layout.php)
+├── src/Accounting/
+│   ├── Domain/
+│   │   ├── Model/        Plain PHP objects with getters/setters/toArray()
+│   │   ├── Repository/   Interface definitions
+│   │   ├── Service/      Business logic services
+│   │   └── Contract/     Interface contracts (AuditLoggerInterface)
+│   ├── Infrastructure/
+│   │   ├── Auth.php      Authentication & authorization
+│   │   ├── Database/     AuditLogger
+│   │   ├── Helpers.php   Utility functions
+│   │   ├── JsonResponse.php  API response helper
+│   │   ├── Logging/      Logger + LoggingPDO + ActionJournal
+│   │   ├── Router.php    Request router
+│   │   ├── SessionMiddleware.php
+│   │   └── Repository/   PDO implementations
+│   └── Interfaces/HTTP/  Controllers
+├── docs/
+│   ├── analysis/         Business specs & gap analysis
+│   └── decisions/        Architecture Decision Records (ADRs)
+└── tests/                Test files (use tests/bootstrap.php)
+```
+
+---
+
+## 18. New Entity Checklist
+
+Khi thêm entity mới, thực hiện theo thứ tự:
+
+```
+[ ] 1. Migration: database/migrations/NNN_create_{table}.php
+[ ] 2. Model: src/Accounting/Domain/Model/{Entity}.php
+[ ] 3. Repository Interface: src/Accounting/Domain/Repository/{Entity}RepositoryInterface.php
+[ ] 4. PDO Repository: src/Accounting/Infrastructure/Repository/PDO{Entity}Repository.php
+[ ] 5. Controller: src/Accounting/Interfaces/HTTP/{Module}/{Entity}Controller.php
+[ ] 6. Routes: config/routes.php
+[ ] 7. DI: config/services.php
+[ ] 8. View: public/views/{entity}.php (extends layout.php)
+[ ] 9. Sidebar: public/views/layout.php
+[ ] 10. Tests: tests/{Entity}Test.php (use tests/bootstrap.php)
+[ ] 11. Permissions: Thêm module/action vào RBAC
+[ ] 12. Audit: AuditLogger::log() trong controller/service
+```
+
+---
+
+## 19. Skill Selection Matrix
+
+### 19.1 Primary Skills
 
 | Phase | Skill | When |
 |---|---|---|
-| **Clarify intent** | `interview-me` | Don't know what you actually want |
-| **Refine ideas** | `idea-refine` | Have a rough concept, need variants |
-| **Define** | `spec-driven-development` | Need acceptance criteria before coding |
-| **Plan** | `planning-and-task-breakdown` | Break spec into verifiable tasks |
+| **Clarify intent** | `interview-me` | Không biết user thực sự muốn gì |
+| **Refine ideas** | `idea-refine` | Ý tưởng mơ hồ, cần variants |
+| **Define** | `spec-driven-development` | Cần acceptance criteria trước khi code |
+| **Plan** | `planning-and-task-breakdown` | Chia spec thành tasks |
 | **Build — general** | `incremental-implementation` | Default: vertical slices, test each |
-| **Build — API** | `api-and-interface-design` | REST endpoints, module contracts |
-| **Build — UI** | `frontend-ui-engineering` | Bootstrap 5 views with a11y |
-| **Build — verified** | `source-driven-development` | Verify patterns against official docs |
-| **Build — adversarial** | `doubt-driven-development` | High-stakes / unfamiliar code |
-| **Build — context** | `context-engineering` | Feed agent right files at right time |
-| **Test** | `test-driven-development` | Red-green-refactor per behavior |
-| **Test — browser** | `browser-testing-with-devtools` | Live DOM/console/network verify |
-| **Debug** | `debugging-and-error-recovery` | Reproduce → localize → fix → guard |
-| **Review** | `code-review-and-quality` | 5-axis review before merge |
-| **Review — security** | `security-and-hardening` | OWASP, input validation, secrets |
-| **Review — performance** | `performance-optimization` | Measure first, optimize second |
-| **Simplify** | `code-simplification` | Simplify after tests pass |
-| **Refactor** | `improve-codebase-architecture` | Deepen modules, extract seams |
-| **Git** | `git-workflow-and-versioning` | Atomic commits, clean history |
-| **CI/CD** | `ci-cd-and-automation` | Quality gates on every push |
-| **Docs** | `documentation-and-adrs` | Capture why, not what |
-| **Ship** | `shipping-and-launch` | Pre-launch checklist + rollback |
+| **Build — API** | `api-and-interface-design` | REST endpoints |
+| **Build — UI** | `frontend-ui-engineering` | Bootstrap 5 views |
+| **Build — verified** | `source-driven-development` | Verify vs official docs |
+| **Build — adversarial** | `doubt-driven-development` | Nghiệp vụ phức tạp/quan trọng |
+| **Build — context** | `context-engineering` | Feed agent đúng files |
+| **Test** | `tdd` / `test-driven-development` | Red-green-refactor |
+| **Debug** | `debugging-and-error-recovery` | Reproduce → fix → guard |
+| **Review** | `code-review-and-quality` | 5-axis review |
+| **Review — security** | `security-and-hardening` | OWASP, input validation |
+| **Simplify** | `code-simplification` | Simplify sau khi test pass |
+| **Refactor** | `improve-codebase-architecture` | Deepen modules |
+| **Git** | `git-workflow-and-versioning` | Atomic commits |
+| **CI/CD** | `ci-cd-and-automation` | Quality gates |
+| **Docs** | `documentation-and-adrs` | Capture why |
+| **Ship** | `shipping-and-launch` | Pre-launch checklist |
 | **Deprecate** | `deprecation-and-migration` | Remove code safely |
-| **Communication** | `caveman` | Terse mode for all output |
+| **Communication** | `caveman` | Terse mode |
 
-**Default:** `karpathy-guidelines` (simplicity first, surgical changes) + `caveman` (terse output).
+### 19.2 Default Skill
 
-## SOLID Check
+```
+karpathy-guidelines (simplicity first, surgical changes)
++ caveman (terse output)
+```
 
-| Principle | Ask |
-|---|---|
-| S — Single Responsibility | Does this class have one reason to change? |
-| O — Open/Closed | Can I extend without modifying? |
-| L — Liskov Substitution | Can a subtype replace its parent? |
-| I — Interface Segregation | Are interfaces focused? |
-| D — Dependency Inversion | Does high-level depend on abstractions? |
+---
 
-Pragmatic SOLID — not abstractions for their own sake.
+## 20. Changelog & ADR
+
+### 20.1 Changelog
+
+| Version | Date | Changes |
+|---|---|---|
+| 2.0 | 2026-05-25 | Enterprise rewrite: governance tiers, Vietnamese comments, risk register, AI agent policy |
+| 1.0 | 2025 | Initial: Golden Rules, Quick Commands, Code Patterns, Gotchas |
+
+### 20.2 Architecture Decision Records
+
+ADRs được lưu tại `docs/decisions/`. Mọi architectural decision quan trọng phải có ADR.
+
+Template:
+
+```markdown
+# ADR-NNN: Title
+
+## Status
+Proposed | Accepted | Superseded by ADR-XXX | Deprecated
+
+## Date
+YYYY-MM-DD
+
+## Context
+Problem, constraints, requirements.
+
+## Decision
+What was decided.
+
+## Alternatives Considered
+- Option A: pros/cons
+- Option B: pros/cons
+
+## Consequences
+What this means for the project.
+```
+
+---
+
+> **Tuyên bố cuối:** Document này là governance contract. Mọi deviation phải được Engineering Lead phê duyệt. Mọi vi phạm REQUIRED hoặc FORBIDDEN đều được coi là incident và phải có post-mortem.

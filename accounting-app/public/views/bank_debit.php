@@ -1,4 +1,8 @@
-<?php $title = 'Giấy báo Nợ'; $activeMenu = 'bank_debit'; ob_start(); ?>
+<?php // Màn hình: Ghi nhận giấy báo Nợ từ ngân hàng (TK 112)
+// API: GET /api/bank-transactions, GET /api/cash/templates?type=payment, GET /api/cash/accounts?for=payment, POST /api/bank/payment, POST /api/bank/charge
+// Nghiệp vụ: Chi tiền qua ngân hàng — Nợ TK đối ứng/Có 1121; hoặc ghi nhận phí NH — Nợ 635/Có 1121
+// Rủi ro: Phí ngân hàng nếu hạch toán sai sẽ ảnh hưởng đến chi phí tài chính (TK 635)
+$title = 'Giấy báo Nợ'; $activeMenu = 'bank_debit'; ob_start(); ?>
 <div class="toolbar">
     <h5>Giấy báo Nợ ngân hàng <span class="stats">(TK 112)</span></h5>
     <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#debitModal"><i class="bi bi-plus-lg"></i> Báo Nợ</button>
@@ -63,12 +67,17 @@ function calcVAT(){
     else{$('#vatAmount').val(0);$('#netAmount').val(total);}
 }
 $('#amount,#vatRate').on('input',function(){if($('#vatRateGroup').is(':visible'))calcVAT();});
+// Submit ghi nhận báo Nợ — POST /api/bank/payment
+// Nghiệp vụ: Nợ debit_account_code/Có 1121 (ví dụ thanh toán NCC: Nợ 331/Có 1121)
+// Nếu có VAT: Nợ 1331 (thuế GTGT đầu vào)
 $('#debitForm').submit(function(e){e.preventDefault();
     $.ajax({url:'/api/bank/payment',method:'POST',contentType:'application/json',headers:{'X-CSRF-Token':csrf},data:JSON.stringify({amount:parseFloat($('#amount').val()),debit_account_code:$('#debitAccount').val(),description:$('#description').val(),vat_amount:$('#vatRateGroup').is(':visible')?parseInt($('#vatAmount').val())||0:0,vat_rate:$('#vatRateGroup').is(':visible')?parseInt($('#vatRate').val())||0:0,}),
         success:function(){$('#debitModal').modal('hide');$('#debitForm')[0].reset();showToast('Ghi nhận báo Nợ thành công','success');loadData();},
         error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}
     });
 });
+// Submit ghi nhận phí ngân hàng — POST /api/bank/charge
+// Nghiệp vụ: Nợ 635 (Chi phí tài chính)/Có 1121 (tiền gửi ngân hàng)
 $('#chargeForm').submit(function(e){e.preventDefault();
     $.ajax({url:'/api/bank/charge',method:'POST',contentType:'application/json',headers:{'X-CSRF-Token':csrf},data:JSON.stringify({amount:parseFloat($('#chgAmount').val()),description:$('#chgDescription').val()}),
         success:function(){$('#chargeModal').modal('hide');$('#chargeForm')[0].reset();showToast('Ghi nhận phí NH thành công','success');loadData();},

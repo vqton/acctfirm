@@ -1,4 +1,8 @@
-<?php $title = 'Chứng từ ghi sổ'; $activeMenu = 'journal'; ob_start(); ?>
+<?php // Màn hình: Nhập và quản lý chứng từ ghi sổ
+// API: GET /api/periods, GET /api/transactions, POST /api/journal/draft, POST /api/journal/approve/{id}
+// Nghiệp vụ: Định khoản Nợ/Có với nhiều dòng, kiểm tra Dr=Cr, lưu nháp hoặc ghi sổ trực tiếp
+// Rủi ro: Bút toán mất cân đối Dr≠Cr sẽ sai báo cáo tài chính — kiểm tra frontend trước khi submit
+$title = 'Chứng từ ghi sổ'; $activeMenu = 'journal'; ob_start(); ?>
 <div class="toolbar">
     <h5>Chứng từ ghi sổ</h5>
     <div>
@@ -45,12 +49,32 @@
 </div></div></div>
 
 <script>
+// Tải danh sách kỳ kế toán từ API, mặc định chọn tháng hiện tại
 function loadPeriods(){
     $.get('/api/periods',function(data){
         var sel=$('#periodFilter');sel.html('<option value="">Tất cả kỳ</option>');
         data.forEach(function(p){if(p.period_type==='month')sel.append('<option value="'+esc(p.period_code)+'">'+esc(p.name)+'</option>');});
         var m=('0'+(new Date().getMonth()+1)).slice(-2);
         sel.val(new Date().getFullYear()+'-'+m);loadData();
+    });
+}
+// Tải danh sách bút toán theo kỳ, hiển thị trạng thái (nháp/đã ghi sổ) và nút duyệt
+function loadData(){
+    var period=$('#periodFilter').val()||'';
+    $.get('/api/transactions?period='+period,function(data){
+        var tbody=$('#dataBody');tbody.empty();
+        if(!data.length){tbody.append('<tr><td colspan="8" class="text-center text-muted py-4">Chưa có bút toán</td></tr>');return;}
+        data.forEach(function(r){
+            var drLines=r.lines.filter(function(l){return l.is_debit;});
+            var crLines=r.lines.filter(function(l){return !l.is_debit;});
+            var drStr=drLines.map(function(l){return l.account_code;}).join(', ');
+            var crStr=crLines.map(function(l){return l.account_code;}).join(', ');
+            var total=r.lines.reduce(function(s,l){return s+parseFloat(l.amount);},0)/2;
+            var badge=r.status==='posted'?'<span class="badge-status badge-active">Đã ghi sổ</span>':'<span class="bg-warning text-dark">Nháp</span>';
+            var actions='';
+            if(r.status==='pending')actions='<button class="btn btn-sm btn-outline-success" onclick="approveEntry(\''+esc(r.id)+'\')"><i class="bi bi-check-lg"></i> Duyệt</button>';
+            tbody.append('<tr><td>'+esc(r.reference)+'</td><td>'+esc(r.description)+'</td><td style="font-size:12px">'+esc(r.date)+'</td><td>'+esc(drStr)+'</td><td>'+esc(crStr)+'</td><td class="text-end font-monospace">'+parseFloat(total).toLocaleString()+'</td><td>'+badge+'</td><td>'+actions+'</td></tr>');
+        });
     });
 }
 function loadData(){
@@ -71,6 +95,8 @@ function loadData(){
         });
     });
 }
+// Duyệt và ghi sổ bút toán — gọi POST /api/journal/approve/{id}
+// RỦI RO: Sau khi duyệt, bút toán không thể sửa/xóa — cần xác nhận trước
 function approveEntry(id){
     if(!confirm('Duyệt bút toán này? Giao dịch sẽ được ghi sổ.'))return;
     $.ajax({url:'/api/journal/approve/'+id,method:'POST',headers:{'X-CSRF-Token':csrf},
@@ -85,6 +111,9 @@ function loadAccounts(sel){
         sel.html(o);
     });
 }
+// Tính toán và hiển thị trạng thái cân đối Nợ/Có real-time
+// Nghiệp vụ: Tổng Dr phải = Tổng Cr (sai lệch tối đa ±10 VND do làm tròn)
+// Nếu lệch > 10 VND → cảnh báo đỏ, không cho submit
 function recalcTotal(){
     var totalDr=0,totalCr=0;
     $('#linesContainer .line-row').each(function(){
@@ -97,6 +126,8 @@ function recalcTotal(){
     else{$('#drCrStatus').text('CHÊNH LỆCH: Nợ '+totalDr.toLocaleString()+' / Có '+totalCr.toLocaleString()).removeClass().addClass('text-danger fw-bold');}
     $('#totalAmount').text(totalDr.toLocaleString());
 }
+// Thêm dòng định khoản mới — tối thiểu 2 dòng (1 Nợ + 1 Có)
+// Nghiệp vụ: Mỗi bút toán cần ít nhất 1 Nợ và 1 Có, tổng tiền bằng nhau
 $(document).on('click','.add-line',function(){
     var row=$('.line-row:first').clone();
     row.find('.acc-picker').html('<option value="">-- TK --</option>');row.find('.amount-input').val('');
@@ -107,6 +138,12 @@ $(document).on('click','.add-line',function(){
 });
 $(document).on('click','.remove-line',function(){$(this).closest('.line-row').remove();recalcTotal();});
 $(document).on('change input','.amount-input,.dr-cr',recalcTotal);
+// Submit form tạo bút toán nháp — POST /api/journal/draft
+// Validate frontend:
+//   1. Ít nhất 2 dòng định khoản
+//   2. Tổng Nợ = Tổng Có (dung sai ±10 VND)
+//   3. Mỗi dòng phải có tài khoản và số tiền
+// RỦI RO: Nếu bỏ qua kiểm tra Dr=Cr, bút toán sẽ làm sai bảng CĐPS
 $('#entryForm').submit(function(e){e.preventDefault();
     var lines=[];$('#linesContainer .line-row').each(function(){
         var ac=$(this).find('.acc-picker').val();var amt=$(this).find('.amount-input').val();var dr=$(this).find('.dr-cr').val();

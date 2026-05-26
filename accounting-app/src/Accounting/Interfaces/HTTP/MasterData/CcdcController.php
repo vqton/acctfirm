@@ -6,6 +6,28 @@ use Accounting\Domain\Repository\CcdcRepositoryInterface;
 
 use \Accounting\Interfaces\HTTP\CrudControllerTrait;
 
+/**
+ * MODULE: Danh mục Công cụ Dụng cụ (CCDC — TK 153)
+ *
+ * Mục đích nghiệp vụ:
+ *   - CRUD công cụ, dụng cụ (tool, instrument) theo dõi riêng
+ *   - Quản lý phương pháp phân bổ (allocation_type): phân bổ 1 lần (direct) hoặc nhiều lần
+ *   - Theo dõi tổng chi phí và giá trị đã phân bổ
+ *   - Tuân thủ quy định về CCDC (thời gian sử dụng < 1 năm)
+ *
+ * API endpoints:
+ *   (Sử dụng CrudControllerTrait — CRUD chuẩn)
+ *
+ * Rủi ro:
+ *   - Nhầm lẫn giữa CCDC và TSCĐ (thời gian sử dụng > 1 năm là TSCĐ)
+ *   - Phân bổ sai → ảnh hưởng chi phí (641, 642, 627)
+ *   - Quản lý số lượng không chính xác
+ *
+ * Tích hợp:
+ *   - CCDC nhập kho qua ReceiptController (TK 153)
+ *   - Xuất CCDC qua IssueController, hạch toán vào chi phí
+ *   - Phân bổ nhiều kỳ cần theo dõi qua bảng phân bổ
+ */
 class CcdcController
 {
     use CrudControllerTrait;

@@ -1,4 +1,5 @@
 <?php
+// Test: Cash ngoại tệ — quản lý thu chi bằng ngoại tệ
 spl_autoload_register(function ($class) {
     $prefix = 'Accounting\\';
     $baseDir = __DIR__ . '/../src/Accounting/';
@@ -63,6 +64,9 @@ $usdEntry = current(array_filter($summary, fn($s) => $s['currency'] === 'USD'));
 assertTrue($usdEntry !== false, 'USD entry in summary');
 assertEq(500, $usdEntry['fc_balance'], 'USD balance = 1,000 - 500 = 500');
 
+// Nghiệp vụ đánh giá lại ngoại tệ cuối kỳ: tỷ giá tăng → lãi chênh lệch
+// Hạch toán: điều chỉnh số dư TK 112 theo tỷ giá mới, ghi nhận vào TK 413
+// Nếu fail → số dư ngoại tệ cuối kỳ sai → báo cáo tài chính sai
 echo "\n=== Test 4: Period-end revaluation (rate increased) ===\n";
 // Book rate: weighted average. Rate now 25,800. FC balance = 500 USD.
 // Gain = 500 × (25,800 - book_avg_rate)
@@ -87,6 +91,8 @@ assertEq(round($totalDr, 0), round($totalCr, 0), 'Trial balance: Dr = Cr');
 $fxAccount = $accountRepo->findByCode('413');
 assertTrue($fxAccount !== null, 'TK 413 exists');
 
+// Biên: Đánh giá lại khi tỷ giá không đổi → lãi/lỗ = 0
+// Nếu fail → hệ thống tạo bút toán điều chỉnh không cần thiết
 echo "\n=== Test 6: Revalue again with no rate change (zero gain/loss) ===\n";
 $reval2 = $cash->revalueFC('112', 'USD', 25800, date('Y-m-d'), 'tester');
 assertEq(0, $reval2['gain_loss'], 'Zero gain/loss when rate unchanged');

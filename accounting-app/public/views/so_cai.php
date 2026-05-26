@@ -1,4 +1,9 @@
-<?php $title = 'Sổ cái'; $activeMenu = 'so_cai'; ob_start(); ?>
+<?php // Màn hình: Sổ cái tài khoản (S05-DN)
+// API: GET /api/gl/accounts, GET /api/gl/ledger?account=&mode=&from=&to=
+// Nghiệp vụ: Sổ cái chi tiết tài khoản — hiển thị phát sinh Nợ/Có, số dư đầu kỳ, cuối kỳ
+// Chế độ: detail (chi tiết theo ngày) hoặc monthly (theo tháng - mẫu S05-DN)
+// Tuân thủ: Mẫu S05-DN theo Thông tư 200 — dùng cho hình thức Nhật ký chung
+$title = 'Sổ cái'; $activeMenu = 'so_cai'; ob_start(); ?>
 <div class="toolbar">
     <h5>Sổ cái <span class="stats">(General Ledger — Mẫu S05-DN)</span></h5>
     <div class="d-flex gap-2">
@@ -93,6 +98,9 @@ function renderMonthly(d) {
     });
 }
 
+// Tải sổ cái — GET /api/gl/ledger?account=&mode=&from=&to=
+// detail: hiển thị từng giao dịch với số dư running balance
+// monthly: hiển thị tổng hợp theo tháng (mẫu S05-DN) + chi tiết Nợ theo TK ĐƯ
 function loadData() {
     var account = $('#accountSelect').val();
     if (!account) return;

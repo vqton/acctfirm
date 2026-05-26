@@ -1,6 +1,27 @@
 <?php
 namespace Accounting\Domain\Model;
 
+/**
+ * Nhà cung cấp — Sổ chi tiết TK 331 "Phải trả cho người bán".
+ *
+ * Mỗi nhà cung cấp là một tài khoản con của TK 331, theo dõi công nợ phải trả.
+ * Số dư bên Có (doanh nghiệp nợ nhà cung cấp) hoặc bên Nợ (ứng trước
+ * cho nhà cung cấp).
+ *
+ * NGHIỆP VỤ:
+ * - $balance: số dư công nợ (dư Có nếu > 0)
+ * - $taxCode: mã số thuế — kiểm tra trên hệ thống hóa đơn điện tử
+ * - $paymentTerms: kỳ hạn thanh toán (VD: "30 ngày kể từ ngày nhận hàng")
+ *
+ * LIÊN KẾT:
+ * - ApService → ghi nhận phải trả, thanh toán, đối trừ
+ * - Purchase module → tạo công nợ khi mua hàng
+ *
+ * RỦI RO:
+ * - Thanh toán sai nhà cung cấp → sai công nợ → sai BC01
+ * - Nhà cung cấp có thể đồng thời là khách hàng → cần đối trừ công nợ
+ * - $taxCode sai → hóa đơn GTGT không hợp lệ → mất khấu trừ thuế
+ */
 class Supplier
 {
     private string $id;
@@ -60,6 +81,10 @@ class Supplier
     public function setNotes(?string $v): void { $this->notes = $v; }
     public function setStatus(bool $v): void { $this->status = $v; }
 
+    // Chuyển đổi model thành mảng để response API.
+    // 'balance': số dư công nợ phải trả (dư Có TK 331) — ảnh hưởng BC01 chỉ tiêu 331.
+    // 'payment_terms': kỳ hạn thanh toán — quyết định thời gian ghi nhận công nợ.
+    // 'tax_code': mã số thuế NCC — để kiểm tra hóa đơn GTGT đầu vào hợp lệ.
     public function toArray(): array
     {
         return [

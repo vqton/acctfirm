@@ -6,6 +6,28 @@ use Accounting\Domain\Repository\ProjectRepositoryInterface;
 
 use \Accounting\Interfaces\HTTP\CrudControllerTrait;
 
+/**
+ * MODULE: Danh mục Dự án (Project Master)
+ *
+ * Mục đích nghiệp vụ:
+ *   - CRUD dự án/ công trình theo dõi riêng
+ *   - Quản lý ngân sách, thời gian, khách hàng liên quan
+ *   - Cơ sở để tập hợp chi phí (TK 154 — CPSXKD dở dang) theo dự án
+ *   - Tính giá thành sản phẩm/dịch vụ theo dự án
+ *
+ * API endpoints:
+ *   (Sử dụng CrudControllerTrait — CRUD chuẩn)
+ *
+ * Rủi ro:
+ *   - Chi phí vượt ngân sách dự án → lỗ dự án
+ *   - Dự án kết thúc không kết chuyển chi phí → sai số dư 154
+ *   - Nhầm lẫn chi phí giữa các dự án
+ *
+ * Tích hợp:
+ *   - Cost allocation module (tương lai) tính giá thành theo dự án
+ *   - CustomerController cung cấp thông tin khách hàng
+ *   - Báo cáo quản trị theo dự án
+ */
 class ProjectController
 {
     use CrudControllerTrait;

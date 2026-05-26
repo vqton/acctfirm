@@ -7,6 +7,35 @@ use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\Helpers;
 use Accounting\Infrastructure\JsonResponse;
 
+/**
+ * MODULE: Tiền mặt & Tiền gửi Ngân hàng (TK 111, 112)
+ *
+ * Mục đích nghiệp vụ:
+ *   - Ghi nhận phiếu thu (PT) — tiền mặt vào quỹ
+ *   - Ghi nhận phiếu chi (PC) — tiền mặt ra khỏi quỹ
+ *   - Chuyển tiền giữa các tài khoản (111 ⇄ 112, nội bộ)
+ *   - Tất cả giao dịch đều qua CashService → JournalService (đảm bảo Dr = Cr)
+ *
+ * API endpoints:
+ *   GET    /api/cash/receipts        — Danh sách phiếu thu
+ *   POST   /api/cash/receipts        — Tạo phiếu thu mới
+ *   GET    /api/cash/payments        — Danh sách phiếu chi
+ *   POST   /api/cash/payments        — Tạo phiếu chi mới
+ *   POST   /api/cash/transfers       — Chuyển tiền giữa các tài khoản
+ *   GET    /api/cash/accounts        — Danh sách tài khoản tiền
+ *   POST   /api/cash/{id}/reverse    — Hoàn nhập giao dịch
+ *
+ * Rủi ro:
+ *   - R002: Dr ≠ Cr do lỗi nhập liệu — đã kiểm tra qua JournalService
+ *   - R005: Sai account code (111 thay vì 1111) — control account check
+ *   - R001: Post vào kỳ đã đóng — PeriodService kiểm tra trước
+ *   - R006: Trùng số chứng từ — VoucherService dùng SELECT FOR UPDATE
+ *
+ * Tích hợp:
+ *   - CashService → JournalService (bắt buộc)
+ *   - PettyCashController dùng chung CashService cho tạm ứng
+ *   - BankReconciliationController đối chiếu số dư cuối kỳ
+ */
 class CashController
 {
     private CashService $cash;
@@ -37,6 +66,15 @@ class CashController
         JsonResponse::ok($stmt->fetchAll(\PDO::FETCH_ASSOC));
     }
 
+    // NGHIỆP VỤ: Ghi nhận phiếu thu tiền mặt (PT) — Nợ 111 / Có (đối ứng)
+    // Input: { amount, credit_account_code, description?, reference?, created_by?, payer_name?, payer_type?, payer_id?, transaction_date? }
+    // Output: { transaction_id, reference, status } — 201 Created
+    // Service: CashService.recordReceipt() → CashService → JournalService.postEntry
+    // Transaction: CashService tự wrap beginTransaction/commit/rollback
+    // Permission: CSRF check + Auth::requirePermission('cash', 'create') (implicit qua service)
+    // Rủi ro: R002 — Dr=Cr kiểm tra trong JournalService. R001 — Period open check
+    // R006: Số CT tự động sinh qua Helpers::nextVoucherNo('PT') với SELECT FOR UPDATE
+    // Tích hợp: Sau ghi nhận, cập nhật payer info vào transactions table
     public function createReceipt(): void
     {
         Auth::checkCsrf();
@@ -91,6 +129,13 @@ class CashController
         JsonResponse::ok($stmt->fetchAll(\PDO::FETCH_ASSOC));
     }
 
+    // NGHIỆP VỤ: Ghi nhận phiếu chi tiền mặt (PC) — Nợ (đối ứng) / Có 111
+    // Input: { amount, debit_account_code, description?, reference?, created_by?, ... }
+    // Output: { transaction_id, reference, status } — 201 Created
+    // Service: CashService.recordPayment() → JournalService.postEntry
+    // Permission: CSRF check
+    // Rủi ro: R005 — debit_account_code phải là TK con (không phải control account 111)
+    // Số CT tự động: Helpers::nextVoucherNo('PC') với SELECT FOR UPDATE
     public function createPayment(): void
     {
         Auth::checkCsrf();
@@ -147,6 +192,13 @@ class CashController
         JsonResponse::ok($stmt->fetchAll(\PDO::FETCH_ASSOC));
     }
 
+    // NGHIỆP VỤ: Ghi nhận nộp tiền vào ngân hàng — Nợ 112 / Có 111 (chuyển tiền mặt ra NH)
+    // Input: { amount, description?, reference?, created_by? }
+    // Output: { transaction_id, reference, status } — 201 Created
+    // Service: CashService.recordBankDeposit() → JournalService.postEntry
+    // Permission: CSRF check
+    // Hạch toán: Dr 112 (tiền gửi) / Cr 111 (tiền mặt) — cùng một doanh nghiệp
+    // Rủi ro: Phải đảm bảo tiền mặt đủ để nộp. Kiểm tra period open.
     public function createDeposit(): void
     {
         Auth::checkCsrf();
@@ -168,6 +220,13 @@ class CashController
         }
     }
 
+    // NGHIỆP VỤ: Ghi nhận rút tiền ngân hàng về quỹ — Nợ 111 / Có 112
+    // Input: { amount, description?, reference?, created_by? }
+    // Output: { transaction_id, reference, status } — 201 Created
+    // Service: CashService.recordBankWithdrawal() → JournalService.postEntry
+    // Permission: CSRF check
+    // Hạch toán: Dr 111 (tiền mặt) / Cr 112 (tiền gửi)
+    // Rủi ro: Số dư TK 112 phải đủ để rút. Cần kiểm tra số dư trước khi ghi nhận
     public function createWithdrawal(): void
     {
         Auth::checkCsrf();
@@ -189,6 +248,13 @@ class CashController
         }
     }
 
+    // NGHIỆP VỤ: Ghi nhận thu tiền qua ngân hàng (KH chuyển khoản) — Nợ 112 / Có (đối ứng)
+    // Input: { amount, credit_account_code, description?, reference?, created_by? }
+    // Output: { transaction_id, reference, status } — 201 Created
+    // Service: CashService.recordBankReceipt() → JournalService.postEntry
+    // Permission: CSRF check
+    // Hạch toán: Dr 112 / Cr 511 (doanh thu), Cr 131 (thu hồi công nợ), Cr 515 (lãi), ...
+    // Rủi ro: R005 — credit_account_code không được là control account
     public function createBankReceipt(): void
     {
         Auth::checkCsrf();
@@ -210,6 +276,13 @@ class CashController
         }
     }
 
+    // NGHIỆP VỤ: Ghi nhận chi tiền qua ngân hàng — Nợ (đối ứng) / Có 112
+    // Input: { amount, debit_account_code, description?, reference?, created_by? }
+    // Output: { transaction_id, reference, status } — 201 Created
+    // Service: CashService.recordBankPayment() → JournalService.postEntry
+    // Permission: CSRF check
+    // Hạch toán: Dr 331 (thanh toán NCC), Dr 152 (mua hàng), Dr 642 (chi phí), ... / Cr 112
+    // Rủi ro: R005 — debit_account_code không control account. Cần kiểm tra số dư 112
     public function createBankPayment(): void
     {
         Auth::checkCsrf();
@@ -231,6 +304,13 @@ class CashController
         }
     }
 
+    // NGHIỆP VỤ: Ghi nhận lãi tiền gửi ngân hàng — Nợ 112 / Có 515
+    // Input: { amount, description?, reference?, created_by? }
+    // Output: { transaction_id, reference, status } — 201 Created
+    // Service: CashService.recordBankInterest() → JournalService.postEntry
+    // Hạch toán: Dr 112 (tiền gửi tăng) / Cr 515 (doanh thu hoạt động tài chính)
+    // Rủi ro: Lãi NH thường được NH báo cuối tháng, cần đối chiếu với sao kê
+    // Ảnh hưởng BC02: Tăng chỉ tiêu doanh thu HĐTC (515)
     public function createInterest(): void
     {
         Auth::checkCsrf();
@@ -252,6 +332,12 @@ class CashController
         }
     }
 
+    // NGHIỆP VỤ: Ghi nhận phí ngân hàng — Nợ 642 (chi phí QLDN) / Có 112
+    // Input: { amount, description?, reference?, created_by? }
+    // Output: { transaction_id, reference, status } — 201 Created
+    // Service: CashService.recordBankCharge() → JournalService.postEntry
+    // Hạch toán: Dr 6425 (phí ngân hàng) / Cr 112 (tiền gửi giảm)
+    // Rủi ro: Phí NH cần đối chiếu với sao kê. Sai TK đối ứng → sai BC02 (642 vs 635)
     public function createCharge(): void
     {
         Auth::checkCsrf();
@@ -282,6 +368,13 @@ class CashController
         JsonResponse::ok($stmt->fetchAll(\PDO::FETCH_ASSOC));
     }
 
+    // NGHIỆP VỤ: Ghi nhận tiền đang chuyển — giữa 2 tài khoản chưa xác định
+    // Input: { amount, description?, reference?, created_by? }
+    // Output: { transit_id, status } — 201 Created
+    // Service: CashService.recordTransit() — ghi vào cash_transit table (tạm thời)
+    // Permission: CSRF check
+    // Rủi ro: Tiền đang chuyển chưa ảnh hưởng số dư TK 111/112. Cần confirmTransit để ghi nhận
+    // Đây là bước trung gian, sau khi xác nhận sẽ ghi bút toán chính thức
     public function createTransit(): void
     {
         Auth::checkCsrf();
@@ -303,6 +396,12 @@ class CashController
         }
     }
 
+    // NGHIỆP VỤ: Xác nhận tiền đã đến tài khoản đích — ghi bút toán chính thức
+    // Input: { transit_id, created_by? }
+    // Output: { transaction_id, status } — 200 OK
+    // Service: CashService.confirmTransit() → JournalService.postEntry
+    // Hạch toán: Dr 1112/112 (tài khoản đích) / Cr 1111 (tài khoản nguồn)
+    // Rủi ro: R007 — Nếu confirm thất bại, transit record vẫn tồn tại để xử lý thủ công
     public function confirmTransit(): void
     {
         Auth::checkCsrf();
@@ -322,6 +421,11 @@ class CashController
         }
     }
 
+    // NGHIỆP VỤ: Hủy giao dịch tiền đang chuyển — xóa transit record, không ghi bút toán
+    // Input: { transit_id, created_by? }
+    // Output: { success: true } — 200 OK
+    // Service: CashService.reverseTransit() — xóa transit (chỉ khi chưa confirm)
+    // Rủi ro: Chỉ reverse được transit chưa confirm. Nếu đã confirm → phải tạo reversing journal
     public function reverseTransit(): void
     {
         Auth::checkCsrf();
@@ -343,6 +447,12 @@ class CashController
 
     // ── Cash Book ──
 
+    // NGHIỆP VỤ: Sổ quỹ tiền mặt — tổng hợp thu/chi theo ngày, tồn quỹ cuối kỳ
+    // Input: GET ?from=2025-01-01&to=2025-01-31
+    // Output: { opening_balance, receipts: [...], payments: [...], closing_balance }
+    // Service: CashService.getCashBook() — đọc từ TransactionRepository
+    // Mục đích: Đối chiếu sổ quỹ thực tế với số dư kế toán (111)
+    // Rủi ro: Chỉ tính giao dịch status=posted, không tính draft
     public function cashBook(): void
     {
         try {
@@ -361,6 +471,14 @@ class CashController
         JsonResponse::ok($this->cash->getFCBalances());
     }
 
+    // NGHIỆP VỤ: Đánh giá lại ngoại tệ cho một tài khoản cụ thể (theo VAS 10)
+    // Input: { account_code, currency_code, closing_rate, as_of_date?, created_by? }
+    // Output: { difference, gain_loss_account, journal_entry }
+    // Service: CashService.revalueFC() → JournalService.postEntry
+    // Permission: CSRF check
+    // Hạch toán: Dr 1112/1122 / Cr 515 (lãi TG) hoặc Dr 635 / Cr 1112/1122 (lỗ TG)
+    // Rủi ro: R001 — Không đánh giá lại nếu kỳ đã đóng. closing_rate phải là tỷ giá cuối kỳ
+    // Ràng buộc: Chỉ áp dụng cho TK 1112, 1122 (tiền mặt/gửi NH ngoại tệ)
     public function fcRevalue(): void
     {
         Auth::checkCsrf();

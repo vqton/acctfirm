@@ -1,4 +1,5 @@
 <?php
+// Test: Nghiệp vụ tiền mặt (TK 111) — thu, chi, tạm ứng
 spl_autoload_register(function ($class) {
     $prefix = 'Accounting\\';
     $baseDir = __DIR__ . '/../src/Accounting/';
@@ -62,6 +63,8 @@ $expense = $accountRepo->findByCode('642')->getBalance();
 assertEq(2500000, $cash4, 'Cash (111) = 2,500,000');
 assertEq(1500000, $expense, 'Expense (642) = 1,500,000');
 
+// Ràng buộc nghiệp vụ: Số dư tiền mặt không đủ → từ chối chi
+// Nếu fail → có thể chi vượt quá số dư → âm tiền mặt không kiểm soát
 echo "\n=== Test 5: Insufficient cash for payment (rejected) ===\n";
 try {
     $svc->recordPayment(99999999, '642', 'Over-limit payment', 'PC-BAD', 'tester');
@@ -71,6 +74,8 @@ try {
     assertTrue(true, 'Insufficient cash rejected');
 }
 
+// Ràng buộc: Mã tài khoản không tồn tại → từ chối
+// Nếu fail → thu/chi vào TK không hợp lệ → sai số dư
 echo "\n=== Test 6: Invalid account rejection ===\n";
 try {
     $svc->recordReceipt(100000, 'NONEXIST', 'Bad account', 'PT-BAD', 'tester');
@@ -80,6 +85,8 @@ try {
     assertTrue(true, 'Invalid account rejected');
 }
 
+// Kiểm tra ràng buộc kế toán: Tổng Dr = tổng Cr sau tất cả giao dịch
+// Nếu fail → hệ thống mất cân đối, báo cáo tài chính sai
 echo "\n=== Test 7: Trial balance still balances after transactions ===\n";
 $all = $accountRepo->findAll();
 $totalDr = 0; $totalCr = 0;

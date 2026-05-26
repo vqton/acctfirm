@@ -1,4 +1,5 @@
 <?php
+// Test: AP — công nợ phải trả nhà cung cấp (TK 331)
 spl_autoload_register(function ($class) {
     $prefix = 'Accounting\\';
     $baseDir = __DIR__ . '/../src/Accounting/';
@@ -89,6 +90,9 @@ $aging = $ap->getAgingReport();
 assertTrue(isset($aging['buckets']), 'Aging report has buckets');
 assertTrue(count($aging['buckets']['current']) >= 0, 'Current bucket exists');
 
+// Nghiệp vụ: Chiết khấu mua hàng được hưởng — ghi giảm công nợ, ghi nhận doanh thu HĐTC
+// Dr 331 / Cr 515 — giảm khoản phải trả, tăng doanh thu tài chính
+// Nếu fail → sai số dư công nợ và doanh thu tài chính
 echo "\n=== Test 7: Discount ===\n";
 $discInv = $ap->recordInvoice($supplierId, 'INV-DISC-001', '2026-06-01', '2026-06-30', 3000000, 300000, 10, 'Discount test', '152', 'tester');
 $disc = $ap->recordDiscount($discInv['invoice_id'], 100000, 'tester');
@@ -105,6 +109,8 @@ assertTrue($ret['amount'] > 0, 'Return recorded');
 $retInv2 = $ap->getInvoice($retInv['invoice_id']);
 assertTrue($retInv2['balance'] < 2200000, 'Balance reduced after return');
 
+// Nghiệp vụ: Xóa sổ công nợ phải trả (khi chủ nợ không đòi)
+// Nếu fail → công nợ ảo tồn tại mãi → sai bảng CĐKT
 echo "\n=== Test 9: Write-off ===\n";
 $woInv = $ap->recordInvoice($supplierId, 'INV-WO-001', '2025-01-01', '2025-01-15', 1000000, 100000, 10, 'Write-off test', '152', 'tester');
 $wo = $ap->writeOff($woInv['invoice_id'], 'tester');

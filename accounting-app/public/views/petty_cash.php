@@ -1,4 +1,9 @@
-<?php $title = 'Tạm ứng'; $activeMenu = 'petty_cash'; ob_start(); ?>
+<?php // Màn hình: Quản lý tạm ứng nhân viên (TK 141)
+// API: GET /api/petty-cash/funds, GET /api/employees, POST /api/petty-cash/funds, POST /api/petty-cash/disburse, POST /api/petty-cash/replenish, POST /api/petty-cash/close
+// Nghiệp vụ: TK 141 — Tạm ứng cho nhân viên (lập quỹ → tạm ứng → hoàn ứng → đóng quỹ)
+// Hạch toán: Lập quỹ (Nợ 141/Có 1111), Tạm ứng (Nợ 141/Có 1111), Hoàn ứng (Nợ 1111/Có 141)
+// Rủi ro: Hoàn ứng vượt quá số dư quỹ sẽ dẫn đến số dư âm TK 141
+$title = 'Tạm ứng'; $activeMenu = 'petty_cash'; ob_start(); ?>
 <div class="toolbar">
     <h5>Tạm ứng <span class="stats">(TK 141)</span></h5>
     <div>
@@ -59,24 +64,32 @@ function loadData(){
 }
 function loadFunds(){$.get('/api/petty-cash/funds',function(l){var o='<option value="">-- Chọn quỹ --</option>';l.forEach(function(r){o+='<option value="'+r.id+'">'+esc(r.employee_name||r.id)+' ('+parseFloat(r.balance).toLocaleString()+')</option>';});$('#dFund,#rFund').html(o);});}
 function loadEmployees(){$.get('/api/employees',function(l){var o='';l.forEach(function(e){o+='<option value="'+esc(e.id)+'">'+esc(e.name)+'</option>';});$('#fundEmployee').html(o);});}
+// Đóng quỹ tạm ứng — POST /api/petty-cash/close
+// RỦI RO: Sau khi đóng, không thể tạm ứng thêm; số dư còn lại phải được hoàn ứng trước
 function closeFund(id){if(!confirm('Đóng quỹ này?'))return;
     $.ajax({url:'/api/petty-cash/close',method:'POST',contentType:'application/json',headers:{'X-CSRF-Token':csrf},data:JSON.stringify({fund_id:id}),
         success:function(){showToast('Đã đóng quỹ','success');loadData();loadFunds();},
         error:function(x){showToast('Lỗi','error');}
     });
 }
+// Submit lập quỹ tạm ứng — POST /api/petty-cash/funds
+// Nghiệp vụ: Nợ 141 (TK tạm ứng)/Có 1111 (tiền mặt) — cấp quỹ cho nhân viên
 $('#fundForm').submit(function(e){e.preventDefault();
     $.ajax({url:'/api/petty-cash/funds',method:'POST',contentType:'application/json',headers:{'X-CSRF-Token':csrf},data:JSON.stringify({employee_id:$('#fundEmployee').val(),amount:parseFloat($('#fundAmount').val())}),
         success:function(){$('#fundModal').modal('hide');$('#fundForm')[0].reset();showToast('Lập quỹ thành công','success');loadData();loadFunds();},
         error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}
     });
 });
+// Submit tạm ứng cho nhân viên — POST /api/petty-cash/disburse
+// Nghiệp vụ: Nợ 141/Có 1111 — trích quỹ tạm ứng, giảm số dư quỹ
 $('#disburseForm').submit(function(e){e.preventDefault();
     $.ajax({url:'/api/petty-cash/disburse',method:'POST',contentType:'application/json',headers:{'X-CSRF-Token':csrf},data:JSON.stringify({fund_id:$('#dFund').val(),amount:parseFloat($('#dAmount').val()),description:$('#dDesc').val()}),
         success:function(){$('#disburseModal').modal('hide');$('#disburseForm')[0].reset();showToast('Tạm ứng thành công','success');loadData();loadFunds();},
         error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}
     });
 });
+// Submit hoàn ứng — POST /api/petty-cash/replenish
+// Nghiệp vụ: Nợ 1111/Có 141 — nhân viên hoàn lại tiền tạm ứng chưa sử dụng
 $('#repForm').submit(function(e){e.preventDefault();
     $.ajax({url:'/api/petty-cash/replenish',method:'POST',contentType:'application/json',headers:{'X-CSRF-Token':csrf},data:JSON.stringify({fund_id:$('#rFund').val(),amount:parseFloat($('#rAmount').val())}),
         success:function(){$('#repModal').modal('hide');$('#repForm')[0].reset();showToast('Hoàn ứng thành công','success');loadData();loadFunds();},

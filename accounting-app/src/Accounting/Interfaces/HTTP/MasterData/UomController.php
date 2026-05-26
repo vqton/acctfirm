@@ -6,6 +6,23 @@ use Accounting\Domain\Repository\UomRepositoryInterface;
 
 use \Accounting\Interfaces\HTTP\CrudControllerTrait;
 
+/**
+ * MODULE: Danh mục Đơn vị Tính (Unit of Measure)
+ *
+ * Mục đích nghiệp vụ:
+ *   - CRUD đơn vị tính: cái, chiếc, kg, mét, thùng, v.v.
+ *   - Cơ sở cho quản lý hàng tồn kho và báo giá
+ *
+ * API endpoints:
+ *   (Sử dụng CrudControllerTrait — CRUD chuẩn)
+ *
+ * Rủi ro:
+ *   - Thiếu đơn vị tính → không tạo được item mới
+ *
+ * Tích hợp:
+ *   - ItemController gán uom_id cho từng item
+ *   - ReceiptController và IssueController dùng đơn vị tính của item
+ */
 class UomController
 {
     use CrudControllerTrait;

@@ -1,4 +1,5 @@
 <?php
+// Bảng chi tiết bút toán — dòng Nợ/Có cho từng chứng từ
 
 return function (PDO $pdo) {
     $pdo->exec('CREATE TABLE IF NOT EXISTS ledger_entries (

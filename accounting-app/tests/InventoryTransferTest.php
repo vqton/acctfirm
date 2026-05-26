@@ -91,6 +91,8 @@ assertEq(20, (float)$stmt->fetchColumn(), 'Warehouse A has 20 units after onward
 $stmt->execute([$item->getId(), $whB_id]);
 assertEq(10, (float)$stmt->fetchColumn(), 'Warehouse B has 10 units');
 
+// Ràng buộc: Chuyển kho vượt quá tồn kho nguồn → từ chối
+// Nếu fail → có thể chuyển kho âm → sai số lượng tồn kho theo kho
 echo "\n=== Test 3: Insufficient stock in source warehouse ===\n";
 try {
     $svc->transferGoods($item->getId(), 999, $whA_id, $whB_id, 'TRF-BAD', 'tester');

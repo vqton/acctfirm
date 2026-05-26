@@ -1,4 +1,5 @@
 <?php
+// Bảng hàng đang đi đường — theo dõi hàng mua chưa về nhập kho
 return function (PDO $pdo) {
     $pdo->exec('CREATE TABLE IF NOT EXISTS inventory_in_transit (
         id VARCHAR(50) PRIMARY KEY,

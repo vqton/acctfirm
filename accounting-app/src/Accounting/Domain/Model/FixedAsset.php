@@ -1,6 +1,33 @@
 <?php
 namespace Accounting\Domain\Model;
 
+/**
+ * Tài sản cố định (TSCĐ) — Quản lý tài sản dài hạn của doanh nghiệp.
+ *
+ * TSCĐ được ghi nhận theo nguyên giá (originalCost) và phân bổ dần qua
+ * khấu hao. Giá trị còn lại (netBookValue = originalCost - accumulatedDepreciation)
+ * được trình bày trên BC01 chỉ tiêu "Tài sản cố định" (TK 211/213/214).
+ *
+ * NGHIỆP VỤ:
+ * - $originalCost: nguyên giá — căn cứ để tính khấu hao và giá trị còn lại
+ * - $depreciationMethod: 'straight_line' (đều), 'declining_balance' (giảm dần),
+ *   'unit_of_production' (theo sản lượng)
+ * - $usefulLife: thời gian sử dụng hữu ích (tháng), theo khung của Circular 45/2013/TT-BTC
+ * - $salvageValue: giá trị thu hồi ước tính khi thanh lý
+ * - $monthlyDepreciation: mức khấu hao hàng tháng = (originalCost - salvageValue) / usefulLife
+ * - $faCategory: 'tangible' (TSCĐ hữu hình - TK 211), 'intangible' (vô hình - TK 213),
+ *   'finance_lease' (thuê tài chính - TK 212)
+ *
+ * LIÊN KẾT:
+ * - DepartmentId → phòng ban sử dụng TSCĐ (để phân bổ chi phí khấu hao vào TK 627/641/642)
+ * - FixedAssetService → tính khấu hao và sinh bút toán kết chuyển
+ * - DepreciationPolicy → chính sách khấu hao mặc định
+ *
+ * RỦI RO:
+ * - Không được thay đổi depreciationMethod sau khi đã tính khấu hao
+ * - Thanh lý TSCĐ phải ghi nhận chênh lệch thanh lý (lãi/lỗ)
+ * - Đánh giá lại TSCĐ phải có quyết định của Hội đồng quản trị
+ */
 class FixedAsset
 {
     private string $id;
@@ -104,6 +131,12 @@ class FixedAsset
     public function setLastDepreciationDate(?string $date): void { $this->lastDepreciationDate = $date; }
     public function setNotes(?string $notes): void { $this->notes = $notes; }
 
+    // Chuyển đổi model thành mảng để response API.
+    // 'original_cost': nguyên giá — trình bày trên BC01 chỉ tiêu "Nguyên giá TSCĐ".
+    // 'accumulated_depreciation': hao mòn lũy kế (TK 214) — giảm trừ trên BC01.
+    // 'net_book_value' = original_cost - accumulated_depreciation: giá trị còn lại.
+    // 'monthly_depreciation': mức khấu hao tháng — ảnh hưởng BC02 chỉ tiêu chi phí.
+    // 'status': 'in_use' (đang sử dụng), 'idle' (chờ thanh lý), 'liquidated' (đã thanh lý).
     public function toArray(): array
     {
         return [

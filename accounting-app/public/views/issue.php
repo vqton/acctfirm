@@ -1,4 +1,9 @@
-<?php $title = 'Xuất kho'; $activeMenu = 'issue'; ob_start(); ?>
+<?php // Màn hình: Lập phiếu xuất kho
+// API: GET /api/inventory/issues, GET /api/inventory/issue/items, POST /api/inventory/issue
+// Nghiệp vụ: Xuất kho — Nợ 632 (giá vốn)/Có 156 (hàng hóa); hoặc Nợ 621/622/627 (SX)/Có 152 (NVL)
+// Phương pháp tính giá: FIFO hoặc Bình quân gia quyền — xác định tại thời điểm xuất
+// Rủi ro: Xuất sai loại (sale/production/construction) sẽ sai TK đối ứng và sai BC02
+$title = 'Xuất kho'; $activeMenu = 'issue'; ob_start(); ?>
 <div class="toolbar">
     <h5>Xuất kho</h5>
     <div>
@@ -86,6 +91,10 @@ $.get('/api/inventory/issue/items', function(items) {
     });
 });
 
+// Submit phiếu xuất kho — POST /api/inventory/issue
+// Validate frontend: kiểm tra item_id, qty > 0
+// issue_type quyết định TK Nợ:
+//   sale → Nợ 632 (giá vốn), production → Nợ 621/622/627, construction → Nợ 241 (XDCB)
 $('#issueForm').submit(function(e) {
     e.preventDefault();
     var data = {

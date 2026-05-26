@@ -1,4 +1,9 @@
-<?php $title = 'Hàng bán trả lại'; $activeMenu = 'customer_return'; ob_start(); ?>
+<?php // Màn hình: Xử lý hàng bán trả lại
+// API: GET /api/inventory/customer-returns, GET /api/inventory/customer-return/items, POST /api/inventory/customer-return
+// Nghiệp vụ: Hàng bán trả lại — Nợ 156 (nhập lại kho)/Có 632 (giảm giá vốn); đồng thời giảm công nợ KH
+// Ảnh hưởng BC02: Giảm doanh thu (511) và giảm giá vốn (632) — cần xử lý đồng bộ
+// Rủi ro: Chỉ nhập kho mà không điều chỉnh công nợ sẽ sai TK 131
+$title = 'Hàng bán trả lại'; $activeMenu = 'customer_return'; ob_start(); ?>
 <div class="toolbar">
     <h5>Hàng bán trả lại</h5>
     <div>

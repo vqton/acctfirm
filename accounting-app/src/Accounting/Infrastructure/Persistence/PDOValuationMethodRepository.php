@@ -1,4 +1,5 @@
 <?php
+// Quản lý dữ liệu: phương pháp tính giá xuất kho
 namespace Accounting\Infrastructure\Persistence;
 
 use Accounting\Domain\Model\ValuationMethod;

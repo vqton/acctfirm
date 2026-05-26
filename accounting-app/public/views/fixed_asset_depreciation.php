@@ -1,4 +1,10 @@
 <?php
+// Màn hình: Tính và phân bổ khấu hao tài sản cố định
+// API: GET /api/fixed-assets, POST /api/fixed-assets/depreciate, GET /api/fixed-assets/{id}/depreciation
+// Nghiệp vụ: Tính khấu hao TSCĐ theo tháng — Nợ 641/642/627/Có 214 (hao mòn lũy kế)
+// Phương pháp: straight_line (đường thẳng), declining_balance (số dư giảm dần), production (sản lượng)
+// Tuân thủ: Thông tư 200 — khấu hao được ghi nhận hàng tháng, kể cả khi TSCĐ chưa sử dụng
+// Rủi ro: Không ghi khấu hao đúng kỳ sẽ làm sai BC02 (chi phí QLDN/SXC)
 $title = 'Tính khấu hao TSCĐ';
 $activeMenu = 'fixed_assets';
 ob_start();

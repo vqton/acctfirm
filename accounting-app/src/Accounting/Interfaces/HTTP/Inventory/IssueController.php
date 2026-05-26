@@ -6,6 +6,30 @@ use Accounting\Domain\Repository\ItemRepositoryInterface;
 use Accounting\Infrastructure\JsonResponse;
 use Accounting\Infrastructure\Auth;
 
+/**
+ * MODULE: Xuất kho (Goods Issue)
+ *
+ * Mục đích nghiệp vụ:
+ *   - Ghi nhận xuất kho cho các mục đích: bán hàng, sản xuất, nội bộ
+ *   - Hạch toán giá vốn (632) theo phương pháp tính giá (FIFO/Bình quân)
+ *   - Giảm tồn kho tương ứng
+ *   - Phân loại xuất theo issue_type (sale, production, internal)
+ *
+ * API endpoints:
+ *   GET  /api/inventory/issues       — Danh sách phiếu xuất
+ *   POST /api/inventory/issues       — Tạo phiếu xuất mới
+ *
+ * Rủi ro:
+ *   - R007: Xuất kho nhưng không ghi nhận bút toán → sai tồn kho
+ *   - Sai phương pháp tính giá → sai giá vốn (632) → sai BC02
+ *   - Xuất vượt quá tồn kho hiện có → số âm
+ *   - Không ghi nhận kịp thời → sai báo cáo tồn kho
+ *
+ * Tích hợp:
+ *   - InventoryService.issueGoods ghi Nợ 632 / Có 152,156
+ *   - ArController ghi nhận doanh thu đồng thời với xuất bán
+ *   - Production module (tương lai) sẽ gọi cho xuất NVL
+ */
 class IssueController
 {
     private InventoryService $inventory;
@@ -27,6 +51,14 @@ class IssueController
         JsonResponse::ok($stmt->fetchAll(\PDO::FETCH_ASSOC));
     }
 
+    // NGHIỆP VỤ: Ghi nhận xuất kho (phiếu xuất kho — PXK)
+    // Input: { item_id, qty, issue_type (sale|production|internal), reference?, created_by? }
+    // Output: { transaction_id, item_id, qty, unit_cost (từ FIFO/BQGQ), total_cost } — 201 Created
+    // Service: InventoryService.issueGoods() → JournalService.postEntry
+    // Hạch toán: Nợ 632 (giá vốn) / Có 152,156 (tồn kho giảm)
+    // Tính giá: Dùng phương pháp đã gán cho item (FIFO hoặc BQGQ) — xem ValuationMethodController
+    // Rủi ro: Xuất vượt tồn kho → InvalidArgumentException. Sai đơn giá xuất → sai 632 → sai BC02
+    // Tích hợp: ArController ghi nhận doanh thu đồng thời khi issue_type=sale
     public function issue(): void
     {
         Auth::checkCsrf();

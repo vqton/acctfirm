@@ -1,4 +1,5 @@
 <?php
+// Test: Hàng đang đi đường — theo dõi và nhập kho
 spl_autoload_register(function ($class) {
     $prefix = 'Accounting\\';
     $baseDir = __DIR__ . '/../src/Accounting/';
@@ -55,6 +56,9 @@ assertEq($expected, $ap, "AP (331) increased by {$expected}");
 $itemCheck = $itemRepo->findById($item->getId());
 assertEq(0, $itemCheck->getStockQty(), 'Stock qty unchanged (0)');
 
+// Nghiệp vụ: Hàng đang đi đường về đến kho — Dr 152 / Cr 151
+// Chuyển từ TK 151 (Hàng đang đi đường) sang TK 152 (Hàng hóa)
+// Nếu fail → hàng không được nhập kho khi về → mất dấu vết
 echo "\n=== Test 2: Receive goods from transit ===\n";
 $result2 = $svc->receiveFromTransit($result['transit_id'], 50, 'RECV-FROM-TRANSIT-001', 'tester');
 

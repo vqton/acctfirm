@@ -1,4 +1,5 @@
 <?php
+// Bảng danh mục kho — quản lý tồn kho theo địa điểm
 return function (PDO $pdo) {
     $pdo->exec('CREATE TABLE IF NOT EXISTS warehouses (
         id VARCHAR(50) PRIMARY KEY,

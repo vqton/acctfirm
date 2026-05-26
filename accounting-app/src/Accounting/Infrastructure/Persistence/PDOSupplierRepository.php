@@ -1,4 +1,5 @@
 <?php
+// Quản lý dữ liệu: danh mục nhà cung cấp
 namespace Accounting\Infrastructure\Persistence;
 
 use Accounting\Domain\Model\Supplier;

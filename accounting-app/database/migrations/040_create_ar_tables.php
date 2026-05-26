@@ -1,4 +1,5 @@
 <?php
+// Bảng công nợ phải thu — hóa đơn bán hàng và thu tiền khách hàng
 return function (PDO $pdo) {
     $pdo->exec('CREATE TABLE IF NOT EXISTS ar_invoices (
         id INT AUTO_INCREMENT PRIMARY KEY,

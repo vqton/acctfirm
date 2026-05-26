@@ -1,8 +1,12 @@
 <?php
+// Test: Helpers — toVnWords, format số tiền
 require __DIR__ . '/bootstrap.php';
 
 use Accounting\Infrastructure\Helpers;
 
+// Nghiệp vụ: Hàm chuyển số tiền sang chữ Việt Nam (dùng trên chứng từ kế toán)
+// Yêu cầu TT200/TT133: số tiền trên chứng từ phải được viết bằng chữ
+// Nếu fail → chứng từ in ra sai số tiền bằng chữ → chứng từ không hợp lệ
 echo "\n=== toVnWords Tests ===\n";
 assertEq('Không đồng', Helpers::toVnWords(0), 'Zero');
 assertEq('Một đồng', Helpers::toVnWords(1), 'One');
@@ -41,6 +45,9 @@ assertEq('&quot;hello&quot;', Helpers::e('"hello"'), 'Escape quotes');
 assertEq('', Helpers::e(null), 'Null returns empty');
 assertEq('abc', Helpers::e('abc'), 'Plain text unchanged');
 
+// Nghiệp vụ: Kiểm tra mã tài khoản hợp lệ (3-6 chữ số, chỉ số)
+// Dùng trong form nhập liệu để validate trước khi gửi lên server
+// Nếu fail → có thể nhập mã TK không hợp lệ → lỗi hạch toán
 echo "\n=== isValidAccountCode Tests ===\n";
 assertTrue(Helpers::isValidAccountCode('111'), '3-digit code valid');
 assertTrue(Helpers::isValidAccountCode('3331'), '4-digit (level 2) valid');

@@ -1,4 +1,5 @@
 <?php
+// Màn hình: Biểu thuế và thuế suất
 $title = 'Biểu thuế';
 $activeMenu = 'tax_rates';
 ob_start();

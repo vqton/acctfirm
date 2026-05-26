@@ -6,6 +6,26 @@ use Accounting\Domain\Repository\ContractRepositoryInterface;
 
 use \Accounting\Interfaces\HTTP\CrudControllerTrait;
 
+/**
+ * MODULE: Danh mục Hợp đồng (Contract Master)
+ *
+ * Mục đích nghiệp vụ:
+ *   - CRUD hợp đồng kinh tế với khách hàng/nhà cung cấp
+ *   - Quản lý thông tin: loại hợp đồng, đối tác, giá trị, thời hạn
+ *   - Cơ sở để theo dõi doanh thu/chi phí theo hợp đồng
+ *
+ * API endpoints:
+ *   (Sử dụng CrudControllerTrait — CRUD chuẩn)
+ *
+ * Rủi ro:
+ *   - Hợp đồng hết hạn không được gia hạn → sai doanh thu dự kiến
+ *   - Giá trị hợp đồng không đồng bộ với thực tế thanh toán
+ *
+ * Tích hợp:
+ *   - ProjectController sử dụng contract_id (nếu có)
+ *   - ArController/ApController ghi nhận hóa đơn theo hợp đồng
+ *   - FsController cần thông tin hợp đồng cho thuyết minh BCTC
+ */
 class ContractController
 {
     use CrudControllerTrait;

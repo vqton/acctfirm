@@ -1,4 +1,5 @@
 <?php
+// Bảng danh mục nhà cung cấp — theo dõi công nợ phải trả
 
 return function (PDO $pdo) {
     $pdo->exec('CREATE TABLE IF NOT EXISTS suppliers (

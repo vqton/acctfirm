@@ -1,4 +1,5 @@
 <?php
+// Thêm cột warehouse_id vào inventory_cost_layers — phân bổ giá vốn theo kho
 return function (PDO $pdo) {
     $stmt = $pdo->query("SHOW COLUMNS FROM inventory_cost_layers LIKE 'warehouse_id'");
     if (!$stmt->fetch()) {

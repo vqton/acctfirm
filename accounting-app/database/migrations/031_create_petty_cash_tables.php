@@ -1,4 +1,5 @@
 <?php
+// Bảng quỹ tiền mặt tạm ứng — quản lý tiền mặt tại bộ phận
 return function (PDO $pdo) {
     $pdo->exec('CREATE TABLE IF NOT EXISTS petty_cash_funds (
         id VARCHAR(50) PRIMARY KEY,

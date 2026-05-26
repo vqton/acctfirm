@@ -1,4 +1,5 @@
 <?php
+// Thêm trường thông tin người nộp tiền vào chứng từ
 return function (PDO $pdo) {
     $pdo->exec('ALTER TABLE transactions
         ADD COLUMN transaction_date DATE DEFAULT NULL AFTER `date`,

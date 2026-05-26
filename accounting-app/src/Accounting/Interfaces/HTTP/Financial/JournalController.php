@@ -7,6 +7,39 @@ use Accounting\Domain\Repository\TransactionRepositoryInterface;
 use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
 
+/**
+ * MODULE: Bút toán (Journal Entry) — CORE SYSTEM
+ *
+ * Mục đích nghiệp vụ:
+ *   - Tạo và quản lý bút toán kế toán tổng hợp
+ *   - Ghi nhận bút toán tay (manual journal) do kế toán viên nhập
+ *   - Cập nhật bút toán nháp (draft) trước khi ghi sổ (post)
+ *   - Ghi sổ (post) — khóa bút toán, không cho sửa/xóa
+ *   - Danh sách bút toán theo kỳ
+ *
+ * API endpoints:
+ *   GET    /api/journals             — Danh sách bút toán theo kỳ
+ *   GET    /api/journals/{id}        — Chi tiết bút toán
+ *   POST   /api/journals             — Tạo bút toán mới
+ *   PUT    /api/journals/{id}        — Cập nhật (draft)
+ *   POST   /api/journals/{id}/post   — Ghi sổ
+ *   POST   /api/journals/{id}/reverse— Hoàn nhập
+ *   DELETE /api/journals/{id}        — Xóa (draft)
+ *
+ * Rủi ro:
+ *   - R001: Post vào kỳ đã đóng → từ chối (PeriodService::isPeriodOpen)
+ *   - R002: Dr ≠ Cr kiểm tra trước khi post (tolerance ±10 VND)
+ *   - R005: Post vào control account → từ chối (trừ khi $allowControl)
+ *   - R006: Trùng số chứng từ → VoucherService SELECT FOR UPDATE
+ *   - R007: Bút toán multi-step không rollback → giao dịch lỗi
+ *   - R008: Không index trên transaction_date → query chậm
+ *
+ * Tích hợp:
+ *   - JournalService là service trung tâm, mọi module gọi qua
+ *   - PostingRuleService kiểm tra Dr-Cr pair hợp lệ
+ *   - AuditLogger ghi lại mọi thay đổi
+ *   - Tất cả module (Cash, AP, AR, Inventory) đều gọi JournalService
+ */
 class JournalController
 {
     private JournalService $journal;
@@ -74,6 +107,14 @@ class JournalController
         ]);
     }
 
+    // NGHIỆP VỤ: Tạo bút toán nháp (draft) — chưa ghi sổ, có thể sửa/xóa
+    // Input: { description?, reference?, lines: [{account_code, amount, is_debit}], created_by? }
+    // Output: { id, reference, status: 'draft', date } — 201 Created
+    // Service: JournalService.createDraft() — validate: ít nhất 2 lines, Dr=Cr, posting rules
+    // Permission: Không cần CSRF (không ảnh hưởng data cuối cùng), không cần permission đặc biệt
+    // Rủi ro: R002 — Kiểm tra Dr=Cr ngay tại createDraft (tolerance ±10). R005 — Control account check
+    // Ràng buộc: lines phải có ít nhất 1 Dr và 1 Cr. Tất cả tài khoản phải tồn tại
+    // Trạng thái: draft → submitted (gửi duyệt) → posted (đã ghi sổ)
     public function createDraft(): void
     {
         $data = json_decode(file_get_contents('php://input'), true);
@@ -99,6 +140,13 @@ class JournalController
         }
     }
 
+    // NGHIỆP VỤ: Phê duyệt draft (gửi duyệt) — chuyển status draft → submitted
+    // Input: id (URL)
+    // Output: { id, reference, status: 'submitted' }
+    // Service: JournalService.approveDraft() — cập nhật status
+    // Permission: journal, approve
+    // Rủi ro: Sau khi submitted, draft không sửa được nữa. Chờ ApprovalController duyệt
+    // Quy trình: Draft → Submitted → (ApprovalController) → Posted
     public function approveDraft(string $id): void
     {
         Auth::requirePermission('journal', 'approve');
@@ -115,6 +163,16 @@ class JournalController
         }
     }
 
+    // NGHIỆP VỤ: Ghi sổ bút toán trực tiếp (post ngay, không qua draft) — CORE OPERATION
+    // Input: { description?, reference?, lines: [{account_code, amount, is_debit}], created_by? }
+    // Output: { id, reference, status: 'posted', date, description, lines } — 201 Created
+    // Service: JournalService.postEntry() — validate posting rules → insert transaction + ledger_entries
+    // Transaction: JournalService tự wrap trong beginTransaction/commit/rollback
+    // Permission: Không CSRF (gọi từ service khác, không trình duyệt trực tiếp)
+    // Validate sequence: (1) Account tồn tại (2) Lines ≥ 2 (3) Dr=Cr ±10 (4) Control account (5) Posting rules
+    // (6) Period open check (7) Voucher uniqueness (SELECT FOR UPDATE)
+    // Rủi ro: R002 (Dr=Cr), R001 (period closed), R005 (control account), R006 (voucher)
+    // Ràng buộc: Sau post, không sửa/xóa được. Chỉ reverse (journal reversal)
     public function postEntry(): void
     {
         $data = json_decode(file_get_contents('php://input'), true);
@@ -146,6 +204,14 @@ class JournalController
         }
     }
 
+    // NGHIỆP VỤ: Bảng cân đối tài khoản (Trial Balance) — tổng hợp số dư tất cả TK
+    // Input: none (đọc tất cả tài khoản)
+    // Output: { accounts: [{code, name, type, debit, credit}], total_debit, total_credit, balanced }
+    // Service: AccountRepository.findAll() — lấy số dư từng tài khoản
+    // Tính chất: Normal_balance D = Asset, Expense. Normal_balance C = Liability, Equity, Revenue
+    // Kiểm tra: total_debit - total_credit < 10 VND → balanced = true
+    // Rủi ro: R002 (CRITICAL) — Nếu balanced=false → toàn bộ hệ thống sai, không thể lập BCTC
+    // Mục đích: Kiểm tra toàn bộ hệ thống trước khi đóng kỳ (PeriodController.closeWithChecklist)
     public function trialBalance(): void
     {
         $accounts = $this->accountRepo->findAll();

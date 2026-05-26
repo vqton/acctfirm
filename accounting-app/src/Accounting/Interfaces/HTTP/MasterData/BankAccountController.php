@@ -6,6 +6,31 @@ use Accounting\Domain\Repository\BankAccountRepositoryInterface;
 
 use \Accounting\Interfaces\HTTP\CrudControllerTrait;
 
+/**
+ * MODULE: Danh mục Tài khoản Ngân hàng (Bank Account Master)
+ *
+ * Mục đích nghiệp vụ:
+ *   - CRUD tài khoản ngân hàng của doanh nghiệp
+ *   - Quản lý thông tin: số tài khoản, ngân hàng, chủ tài khoản, chi nhánh
+ *   - Theo dõi loại tiền tệ và số dư đầu kỳ
+ *
+ * API endpoints:
+ *   (Sử dụng CrudControllerTrait — CRUD chuẩn)
+ *   GET    /api/bank-accounts       — Danh sách
+ *   GET    /api/bank-accounts/{id}  — Chi tiết
+ *   POST   /api/bank-accounts       — Tạo mới
+ *   PUT    /api/bank-accounts/{id}  — Cập nhật
+ *   DELETE /api/bank-accounts/{id}  — Xóa
+ *
+ * Rủi ro:
+ *   - Sai số tài khoản → chuyển tiền sai đích
+ *   - Không đồng bộ với tài khoản kế toán (112) → sai số dư BC01
+ *
+ * Tích hợp:
+ *   - BankReconciliationController dùng bank_account_code để đối chiếu
+ *   - CashController tham chiếu khi ghi nhận giao dịch ngân hàng
+ *   - Liên kết với account_code 112 (tiền gửi ngân hàng)
+ */
 class BankAccountController
 {
     use CrudControllerTrait;

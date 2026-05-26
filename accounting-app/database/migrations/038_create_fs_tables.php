@@ -1,4 +1,5 @@
 <?php
+// Bảng chỉ tiêu báo cáo tài chính — BC01, BC02, BC03
 return function (PDO $pdo) {
     $pdo->exec('CREATE TABLE IF NOT EXISTS fs_line_items (
         id INT AUTO_INCREMENT PRIMARY KEY,

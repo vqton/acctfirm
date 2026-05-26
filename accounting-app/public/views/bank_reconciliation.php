@@ -1,4 +1,9 @@
-<?php $title = 'Đối chiếu ngân hàng'; $activeMenu = 'bank_reconciliation'; ob_start(); ?>
+<?php // Màn hình: Đối chiếu số dư ngân hàng với sổ sách
+// API: GET /api/bank-reconciliation/sessions, GET /api/bank-reconciliation/bank-accounts, POST /api/bank-reconciliation/start
+// Nghiệp vụ: Đối chiếu số dư TK 112 trên sổ kế toán với sao kê ngân hàng
+// Quy trình: Tạo phiên → nhập số dư NH → so khớp từng giao dịch → xử lý chênh lệch
+// Rủi ro: Chênh lệch không được xử lý sẽ dẫn đến sai số dư tiền gửi trên BC01
+$title = 'Đối chiếu ngân hàng'; $activeMenu = 'bank_reconciliation'; ob_start(); ?>
 <div class="toolbar">
     <h5>Đối chiếu ngân hàng</h5>
     <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#startModal"><i class="bi bi-plus-lg"></i> Bắt đầu đối chiếu</button>
@@ -48,6 +53,8 @@ function loadBankAccounts(){
 function viewSession(id){
     window.location='/thu/doi-chieu-ngan-hang?session='+id;
 }
+// Submit tạo phiên đối chiếu mới — POST /api/bank-reconciliation/start
+// Người dùng nhập số dư từ sao kê NH, hệ thống tự động tính chênh lệch với sổ sách
 $('#startForm').submit(function(e){e.preventDefault();
     $.ajax({url:'/api/bank-reconciliation/start',method:'POST',contentType:'application/json',headers:{'X-CSRF-Token':csrf},data:JSON.stringify({bank_account_code:$('#bankAccount').val(),statement_date:$('#statementDate').val(),statement_balance:parseFloat($('#statementBalance').val())}),
         success:function(r){$('#startModal').modal('hide');showToast('Đã tạo phiên đối chiếu','success');loadData();},

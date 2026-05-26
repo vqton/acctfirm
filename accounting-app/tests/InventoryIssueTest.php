@@ -77,6 +77,8 @@ $wip = $accountRepo->findByCode('154')->getBalance();
 $expectedWip = 20 * $origCost;
 assertEq($expectedWip, $wip, "WIP (154) increased by {$expectedWip}");
 
+// Ràng buộc: Xuất kho vượt quá tồn kho thực tế → từ chối
+// Nếu fail → có thể xuất kho âm → sai số lượng tồn kho
 echo "\n=== Test 3: Insufficient stock should reject ===\n";
 try {
     $svc->issueGoods($item->getId(), 999, 'sale', 'BAD-001', 'tester');

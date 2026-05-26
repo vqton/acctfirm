@@ -1,4 +1,5 @@
 <?php
+// Quản lý dữ liệu: tỷ giá ngoại tệ
 namespace Accounting\Infrastructure\Persistence;
 
 use Accounting\Domain\Model\ExchangeRate;

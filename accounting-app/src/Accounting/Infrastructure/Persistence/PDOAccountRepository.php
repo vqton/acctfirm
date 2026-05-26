@@ -1,4 +1,5 @@
 <?php
+// Quản lý dữ liệu: danh mục tài khoản kế toán
 namespace Accounting\Infrastructure\Persistence;
 
 use Accounting\Domain\Model\Account;

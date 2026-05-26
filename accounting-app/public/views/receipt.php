@@ -1,4 +1,9 @@
-<?php $title = 'Nhập kho'; $activeMenu = 'receipt'; ob_start(); ?>
+<?php // Màn hình: Lập phiếu nhập kho
+// API: GET /api/inventory/receipts, GET /api/inventory/issue/items, POST /api/inventory/receive
+// Nghiệp vụ: Nhập kho — Nợ 152/153/155/156 (tùy loại VT)/Có 331 (hoặc 111/112)
+// Xác định đơn giá: Giá nhập kho = Đơn giá + Chi phí vận chuyển/phụ phí phân bổ
+// Rủi ro: Nhập sai giá làm sai giá vốn hàng bán (TK 632) khi xuất sau này
+$title = 'Nhập kho'; $activeMenu = 'receipt'; ob_start(); ?>
 <div class="toolbar">
     <h5>Nhập kho</h5>
     <div>
@@ -86,6 +91,9 @@ $.get('/api/inventory/issue/items', function(items) {
     });
 });
 
+// Submit phiếu nhập kho — POST /api/inventory/receive
+// Validate frontend: kiểm tra item_id, qty > 0, unit_price > 0
+// Phụ phí (vận chuyển) được cộng vào giá vốn hàng nhập kho
 $('#receiptForm').submit(function(e) {
     e.preventDefault();
     var data = {

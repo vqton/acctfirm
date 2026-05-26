@@ -1,4 +1,5 @@
 <?php
+// Bảng tiền đang chuyển — theo dõi tiền chưa về tài khoản ngân hàng
 return function (PDO $pdo) {
     $pdo->exec('CREATE TABLE IF NOT EXISTS cash_transit (
         id VARCHAR(50) PRIMARY KEY,

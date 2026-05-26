@@ -6,6 +6,31 @@ use Accounting\Domain\Repository\ItemRepositoryInterface;
 use Accounting\Infrastructure\JsonResponse;
 use Accounting\Infrastructure\Auth;
 
+/**
+ * MODULE: Nhập kho (Goods Receipt)
+ *
+ * Mục đích nghiệp vụ:
+ *   - Ghi nhận nhập kho hàng hóa, nguyên vật liệu
+ *   - Hạch toán tăng tồn kho (Nợ 152, 156 / Có 331)
+ *   - Xử lý chi phí phát sinh thêm (addon costs) phân bổ vào giá vốn
+ *   - Cập nhật đơn giá nhập cho tính giá xuất kho (FIFO/Bình quân)
+ *
+ * API endpoints:
+ *   GET  /api/inventory/receipts       — Danh sách phiếu nhập
+ *   POST /api/inventory/receipts       — Tạo phiếu nhập mới
+ *   GET  /api/inventory/receipts/items — Danh sách item để chọn
+ *
+ * Rủi ro:
+ *   - R007: Nhập kho không ghi nhận bút toán → sai tồn kho
+ *   - Sai đơn giá nhập → sai giá vốn khi xuất
+ *   - Addon costs không phân bổ đúng → sai giá trị hàng tồn kho
+ *   - Nhập kho mà chưa có hóa đơn → cần theo dõi tạm thời
+ *
+ * Tích hợp:
+ *   - InventoryService.receiveGoods ghi nhận và tạo bút toán
+ *   - ApController ghi nhận hóa đơn mua hàng đồng thời
+ *   - InventoryTransitController xử lý hàng đi đường trước khi nhập
+ */
 class ReceiptController
 {
     private InventoryService $inventory;
@@ -27,6 +52,15 @@ class ReceiptController
         JsonResponse::ok($stmt->fetchAll(\PDO::FETCH_ASSOC));
     }
 
+    // NGHIỆP VỤ: Ghi nhận nhập kho (phiếu nhập kho — PNK)
+    // Input: { item_id, qty, unit_price, addon_costs?, reference?, created_by? }
+    // Output: { transaction_id, item_id, qty, unit_price, total_cost } — 201 Created
+    // Service: InventoryService.receiveGoods() → JournalService.postEntry
+    // Hạch toán: Nợ 152,156 (tồn kho) / Có 331 (công nợ NCC) — hoặc Nợ 152/156 / Có 111,112 nếu trả tiền ngay
+    // Transaction: InventoryService tự wrap (ghi nhận tồn kho + bút toán)
+    // Rủi ro: addon_costs (vận chuyển, bảo hiểm) phải phân bổ vào giá vốn. Sai đơn giá → sai giá xuất sau này
+    // Quy trình: Nhập kho → cập nhật inventory_layers (FIFO) hoặc tính lại giá BQGQ
+    // Tích hợp: ApController.recordInvoice ghi nhận hóa đơn mua đồng thời
     public function receive(): void
     {
         Auth::checkCsrf();

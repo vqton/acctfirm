@@ -1,4 +1,5 @@
 <?php
+// Bảng danh mục phòng ban — tập hợp chi phí theo bộ phận
 return function (PDO $pdo) {
     $pdo->exec('CREATE TABLE IF NOT EXISTS departments (
         id VARCHAR(50) PRIMARY KEY,

@@ -1,4 +1,5 @@
 <?php
+// Test: Sổ nhật ký chung — ghi nhận bút toán theo thời gian
 spl_autoload_register(function ($class) {
     $prefix = 'Accounting\\';
     $baseDir = __DIR__ . '/../src/Accounting/';
@@ -28,6 +29,8 @@ function assertTrue($c, $m) { global $total, $failed;
 }
 
 // === Test 1: Empty result for future period ===
+// Biên: Kỳ tương lai (2099) không có dữ liệu → trả về mảng rỗng
+// Nếu fail → sổ nhật ký chung trả về dữ liệu sai
 $result = $journalBook->getGeneralJournal('2099-01-01', '2099-12-31');
 assertTrue(count($result['entries']) === 0, 'Empty result for future period');
 assertTrue($result['total_debit'] == 0, 'Total debit = 0 for empty');
@@ -50,6 +53,8 @@ assertTrue($firstEntry['debit'] >= 0, 'Entry debit >= 0');
 assertTrue($firstEntry['credit'] >= 0, 'Entry credit >= 0');
 
 // === Test 4: Entries ordered by date ===
+// Nghiệp vụ: Sổ nhật ký chung sắp xếp theo thứ tự thời gian
+// Nếu fail → không đúng mẫu sổ S01-DN quy định
 $dates = array_map(fn($e) => $e['date'], $result['entries']);
 $sorted = $dates;
 sort($sorted);

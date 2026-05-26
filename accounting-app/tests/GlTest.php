@@ -1,4 +1,5 @@
 <?php
+// Test: Sổ cái — xem số dư và phát sinh theo tài khoản
 spl_autoload_register(function ($class) {
     $prefix = 'Accounting\\';
     $baseDir = __DIR__ . '/../src/Accounting/';
@@ -65,6 +66,8 @@ assertTrue(count($r['entries']) >= 2, 'At least 2 entries');
 assertEq(10000000, $r['entries'][0]['debit'], 'First entry: Dr 10M');
 assertEq(3000000, $r['entries'][1]['credit'], 'Second entry: Cr 3M');
 
+// Nghiệp vụ: Sổ cái hiển thị tài khoản đối ứng cho mỗi dòng phát sinh
+// Nếu fail → không trace được nguồn gốc bút toán → audit khó khăn
 echo "\n=== Test 4: Contra account shown ===\n";
 assertTrue(strlen($r['entries'][0]['contra_account']) > 0, 'Contra account shown');
 
@@ -76,6 +79,8 @@ echo "\n=== Test 6: Filtered by date ===\n";
 $r2 = $gl->getGeneralLedger('111', '2026-01-01', '2026-12-31');
 assertEq(7000000, $r2['closing_balance'], 'Filtered by year: closing = 7M');
 
+// Nghiệp vụ: Sổ cái theo tháng theo mẫu S05-DN — 12 tháng cho 1 năm
+// Nếu fail → báo cáo sổ cái không đúng mẫu quy định
 echo "\n=== Test 7: Monthly ledger (S05-DN) — empty account ===\n";
 $monthly = $gl->getMonthlyLedger('111');
 assertEq('monthly', $monthly['mode'], 'Monthly mode indicator');

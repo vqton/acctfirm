@@ -1,4 +1,5 @@
 <?php
+// Bảng danh mục tài khoản kế toán theo Thông tư 99
 
 return function (PDO $pdo) {
     $pdo->exec('CREATE TABLE IF NOT EXISTS accounts (

@@ -1,4 +1,5 @@
 <?php
+// Test: Hàng gửi bán/ký gửi — theo dõi và kết chuyển
 spl_autoload_register(function ($class) {
     $prefix = 'Accounting\\';
     $baseDir = __DIR__ . '/../src/Accounting/';
@@ -85,6 +86,9 @@ try {
     assertTrue(true, 'Insufficient consignment rejected');
 }
 
+// Nghiệp vụ: Hàng ký gửi không bán được → nhập lại kho
+// Dr 152 (Hàng hóa) / Cr 157 (Hàng gửi bán) — đảo ngược bút toán gửi bán
+// Nếu fail → hàng trả về không nhập được kho → mất hàng
 echo "\n=== Test 4: Return consigned goods to inventory ===\n";
 $result3 = $svc->returnConsigned($result['consignment_id'], 10, 'RETURN-CONSIGN-001', 'tester');
 

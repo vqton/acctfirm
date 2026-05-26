@@ -1,4 +1,5 @@
 <?php
+// Màn hình: Danh mục khách hàng
 $title = 'Danh mục khách hàng';
 $activeMenu = 'customers';
 ob_start();

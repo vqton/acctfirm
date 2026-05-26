@@ -1,4 +1,9 @@
-<?php $title = 'Dự phòng giảm giá hàng tồn kho'; $activeMenu = 'impairment'; ob_start(); ?>
+<?php // Màn hình: Dự phòng giảm giá hàng tồn kho (TK 229)
+// API: GET /api/impairments, GET /api/items, POST /api/impairments
+// Nghiệp vụ: Dự phòng giảm giá HTK — Nợ 632 (giá vốn)/Có 229 (dự phòng)
+// Tuân thủ: Thông tư 200 — trích lập dự phòng nếu giá thị trường < giá ghi sổ
+// Rủi ro: Không hoàn nhập dự phòng khi giá phục hồi sẽ làm sai BC02
+$title = 'Dự phòng giảm giá hàng tồn kho'; $activeMenu = 'impairment'; ob_start(); ?>
 <div class="toolbar">
     <h5>Dự phòng giảm giá HTK <span class="stats">(TK 229)</span></h5>
     <div>

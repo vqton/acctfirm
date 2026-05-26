@@ -1,4 +1,5 @@
 <?php
+// Test: Tiền đang chuyển — theo dõi tiền chưa về ngân hàng
 spl_autoload_register(function ($class) {
     $prefix = 'Accounting\\';
     $baseDir = __DIR__ . '/../src/Accounting/';
@@ -52,6 +53,9 @@ assertEq(0, $transit2, 'Transit (113) cleared to 0');
 $row = $pdo->query("SELECT status FROM cash_transit WHERE id='{$result['transit_id']}'")->fetch();
 assertEq('confirmed', $row['status'], 'Transit status = confirmed');
 
+// Nghiệp vụ: Séc không được thanh toán (cheque dishonour) → hoàn nhập tiền đang chuyển
+// Dr 111 (Tiền mặt) / Cr 113 (Tiền đang chuyển)
+// Nếu fail → không xử lý được trường hợp séc không hợp lệ → sai số dư
 echo "\n=== Test 3: Cheque dishonour — reverse transit (Dr 111 — Cr 113) ===\n";
 $result2 = $svc->recordTransit(2000000, 'Cheque deposit', 'CT-002', 'tester');
 $svc->reverseTransit($result2['transit_id'], 'tester');
@@ -65,6 +69,7 @@ assertEq(0, $transit3, 'Transit (113) cleared after reversal');
 $row2 = $pdo->query("SELECT status FROM cash_transit WHERE id='{$result2['transit_id']}'")->fetch();
 assertEq('reversed', $row2['status'], 'Transit status = reversed');
 
+// Kiểm tra ràng buộc Dr = Cr sau các giao dịch tiền đang chuyển
 echo "\n=== Test 4: Trial balance after transit transactions ===\n";
 $all = $accountRepo->findAll();
 $totalDr = 0; $totalCr = 0;

@@ -1,4 +1,5 @@
 <?php
+// Bảng hợp đồng — quản lý hợp đồng mua bán, dịch vụ
 return function (PDO $pdo) {
     $pdo->exec('CREATE TABLE IF NOT EXISTS contracts (
         id VARCHAR(50) PRIMARY KEY, code VARCHAR(50) NOT NULL UNIQUE, name VARCHAR(200) NOT NULL,

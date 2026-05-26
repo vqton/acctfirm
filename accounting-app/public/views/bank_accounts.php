@@ -1,4 +1,5 @@
-<?php $title = 'TK ngân hàng'; $activeMenu = 'bank_accounts'; ob_start(); ?>
+<?php // Màn hình: Danh mục tài khoản ngân hàng
+$title = 'TK ngân hàng'; $activeMenu = 'bank_accounts'; ob_start(); ?>
 <div class="toolbar">
     <h5>Tài khoản ngân hàng</h5>
     <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#baModal"><i class="bi bi-plus-lg"></i> Thêm</button>

@@ -6,6 +6,30 @@ use Accounting\Domain\Repository\FixedAssetRepositoryInterface;
 
 use \Accounting\Interfaces\HTTP\CrudControllerTrait;
 
+/**
+ * MODULE: Danh mục TSCĐ (Fixed Asset — TK 211, 213, 214, 217, 241)
+ *
+ * Mục đích nghiệp vụ:
+ *   - CRUD tài sản cố định (hữu hình, vô hình, thuê tài chính)
+ *   - Quản lý nguyên giá, khấu hao, giá trị còn lại
+ *   - Phân loại tài sản (nhà cửa, máy móc, phương tiện...)
+ *   - Tự động tính khấu hao hàng tháng theo chính sách
+ *   - Quản lý tình trạng: đang sử dụng, ngừng sử dụng, thanh lý
+ *
+ * API endpoints:
+ *   (Sử dụng CrudControllerTrait — CRUD chuẩn)
+ *
+ * Rủi ro:
+ *   - R005: Sai TK tài sản (211/213/217) → sai BC01
+ *   - Sai phương pháp/nguyên giá khấu hao → sai chi phí → sai BC02
+ *   - Thanh lý TSCĐ không đúng quy trình → mất tài sản
+ *   - Thời gian sử dụng không phù hợp TT 99 → kiểm toán từ chối
+ *
+ * Tích hợp:
+ *   - FixedAssetService tính khấu hao ghi Nợ 641,642,627 / Có 214
+ *   - DepreciationPolicyController cung cấp chính sách khấu hao
+ *   - Báo cáo TSCĐ ảnh hưởng BC01 chỉ tiêu 211, 213, 214, 217
+ */
 class FixedAssetController
 {
     use CrudControllerTrait;

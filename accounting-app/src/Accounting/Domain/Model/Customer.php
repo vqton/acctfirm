@@ -1,6 +1,27 @@
 <?php
 namespace Accounting\Domain\Model;
 
+/**
+ * Khách hàng — Sổ chi tiết TK 131 "Phải thu của khách hàng".
+ *
+ * Mỗi khách hàng là một tài khoản con của TK 131, theo dõi công nợ phải thu.
+ * Số dư bên Nợ (khách hàng nợ doanh nghiệp) hoặc bên Có (doanh nghiệp nợ
+ * khách hàng do ứng trước).
+ *
+ * NGHIỆP VỤ:
+ * - $balance: số dư công nợ tại thời điểm hiện tại (dư Nợ nếu > 0)
+ * - $creditLimit: hạn mức tín dụng — vượt quá sẽ chặn bán hàng
+ * - $taxCode: mã số thuế khách hàng — bắt buộc cho hóa đơn GTGT
+ * - $paymentTerms: điều khoản thanh toán (VD: "Net30", "2/10 Net30")
+ *
+ * LIÊN KẾT:
+ * - ArService → ghi nhận phải thu, thu tiền, đối trừ công nợ
+ * - ArAging → phân tích tuổi nợ và trích lập dự phòng (TK 2293)
+ *
+ * RỦI RO:
+ * - Không được xóa khách hàng đã phát sinh công nợ — chỉ deactivate status
+ * - Đối trừ công nợ phải đúng nguyên tắc: cùng khách hàng, cùng loại tiền
+ */
 class Customer
 {
     private string $id;
@@ -60,6 +81,10 @@ class Customer
     public function setNotes(?string $v): void { $this->notes = $v; }
     public function setStatus(bool $v): void { $this->status = $v; }
 
+    // Chuyển đổi model thành mảng để response API.
+    // 'balance': số dư công nợ phải thu (dư Nợ TK 131) — ảnh hưởng BC01 chỉ tiêu 131.
+    // 'credit_limit': hạn mức tín dụng — vượt quá sẽ chặn bán hàng.
+    // 'tax_code': mã số thuế — bắt buộc cho hóa đơn GTGT (theo TT 78/2021).
     public function toArray(): array
     {
         return [

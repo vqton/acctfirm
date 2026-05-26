@@ -22,11 +22,17 @@ use Accounting\Domain\Contract\AuditLoggerInterface;
 use Accounting\Infrastructure\Database\AuditLogger;
 use Accounting\Infrastructure\Logging\LoggingPDO;
 use Accounting\Domain\Service\JournalService;
+use Accounting\Domain\Service\PostingRuleService;
+use Accounting\Domain\Service\VoucherService;
+use Accounting\Domain\Service\ApprovalRoutingService;
 use Accounting\Domain\Service\InventoryService;
 use Accounting\Domain\Service\CashService;
 use Accounting\Domain\Service\CashReportService;
 use Accounting\Domain\Service\PettyCashService;
 use Accounting\Domain\Service\BankReconciliationService;
+use Accounting\Domain\Service\ReconciliationService;
+use Accounting\Domain\Service\FxRevaluationService;
+use Accounting\Domain\Service\IntercompanyService;
 use Accounting\Domain\Service\PeriodService;
 use Accounting\Domain\Service\FsService;
 use Accounting\Domain\Service\ApService;
@@ -38,6 +44,7 @@ use Accounting\Interfaces\HTTP\Cash\BankReconciliationController;
 use Accounting\Interfaces\HTTP\Cash\CashController;
 use Accounting\Interfaces\HTTP\Cash\CashReportController;
 use Accounting\Interfaces\HTTP\Cash\PettyCashController;
+use Accounting\Interfaces\HTTP\ApprovalController;
 use Accounting\Interfaces\HTTP\Inventory\ConsignmentController;
 use Accounting\Interfaces\HTTP\Inventory\ImpairmentController;
 use Accounting\Interfaces\HTTP\Inventory\InventoryTransitController;
@@ -45,8 +52,11 @@ use Accounting\Interfaces\HTTP\Inventory\ItemController;
 use Accounting\Interfaces\HTTP\Inventory\PeriodicController;
 use Accounting\Interfaces\HTTP\Inventory\PhysicalCountController;
 use Accounting\Interfaces\HTTP\Inventory\PromotionalController;
+use Accounting\Interfaces\HTTP\Inventory\ReturnToSupplierController;
+use Accounting\Interfaces\HTTP\Inventory\WriteOffController;
 use Accounting\Interfaces\HTTP\Inventory\ReceiptController;
 use Accounting\Interfaces\HTTP\Inventory\IssueController;
+use Accounting\Interfaces\HTTP\Inventory\InventoryReportController;
 use Accounting\Interfaces\HTTP\Inventory\CustomerReturnController;
 use Accounting\Interfaces\HTTP\Inventory\TransferController;
 use Accounting\Interfaces\HTTP\Financial\ApController;
@@ -76,9 +86,25 @@ use Accounting\Interfaces\HTTP\Auth\AuditLogController;
 use Accounting\Interfaces\HTTP\Auth\AuthController;
 use Accounting\Interfaces\HTTP\Auth\RoleController;
 use Accounting\Interfaces\HTTP\Auth\UserController;
+use Accounting\Interfaces\HTTP\ReconciliationController;
+use Accounting\Interfaces\HTTP\FxController;
+use Accounting\Interfaces\HTTP\IntercompanyController;
+use Accounting\Interfaces\HTTP\Payroll\PayrollController;
+use Accounting\Domain\Service\PayrollService;
+use Accounting\Infrastructure\Persistence\PDOPayrollEntryRepository;
+use Accounting\Infrastructure\Persistence\PDOPayrollPeriodRepository;
+use Accounting\Infrastructure\Persistence\PDOSalaryComponentRepository;
+use Accounting\Infrastructure\Persistence\PDOSalaryFormulaRepository;
 
+// Tạo DI container — khởi tạo tất cả service, repository, controller
+// Dependency graph:
+// PDO ← LoggingPDO ← Repository ← Service ← Controller
+// Tất cả module giao tiếp qua JournalService — không module nào ghi trực tiếp vào DB
+// Controller chỉ gọi Service — không chứa business logic
 function createContainer(): array
 {
+    // === LỚP INFRASTRUCTURE: PDO + Logging ===
+    // PDO thật (innerPdo) được bọc trong LoggingPDO để log SQL tự động
     $dbConfig = require __DIR__ . '/database.php';
     $innerPdo = new PDO(
         "mysql:host={$dbConfig['host']};dbname={$dbConfig['dbname']};charset={$dbConfig['charset']}",
@@ -86,6 +112,9 @@ function createContainer(): array
     );
     $pdo = new LoggingPDO($innerPdo);
 
+    // === LỚP REPOSITORY: Truy cập dữ liệu qua PDO ===
+    // Mỗi entity có Repository Interface + PDO Implementation
+    // Repository pattern: controller/service không biết DB implementation
     $accountRepository = new PDOAccountRepository($pdo);
     $transactionRepository = new PDOTransactionRepository($pdo);
     $itemRepository = new PDOItemRepository($pdo);
@@ -104,24 +133,46 @@ function createContainer(): array
     $contractRepository = new PDOContractRepository($pdo);
     $projectRepository = new PDOProjectRepository($pdo);
     $depreciationPolicyRepository = new PDODepreciationPolicyRepository($pdo);
+    $payrollEntryRepository = new PDOPayrollEntryRepository($pdo);
+    $payrollPeriodRepository = new PDOPayrollPeriodRepository($pdo);
+    $salaryComponentRepository = new PDOSalaryComponentRepository($pdo);
+    $salaryFormulaRepository = new PDOSalaryFormulaRepository($pdo);
 
+    // === LỚP INFRASTRUCTURE SERVICE: Audit, Posting Rule, Voucher ===
+    // Các service không chứa nghiệp vụ kế toán cụ thể — hỗ trợ kỹ thuật
     $auditLogger = new AuditLogger($pdo);
+    $postingRuleService = new PostingRuleService($pdo);
+    $voucherService = new VoucherService($pdo);
+    $approvalRoutingService = new ApprovalRoutingService($pdo);
+    $reconciliationService = new ReconciliationService($pdo);
 
-    $journalService = new JournalService($accountRepository, $transactionRepository, $pdo, $auditLogger);
+    // === LỚP DOMAIN SERVICE: Xử lý nghiệp vụ kế toán ===
+    // JournalService — CORE: mọi bút toán đều qua service này
+    // Đảm bảo Dr = Cr, kiểm tra posting rules, sinh số chứng từ, ghi audit trail
+    // Tất cả module khác đều phụ thuộc vào JournalService để ghi sổ
+    $journalService = new JournalService($accountRepository, $transactionRepository, $pdo, $auditLogger, $postingRuleService, $voucherService, $approvalRoutingService);
+    $fxRevaluationService = new FxRevaluationService($pdo, $accountRepository, $journalService);
+    $intercompanyService = new IntercompanyService($pdo, $journalService);
     $inventoryService = new InventoryService($accountRepository, $transactionRepository, $itemRepository, $warehouseRepository, $journalService, $pdo);
     $cashService = new CashService($accountRepository, $transactionRepository, $journalService, $pdo);
     $pettyCashService = new PettyCashService($accountRepository, $transactionRepository, $journalService, $pdo);
     $bankReconciliationService = new BankReconciliationService($accountRepository, $transactionRepository, $journalService, $pdo, $auditLogger);
     $cashReportService = new CashReportService($pdo, $accountRepository);
-    $periodService = new PeriodService($pdo, $accountRepository, $transactionRepository, $journalService, $auditLogger);
+    // PeriodService phụ thuộc InventoryService để kiểm tra tồn kho trước khi đóng kỳ
+    $periodService = new PeriodService($pdo, $accountRepository, $transactionRepository, $journalService, $auditLogger, $inventoryService, $reconciliationService);
     $fsService = new FsService($pdo, $accountRepository, $auditLogger);
     $apService = new ApService($pdo, $supplierRepository, $accountRepository, $journalService, $auditLogger);
     $arService = new ArService($pdo, $accountRepository, $journalService, $auditLogger);
     $glService = new GlService($pdo, $accountRepository);
     $journalBookService = new JournalBookService($pdo);
     $fixedAssetService = new FixedAssetService($fixedAssetRepository, $accountRepository, $transactionRepository, $journalService, $pdo, $auditLogger);
+    $payrollService = new PayrollService($payrollEntryRepository, $payrollPeriodRepository, $salaryComponentRepository, $employeeRepository, $journalService, $pdo, $auditLogger);
 
+    // === LỚP CONTROLLER: Tiếp nhận request từ Router, gọi Service ===
+    // Controller KHÔNG chứa business logic — chỉ validate input + format response
+    // Mỗi controller nhận dependency từ constructor — không dùng static/global trong controller
     $accountController = new AccountController($accountRepository, $auditLogger);
+    $approvalController = new ApprovalController($journalService, $pdo, $approvalRoutingService);
     $apController = new ApController($apService);
     $arController = new ArController($arService);
     $auditLogController = new AuditLogController($pdo);
@@ -143,6 +194,9 @@ function createContainer(): array
     $fsController = new FsController($fsService);
     $glController = new GlController($glService);
     $journalBookController = new JournalBookController($journalBookService);
+    $reconciliationController = new ReconciliationController($reconciliationService);
+    $fxController = new FxController($fxRevaluationService);
+    $intercompanyController = new IntercompanyController($intercompanyService);
     $impairmentController = new ImpairmentController($inventoryService, $pdo);
     $inventoryTransitController = new InventoryTransitController($inventoryService, $itemRepository, $pdo);
     $itemController = new ItemController($itemRepository);
@@ -151,7 +205,10 @@ function createContainer(): array
     $periodicController = new PeriodicController($inventoryService, $itemRepository, $pdo);
     $physicalCountController = new PhysicalCountController($inventoryService, $itemRepository, $pdo);
     $projectController = new ProjectController($projectRepository);
+    $inventoryReportController = new InventoryReportController($inventoryService);
     $promotionalController = new PromotionalController($inventoryService, $itemRepository);
+    $returnToSupplierController = new ReturnToSupplierController($inventoryService, $itemRepository, $pdo);
+    $writeOffController = new WriteOffController($inventoryService, $pdo);
     $roleController = new RoleController($pdo);
     $supplierController = new SupplierController($supplierRepository);
     $taxRateController = new TaxRateController($taxRateRepository);
@@ -163,7 +220,12 @@ function createContainer(): array
     $userController = new UserController($pdo);
     $valuationMethodController = new ValuationMethodController($valuationMethodRepository);
     $warehouseController = new WarehouseController($warehouseRepository);
+    $payrollController = new PayrollController($payrollService, $employeeRepository, $payrollPeriodRepository, $payrollEntryRepository);
 
+    // === CONTAINER: Map tên → instance ===
+    // Container là array $GLOBALS['container'], controller/service lấy nhau qua key
+    // Pattern: $c['AccountController'] thay vì new AccountController(...) — lazy loading tương đối
+    // LƯU Ý: Nếu cần thêm service mới, phải khởi tạo ở đây và thêm vào return array
     return [
         'pdo' => $pdo, 'accountRepository' => $accountRepository,
         'transactionRepository' => $transactionRepository,
@@ -193,6 +255,7 @@ function createContainer(): array
         'fixedAssetService' => $fixedAssetService,
 
         'AccountController' => $accountController,
+        'ApprovalController' => $approvalController,
         'ApController' => $apController,
         'ArController' => $arController,
         'AuditLogController' => $auditLogController,
@@ -214,6 +277,9 @@ function createContainer(): array
         'FsController' => $fsController,
         'GlController' => $glController,
         'JournalBookController' => $journalBookController,
+        'ReconciliationController' => $reconciliationController,
+        'FxController' => $fxController,
+        'IntercompanyController' => $intercompanyController,
         'ImpairmentController' => $impairmentController,
         'InventoryTransitController' => $inventoryTransitController,
         'ItemController' => $itemController,
@@ -223,8 +289,11 @@ function createContainer(): array
         'PhysicalCountController' => $physicalCountController,
         'ProjectController' => $projectController,
         'PromotionalController' => $promotionalController,
+        'ReturnToSupplierController' => $returnToSupplierController,
+        'WriteOffController' => $writeOffController,
         'ReceiptController' => $receiptController,
         'IssueController' => $issueController,
+        'InventoryReportController' => $inventoryReportController,
         'CustomerReturnController' => $customerReturnController,
         'RoleController' => $roleController,
         'SupplierController' => $supplierController,
@@ -234,6 +303,12 @@ function createContainer(): array
         'UserController' => $userController,
         'ValuationMethodController' => $valuationMethodController,
         'WarehouseController' => $warehouseController,
+        'PayrollController' => $payrollController,
+        'payrollService' => $payrollService,
+        'payrollEntryRepository' => $payrollEntryRepository,
+        'payrollPeriodRepository' => $payrollPeriodRepository,
+        'salaryComponentRepository' => $salaryComponentRepository,
+        'salaryFormulaRepository' => $salaryFormulaRepository,
     ];
 }
 

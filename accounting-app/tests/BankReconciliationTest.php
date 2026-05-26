@@ -1,4 +1,5 @@
 <?php
+// Test: Đối chiếu ngân hàng — kiểm tra chênh lệch số dư
 spl_autoload_register(function ($class) {
     $prefix = 'Accounting\\';
     $baseDir = __DIR__ . '/../src/Accounting/';
@@ -63,6 +64,8 @@ echo "\n=== Test 3: Add statement transaction ===\n";
 $stmtId = $recon->addStatementEntry($session['id'], 10000000, 'Customer A payment', 'BC-001', '2026-05-30', 'receipt');
 assertTrue($stmtId > 0, 'Statement entry ID returned');
 
+// Nghiệp vụ: Đối chiếu tự động NH — so khớp theo số tiền + số chứng từ
+// Nếu fail → mất nhiều thời gian đối chiếu thủ công
 echo "\n=== Test 4: Auto-match by amount + reference ===\n";
 $recon->addStatementEntry($session['id'], 4000000, 'Supplier X payment', 'BN-001', '2026-05-30', 'payment');
 $recon->addStatementEntry($session['id'], 50000, 'Interest Aug', 'BC-002', '2026-05-31', 'receipt');
@@ -103,6 +106,8 @@ echo "\n=== Test 8: List sessions ===\n";
 $sessions = $recon->getSessions();
 assertTrue(count($sessions) >= 1, 'At least 1 session listed');
 
+// Ràng buộc: Không thể hoàn tất đối chiếu nếu chênh lệch # 0
+// Nếu fail → đối chiếu sai lệch vẫn được chấp nhận → sai số dư NH
 echo "\n=== Test 9: Out-of-balance rejection ===\n";
 $cash->recordBankReceipt(5000000, '511', 'Revenue', 'BC-099', 'tester');
 $badSession = $recon->startSession('112', '2026-06-15', 9999999, 'tester');

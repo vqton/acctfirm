@@ -1,4 +1,5 @@
 <?php
+// Màn hình: Danh mục dự án, công trình
 $title = 'Danh mục dự án, công trình';
 $activeMenu = 'projects';
 ob_start();

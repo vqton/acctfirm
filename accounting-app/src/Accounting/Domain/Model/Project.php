@@ -1,6 +1,28 @@
 <?php
 namespace Accounting\Domain\Model;
 
+/**
+ * Dự án — Đối tượng tập hợp chi phí và doanh thu.
+ *
+ * Dự án cho phép theo dõi chi phí (TK 154 — CPSXKD dở dang) và doanh thu
+ * theo từng công trình, đơn hàng, hoặc hoạt động cụ thể. Sử dụng phổ biến
+ * trong doanh nghiệp xây lắp, sản xuất theo đơn hàng, hoặc dịch vụ.
+ *
+ * NGHIỆP VỤ:
+ * - $customerId: khách hàng sở hữu dự án
+ * - $startDate/$endDate: thời gian thực hiện dự án
+ * - $budget: dự toán — dùng để so sánh chi phí thực tế với dự toán
+ *
+ * LIÊN KẾT:
+ * - Contract → dự án thuộc hợp đồng nào
+ * - LedgerEntry → các bút toán chi phí được gán vào dự án (cost object)
+ * - Kết chuyển cuối kỳ: chi phí dự án → giá vốn (TK 632) khi bàn giao
+ *
+ * RỦI RO:
+ * - Chi phí vượt dự toán cần được phê duyệt bổ sung
+ * - Dự án dở dang cuối kỳ (TK 154) phải được xác định giá trị chính xác
+ * - Bàn giao dự án không đúng tiến độ ảnh hưởng doanh thu ghi nhận
+ */
 class Project
 {
     private string $id;
@@ -50,6 +72,11 @@ class Project
     public function setStatus(bool $status): void { $this->status = $status; }
     public function setNotes(?string $notes): void { $this->notes = $notes; }
 
+    // Chuyển đổi model thành mảng để response API.
+    // Dự án là đối tượng tập hợp chi phí (cost object) — mọi chi phí được gán vào dự án qua TK 154.
+    // 'budget': dự toán — so sánh với chi phí thực tế để kiểm soát chi phí.
+    // RỦI RO: Dự án dở dang cuối kỳ (TK 154) phải được xác định giá trị chính xác.
+    // Bàn giao kết chuyển: Nợ 632 / Có 154 khi dự án hoàn thành.
     public function toArray(): array
     {
         return [

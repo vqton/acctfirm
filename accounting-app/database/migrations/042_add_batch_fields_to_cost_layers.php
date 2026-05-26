@@ -1,4 +1,5 @@
 <?php
+// Thêm cột batch_code, lot_no vào inventory_cost_layers — quản lý lô hàng
 return function (PDO $pdo) {
     $stmt = $pdo->query("SHOW COLUMNS FROM inventory_cost_layers LIKE 'batch_code'");
     if (!$stmt->fetch()) {

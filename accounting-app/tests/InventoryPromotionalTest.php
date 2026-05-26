@@ -1,4 +1,5 @@
 <?php
+// Test: Hàng khuyến mãi — xuất kho tặng kèm
 spl_autoload_register(function ($class) {
     $prefix = 'Accounting\\';
     $baseDir = __DIR__ . '/../src/Accounting/';
@@ -43,6 +44,9 @@ $itemRepo->save($item);
 // Receive goods
 $svc->receiveGoods($item->getId(), 100, 50000, [], 'PO-PROMO-001', 'tester');
 
+// Nghiệp vụ: Xuất hàng khuyến mãi — Dr 641 (Chi phí bán hàng) / Cr 152 (Hàng hóa)
+// Hàng tặng kèm không thu tiền → ghi nhận vào chi phí bán hàng
+// Nếu fail → chi phí khuyến mãi không được hạch toán → sai BC02
 echo "\n=== Test 1: Issue promotional goods ===\n";
 $result = $svc->issuePromotional($item->getId(), 20, 'PROMO-TET-2026', 'tester');
 
@@ -64,6 +68,21 @@ try {
 } catch (\InvalidArgumentException $e) {
     assertTrue(true, 'Insufficient stock rejected');
 }
+
+echo "\n=== Test 3: Promotional with output VAT (VAS 02) ===\n";
+// Deemed sale value = 20 x 80,000 = 1,600,000; VAT 10% = 160,000
+// Additional entry: Dr 641 (160,000) — Cr 3331 (160,000)
+$resultVat = $svc->issuePromotional($item->getId(), 10, 'PROMO-VAT-2026', 'tester', 800000, 10);
+
+$itemAfter2 = $itemRepo->findById($item->getId());
+assertEq(70, $itemAfter2->getStockQty(), 'Stock decreased by 10 (80 → 70)');
+
+$vatPayable = $accountRepo->findByCode('33311')->getBalance();
+assertEq(80000, $vatPayable, 'Output VAT (33311) = 80,000 (800,000 × 10%)');
+
+$sellingExp2 = $accountRepo->findByCode('641')->getBalance();
+// COGS: 20 x 50,000 + 10 x 50,000 = 1,500,000; VAT: 80,000
+assertEq(1580000, $sellingExp2, 'Selling expense (641) = 1,500,000 + 80,000 = 1,580,000');
 
 echo "\n=== Results: {$total} tests, {$failed} failed ===\n";
 exit($failed > 0 ? 1 : 0);

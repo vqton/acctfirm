@@ -1,4 +1,5 @@
 <?php
+// Bảng danh mục hàng hóa, vật tư, nguyên liệu
 
 return function (PDO $pdo) {
     $pdo->exec('CREATE TABLE IF NOT EXISTS items (

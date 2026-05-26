@@ -1,4 +1,5 @@
 <?php
+// Bảng tỷ giá ngoại tệ — phục vụ đánh giá lại cuối kỳ
 return function (PDO $pdo) {
     $pdo->exec('CREATE TABLE IF NOT EXISTS exchange_rates (
         id VARCHAR(50) PRIMARY KEY, currency_code VARCHAR(10) NOT NULL, currency_name VARCHAR(100),

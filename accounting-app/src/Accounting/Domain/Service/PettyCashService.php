@@ -4,6 +4,20 @@ namespace Accounting\Domain\Service;
 use Accounting\Domain\Repository\AccountRepositoryInterface;
 use Accounting\Domain\Repository\TransactionRepositoryInterface;
 
+// Dịch vụ quản lý quỹ tiền mặt tạm ứng (Petty Cash / Quỹ tạm ứng)
+//
+// Nghiệp vụ: Doanh nghiệp có thể thành lập quỹ tạm ứng (imprest fund) cho các
+// chi tiêu nhỏ lẻ thường xuyên như mua văn phòng phẩm, tiếp khách, công tác phí.
+// Trình tự hạch toán:
+//   - establishPettyCash: Cấp quỹ - Nợ TK 111 / Có TK 111 (chuyển quỹ chính → quỹ TM)
+//   - disbursePettyCash: Tạm ứng - Nợ TK chi phí / Có TK 111
+//   - replenishPettyCash: Hoàn ứng - Nợ TK chi phí / Có TK 111 (đưa quỹ về mức ấn định)
+//   - closePettyCash: Đóng quỹ - Thu hồi tiền thừa về quỹ chính
+//
+// RỦI RO: Nếu không kiểm soát quỹ tạm ứng định kỳ, tiền có thể bị chi sai mục đích
+// hoặc thất thoát. Quỹ tạm ứng phải được đối chiếu và hoàn ứng cuối mỗi kỳ.
+//
+// Hạch toán: Sử dụng TK 111 (có TK con riêng) cho các giao dịch quỹ tạm ứng
 class PettyCashService
 {
     private AccountRepositoryInterface $accountRepo;
@@ -38,6 +52,28 @@ class PettyCashService
         return ['fund_id' => $fundId, 'fund_name' => $fundName, 'imprest_amount' => $imprestAmount, 'current_balance' => $imprestAmount];
     }
 
+    // Chi tiền từ quỹ tạm ứng (Petty Cash Disbursement)
+    //
+    // Input: fundId, amount, description, reference, createdBy
+    // Output: { transaction_id, amount, type }
+    //
+    // Quy trình:
+    //   1. Kiểm tra quỹ tồn tại, đang active
+    //   2. Kiểm tra current_balance >= amount — không cho quỹ âm
+    //   3. Ghi nhận giao dịch chi (type = 'disbursement')
+    //   4. Giảm current_balance
+    //
+    // RỦI RO: Không có transaction wrapping!
+    //   - INSERT và UPDATE là 2 câu lệnh riêng biệt (không beginTransaction)
+    //   - Nếu INSERT thành công, UPDATE thất bại → mất tiền (balance không giảm)
+    //   - Nếu UPDATE thành công, INSERT thất bại → mất dấu vết giao dịch
+    //
+    // RỦI RO THẤT THOÁT: Không có yêu cầu chứng từ/chứng minh khi chi
+    //   - description và reference là text tự nhập — không kiểm tra hóa đơn
+    //   - Cần cơ chế đối chiếu: chi tiêu phải có hóa đơn/chứng từ kèm theo
+    //
+    // Hạch toán hiện tại: KHÔNG hạch toán kép — chỉ ghi nhận nghiệp vụ chi
+    // Hạch toán kép sẽ được thực hiện khi replenish (khi có chứng từ chi tiết)
     public function disbursePettyCash(string $fundId, float $amount, string $description, string $reference, string $createdBy): array
     {
         if ($amount <= 0) throw new \InvalidArgumentException('Amount must be positive');
@@ -64,6 +100,31 @@ class PettyCashService
         return ['transaction_id' => $txId, 'amount' => $amount, 'type' => 'disbursement'];
     }
 
+    // Hoàn ứng quỹ tạm ứng (Replenish / Top-up)
+    //
+    // Input: fundId, expenseAccount, totalAmount, description, reference, createdBy
+    // Output: { transaction_id, amount, type }
+    //
+    // Quy trình:
+    //   1. Kiểm tra quỹ tồn tại, active
+    //   2. Gọi JournalService::postEntry — hạch toán kép:
+    //      - Nợ TK chi phí (theo expenseAccount) — ghi nhận chi phí thực tế
+    //      - Có TK 111 (tiền mặt) — giảm quỹ chính
+    //   3. Reset current_balance = imprest_amount (imprest system)
+    //   4. Ghi nhận giao dịch hoàn ứng
+    //
+    // Imprest System: Sau khi hoàn ứng, số dư quỹ được đưa về mức ấn định ban đầu
+    //   (imprest_amount). Tổng chi = tổng hoàn ứng trong kỳ.
+    //
+    // RỦI RO NHIỀU LẦN HOÀN ỨNG:
+    //   - Nếu hoàn ứng nhiều lần trước khi hoàn tất đối chiếu → chi phí bị ghi nhận nhiều lần
+    //   - Ví dụ: Chi 5tr, hoàn ứng 5tr (quỹ về 10tr), chi 3tr, hoàn ứng 3tr (quỹ về 10tr)
+    //   → Tổng chi phí ghi nhận = 8tr (đúng), quỹ luôn đầy = 10tr (đúng)
+    //   → OK nếu chứng từ đầy đủ
+    //
+    // Hạch toán:
+    //   Nợ TK chi phí (6428, 6418, 6278...) — tùy bản chất chi
+    //   Có TK 111 — giảm tiền mặt tại quỹ chính
     public function replenishPettyCash(string $fundId, string $expenseAccount, float $totalAmount, string $description, string $reference, string $createdBy): array
     {
         $fund = $this->getPettyCashFundById($fundId);
@@ -92,6 +153,28 @@ class PettyCashService
         return ['transaction_id' => $txn->getId(), 'amount' => $totalAmount, 'type' => 'replenishment'];
     }
 
+    // Đóng quỹ tạm ứng — thu hồi tiền thừa về quỹ chính
+    //
+    // Input: fundId, returnAmount, createdBy
+    // Output: { transaction_id, fund_id, type }
+    //
+    // Quy trình:
+    //   1. Kiểm tra quỹ tồn tại, đang active
+    //   2. Gọi JournalService::postEntry — chuyển tiền từ quỹ TM về quỹ chính:
+    //      - Nợ TK 111 (quỹ chính) — tăng tiền quỹ chính
+    //      - Có TK 111 (quỹ TM) — giảm quỹ tạm ứng
+    //      (Cần TK con riêng biệt — hiện tại đều là '111' → thiếu chi tiết)
+    //   3. Set status = 'closed', current_balance = 0
+    //
+    // RỦI RO — TK 111 cho cả 2 bên:
+    //   postEntry với ['account_code' => '111'] cho cả Nợ và Có
+    //   → JournalService phải xử lý đúng: đây là chuyển tiền nội bộ
+    //   → Nếu không có TK con (1111, 1112) → khó phân biệt quỹ chính/quỹ TM
+    //   → Cần tách biệt hoặc có sub-account riêng cho petty cash
+    //
+    // RỦI RO: returnAmount không được kiểm tra so với số dư thực tế
+    //   Kế toán viên có thể nhập returnAmount sai lệch so với current_balance
+    //   → thất thoát hoặc sai lệch số dư
     public function closePettyCash(string $fundId, float $returnAmount, string $createdBy): array
     {
         $fund = $this->getPettyCashFundById($fundId);

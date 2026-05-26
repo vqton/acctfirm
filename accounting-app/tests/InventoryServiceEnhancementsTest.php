@@ -43,6 +43,9 @@ $item->setPurchasePrice(0);
 $itemRepo->save($item);
 
 // =========================================
+// Nghiệp vụ: Tự động tính giá bình quân gia quyền (WA) sau mỗi lần nhập kho
+// Lô 1: 10×100K = 1M, Lô 2: 10×50K = 500K → WA = 75,000
+// Nếu fail → đơn giá xuất kho sai → sai giá vốn hàng bán
 echo "\n=== 1. Auto WA: purchasePrice updated after receipt ===\n";
 $svc->receiveGoods($item->getId(), 10, 100000, [], 'PO-WA-001', 'tester');
 $after = $itemRepo->findById($item->getId());
@@ -86,6 +89,7 @@ assertEq(15, $remaining, 'Batch LOT-2026-001 remaining = 15 (20-5)');
 $cogs = $accountRepo->findByCode('632')->getBalance();
 assertEq(400000, $cogs, 'COGS (632) = 400,000 (5×80K from batch)');
 
+// Ràng buộc: Xuất từ batch không tồn tại → từ chối
 echo "\n=== 4. Issue from non-existent batch ===\n";
 try {
     $svc->issueFromBatch($item->getId(), 1, 'NONEXISTENT', 'sale', 'ISS-BAD', 'tester');

@@ -6,6 +6,27 @@ use Accounting\Domain\Repository\TaxRateRepositoryInterface;
 
 use \Accounting\Interfaces\HTTP\CrudControllerTrait;
 
+/**
+ * MODULE: Danh mục Thuế suất (Tax Rate)
+ *
+ * Mục đích nghiệp vụ:
+ *   - CRUD thuế suất: thuế GTGT (VAT), thuế TNCN, thuế TNDN
+ *   - Quản lý các mức thuế: 0%, 5%, 8%, 10% (GTGT), các loại thuế khác
+ *   - Phân loại theo tax_type (vat, income, withholding, etc.)
+ *
+ * API endpoints:
+ *   (Sử dụng CrudControllerTrait — CRUD chuẩn)
+ *
+ * Rủi ro:
+ *   - Sai thuế suất → sai số thuế phải nộp → phạt chậm nộp
+ *   - Không cập nhật theo thay đổi chính sách thuế (Thông tư mới)
+ *   - Sai phân loại thuế → kê khai sai tờ khai thuế GTGT
+ *
+ * Tích hợp:
+ *   - ApController dùng tax_rate để tính VAT đầu vào (1331)
+ *   - ArController dùng tax_rate để tính VAT đầu ra (3331)
+ *   - Báo cáo thuế GTGT tổng hợp
+ */
 class TaxRateController
 {
     use CrudControllerTrait;

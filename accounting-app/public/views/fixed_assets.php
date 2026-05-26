@@ -1,4 +1,5 @@
 <?php
+// Màn hình: Danh mục tài sản cố định
 $title = 'Tài sản cố định';
 $activeMenu = 'fixed_assets';
 ob_start();

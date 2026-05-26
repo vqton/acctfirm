@@ -1,4 +1,9 @@
-<?php $title = 'Kiểm kê kho'; $activeMenu = 'physical_count'; ob_start(); ?>
+<?php // Màn hình: Kiểm kê hàng tồn kho thực tế
+// API: GET /api/physical-count/sessions, GET /api/items, POST /api/physical-count/adjust, POST /api/physical-count/sessions
+// Nghiệp vụ: Kiểm kê thực tế — so sánh SL hệ thống vs SL thực tế → điều chỉnh (Nợ/Có 152/156/Có 632)
+// Tuân thủ: Chênh lệch kiểm kê phải có biên bản và được duyệt trước khi điều chỉnh
+// Rủi ro: Điều chỉnh sai làm thay đổi giá vốn và BC02
+$title = 'Kiểm kê kho'; $activeMenu = 'physical_count'; ob_start(); ?>
 <div class="toolbar">
     <h5>Kiểm kê kho</h5>
     <div>

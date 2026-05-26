@@ -1,4 +1,5 @@
-<?php $title = 'Sổ chi tiết công nợ phải thu'; $activeMenu = 'ar_statement'; ob_start(); ?>
+<?php // Màn hình: Sổ chi tiết công nợ phải thu khách hàng
+$title = 'Sổ chi tiết công nợ phải thu'; $activeMenu = 'ar_statement'; ob_start(); ?>
 <div class="toolbar">
     <h5>Sổ chi tiết công nợ khách hàng</h5>
     <div><select class="form-select form-select-sm d-inline-block w-auto" id="stmtCust"><option value="">Chọn KH...</option></select>

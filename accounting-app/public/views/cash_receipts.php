@@ -1,4 +1,9 @@
-<?php header('Cache-Control: no-cache, no-store, must-revalidate'); header('Pragma: no-cache'); header('Expires: 0');
+<?php // Màn hình: Lập và quản lý phiếu thu tiền mặt
+// API: GET /api/cash/receipts, GET /api/cash/templates?type=receipt, GET /api/cash/accounts?for=receipt, POST /api/cash/receipts, GET /api/payers/search, GET /api/utils/to-words
+// Nghiệp vụ: Thu tiền mặt — Nợ 1111/Có TK đối ứng (131, 511, 338...)
+// Tuân thủ: Chỉ post vào TK con 1111 (không post vào TK tổng hợp 111)
+// Rủi ro: Chọn sai TK Có sẽ ảnh hưởng đến doanh thu/công nợ — kiểm tra loại thu trước khi ghi nhận
+header('Cache-Control: no-cache, no-store, must-revalidate'); header('Pragma: no-cache'); header('Expires: 0');
 $title = 'Phiếu thu'; $activeMenu = 'cash_receipts'; ob_start(); ?>
 <div class="toolbar">
     <h5>Phiếu thu tiền mặt <span class="stats">(TK 111)</span></h5>
@@ -43,6 +48,8 @@ $title = 'Phiếu thu'; $activeMenu = 'cash_receipts'; ob_start(); ?>
 </div></div></div>
 
 <script>
+// Tải danh sách phiếu thu — GET /api/cash/receipts
+// Hiển thị thông tin: số CT, người nộp, diễn giải, số tiền, TK Có, ngày, trạng thái
 function loadData(){
     $.ajax({url:'/api/cash/receipts',headers:{'X-CSRF-Token':csrf},success:function(data){
         var tbody=$('#dataBody'); tbody.empty();
@@ -65,6 +72,9 @@ function loadTemplates(){
         $('#loadStatus').text('OK: '+l.length+' tài khoản').css('color','');
     }).fail(function(x){$('#creditAccount').html('<option>Lỗi: '+x.status+'</option>');$('#loadStatus').text('LỖI: '+x.status).css('color','red');});
 }
+// Khi chọn loại thu — tự động điền TK Có mặc định và hiển thị VAT nếu có
+// Nghiệp vụ: Nếu loại thu có VAT (ví dụ thu tiền bán hàng), hiển thị trường VAT
+// Công thức: Tiền chưa thuế = Tổng / (1 + VAT%), Tiền VAT = Tổng - Tiền chưa thuế
 $('#receiptType').on('change',function(){
     var opt=$(this).find(':selected');
     var hasVat=opt.data('vat')===true;
@@ -84,7 +94,9 @@ $('#amount').on('input',function(){
     var v=parseFloat($(this).val())||0;
     if(v>0){$.get('/api/utils/to-words?amount='+v,function(d){$('#amountWords').text('Bằng chữ: '+d.words);});}else{$('#amountWords').text('');}
 });
-// Payer search
+// Tra cứu người nộp tiền — GET /api/payers/search?q=...
+// Tìm kiếm trong 3 loại đối tượng: khách hàng (customer), nhà cung cấp (supplier), nhân viên (employee)
+// Debounce 300ms — tránh gọi API liên tục khi người dùng gõ
 var searchTimer;
 $('#payerSearch').on('input',function(){
     clearTimeout(searchTimer);
@@ -102,6 +114,7 @@ $('#payerSearch').on('input',function(){
         });
     },300);
 });
+// Chọn đối tượng từ kết quả tìm kiếm — lưu ID và type vào hidden field
 $(document).on('click','.payer-item',function(){
     $('#payerSearch').val($(this).data('name'));
     $('#payerId').val($(this).data('id'));
@@ -109,7 +122,10 @@ $(document).on('click','.payer-item',function(){
     $('#payerResults').hide();
 });
 $(document).on('click',function(e){if(!$(e.target).closest('#payerSearch,#payerResults').length)$('#payerResults').hide();});
-// Submit
+// Submit tạo phiếu thu — POST /api/cash/receipts
+// Nghiệp vụ: Nợ 1111/Có credit_account_code (ví dụ 131, 511, 3388)
+// Nếu có VAT: ghi nhận thêm Nợ 1331/Có 33311 (thuế GTGT đầu ra)
+// RỦI RO: Nếu không nhập đúng payer_type, công nợ chi tiết sẽ không được cập nhật
 $('#receiptForm').submit(function(e){e.preventDefault();
     var data={
         amount: parseFloat($('#amount').val()),

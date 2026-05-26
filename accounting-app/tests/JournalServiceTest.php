@@ -61,7 +61,15 @@ if (!$cash || !$revenue) {
     exit(1);
 }
 
+// Nghiệp vụ: Hạch toán bút toán đơn giản Dr tiền mặt (111) / Cr doanh thu (511)
+// Nếu test fail → cơ chế post journal bị hỏng, không ghi nhận được bất kỳ nghiệp vụ nào
+// Giả định: TK 111 và 511 đã tồn tại trong COA
 echo "\n=== Test 1: Post simple Dr/Cr journal entry ===\n";
+
+// Capture starting balances to handle parallel runs
+$cashStart = $accountRepo->findByCode('111')->getBalance();
+$revStart = $accountRepo->findByCode('511')->getBalance();
+
 $txn = $svc->postEntry('Test sale', 'REF-001', [
     ['account_code' => '111', 'amount' => 1000000, 'is_debit' => true],
     ['account_code' => '511', 'amount' => 1000000, 'is_debit' => false],
@@ -73,9 +81,12 @@ assertEq('posted', $txn->getStatus(), 'Transaction status is "posted"');
 $cashBalance = $accountRepo->findByCode('111')->getBalance();
 $revBalance = $accountRepo->findByCode('511')->getBalance();
 
-assertEq(1000000, $cashBalance, 'Cash (asset) increased by 1,000,000 on debit');
-assertEq(1000000, $revBalance, 'Revenue increased by 1,000,000 on credit');
+assertEq($cashStart + 1000000, $cashBalance, 'Cash (asset) increased by 1,000,000 on debit');
+assertEq($revStart + 1000000, $revBalance, 'Revenue increased by 1,000,000 on credit');
 
+// Nghiệp vụ: Hạch toán chi phí — Dr 641 (chi phí bán hàng) / Cr 112 (ngân hàng)
+// Nếu fail → không ghi nhận được chi phí qua ngân hàng, sai BC02
+// Giả định: TK 641, 112 tồn tại
 echo "\n=== Test 2: Post Dr Expense — Cr Bank ===\n";
 $txn2 = $svc->postEntry('Test expense', 'REF-002', [
     ['account_code' => '641', 'amount' => 500000, 'is_debit' => true],
@@ -87,6 +98,8 @@ $bankBalance = $accountRepo->findByCode('112')->getBalance();
 assertEq(-500000, $bankBalance, 'Bank (asset) decreased by 500,000 on credit');
 assertEq('posted', $txn2->getStatus(), 'Expense entry posted');
 
+// Ràng buộc kế toán: tổng Dr ≠ tổng Cr → throw InvalidArgumentException
+// Nếu fail → bút toán lệch được chấp nhận → bảng cân đối kế toán sai
 echo "\n=== Test 3: Unbalanced entry must be rejected ===\n";
 try {
     $svc->postEntry('Bad entry', 'REF-003', [
@@ -99,6 +112,8 @@ try {
     assertTrue(true, 'Unbalanced entry rejected with InvalidArgumentException');
 }
 
+// Ràng buộc: Số tiền không thể = 0 → vô nghĩa trong hạch toán
+// Nếu fail → bút toán 0đ được ghi nhận → sai lệch dữ liệu
 echo "\n=== Test 4: Zero-amount line must be rejected ===\n";
 try {
     $svc->postEntry('Zero entry', 'REF-004', [
@@ -111,6 +126,8 @@ try {
     assertTrue(true, 'Zero-amount entry rejected');
 }
 
+// Ràng buộc: Bút toán phải có ít nhất 2 dòng (1 Dr + 1 Cr)
+// Nếu fail → bút toán 1 dòng làm mất cân đối hệ thống
 echo "\n=== Test 5: Single-line entry must be rejected ===\n";
 try {
     $svc->postEntry('Single line', 'REF-005', [
@@ -122,6 +139,8 @@ try {
     assertTrue(true, 'Single-line entry rejected');
 }
 
+// Ràng buộc: Mã tài khoản không tồn tại trong COA → rejected
+// Nếu fail → bút toán vào TK không hợp lệ → sai báo cáo tài chính
 echo "\n=== Test 6: Non-existent account must be rejected ===\n";
 try {
     $svc->postEntry('Bad account', 'REF-006', [
@@ -134,7 +153,9 @@ try {
     assertTrue(true, 'Non-existent account rejected');
 }
 
-// Verify transaction has audit trail
+// Kiểm tra: Bút toán đã post được persist đầy đủ — immutable
+// Nếu fail → mất dữ liệu hoặc audit trail không tin cậy
+// Giả định: TransactionRepository::findById hoạt động
 echo "\n=== Test 7: Posted entry is immutable ===\n";
 $saved = $txnRepo->findById($txn->getId());
 assertTrue($saved !== null, 'Transaction persisted');

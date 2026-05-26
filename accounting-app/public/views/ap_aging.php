@@ -1,4 +1,8 @@
-<?php $title = 'Phân tích tuổi nợ'; $activeMenu = 'ap_aging'; ob_start(); ?>
+<?php // Màn hình: Phân tích tuổi nợ phải trả nhà cung cấp
+// API: GET /api/ap/aging
+// Nghiệp vụ: Phân tích công nợ 331 theo thời gian quá hạn: current, 1-30, 31-60, 61-90, 90+ ngày
+// Mục đích: Quản lý dòng tiền, ưu tiên thanh toán các khoản gần quá hạn
+$title = 'Phân tích tuổi nợ'; $activeMenu = 'ap_aging'; ob_start(); ?>
 <div class="toolbar">
     <h5>Phân tích tuổi nợ phải trả <span class="stats">(Aging)</span></h5>
     <div><button class="btn btn-outline-primary btn-sm" onclick="loadData()"><i class="bi bi-arrow-clockwise"></i> Làm mới</button></div>

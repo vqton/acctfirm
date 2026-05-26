@@ -1,4 +1,8 @@
-<?php $title = 'Giấy báo Có'; $activeMenu = 'bank_credit'; ob_start(); ?>
+<?php // Màn hình: Ghi nhận giấy báo Có từ ngân hàng (TK 112)
+// API: GET /api/bank-transactions, GET /api/cash/templates?type=receipt, GET /api/cash/accounts?for=receipt, POST /api/bank/receipt, POST /api/bank/interest
+// Nghiệp vụ: Thu tiền qua ngân hàng — Nợ 1121/Có TK đối ứng; hoặc ghi nhận lãi NH — Nợ 1121/Có 515
+// Tuân thủ: Chỉ post vào TK con 1121; lãi NH hạch toán vào doanh thu HĐTC (TK 515)
+$title = 'Giấy báo Có'; $activeMenu = 'bank_credit'; ob_start(); ?>
 <div class="toolbar">
     <h5>Giấy báo Có ngân hàng <span class="stats">(TK 112)</span></h5>
     <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#creditModal"><i class="bi bi-plus-lg"></i> Báo Có</button>
@@ -33,6 +37,8 @@
 </div></div></div>
 
 <script>
+// Tải danh sách giao dịch ngân hàng — GET /api/bank-transactions
+// Phân loại: bank_receipt (thu qua NH), interest (lãi NH), charge (phí NH)
 function loadData(){
     $.get('/api/bank-transactions',function(data){
         var tbody=$('#dataBody'); tbody.empty();
@@ -63,12 +69,17 @@ function calcVAT(){
     else{$('#vatAmount').val(0);$('#netAmount').val(total);}
 }
 $('#amount,#vatRate').on('input',function(){if($('#vatRateGroup').is(':visible'))calcVAT();});
+// Submit ghi nhận báo Có — POST /api/bank/receipt
+// Nghiệp vụ: Nợ 1121/Có credit_account_code (ví dụ 131, 511, 3388)
+// Nếu có VAT: Nợ 1331/Có 33311 (thuế GTGT)
 $('#creditForm').submit(function(e){e.preventDefault();
     $.ajax({url:'/api/bank/receipt',method:'POST',contentType:'application/json',headers:{'X-CSRF-Token':csrf},data:JSON.stringify({amount:parseFloat($('#amount').val()),credit_account_code:$('#creditAccount').val(),description:$('#description').val(),vat_amount:$('#vatRateGroup').is(':visible')?parseInt($('#vatAmount').val())||0:0,vat_rate:$('#vatRateGroup').is(':visible')?parseInt($('#vatRate').val())||0:0,}),
         success:function(){$('#creditModal').modal('hide');$('#creditForm')[0].reset();showToast('Ghi nhận báo Có thành công','success');loadData();},
         error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}
     });
 });
+// Submit ghi nhận lãi ngân hàng — POST /api/bank/interest
+// Nghiệp vụ: Nợ 1121/Có 515 (Doanh thu hoạt động tài chính)
 $('#interestForm').submit(function(e){e.preventDefault();
     $.ajax({url:'/api/bank/interest',method:'POST',contentType:'application/json',headers:{'X-CSRF-Token':csrf},data:JSON.stringify({amount:parseFloat($('#intAmount').val()),description:$('#intDescription').val()}),
         success:function(){$('#interestModal').modal('hide');$('#interestForm')[0].reset();showToast('Ghi nhận lãi NH thành công','success');loadData();},

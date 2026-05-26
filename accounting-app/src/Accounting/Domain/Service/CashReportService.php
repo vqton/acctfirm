@@ -3,6 +3,18 @@ namespace Accounting\Domain\Service;
 
 use Accounting\Domain\Repository\AccountRepositoryInterface;
 
+// Dịch vụ báo cáo tiền mặt và tiền gửi ngân hàng
+//
+// Nghiệp vụ: Cung cấp các báo cáo phục vụ quản lý dòng tiền cho Ban Giám đốc
+// và Kế toán trưởng, bao gồm:
+//   - getCashPosition: Tổng quan số dư tiền mặt (111), tiền gửi (112), tiền đang chuyển (113)
+//   - getBankLedger: Sổ chi tiết tài khoản ngân hàng theo ngày
+//   - getDailyCashFlow: Báo cáo thu/chi theo ngày phục vụ quản lý dòng tiền
+//   - getCashConcentration: Cơ cấu phân bổ tiền giữa các tài khoản ngân hàng
+//   - getKPIs: Các chỉ số quản lý tiền (số dư, thu/chi hôm nay, đối chiếu tồn đọng)
+//
+// Ảnh hưởng: Báo cáo này ảnh hưởng trực tiếp đến quyết định của Ban Giám đốc
+// về đầu tư ngắn hạn, vay vốn lưu động, và quản trị rủi ro thanh khoản.
 class CashReportService
 {
     private \PDO $pdo;
@@ -14,6 +26,22 @@ class CashReportService
         $this->accountRepo = $accountRepo;
     }
 
+    // Báo cáo tổng quan vị thế tiền mặt tại thời điểm hiện tại
+    //
+    // Output: { cash_balance, bank_balance, transit_balance, total, bank_accounts[] }
+    //
+    // Nghiệp vụ:
+    //   - cash_balance: TK 111 (Tiền mặt) — số dư quỹ tiền mặt
+    //   - bank_balance: TK 112 (Tiền gửi NH) — tổng số dư tất cả TK ngân hàng
+    //   - transit_balance: TK 113 (Tiền đang chuyển) — tiền chưa về tài khoản
+    //   - bank_accounts: Chi tiết từng tài khoản ngân hàng (1121, 1122...)
+    //
+    // Ảnh hưởng BC01: Chỉ tiêu 111 (Tiền) — phải khớp với số liệu BC01
+    // Ảnh hưởNG QUẢN TRỊ: Quyết định vay/vốn lưu động dựa trên số dư này
+    //
+    // GIỚI HẠN: Số dư là REAL-TIME (từ AccountRepository::getBalance)
+    //   Không bao gồm giao dịch chưa ghi nhận (cut-off time)
+    //   Không bao gồm dự báo dòng tiền
     public function getCashPosition(): array
     {
         $cash = $this->accountRepo->findByCode('111');
@@ -38,6 +66,27 @@ class CashReportService
         ];
     }
 
+    // Sổ chi tiết tài khoản ngân hàng (Bank Ledger)
+    //
+    // Input: fromDate, toDate, bankAccount (mặc định 112)
+    // Output: Mảng giao dịch với running_balance (số dư lũy kế)
+    //
+    // Quy trình:
+    //   1. Lấy account theo bankAccount code (hỗ trợ TK con: 1121, 1122...)
+    //   2. Query ledger_entries JOIN transactions + accounts
+    //   3. Tính running_balance: receipt (+) / payment (-)
+    //
+    // KHÔNG DÙNG prepared statement cho WHERE clause động
+    //   → String concatenation (nhưng có (int) cast cho account_id)
+    //   → date params dùng quote() — an toàn nhưng không phải prepared statement
+    //
+    // RỦI RO TRÌNH TỰ:
+    //   running_balance tính từ giao dịch đầu tiên trong kết quả
+    //   Nếu fromDate không phải là ngày đầu kỳ → số dư đầu không chính xác
+    //   Cần lấy số dư đầu kỳ (opening balance) trước khi tính running
+    //
+    // RỦI RO DỮ LIỆU LỚN: Nếu khoảng thời gian dài → nhiều giao dịch
+    //   → PHP memory issue với mảng lớn
     public function getBankLedger(string $fromDate = null, string $toDate = null, string $bankAccount = '112'): array
     {
         $bank = $this->accountRepo->findByCode($bankAccount);
@@ -68,6 +117,26 @@ class CashReportService
         return $rows;
     }
 
+    // Báo cáo dòng tiền thu/chi theo ngày
+    //
+    // Input: fromDate, toDate
+    // Output: Mảng { date, receipts, payments, transaction_count }
+    //
+    // Nghiệp vụ:
+    //   - receipts: Tổng Nợ TK 111/112 (tiền vào)
+    //   - payments: Tổng Có TK 111/112 (tiền ra)
+    //   - transaction_count: Số lượng giao dịch trong ngày
+    //
+    // Ảnh hưởng QUẢN TRỊ:
+    //   - Ban Giám đốc dùng báo cáo này để đánh giá dòng tiền hàng ngày
+    //   - Phát hiện biến động bất thường (thu/chi đột biến)
+    //   - Hỗ trợ quyết định vay ngắn hạn hoặc đầu tư tạm thời
+    //
+    // KHÔNG phải BC03 (Báo cáo LCTT) — chỉ là báo cáo quản trị nội bộ
+    // BC03 phân loại theo hoạt động (KD/ĐT/TC), không theo ngày
+    //
+    // GIỚI HẠN: Chỉ tính trên TK 111 và 112 (tiền mặt và tiền gửi)
+    //   Không bao gồm TK 113 (tiền đang chuyển) — tiền chưa thực sự về
     public function getDailyCashFlow(string $fromDate, string $toDate): array
     {
         $stmt = $this->pdo->prepare(
@@ -106,6 +175,28 @@ class CashReportService
         return ['accounts' => $rows, 'total' => $total];
     }
 
+    // Dashboard KPIs cho quản lý tiền mặt
+    //
+    // Output: {
+    //   cash_balance, bank_balance, total_cash_bank,    — số dư hiện tại
+    //   today_receipts, today_payments,                  — giao dịch hôm nay
+    //   pending_recon_count,                             — phiên đối chiếu chưa hoàn tất
+    //   trend                                            — dòng tiền 7 ngày
+    // }
+    //
+    // Nghiệp vụ:
+    //   - pending_recon_count > 0 → cảnh báo: có phiên đối chiếu NH chưa hoàn tất
+    //   - today_receipts/payments → biết ngay dòng tiền hôm nay
+    //   - trend (7 ngày) → xu hướng tăng/giảm
+    //
+    // RỦI RO QUYẾT ĐỊNH SAI:
+    //   Nếu pending_recon_count sai (do không tạo phiên đối chiếu)
+    //   → lãnh đạo nghĩ rằng mọi thứ đã được đối chiếu
+    //   → thực tế có thể có sai lệch NH chưa phát hiện
+    //
+    // LƯU Ý: cash, bank variables ở đầu method chỉ dùng để tính số dư
+    //   Thực tế dùng pos array từ getCashPosition() cho hầu hết dữ liệu
+    //   → cash và bank có vẻ là dead code (dư thừa)
     public function getKPIs(): array
     {
         $cash = $this->accountRepo->findByCode('111');

@@ -1,4 +1,5 @@
-<?php $title = 'Kiểm kê định kỳ'; $activeMenu = 'periodic'; ob_start(); ?>
+<?php // Màn hình: Tính giá xuất kho theo phương pháp định kỳ
+$title = 'Kiểm kê định kỳ'; $activeMenu = 'periodic'; ob_start(); ?>
 <div class="toolbar">
     <h5>Tính giá xuất kho (Định kỳ)</h5>
     <div>

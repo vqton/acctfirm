@@ -1,4 +1,8 @@
-<?php $title = 'Bảng cân đối số phát sinh'; $activeMenu = 'trial_balance'; ob_start(); ?>
+<?php // Màn hình: Bảng cân đối số phát sinh tài khoản
+// API: GET /api/trial-balance
+// Nghiệp vụ: Hiển thị tổng Nợ và tổng Có của tất cả tài khoản — kiểm tra Dr=Cr toàn hệ thống
+// Tuân thủ: Tổng Nợ phải = Tổng Có — nếu không, hệ thống mất cân đối nghiêm trọng
+$title = 'Bảng cân đối số phát sinh'; $activeMenu = 'trial_balance'; ob_start(); ?>
 <div class="toolbar">
     <h5>Bảng cân đối số phát sinh</h5>
     <button class="btn btn-outline-primary btn-sm" onclick="loadData()"><i class="bi bi-arrow-clockwise"></i> Làm mới</button>
@@ -10,6 +14,9 @@
 </table></div>
 
 <script>
+// Tải bảng CĐPS — GET /api/trial-balance
+// Kiểm tra nguyên tắc kế toán cơ bản: Tổng số dư Nợ = Tổng số dư Có
+// Nếu mất cân đối → hiển thị cảnh báo đỏ — cần kiểm tra ngay
 function loadData(){
     $.get('/api/trial-balance',function(d){
         var tbody=$('#dataBody');tbody.empty();

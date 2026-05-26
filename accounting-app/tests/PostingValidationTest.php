@@ -1,4 +1,5 @@
 <?php
+// Test: Validation hạch toán — Dr = Cr, control account, posting rules
 spl_autoload_register(function ($class) {
     $prefix = 'Accounting\\';
     $baseDir = __DIR__ . '/../src/Accounting/';
@@ -38,6 +39,9 @@ $txn = $svc->postEntry('Test entry', 'T1', [
 ], 'tester');
 assertEq('posted', $txn->getStatus(), 'Non-control entry posted');
 
+// Ràng buộc kế toán: Không được post vào TK tổng hợp (control account)
+// TK 128, 133 có is_control = 1 → throw InvalidArgumentException
+// Nếu fail → có thể post vào TK tổng hợp → sai số dư chi tiết, sai BC01
 echo "\n=== Test 2: Post to control account (rejected) ===\n";
 try {
     $svc->postEntry('Control entry', 'T2', [
@@ -50,6 +54,9 @@ try {
     assertTrue(str_contains($e->getMessage(), 'control account'), 'Control account rejected with correct message');
 }
 
+// Nghiệp vụ: Post vào TK tổng hợp với override ($allowControl = true)
+// Chỉ kế toán trưởng mới được dùng — exception cho trường hợp đặc biệt
+// Nếu fail → không thể thực hiện bút toán đặc biệt cần thiết
 echo "\n=== Test 3: Post to control account with override (allowed) ===\n";
 $txn3 = $svc->postEntry('Override entry', 'T3', [
     ['account_code' => '128', 'amount' => 50000, 'is_debit' => true],
@@ -57,6 +64,9 @@ $txn3 = $svc->postEntry('Override entry', 'T3', [
 ], 'chief_accountant', true);
 assertEq('posted', $txn3->getStatus(), 'Override entry posted');
 
+// Nghiệp vụ: Post vào TK chi tiết (1281) — không phải control → cho phép
+// TK con phải được cập nhật số dư
+// Nếu fail → không thể hạch toán vào TK chi tiết
 echo "\n=== Test 4: Post to sub-account (allowed, not control) ===\n";
 $txn4 = $svc->postEntry('Sub-account entry', 'T4', [
     ['account_code' => '1281', 'amount' => 30000, 'is_debit' => true],

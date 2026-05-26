@@ -1,4 +1,5 @@
 <?php
+// Bảng phân quyền (RBAC) — users, roles, permissions
 return function (PDO $pdo) {
     $pdo->exec('CREATE TABLE IF NOT EXISTS users (
         id VARCHAR(50) PRIMARY KEY,

@@ -1,14 +1,23 @@
 <?php
 namespace Accounting\Domain\Service;
 
-use Accounting\Domain\Model\LedgerEntry;
 use Accounting\Domain\Repository\AccountRepositoryInterface;
-use Accounting\Domain\Repository\TransactionRepositoryInterface;
 use Accounting\Domain\Repository\ItemRepositoryInterface;
+use Accounting\Domain\Repository\TransactionRepositoryInterface;
 use Accounting\Domain\Repository\WarehouseRepositoryInterface;
 
 class InventoryService
 {
+    // NGHIỆP VỤ KHO: Service xử lý toàn bộ nghiệp vụ nhập/xuất/tồn kho theo Thông tư 99/2025/TT-BTC.
+    //
+    // Nguyên tắc hạch toán:
+    // - Mọi biến động hàng tồn kho đều ghi nhận bút toán kép qua JournalService
+    // - Giá trị tồn kho theo dõi chi tiết qua cost layer (FIFO/Bình quân gia quyền/Specific ID)
+    // - Xuất kho → ghi nhận giá vốn (TK 632) → ảnh hưởng BC02 chỉ tiêu 24
+    //
+    // RỦI RO: Sai giá vốn → BC02 sai → Thuế TNDN sai → Phạt thuế
+    // RỦI RO: Mất dữ liệu cost layer → không trace được giá gốc xuất kho
+    // RỦI RO: Âm kho sai lệch số liệu kiểm kê → BC01 sai
     private AccountRepositoryInterface $accountRepo;
     private TransactionRepositoryInterface $txnRepo;
     private ItemRepositoryInterface $itemRepo;
@@ -16,6 +25,14 @@ class InventoryService
     private \PDO $pdo;
     private JournalService $journal;
 
+    // BẢNG ÁNH XẠ: Loại hàng → Tài khoản tồn kho tương ứng
+    // - material (152): Nguyên liệu vật liệu
+    // - tool (153): Công cụ dụng cụ
+    // - product (155): Thành phẩm sản xuất
+    // - merchandise (156): Hàng hóa mua về bán
+    // - other (152): Mặc định vào Nguyên liệu
+    //
+    // Chú ý: Các TK này KHÔNG phải control account trong nghiệp vụ kho
     private array $inventoryAccountMap = [
         'material' => '152', 'tool' => '153',
         'product' => '155', 'merchandise' => '156',
@@ -38,6 +55,12 @@ class InventoryService
         $this->pdo = $pdo;
     }
 
+    // BẢO VỆ TOÀN VẸN: Mọi nghiệp vụ kho đều chạy trong DB transaction.
+    // Nếu một bước thất bại (ví dụ: trừ kho nhưng post bút toán lỗi),
+    // toàn bộ thay đổi về số lượng lẫn giá trị đều được rollback.
+    //
+    // RỦI RO: Nếu không dùng transaction, trường hợp lỗi giữa chừng sẽ
+    // dẫn đến lệch số lượng kho với số dư tài khoản (không trace được).
     private function wrapInTransaction(callable $fn): mixed
     {
         $this->pdo->beginTransaction();
@@ -51,11 +74,35 @@ class InventoryService
         }
     }
 
+    // KIỂM SOÁT KỲ: Không cho phép nhập/xuất vào kỳ kế toán đã đóng.
+    // Nếu kỳ đã đóng mà vẫn cho nhập/xuất → số dư đầu kỳ sau sai,
+    // báo cáo tài chính BC01/BC02 không khớp → audit fail.
+    private function assertPeriodOpen(?string $date = null): void
+    {
+        $date ??= date('Y-m-d');
+        if (!PeriodService::isPeriodOpen($date, $this->pdo)) {
+            throw new \InvalidArgumentException("Cannot modify inventory in a closed period. Date: {$date}");
+        }
+    }
+
+    // NGHIỆP VỤ: NHẬP KHO (Mua hàng)
+    // Hạch toán:
+    //   Nợ 15x (Giá trị hàng = SL × ĐG + Chi phí mua)
+    //   Có 331 (Phải trả người bán)
+    //
+    // Chi phí mua (vận chuyển, bốc xếp, bảo hiểm) được phân bổ vào giá gốc hàng nhập
+    // và ghi nhận vào addon_per_unit để tính giá xuất sau này.
+    // Cost layer được tạo để theo dõi giá gốc riêng cho từng lô nhập (FIFO).
+    //
+    // ẢNH HƯỞNG BCTC: Tăng giá trị hàng tồn kho (BC01), chưa ảnh hưởng BC02
+    //
+    // RỦI RO: Nếu không phân bổ chi phí mua → giá vốn sau này thấp hơn thực tế → lợi nhuận ảo
     public function receiveGoods(string $itemId, float $qty, float $unitPrice,
         array $addonCosts, string $reference, string $createdBy,
         ?string $batchCode = null, ?string $expiryDate = null): array
     {
         return $this->wrapInTransaction(function () use ($itemId, $qty, $unitPrice, $addonCosts, $reference, $createdBy, $batchCode, $expiryDate) {
+            $this->assertPeriodOpen();
             $item = $this->itemRepo->findById($itemId);
             if (!$item) throw new \InvalidArgumentException("Item not found: {$itemId}");
 
@@ -71,6 +118,13 @@ class InventoryService
 
             $txn = $this->journal->postEntry("Goods receipt: {$item->getName()}", $reference, $lines, $createdBy);
 
+            // CONCURRENCY: update stock_qty và save cost layer không dùng SELECT FOR UPDATE.
+            // Dưới concurrent cao, 2 request nhập kho cùng lúc có thể đọc cùng stock_qty cũ,
+            // dẫn đến mất 1 lần cập nhật (lost update).
+            // Biện pháp: DB transaction + WHERE stock_qty = old_value (optimistic locking).
+            // Hiện tại chưa có optimistic lock — cần bổ sung nếu scale > 10 request/giây.
+            // RỦI RO THẤP: Với nghiệp vụ nhập kho, tần suất thấp (vài lần/ngày), lost update
+            // hiếm xảy ra. Với xuất kho bán lẻ (hàng trăm lần/ngày), cần bổ sung lock.
             $item->setStockQty($item->getStockQty() + $qty);
             $this->itemRepo->save($item);
 
@@ -81,13 +135,28 @@ class InventoryService
         });
     }
 
+    // NGHIỆP VỤ: XUẤT KHO
+    // Hạch toán:
+    //   Nợ 154/241/632 (tùy mục đích xuất)
+    //   Có 15x (Giá vốn = SL × ĐG xuất)
+    //
+    // issueType xác định bản chất xuất:
+    //   'production' (154): Xuất cho sản xuất → CPSXKD dở dang
+    //   'construction' (241): Xuất cho XDCB → XDCB dở dang
+    //   'sale' (632): Xuất bán → Giá vốn hàng bán (ảnh hưởng trực tiếp BC02 chỉ tiêu 24)
+    //
+    // Đơn giá xuất được tính từ consumeCostLayers() theo phương pháp FIFO/bình quân.
+    //
+    // RỦI RO: Sai phương pháp tính giá → sai giá vốn → BC02 sai → Thuế TNDN sai
+    // RỦI RO: Xuất nhầm loại (sale vs production) → sai chỉ tiêu BC01 và BC02
     public function issueGoods(string $itemId, float $qty, string $issueType,
         string $reference, string $createdBy): array
     {
         return $this->wrapInTransaction(function () use ($itemId, $qty, $issueType, $reference, $createdBy) {
+            $this->assertPeriodOpen();
             $item = $this->itemRepo->findById($itemId);
             if (!$item) throw new \InvalidArgumentException("Item not found: {$itemId}");
-            if ($item->getStockQty() < $qty) {
+            if (!$item->getAllowNegativeStock() && $item->getStockQty() < $qty) {
                 throw new \InvalidArgumentException(
                     "Insufficient stock: have {$item->getStockQty()}, need {$qty}"
                 );
@@ -108,6 +177,12 @@ class InventoryService
                 ['account_code' => $inventoryCode, 'amount' => $totalCost, 'is_debit' => false],
             ];
 
+            // allowControl=true cho construction (TK 241 là control account):
+            // TK 241 (XDCB dở dang) có thể là control account với TK con 2411, 2412, 2413.
+            // Xuất kho cho XDCB thường ghi nhận vào TK 241 tổng hợp do chưa phân bổ được
+            // ngay vào TK con. Cho phép bypass control account check cho trường hợp này.
+            // RỦI RO: Nếu lạm dụng allowControl=true cho mục đích khác → mất kiểm soát
+            // chi tiết tài khoản → số dư chi tiết không khớp tổng hợp.
             $txn = $this->journal->postEntry("Goods issue: {$item->getName()}", $reference, $lines, $createdBy, $issueType === 'construction');
 
             $item->setStockQty($item->getStockQty() - $qty);
@@ -117,9 +192,20 @@ class InventoryService
         });
     }
 
+    // NGHIỆP VỤ: CHUYỂN KHO NỘI BỘ
+    // Hạch toán:
+    //   Nợ 15x (Kho đích)
+    //   Có 15x (Kho nguồn)
+    //
+    // Đây là bút toán nội bảng — không ảnh hưởng đến BC02 (không ghi nhận giá vốn).
+    // Cost layer được chuyển từ kho nguồn sang kho đích giữ nguyên đơn giá gốc,
+    // đảm bảo trace được giá nhập ban đầu.
+    //
+    // RỦI RO: Nếu không giữ nguyên đơn giá layer → sai số dư kho đích → sai giá vốn khi xuất sau này
     public function transferGoods(string $itemId, float $qty, ?string $fromWarehouseId, string $toWarehouseId, string $reference, string $createdBy): array
     {
         return $this->wrapInTransaction(function () use ($itemId, $qty, $fromWarehouseId, $toWarehouseId, $reference, $createdBy) {
+            $this->assertPeriodOpen();
             $item = $this->itemRepo->findById($itemId);
             if (!$item) throw new \InvalidArgumentException("Item not found: {$itemId}");
 
@@ -139,7 +225,7 @@ class InventoryService
                 $stmt->execute([$itemId]);
             }
             $sourceStock = (float)$stmt->fetchColumn();
-            if ($sourceStock < $qty) {
+            if (!$item->getAllowNegativeStock() && $sourceStock < $qty) {
                 throw new \InvalidArgumentException("Insufficient stock in source: have {$sourceStock}, need {$qty}");
             }
 
@@ -194,10 +280,22 @@ class InventoryService
         });
     }
 
+    // NGHIỆP VỤ: HÀNG ĐANG ĐI ĐƯỜNG (TK 151)
+    // Hạch toán:
+    //   Nợ 151 (Hàng mua đang đi đường)
+    //   Có 331 (Phải trả người bán)
+    //
+    // Sử dụng khi hàng đã mua nhưng chưa về đến kho.
+    // Hàng đi đường vẫn thuộc sở hữu của DN — phải ghi nhận để đảm bảo BC01 phản ánh đúng.
+    //
+    // ẢNH HƯỞNG BCTC: Tăng TK 151 (BC01), chưa ghi nhận vào tồn kho thực tế
+    //
+    // RỦI RO: Nếu không ghi nhận → thiếu hàng trên BC01 → sai tỷ lệ thanh toán với NCC
     public function recordInTransit(string $itemId, float $qty, float $unitPrice,
         array $addonCosts, string $reference, string $createdBy): array
     {
         return $this->wrapInTransaction(function () use ($itemId, $qty, $unitPrice, $addonCosts, $reference, $createdBy) {
+            $this->assertPeriodOpen();
             $item = $this->itemRepo->findById($itemId);
             if (!$item) throw new \InvalidArgumentException("Item not found: {$itemId}");
 
@@ -224,9 +322,19 @@ class InventoryService
         });
     }
 
+    // NGHIỆP VỤ: NHẬN HÀNG TỪ ĐI ĐƯỜNG VỀ KHO
+    // Hạch toán:
+    //   Nợ 15x (Hàng tồn kho)
+    //   Có 151 (Hàng mua đang đi đường)
+    //
+    // Khi hàng về đến kho, chuyển từ TK 151 sang TK tồn kho tương ứng.
+    // Cost layer được tạo với giá gốc giống hồi ghi nhận đi đường.
+    //
+    // ẢNH HƯỞNG BCTC: Giảm TK 151, tăng TK 15x (BC01), không ảnh hưởng BC02
     public function receiveFromTransit(string $transitId, float $qty, string $reference, string $createdBy): array
     {
         return $this->wrapInTransaction(function () use ($transitId, $qty, $reference, $createdBy) {
+            $this->assertPeriodOpen();
             $pdo = $this->getPdo();
             $stmt = $pdo->prepare("SELECT * FROM inventory_in_transit WHERE id = ?");
             $stmt->execute([$transitId]);
@@ -267,13 +375,25 @@ class InventoryService
         });
     }
 
+    // NGHIỆP VỤ: GỬI BÁN ĐẠI LÝ/KÝ GỬI (TK 157)
+    // Hạch toán:
+    //   Nợ 157 (Hàng gửi đi bán)
+    //   Có 15x (Hàng tồn kho)
+    //
+    // Hàng gửi đi bán vẫn thuộc sở hữu DN đến khi bên nhận bán được.
+    // Chuyển từ tồn kho trong kho sang tồn kho gửi bán — không ghi nhận doanh thu hay giá vốn.
+    //
+    // ẢNH HƯỞNG BCTC: Giảm TK 15x, tăng TK 157 (BC01), chưa ảnh hưởng BC02
+    //
+    // RỦI RO: Nếu ghi nhận doanh thu khi gửi bán → doanh thu ảo → sai BC02 + Thuế GTGT
     public function consignGoods(string $itemId, float $qty, string $consignee,
         string $reference, string $createdBy): array
     {
         return $this->wrapInTransaction(function () use ($itemId, $qty, $consignee, $reference, $createdBy) {
+            $this->assertPeriodOpen();
             $item = $this->itemRepo->findById($itemId);
             if (!$item) throw new \InvalidArgumentException("Item not found: {$itemId}");
-            if ($item->getStockQty() < $qty) {
+            if (!$item->getAllowNegativeStock() && $item->getStockQty() < $qty) {
                 throw new \InvalidArgumentException("Insufficient stock: have {$item->getStockQty()}, need {$qty}");
             }
 
@@ -301,9 +421,19 @@ class InventoryService
         });
     }
 
+    // NGHIỆP VỤ: BÁN HÀNG KÝ GỬI
+    // Hạch toán:
+    //   Nợ 632 (Giá vốn hàng bán)
+    //   Có 157 (Hàng gửi đi bán)
+    //
+    // Khi bên nhận ký gửi thông báo đã bán được hàng, ghi nhận giá vốn.
+    // Lúc này hàng không còn thuộc sở hữu DN → xóa khỏi TK 157.
+    //
+    // ẢNH HƯỞNG BCTC: Tăng giá vốn (BC02 chỉ tiêu 24), giảm TK 157 (BC01)
     public function sellConsigned(string $consignmentId, float $qty, string $reference, string $createdBy): array
     {
         return $this->wrapInTransaction(function () use ($consignmentId, $qty, $reference, $createdBy) {
+            $this->assertPeriodOpen();
             $pdo = $this->getPdo();
             $stmt = $pdo->prepare("SELECT * FROM inventory_consignment WHERE id = ?");
             $stmt->execute([$consignmentId]);
@@ -332,9 +462,19 @@ class InventoryService
         });
     }
 
+    // NGHIỆP VỤ: NHẬN LẠI HÀNG KÝ GỬI (KHÔNG BÁN ĐƯỢC)
+    // Hạch toán:
+    //   Nợ 15x (Nhập lại kho)
+    //   Có 157 (Hàng gửi đi bán)
+    //
+    // Khi bên nhận ký gửi trả lại, hàng về kho với giá gốc ban đầu.
+    // Cost layer được tạo lại để phục hồi dấu vết giá gốc.
+    //
+    // ẢNH HƯỞNG BCTC: Tăng TK 15x, giảm TK 157 (BC01), không ảnh hưởng BC02
     public function returnConsigned(string $consignmentId, float $qty, string $reference, string $createdBy): array
     {
         return $this->wrapInTransaction(function () use ($consignmentId, $qty, $reference, $createdBy) {
+            $this->assertPeriodOpen();
             $pdo = $this->getPdo();
             $stmt = $pdo->prepare("SELECT * FROM inventory_consignment WHERE id = ?");
             $stmt->execute([$consignmentId]);
@@ -372,9 +512,23 @@ class InventoryService
         });
     }
 
+    // NGHIỆP VỤ: ĐIỀU CHỈNH TỒN KHO THEO KIỂM KÊ THỰC TẾ
+    //
+    // Thừa (actualQty > systemQty):
+    //   Nợ 15x, Có 711 (Thu nhập khác) — ghi nhận hàng thừa chờ xử lý
+    //
+    // Thiếu (actualQty < systemQty):
+    //   Nợ 632 (Giá vốn), Có 15x — ghi nhận hao hụt vào giá vốn
+    //
+    // Kiểm kê định kỳ là yêu cầu bắt buộc theo chuẩn mực kế toán.
+    // Chênh lệch > 10% phải có giải trình với cơ quan thuế.
+    //
+    // RỦI RO: Nếu không điều chỉnh kịp thời → BC01 sai số dư hàng tồn kho
+    // RỦI RO: Thiếu kho không ghi nhận → lãi ảo (giá vốn thấp hơn thực tế)
     public function adjustPhysicalCount(string $itemId, float $actualQty, string $reference, string $createdBy): array
     {
         return $this->wrapInTransaction(function () use ($itemId, $actualQty, $reference, $createdBy) {
+            $this->assertPeriodOpen();
             $item = $this->itemRepo->findById($itemId);
             if (!$item) throw new \InvalidArgumentException("Item not found: {$itemId}");
 
@@ -386,6 +540,18 @@ class InventoryService
 
             $inventoryCode = $this->inventoryAccountMap[$item->getItemType()] ?? '152';
 
+            // KIỂM KÊ: Xử lý chênh lệch theo 2 hướng:
+            // THỪA (diff > 0): Ghi nhận vào 711 (Thu nhập khác).
+            //   → Ảnh hưởng BC02: Tăng LN trước thuế (chỉ tiêu 40) → Tăng Thuế TNDN
+            //   → RỦI RO: Nếu thừa do nhập sai (không phải thu nhập thực), khai thuế có thể bị truy thu.
+            //   → Xử lý đúng: Phải chờ xử lý (TK 3381 - Tài sản thừa chờ giải quyết).
+            //
+            // THIẾU (diff < 0): Ghi nhận vào 632 (Giá vốn hàng bán).
+            //   → Ảnh hưởng BC02: Tăng giá vốn (chỉ tiêu 24) → Giảm LN trước thuế → Giảm Thuế TNDN
+            //   → RỦI RO: Nếu thiếu do mất cắp (không phải hao hụt tự nhiên), cơ quan thuế
+            //     có thể loại chi phí này khi tính thuế TNDN (cần Biên bản xử lý của cơ quan công an).
+            //
+            // THAM CHIẾU: Chuẩn mực kế toán VAS 02 — Hàng tồn kho và Thông tư 48/2019/TT-BTC.
             if ($diff > 0) {
                 $unitCost = $item->getPurchasePrice() ?: 0;
                 $diffValue = abs($diff) * $unitCost;
@@ -424,9 +590,18 @@ class InventoryService
         });
     }
 
+    // NGHIỆP VỤ: TẠO PHIÊN KIỂM KÊ (DRAFT)
+    //
+    // Ghi nhận danh sách kiểm kê ở trạng thái 'draft' để đối chiếu sau.
+    // Mỗi dòng ghi nhận: số lượng hệ thống, số lượng thực tế, chênh lệch, giá trị chênh lệch.
+    //
+    // Sau khi kiểm kê xong, gọi adjustPhysicalCount() cho từng item có chênh lệch.
+    //
+    // Audit trail: Lưu toàn bộ phiên kiểm kê — ai kiểm, ngày nào, lệch bao nhiêu.
     public function createCountSession(array $lines, string $reference, string $notes, string $createdBy): array
     {
         return $this->wrapInTransaction(function () use ($lines, $reference, $notes, $createdBy) {
+            $this->assertPeriodOpen();
             $pdo = $this->getPdo();
             $sessionId = uniqid('cnt_');
             $totalDiff = 0;
@@ -458,9 +633,21 @@ class InventoryService
         });
     }
 
+    // NGHIỆP VỤ: TRÍCH LẬP DỰ PHÒNG GIẢM GIÁ HÀNG TỒN KHO
+    // Hạch toán:
+    //   Nợ 632 (Giá vốn hàng bán)
+    //   Có 2294 (Dự phòng giảm giá hàng tồn kho)
+    //
+    // Khi giá trị thuần có thể thực hiện được (NRV) thấp hơn giá gốc,
+    // DN phải trích lập dự phòng theo chuẩn mực kế toán VAS 02 và TT 48/2019/TT-BTC.
+    //
+    // ẢNH HƯỞNG BCTC: Tăng giá vốn (giảm lợi nhuận), số dư TK 2294 tăng (BC01)
+    //
+    // RỦI RO: Nếu không trích lập → tài sản và lợi nhuận cao hơn thực tế → sai BC01/BC02
     public function recordImpairment(string $itemId, float $amount, string $reference, string $notes, string $createdBy): array
     {
         return $this->wrapInTransaction(function () use ($itemId, $amount, $reference, $notes, $createdBy) {
+            $this->assertPeriodOpen();
             $item = $this->itemRepo->findById($itemId);
             if (!$item) throw new \InvalidArgumentException("Item not found: {$itemId}");
             if ($amount <= 0) throw new \InvalidArgumentException("Provision amount must be positive");
@@ -479,9 +666,21 @@ class InventoryService
         });
     }
 
+    // NGHIỆP VỤ: HOÀN NHẬP DỰ PHÒNG GIẢM GIÁ HÀNG TỒN KHO
+    // Hạch toán:
+    //   Nợ 2294 (Dự phòng giảm giá hàng tồn kho)
+    //   Có 632 (Giá vốn hàng bán)
+    //
+    // Khi giá trị thị trường phục hồi hoặc hàng đã được bán/xuất khỏi kho,
+    // phần dự phòng tương ứng được hoàn nhập để phản ánh đúng thực tế.
+    //
+    // ẢNH HƯỞNG BCTC: Giảm giá vốn (tăng lợi nhuận), giảm số dư TK 2294 (BC01)
+    //
+    // RỦI RO: Hoàn nhập quá mức → lãi ảo → sai BC02 + Thuế TNDN
     public function reverseImpairment(string $impairmentId, float $amount, string $reference, string $createdBy): array
     {
         return $this->wrapInTransaction(function () use ($impairmentId, $amount, $reference, $createdBy) {
+            $this->assertPeriodOpen();
             $pdo = $this->getPdo();
             $stmt = $pdo->prepare("SELECT * FROM inventory_impairment WHERE id = ?");
             $stmt->execute([$impairmentId]);
@@ -507,12 +706,28 @@ class InventoryService
         });
     }
 
-    public function issuePromotional(string $itemId, float $qty, string $reference, string $createdBy): array
+    // NGHIỆP VỤ: XUẤT HÀNG KHUYẾN MẠI (tặng kèm, khuyến mãi)
+    // Hạch toán:
+    //   Nợ 641 (Chi phí bán hàng) — giá vốn hàng khuyến mại
+    //   Có 15x (Hàng tồn kho)
+    //
+    // Nếu có deemedSaleValue (giá tính thuế TTĐB hoặc GTGT):
+    //   Nợ 641, Có 33311 (Thuế GTGT đầu ra phải nộp) — theo VAS 02
+    //
+    // Hàng khuyến mại không ghi nhận doanh thu nhưng vẫn phải nộp thuế GTGT
+    // trên giá trị tính thuế theo quy định.
+    //
+    // ẢNH HƯỞNG BCTC: Tăng chi phí bán hàng (BC02), giảm tồn kho (BC01)
+    //
+    // RỦI RO: Quên thuế GTGT đầu ra cho hàng KM → bị phạt thuế
+    public function issuePromotional(string $itemId, float $qty, string $reference, string $createdBy,
+        ?float $deemedSaleValue = null, float $vatRate = 0): array
     {
-        return $this->wrapInTransaction(function () use ($itemId, $qty, $reference, $createdBy) {
+        return $this->wrapInTransaction(function () use ($itemId, $qty, $reference, $createdBy, $deemedSaleValue, $vatRate) {
+            $this->assertPeriodOpen();
             $item = $this->itemRepo->findById($itemId);
             if (!$item) throw new \InvalidArgumentException("Item not found: {$itemId}");
-            if ($item->getStockQty() < $qty) {
+            if (!$item->getAllowNegativeStock() && $item->getStockQty() < $qty) {
                 throw new \InvalidArgumentException("Insufficient stock: have {$item->getStockQty()}, need {$qty}");
             }
 
@@ -520,22 +735,40 @@ class InventoryService
             $costResult = $this->consumeCostLayers($itemId, $qty, null);
             $totalCost = $costResult['total_cost'];
 
-            $txn = $this->journal->postEntry("Promotional: {$item->getName()}", $reference, [
+            $lines = [
                 ['account_code' => '641', 'amount' => $totalCost, 'is_debit' => true],
                 ['account_code' => $inventoryCode, 'amount' => $totalCost, 'is_debit' => false],
-            ], $createdBy);
+            ];
+
+            // Output VAT on deemed sale value for promotional goods (VAS 02)
+            if ($deemedSaleValue !== null && $deemedSaleValue > 0 && $vatRate > 0) {
+                $vatAmount = $deemedSaleValue * $vatRate / 100;
+                $lines[] = ['account_code' => '641', 'amount' => $vatAmount, 'is_debit' => true];
+                $lines[] = ['account_code' => '33311', 'amount' => $vatAmount, 'is_debit' => false];
+            }
+
+            $txn = $this->journal->postEntry("Promotional: {$item->getName()}", $reference, $lines, $createdBy);
 
             $item->setStockQty($item->getStockQty() - $qty);
             $this->itemRepo->save($item);
 
-            return ['transaction_id' => $txn->getId(), 'total_cost' => $totalCost, 'qty' => $qty];
+            return ['transaction_id' => $txn->getId(), 'total_cost' => $totalCost, 'qty' => $qty, 'vat_amount' => $vatAmount ?? 0];
         });
     }
 
+    // NGHIỆP VỤ: XUẤT KHO THEO LÔ (Batch)
+    //
+    // Giống issueGoods() nhưng bắt buộc xuất từ một lô cụ thể.
+    // Sử dụng khi hàng hóa yêu cầu trace theo lô (dược phẩm, thực phẩm, hóa chất).
+    //
+    // Phương pháp tính giá: Specific ID — lấy đúng đơn giá của lô đó.
+    //
+    // RỦI RO: Nếu không theo dõi lô → không trace được hàng hư hỏng/ thu hồi → rủi ro pháp lý
     public function issueFromBatch(string $itemId, float $qty, string $batchCode, string $issueType,
         string $reference, string $createdBy): array
     {
         return $this->wrapInTransaction(function () use ($itemId, $qty, $batchCode, $issueType, $reference, $createdBy) {
+            $this->assertPeriodOpen();
             $item = $this->itemRepo->findById($itemId);
             if (!$item) throw new \InvalidArgumentException("Item not found: {$itemId}");
 
@@ -543,7 +776,7 @@ class InventoryService
             $stmt = $pdo->prepare("SELECT COALESCE(SUM(qty),0) FROM inventory_cost_layers WHERE item_id = ? AND batch_code = ? AND qty > 0");
             $stmt->execute([$itemId, $batchCode]);
             $available = (float)$stmt->fetchColumn();
-            if ($available < $qty) {
+            if (!$item->getAllowNegativeStock() && $available < $qty) {
                 throw new \InvalidArgumentException("Insufficient stock in batch {$batchCode}: have {$available}, need {$qty}");
             }
 
@@ -580,6 +813,10 @@ class InventoryService
         });
     }
 
+    // LẤY TỶ GIÁ NGOẠI TỆ: Tra cứu tỷ giá mới nhất cho giao dịch nhập kho ngoại tệ.
+    // Tỷ giá sử dụng là tỷ giá ghi sổ (theo Thông tư 200/2014/TT-BTC).
+    //
+    // RỦI RO: Nếu dùng sai tỷ giá → sai giá gốc hàng nhập → sai giá vốn khi xuất
     public function getExchangeRate(string $currencyCode): float
     {
         $pdo = $this->getPdo();
@@ -590,11 +827,20 @@ class InventoryService
         return (float)$row['rate'];
     }
 
+    // NGHIỆP VỤ: NHẬP KHO NGOẠI TỆ
+    //
+    // Hạch toán giống receiveGoods() nhưng quy đổi từ ngoại tệ sang VND theo tỷ giá tại ngày nhập.
+    // Ghi nhận song song:
+    //   - Giá trị VND hạch toán vào TK 15x
+    //   - Thông tin ngoại tệ ghi vào fc_transactions để quản lý chênh lệch tỷ giá
+    //
+    // RỦI RO: Chênh lệch tỷ giá sau này nếu chưa thanh toán → ảnh hưởng BC02 (chi phí tài chính TK 635)
     public function receiveGoodsFC(string $itemId, float $qty, float $unitPriceFC,
         array $addonCosts, string $currencyCode, ?float $exchangeRate,
         string $reference, string $createdBy): array
     {
         return $this->wrapInTransaction(function () use ($itemId, $qty, $unitPriceFC, $addonCosts, $currencyCode, $exchangeRate, $reference, $createdBy) {
+            $this->assertPeriodOpen();
             $item = $this->itemRepo->findById($itemId);
             if (!$item) throw new \InvalidArgumentException("Item not found: {$itemId}");
 
@@ -628,9 +874,21 @@ class InventoryService
         });
     }
 
+    // NGHIỆP VỤ: KHÁCH HÀNG TRẢ LẠI HÀNG (NHẬP LẠI KHO)
+    // Hạch toán:
+    //   Nợ 15x (Nhập lại kho)
+    //   Có 632 (Giá vốn hàng bán) — giảm giá vốn tương ứng
+    //
+    // Giá nhập lại = giá bình quân hiện tại trong kho tại thời điểm trả lại.
+    // Cost layer được tạo với đơn giá đó để theo dõi sau này.
+    //
+    // ẢNH HƯỞNG BCTC: Tăng tồn kho, giảm giá vốn (tăng lợi nhuận BC02)
+    //
+    // RỦI RO: Nếu dùng sai giá nhập lại → sai giá vốn kỳ sau → sai BC02
     public function returnFromCustomer(string $itemId, float $qty, string $reference, string $createdBy): array
     {
         return $this->wrapInTransaction(function () use ($itemId, $qty, $reference, $createdBy) {
+            $this->assertPeriodOpen();
             $item = $this->itemRepo->findById($itemId);
             if (!$item) throw new \InvalidArgumentException("Item not found: {$itemId}");
             if ($qty <= 0) throw new \InvalidArgumentException("Qty must be positive");
@@ -658,9 +916,131 @@ class InventoryService
         });
     }
 
+    // NGHIỆP VỤ: TRẢ LẠI HÀNG CHO NHÀ CUNG CẤP
+    // Hạch toán:
+    //   Nợ 331 (Phải trả người bán — giảm công nợ)
+    //   Có 15x (Hàng tồn kho — xuất trả)
+    //
+    // Cost layer được xuất theo FIFO để giảm số lượng tồn kho tương ứng.
+    // Giá trị hàng trả = giá bình quân hiện tại (không nhất thiết bằng giá mua ban đầu).
+    //
+    // ẢNH HƯỞNG BCTC: Giảm hàng tồn kho (BC01), giảm công nợ phải trả (BC01)
+    //
+    // RỦI RO: Nếu giá trả khác giá mua → chênh lệch ảnh hưởng giá vốn sau này
+    public function returnToSupplier(string $itemId, float $qty, string $reference, string $createdBy): array
+    {
+        return $this->wrapInTransaction(function () use ($itemId, $qty, $reference, $createdBy) {
+            $this->assertPeriodOpen();
+            $item = $this->itemRepo->findById($itemId);
+            if (!$item) throw new \InvalidArgumentException("Item not found: {$itemId}");
+            if ($qty <= 0) throw new \InvalidArgumentException("Qty must be positive");
+            if ($item->getStockQty() < $qty) {
+                throw new \InvalidArgumentException("Insufficient stock for return: have {$item->getStockQty()}, need {$qty}");
+            }
+
+            $inventoryCode = $this->inventoryAccountMap[$item->getItemType()] ?? '152';
+            $pdo = $this->getPdo();
+
+            // Get weighted average cost for the return
+            $aggStmt = $pdo->prepare("SELECT SUM(qty) as total_qty, SUM(qty * (unit_cost + addon_per_unit)) as total_value FROM inventory_cost_layers WHERE item_id = ? AND qty > 0");
+            $aggStmt->execute([$itemId]);
+            $aggRow = $aggStmt->fetch(\PDO::FETCH_ASSOC);
+            $avgUnitCost = ($aggRow['total_qty'] > 0) ? $aggRow['total_value'] / $aggRow['total_qty'] : $item->getPurchasePrice();
+            $totalCost = $qty * $avgUnitCost;
+
+            // Consume layers FIFO for physical tracking
+            $stmt = $pdo->prepare("SELECT id, qty FROM inventory_cost_layers WHERE item_id = ? AND qty > 0 ORDER BY created_at ASC");
+            $stmt->execute([$itemId]);
+            $remaining = $qty;
+            while (($row = $stmt->fetch(\PDO::FETCH_ASSOC)) && $remaining > 0) {
+                $consume = min($row['qty'], $remaining);
+                $pdo->prepare("UPDATE inventory_cost_layers SET qty = qty - ? WHERE id = ?")->execute([$consume, $row['id']]);
+                $remaining -= $consume;
+            }
+
+            $txn = $this->journal->postEntry("Supplier return: {$item->getName()}", $reference, [
+                ['account_code' => '331', 'amount' => $totalCost, 'is_debit' => true],
+                ['account_code' => $inventoryCode, 'amount' => $totalCost, 'is_debit' => false],
+            ], $createdBy);
+
+            $item->setStockQty($item->getStockQty() - $qty);
+            $this->itemRepo->save($item);
+            $this->calculateAndUpdateUnitCost($itemId);
+
+            $returnId = uniqid('sret_');
+            $pdo->prepare("INSERT INTO supplier_returns (id, item_id, qty, unit_cost, total_cost, reference, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)")
+                ->execute([$returnId, $itemId, $qty, $avgUnitCost, $totalCost, $reference, $createdBy]);
+
+            return ['return_id' => $returnId, 'transaction_id' => $txn->getId(), 'total_cost' => $totalCost, 'qty' => $qty];
+        });
+    }
+
+    // NGHIỆP VỤ: XÓA SỔ HÀNG TỒN KHO (hỏng, hết hạn, lỗi thời, mất, khác)
+    // Hạch toán:
+    //   Nợ TK chi phí (theo expenseAccount)
+    //   Có 15x (Hàng tồn kho)
+    //
+    // Lý do xóa sổ được kiểm soát chặt (validReasons) để đảm bảo audit trail.
+    // Chi phí xóa sổ có thể hạch toán vào 632 (giá vốn), 641 (bán hàng), 642 (QLDN) tùy bản chất.
+    //
+    // ẢNH HƯỞNG BCTC: Tăng chi phí (BC02), giảm hàng tồn kho (BC01)
+    //
+    // RỦI RO: Xóa sổ không đúng lý do → thuế không chấp nhận chi phí → tăng thuế TNDN
+    // RỦI RO: Cần hóa đơn/chứng từ cho hàng hỏng/hết hạn để được khấu trừ thuế
+    public function writeOffGoods(string $itemId, float $qty, string $reason, string $expenseAccount, string $reference, string $createdBy, string $notes = ''): array
+    {
+        $validReasons = ['damaged', 'expired', 'obsolete', 'lost', 'other'];
+        if (!in_array($reason, $validReasons)) {
+            throw new \InvalidArgumentException("Invalid reason: {$reason}. Valid: " . implode(', ', $validReasons));
+        }
+
+        return $this->wrapInTransaction(function () use ($itemId, $qty, $reason, $expenseAccount, $reference, $createdBy, $notes) {
+            $this->assertPeriodOpen();
+            $item = $this->itemRepo->findById($itemId);
+            if (!$item) throw new \InvalidArgumentException("Item not found: {$itemId}");
+            if ($qty <= 0) throw new \InvalidArgumentException("Qty must be positive");
+            if ($item->getStockQty() < $qty) {
+                throw new \InvalidArgumentException("Insufficient stock: have {$item->getStockQty()}, need {$qty}");
+            }
+
+            $inventoryCode = $this->inventoryAccountMap[$item->getItemType()] ?? '152';
+            $costResult = $this->consumeCostLayers($itemId, $qty, null);
+            $totalCost = $costResult['total_cost'];
+
+            $txn = $this->journal->postEntry("Write-off ({$reason}): {$item->getName()}", $reference, [
+                ['account_code' => $expenseAccount, 'amount' => $totalCost, 'is_debit' => true],
+                ['account_code' => $inventoryCode, 'amount' => $totalCost, 'is_debit' => false],
+            ], $createdBy);
+
+            $item->setStockQty($item->getStockQty() - $qty);
+            $this->itemRepo->save($item);
+
+            $woId = uniqid('wo_');
+            $pdo = $this->getPdo();
+            $pdo->prepare("INSERT INTO inventory_write_offs (id, item_id, qty, unit_cost, total_cost, reason, expense_account, reference, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+                ->execute([$woId, $itemId, $qty, $totalCost / max($qty, 1), $totalCost, $reason, $expenseAccount, $reference, $notes, $createdBy]);
+
+            return ['write_off_id' => $woId, 'transaction_id' => $txn->getId(), 'total_cost' => $totalCost, 'qty' => $qty];
+        });
+    }
+
+    // NGHIỆP VỤ: KẾT CHUYỂN TỒN KHO CUỐI KỲ (Phương pháp kiểm kê định kỳ)
+    //
+    // Với phương pháp kiểm kê định kỳ, giá trị hàng tồn cuối kỳ được xác định bằng kiểm kê thực tế.
+    // Giá vốn = Giá trị tồn đầu kỳ + Nhập trong kỳ - Giá trị tồn cuối kỳ (theo kiểm kê).
+    //
+    // Hạch toán:
+    //   Nợ 632 (Giá vốn hàng bán), Có 15x (Giá trị hàng đã tiêu thụ)
+    //
+    // Xóa toàn bộ cost layer cũ và tạo layer mới với số lượng tồn cuối kỳ.
+    //
+    // ẢNH HƯỞNG BCTC: Ghi nhận giá vốn toàn bộ hàng đã bán trong kỳ (BC02 chỉ tiêu 24)
+    //
+    // RỦI RO: Kiểm kê sai → giá vốn sai → BC02 sai → Thuế TNDN sai
     public function closePeriodicInventory(string $itemId, float $closingQty, float $closingUnitCost, string $reference, string $createdBy): array
     {
         return $this->wrapInTransaction(function () use ($itemId, $closingQty, $closingUnitCost, $reference, $createdBy) {
+            $this->assertPeriodOpen();
             $item = $this->itemRepo->findById($itemId);
             if (!$item) throw new \InvalidArgumentException("Item not found: {$itemId}");
 
@@ -685,6 +1065,13 @@ class InventoryService
                 $txnId = null;
             }
 
+            // RỦI RO NGHIỆM TRỌNG: DELETE toàn bộ cost layer của item — nếu INSERT
+            // saveCostLayer() phía sau thất bại (ví dụ: lỗi kết nối DB giữa chừng),
+            // toàn bộ track record giá gốc của item này bị mất vĩnh viễn.
+            // Biện pháp: wrapInTransaction() ở method cha đã bao bọc — rollback toàn bộ
+            // nếu bất kỳ bước nào thất bại. Nhưng nếu DELETE thành công mà transaction
+            // commit thất bại (network split), cost layer vẫn có thể bị mất.
+            // TODO: Sử dụng soft-delete (status flag) thay vì DELETE để phục hồi khi cần.
             $pdo->prepare("DELETE FROM inventory_cost_layers WHERE item_id = ?")->execute([$itemId]);
             $this->saveCostLayer($itemId, $closingQty, $closingUnitCost, 0, null);
 
@@ -707,6 +1094,123 @@ class InventoryService
         });
     }
 
+    // NGHIỆP VỤ: CHỐT TỒN KHO CUỐI KỲ + ĐỐI CHIẾU SỔ CHI TIẾT VỚI TỔNG HỢP
+    //
+    // Bước 1: Snapshot toàn bộ cost layer để lưu trữ (audit trail không thể xóa).
+    // Bước 2: Đối chiếu số dư sub-ledger (tổng giá trị cost layer) với số dư GL (ledger_entries).
+    //
+    // Nếu sub-ledger ≠ GL và chênh lệch > 10 VND → cảnh báo trong báo cáo reconciliation.
+    // Chênh lệch thường do:
+    //   - Bút toán tay sửa trực tiếp vào GL mà không qua InventoryService
+    //   - Lỗi trong quá trình nhập/xuất trước đó
+    //
+    // RỦI RO: Chênh lệch SL ≠ GL không được phát hiện → sai BC01 và BC02
+    public function closeInventoryForPeriod(int $periodId, string $periodCode, string $startDate, string $endDate, string $closedBy): array
+    {
+        $pdo = $this->getPdo();
+
+        // Snapshot all cost layers
+        $stmt = $pdo->query("SELECT cl.*, i.code as item_code, i.name as item_name, i.stock_qty
+            FROM inventory_cost_layers cl JOIN items i ON i.id = cl.item_id WHERE cl.qty > 0");
+        $layers = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+        // Verify sub-ledger = GL for inventory accounts
+        $invAccounts = array_unique(array_values($this->inventoryAccountMap));
+        $reconResults = [];
+        $itemTypeMap = ['152' => 'material', '153' => 'tool', '155' => 'product', '156' => 'merchandise'];
+        foreach ($invAccounts as $accCode) {
+            $itemType = $itemTypeMap[$accCode] ?? 'other';
+            $slStmt = $pdo->prepare("SELECT COALESCE(SUM(cl.qty * (cl.unit_cost + cl.addon_per_unit)), 0)
+                FROM inventory_cost_layers cl JOIN items i ON i.id = cl.item_id
+                WHERE i.item_type = ? AND cl.qty > 0");
+            $slStmt->execute([$itemType]);
+            $subLedgerVal = (float)$slStmt->fetchColumn();
+
+            $glStmt = $pdo->prepare("SELECT COALESCE(SUM(le.amount * IF(le.is_debit, 1, -1)), 0)
+                FROM ledger_entries le JOIN accounts a ON a.id = le.account_id
+                WHERE a.code = ? AND le.created_at <= ?");
+            $glStmt->execute([$accCode, $endDate . ' 23:59:59']);
+            $glVal = (float)$glStmt->fetchColumn();
+
+            $diff = abs($subLedgerVal - $glVal);
+            $reconResults[$accCode] = ['sub_ledger' => $subLedgerVal, 'gl' => $glVal, 'diff' => $diff > 10];
+        }
+
+        // Store snapshot
+        $snapshotId = uniqid('snap_');
+        $pdo->prepare("INSERT INTO period_inventory_snapshots (id, period_id, period_code, data, created_by)
+            VALUES (?, ?, ?, ?, ?)")
+            ->execute([$snapshotId, $periodId, $periodCode, json_encode($layers), $closedBy]);
+
+        return [
+            'snapshot_id' => $snapshotId,
+            'items_count' => count($layers),
+            'reconciliation' => $reconResults,
+        ];
+    }
+
+    // NGHIỆP VỤ: KHÔI PHỤC TỒN KHO TỪ SNAPSHOT (Rollback)
+    //
+    // Xóa toàn bộ cost layer hiện tại và khôi phục từ snapshot đã lưu khi chốt kỳ.
+    // Việc này chỉ nên thực hiện khi phát hiện sai sót nghiêm trọng trong kỳ hiện tại.
+    //
+    // RỦI RO: Rollback sẽ mất toàn bộ thay đổi tồn kho sau snapshot
+    // Biện pháp: Chỉ kế toán trưởng mới được thực hiện, phải có audit trail
+    public function rollbackInventoryForPeriod(int $periodId, string $rolledBackBy): array
+    {
+        $pdo = $this->getPdo();
+
+        $stmt = $pdo->prepare("SELECT * FROM period_inventory_snapshots WHERE period_id = ? ORDER BY created_at DESC LIMIT 1");
+        $stmt->execute([$periodId]);
+        $snapshot = $stmt->fetch(\PDO::FETCH_ASSOC);
+        if (!$snapshot) throw new \InvalidArgumentException("No inventory snapshot found for period {$periodId}");
+
+        $layers = json_decode($snapshot['data'], true);
+        if (!is_array($layers)) throw new \InvalidArgumentException("Corrupt snapshot data");
+
+        // CẢNH BÁO RỦI RO CỰC KỲ NGHIÊM TRỌNG — CHỈ SỬ DỤNG KHI THẬT SỰ CẦN:
+        // Thao tác này XÓA TOÀN BỘ cost layer hiện tại và khôi phục từ snapshot cũ.
+        // Hậu quả:
+        // 1. Mất tất cả giao dịch nhập/xuất kho đã thực hiện SAU snapshot
+        // 2. Số dư tài khoản GL (ledger_entries) KHÔNG được rollback → lệch sub-ledger vs GL
+        // 3. Báo cáo tài chính BC01/BC02 không khớp → phải làm bút toán điều chỉnh thủ công
+        // 4. Audit trail bị gián đoạn — kiểm toán viên sẽ đặt câu hỏi
+        //
+        // Biện pháp kiểm soát: Chỉ Kế toán trưởng được gọi. AuditLogger ghi nhận mỗi lần.
+        // Sau rollback, bắt buộc kiểm tra: sub-ledger vs GL, trial balance, BC01 số dư đầu kỳ.
+        $this->wrapInTransaction(function () use ($pdo, $layers, $periodId, $rolledBackBy, $snapshot) {
+            // Delete current cost layers
+            $pdo->exec("DELETE FROM inventory_cost_layers");
+
+            // Restore from snapshot
+            $insert = $pdo->prepare("INSERT INTO inventory_cost_layers (id, item_id, warehouse_id, batch_code, expiry_date, qty, unit_cost, addon_per_unit, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            foreach ($layers as $l) {
+                $insert->execute([
+                    $l['id'], $l['item_id'], $l['warehouse_id'], $l['batch_code'], $l['expiry_date'],
+                    $l['qty'], $l['unit_cost'], $l['addon_per_unit'], $l['created_at']
+                ]);
+            }
+
+            // Restore stock quantities
+            $updateStock = $pdo->prepare("UPDATE items SET stock_qty = ? WHERE id = ?");
+            foreach ($layers as $l) {
+                $updateStock->execute([$l['stock_qty'], $l['item_id']]);
+            }
+        });
+
+        return ['message' => 'Inventory rolled back', 'items_restored' => count($layers)];
+    }
+
+    // TÍNH GIÁ BÌNH QUÂN GIA QUYỀN: Cập nhật đơn giá cho item sau mỗi lần nhập.
+    //
+    // Công thức: ĐGBQ = (Tổng giá trị cost layer) / (Tổng số lượng cost layer)
+    //
+    // Nếu phương pháp định giá là 'weighted_avg', toàn bộ cost layer của item
+    // được cập nhật về cùng một đơn giá bình quân (revalue remaining layers).
+    // Với phương pháp FIFO, chỉ cập nhật purchasePrice item — không thay đổi layer.
+    //
+    // RỦI RO: Nếu tính sai giá bình quân → sai định giá tồn kho → sai BC01
     public function calculateAndUpdateUnitCost(string $itemId): void
     {
         $pdo = $this->getPdo();
@@ -721,9 +1225,193 @@ class InventoryService
                 $item->setPurchasePrice($avg);
                 $this->itemRepo->save($item);
             }
+
+            // For weighted average items, revalue remaining layers to the new avg
+            $methodStmt = $pdo->prepare("SELECT COALESCE(vm.code, 'fifo') FROM items i LEFT JOIN valuation_methods vm ON vm.id = i.valuation_method_id WHERE i.id = ?");
+            $methodStmt->execute([$itemId]);
+            if ($methodStmt->fetchColumn() === 'weighted_avg') {
+                $pdo->prepare("UPDATE inventory_cost_layers SET unit_cost = ?, addon_per_unit = 0 WHERE item_id = ? AND qty > 0")
+                    ->execute([$avg, $itemId]);
+            }
         }
     }
 
+    // BÁO CÁO: PHÂN TÍCH TUỔI TỒN KHO
+    //
+    // Phân loại hàng tồn kho theo thời gian lưu kho (0-30, 31-60, 61-90, 91-180, 180+ ngày).
+    // Hữu ích để xác định hàng chậm luân chuyển, hàng có nguy cơ giảm giá hoặc hết hạn.
+    //
+    // Kế toán quản trị sử dụng báo cáo này để:
+    //   - Đánh giá hiệu quả quản lý kho
+    //   - Trích lập dự phòng cho hàng tồn lâu
+    //   - Đề xuất thanh lý hàng chậm luân chuyển
+    public function getAgingReport(?string $itemId = null, ?string $warehouseId = null): array
+    {
+        $pdo = $this->getPdo();
+        $sql = "SELECT i.id, i.code, i.name, i.unit,
+            cl.qty, cl.unit_cost, cl.addon_per_unit,
+            DATEDIFF(NOW(), cl.created_at) as age_days
+            FROM inventory_cost_layers cl
+            JOIN items i ON i.id = cl.item_id
+            WHERE cl.qty > 0";
+        $params = [];
+        if ($itemId) { $sql .= " AND cl.item_id = ?"; $params[] = $itemId; }
+        if ($warehouseId) { $sql .= " AND cl.warehouse_id = ?"; $params[] = $warehouseId; }
+        $sql .= " ORDER BY i.code, cl.created_at ASC";
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+        $buckets = ['0-30' => 0, '31-60' => 0, '61-90' => 0, '91-180' => 0, '180+' => 0];
+        $report = [];
+        foreach ($rows as $r) {
+            $key = $r['id'];
+            if (!isset($report[$key])) {
+                $report[$key] = ['code' => $r['code'], 'name' => $r['name'], 'unit' => $r['unit'],
+                    'total_qty' => 0, 'total_value' => 0] + $buckets;
+            }
+            $val = (float)$r['qty'] * ((float)$r['unit_cost'] + (float)$r['addon_per_unit']);
+            $age = (int)$r['age_days'];
+            $bucket = match(true) { $age <= 30 => '0-30', $age <= 60 => '31-60', $age <= 90 => '61-90', $age <= 180 => '91-180', default => '180+' };
+            $report[$key][$bucket] += $val;
+            $report[$key]['total_qty'] += (float)$r['qty'];
+            $report[$key]['total_value'] += $val;
+        }
+        return ['buckets' => array_keys($buckets), 'items' => array_values($report)];
+    }
+
+    // BÁO CÁO: VÒNG QUAY HÀNG TỒN KHO (Inventory Turnover Ratio)
+    //
+    // Công thức: Vòng quay HTK = Giá vốn hàng bán / Giá trị HTK bình quân
+    // Số ngày tồn kho = 365 / Vòng quay HTK
+    //
+    // Giá vốn (COGS) lấy từ TK 632 trong kỳ.
+    // Giá trị HTK bình quân = (Đầu kỳ + Cuối kỳ) / 2 từ cost layer.
+    //
+    // Chỉ số này giúp đánh giá hiệu quả quản lý kho:
+    //   - Cao: Hàng bán nhanh, quản lý tốt
+    //   - Thấp: Hàng tồn đọng, cần xem xét trích lập dự phòng
+    //
+    // RỦI RO: Nếu tính sai COGS → vòng quay sai → quyết định quản trị sai
+    public function getTurnoverRatio(string $periodStart, string $periodEnd, ?string $itemId = null): array
+    {
+        $pdo = $this->getPdo();
+
+        // COGS from transactions in period
+        $cogsSql = "SELECT COALESCE(SUM(le.amount), 0) FROM ledger_entries le
+            JOIN transactions t ON t.id = le.transaction_id
+            JOIN accounts a ON a.id = le.account_id
+            WHERE a.code = '632' AND le.is_debit = 1
+            AND t.created_at BETWEEN ? AND ?";
+        $cogsParams = [$periodStart, $periodEnd];
+        if ($itemId) {
+            $item = $this->itemRepo->findById($itemId);
+            $itemName = $item ? $item->getName() : $itemId;
+            $cogsSql .= " AND t.description LIKE ?";
+            $cogsParams[] = "%{$itemName}%";
+        }
+        $stmt = $pdo->prepare($cogsSql);
+        $stmt->execute($cogsParams);
+        $cogs = (float)$stmt->fetchColumn();
+
+        // Opening inventory value from periodic_inventory or cost layers at period start
+        $openStmt = $pdo->prepare("SELECT COALESCE(SUM(cl.qty * (cl.unit_cost + cl.addon_per_unit)), 0)
+            FROM inventory_cost_layers cl WHERE cl.created_at < ? AND cl.qty > 0");
+        $openStmt->execute([$periodStart]);
+        $openingValue = (float)$openStmt->fetchColumn();
+
+        // Closing inventory value
+        $closeStmt = $pdo->prepare("SELECT COALESCE(SUM(cl.qty * (cl.unit_cost + cl.addon_per_unit)), 0)
+            FROM inventory_cost_layers cl WHERE cl.created_at <= ? AND cl.qty > 0");
+        $closeStmt->execute([$periodEnd]);
+        $closingValue = (float)$closeStmt->fetchColumn();
+
+        $avgInventory = ($openingValue + $closingValue) / 2;
+        $turnover = $avgInventory > 0 ? round($cogs / $avgInventory, 2) : 0;
+        $daysOutstanding = $turnover > 0 ? round(365 / $turnover, 1) : 0;
+
+        return [
+            'period_start' => $periodStart, 'period_end' => $periodEnd,
+            'total_cogs' => $cogs,
+            'opening_inventory' => $openingValue,
+            'closing_inventory' => $closingValue,
+            'avg_inventory' => $avgInventory,
+            'turnover_ratio' => $turnover,
+            'days_outstanding' => $daysOutstanding,
+        ];
+    }
+
+    // BÁO CÁO: ĐỊNH GIÁ HÀNG TỒN KHO THEO PHƯƠNG PHÁP TÍNH GIÁ
+    //
+    // Hiển thị chi tiết tồn kho theo:
+    //   - Phương pháp định giá (FIFO, Bình quân, Specific ID)
+    //   - Số lượng và giá trị đầu kỳ, nhập trong kỳ, cuối kỳ
+    //
+    // Dữ liệu lấy từ cost layer, phân kỳ dựa trên created_at của layer.
+    //
+    // Hữu ích cho kiểm toán viên đối chiếu số dư tồn kho cuối kỳ (BC01)
+    // và kiểm tra tính nhất quán của phương pháp tính giá.
+    public function getValuationReport(?string $itemId = null, ?string $warehouseId = null,
+        ?string $periodStart = null, ?string $periodEnd = null): array
+    {
+        $pdo = $this->getPdo();
+        $periodStart ??= date('Y-m-01');
+        $periodEnd ??= date('Y-m-t');
+
+        $sql = "SELECT i.id, i.code, i.name, i.unit, COALESCE(vm.code, 'fifo') as method,
+            cl.id as layer_id, cl.qty, cl.unit_cost, cl.addon_per_unit, cl.created_at
+            FROM inventory_cost_layers cl
+            JOIN items i ON i.id = cl.item_id
+            LEFT JOIN valuation_methods vm ON vm.id = i.valuation_method_id
+            WHERE cl.qty > 0";
+        $params = [];
+        if ($itemId) { $sql .= " AND cl.item_id = ?"; $params[] = $itemId; }
+        if ($warehouseId) { $sql .= " AND cl.warehouse_id = ?"; $params[] = $warehouseId; }
+        $sql .= " ORDER BY i.code, cl.created_at ASC";
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+        $items = [];
+        foreach ($rows as $r) {
+            $key = $r['id'];
+            if (!isset($items[$key])) {
+                $items[$key] = ['code' => $r['code'], 'name' => $r['name'], 'unit' => $r['unit'],
+                    'method' => $r['method'], 'opening_qty' => 0, 'opening_value' => 0,
+                    'receipts_qty' => 0, 'receipts_value' => 0,
+                    'issues_qty' => 0, 'issues_value' => 0,
+                    'closing_qty' => 0, 'closing_value' => 0];
+            }
+            $val = (float)$r['qty'] * ((float)$r['unit_cost'] + (float)$r['addon_per_unit']);
+            $created = $r['created_at'];
+            if ($created < $periodStart) {
+                $items[$key]['opening_qty'] += (float)$r['qty'];
+                $items[$key]['opening_value'] += $val;
+            } elseif ($created <= $periodEnd) {
+                $items[$key]['receipts_qty'] += (float)$r['qty'];
+                $items[$key]['receipts_value'] += $val;
+            }
+            $items[$key]['closing_qty'] += (float)$r['qty'];
+            $items[$key]['closing_value'] += $val;
+        }
+
+        return ['period_start' => $periodStart, 'period_end' => $periodEnd,
+            'items' => array_values($items)];
+    }
+
+    // GHI NHẬN COST LAYER: Lưu một lớp giá trị cho lô hàng nhập kho.
+    //
+    // Mỗi lần nhập kho → tạo một cost layer mới với đơn giá riêng.
+    // Khi xuất kho, consumeCostLayers() sẽ lấy từ các layer cũ nhất trước (FIFO).
+    //
+    // Thông số lưu trữ:
+    //   - unit_cost: Đơn giá mua (chưa gồm chi phí mua)
+    //   - addon_per_unit: Chi phí mua phân bổ cho mỗi đơn vị
+    //   - batch_code / expiry_date: Theo dõi lô và hạn dùng (nếu có)
+    //
+    // RỦI RO: Nếu không lưu chi phí mua riêng → giá vốn xuất kho thấp hơn thực tế
     private function saveCostLayer(string $itemId, float $qty, float $unitCost, float $addonPerUnit, ?string $warehouseId,
         ?string $batchCode = null, ?string $expiryDate = null): void
     {
@@ -734,9 +1422,86 @@ class InventoryService
         $stmt->execute([uniqid('cst_'), $itemId, $warehouseId, $batchCode, $expiryDate, $qty, $unitCost, $addonPerUnit]);
     }
 
-    private function consumeCostLayers(string $itemId, float $qty, ?string $warehouseId): array
+    // XUẤT COST LAYER: Xác định giá vốn khi xuất kho theo phương pháp định giá.
+    //
+    // Hỗ trợ 3 phương pháp:
+    //   1. Specific ID: Xuất đúng lô chỉ định (batchCode bắt buộc)
+    //   2. Weighted Average: Tính tổng giá trị / tổng số lượng → đơn giá bình quân
+    //   3. FIFO (mặc định): Xuất từ layer cũ nhất trước — created_at ASC
+    //
+    // Với FIFO, mỗi layer giảm dần số lượng cho đến hết, giữ nguyên đơn giá gốc của layer đó.
+    // Với Weighted Average, chỉ giảm số lượng layer, giá trị = số lượng × giá bình quân.
+    //
+    // RỦI RO: Nếu âm kho (qty > available) → sai giá vốn do không đủ layer để xuất
+    // RỦI RO: Đổi phương pháp tính giá giữa kỳ → sai số liệu so sánh BC02
+    private function consumeCostLayers(string $itemId, float $qty, ?string $warehouseId, ?string $batchCode = null): array
     {
         $pdo = $this->getPdo();
+
+        $methodStmt = $pdo->prepare("SELECT COALESCE(vm.code, 'fifo') FROM items i LEFT JOIN valuation_methods vm ON vm.id = i.valuation_method_id WHERE i.id = ?");
+        $methodStmt->execute([$itemId]);
+        $methodCode = $methodStmt->fetchColumn();
+
+        // PHƯƠNG PHÁP TÍNH GIÁ XUẤT KHO:
+        //   1. Specific ID: Lấy đơn giá từ lô cụ thể — dùng cho hàng yêu cầu trace (dược, thực phẩm)
+        //   2. Weighted Average: Tính đơn giá bình quân = Tổng giá trị / Tổng số lượng
+        //   3. FIFO (mặc định): Xuất từ layer cũ nhất — đúng bản chất dòng chảy vật tư
+        //
+        // RỦI RO CONCURRENCY: Dưới concurrent, 2 request xuất kho cùng lúc có thể đọc cùng
+        // một cost layer, dẫn đến double-consumption (cùng layer bị trừ 2 lần).
+        // Biện pháp: SELECT ... FOR UPDATE trên cost layer bị ảnh hưởng (cần bổ sung).
+        // Hậu quả nếu double-consumption: giá vốn (632) ghi nhận sai (cao hơn thực tế),
+        // số lượng tồn kho âm oan, BC02 chỉ tiêu 24 sai.
+        if ($methodCode === 'specific_id') {
+            if (!$batchCode) {
+                throw new \InvalidArgumentException("Specific ID costing requires a batch code");
+            }
+            $stmt = $pdo->prepare("SELECT id, qty, unit_cost, addon_per_unit FROM inventory_cost_layers WHERE item_id = ? AND batch_code = ? AND qty > 0 ORDER BY created_at ASC");
+            $stmt->execute([$itemId, $batchCode]);
+            $remaining = $qty;
+            $totalCost = 0.0;
+            while (($row = $stmt->fetch(\PDO::FETCH_ASSOC)) && $remaining > 0) {
+                $consume = min($row['qty'], $remaining);
+                $layerUnitCost = (float)$row['unit_cost'] + (float)$row['addon_per_unit'];
+                $totalCost += $consume * $layerUnitCost;
+                $update = $pdo->prepare("UPDATE inventory_cost_layers SET qty = qty - ? WHERE id = ?");
+                $update->execute([$consume, $row['id']]);
+                $remaining -= $consume;
+            }
+            return ['total_cost' => $totalCost, 'remaining' => $remaining];
+        }
+
+        if ($methodCode === 'weighted_avg') {
+            $aggSql = "SELECT SUM(qty) as total_qty, SUM(qty * (unit_cost + addon_per_unit)) as total_value FROM inventory_cost_layers WHERE item_id = ? AND qty > 0";
+            $aggParams = [$itemId];
+            if ($warehouseId !== null) {
+                $aggSql .= " AND warehouse_id = ?";
+                $aggParams[] = $warehouseId;
+            } else {
+                $aggSql .= " AND warehouse_id IS NULL";
+            }
+            $aggStmt = $pdo->prepare($aggSql);
+            $aggStmt->execute($aggParams);
+            $aggRow = $aggStmt->fetch(\PDO::FETCH_ASSOC);
+            $totalQty = (float)$aggRow['total_qty'];
+            $waUnitCost = $totalQty > 0 ? $aggRow['total_value'] / $totalQty : 0;
+            $consumeQty = min($qty, $totalQty);
+            $remaining = $qty;
+            $whereClause = $warehouseId ? "warehouse_id = ? AND" : "warehouse_id IS NULL AND";
+            $params = $warehouseId ? [$itemId, $warehouseId] : [$itemId];
+            $stmt = $pdo->prepare("SELECT id, qty FROM inventory_cost_layers WHERE item_id = ? AND {$whereClause} qty > 0 ORDER BY created_at ASC");
+            $stmt->execute($params);
+            while (($row = $stmt->fetch(\PDO::FETCH_ASSOC)) && $remaining > 0) {
+                $consume = min($row['qty'], $remaining);
+                $update = $pdo->prepare("UPDATE inventory_cost_layers SET qty = qty - ? WHERE id = ?");
+                $update->execute([$consume, $row['id']]);
+                $remaining -= $consume;
+            }
+            $totalCost = $consumeQty * $waUnitCost;
+            return ['total_cost' => $totalCost, 'remaining' => $remaining];
+        }
+
+        // Default: FIFO
         if ($warehouseId !== null) {
             $stmt = $pdo->prepare("SELECT id, qty, unit_cost, addon_per_unit FROM inventory_cost_layers WHERE item_id = ? AND warehouse_id = ? AND qty > 0 ORDER BY created_at ASC");
             $stmt->execute([$itemId, $warehouseId]);

@@ -1,4 +1,5 @@
 <?php
+// Bảng nhật ký kiểm toán — audit trail cho mọi thay đổi dữ liệu
 return function (PDO $pdo) {
     $pdo->exec('CREATE TABLE IF NOT EXISTS audit_log (
         id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,

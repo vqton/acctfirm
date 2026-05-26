@@ -1,6 +1,29 @@
 <?php
 namespace Accounting\Domain\Model;
 
+/**
+ * Hợp đồng — Thỏa thuận pháp lý với khách hàng hoặc nhà cung cấp.
+ *
+ * Hợp đồng làm cơ sở phát sinh các giao dịch mua/bán, tạm ứng, thanh lý.
+ * Trong kế toán, hợp đồng quyết định thời điểm ghi nhận doanh thu,
+ * thời hạn thanh toán, và các điều khoản tài chính.
+ *
+ * NGHIỆP VỤ:
+ * - $contractType: 'sale' (bán hàng), 'purchase' (mua hàng), 'service' (dịch vụ),
+ *   'construction' (xây dựng), 'lease' (thuê)
+ * - $partyId/$partyName: đối tác — có thể là Customer hoặc Supplier
+ * - $totalAmount: tổng giá trị hợp đồng (chưa bao gồm thuế)
+ * - $currency: loại tiền của hợp đồng
+ *
+ * LIÊN KẾT:
+ * - Project → một hợp đồng có thể có nhiều dự án
+ * - Payment terms ảnh hưởng đến lịch thanh toán và công nợ
+ *
+ * RỦI RO:
+ * - Doanh thu ghi nhận theo % hoàn thành (construction) cần ước lượng đáng tin cậy
+ * - Hợp đồng ngoại tệ phải theo dõi chênh lệch tỷ giá
+ * - Thanh lý hợp đồng có thể phát sinh phạt vi phạm (thu nhập khác - TK 711)
+ */
 class Contract
 {
     private string $id;
@@ -59,6 +82,11 @@ class Contract
     public function setStatus(bool $status): void { $this->status = $status; }
     public function setNotes(?string $notes): void { $this->notes = $notes; }
 
+    // Chuyển đổi model thành mảng để response API.
+    // 'contract_type': 'sale' (doanh thu), 'purchase' (chi phí), 'construction' (dở dang).
+    // 'total_amount': tổng giá trị — ảnh hưởng doanh thu/chi phí theo tiến độ thực hiện.
+    // RỦI RO: Hợp đồng ngoại tệ phải theo dõi chênh lệch tỷ giá cuối kỳ.
+    // Thanh lý hợp đồng có thể phát sinh phạt vi phạm (thu nhập khác TK 711).
     public function toArray(): array
     {
         return [

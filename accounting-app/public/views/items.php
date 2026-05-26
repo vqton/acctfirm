@@ -1,4 +1,5 @@
 <?php
+// Màn hình: Danh mục vật tư, hàng hóa
 $title = 'Danh mục vật tư, hàng hóa';
 $activeMenu = 'items';
 ob_start();

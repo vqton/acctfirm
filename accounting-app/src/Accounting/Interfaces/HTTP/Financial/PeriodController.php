@@ -5,6 +5,35 @@ use Accounting\Domain\Service\PeriodService;
 use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
 
+/**
+ * MODULE: Kỳ Kế toán (Accounting Period)
+ *
+ * Mục đích nghiệp vụ:
+ *   - Quản lý kỳ kế toán: tháng, quý, năm
+ *   - Tạo kỳ mới với ngày bắt đầu/kết thúc
+ *   - Đóng kỳ kế toán (chỉ Kế toán trưởng) — kỳ đã đóng là read-only
+ *   - Kết chuyển cuối kỳ: doanh thu, chi phí → 911 → 421
+ *   - Mở lại kỳ (nếu cần điều chỉnh — phải có phê duyệt đặc biệt)
+ *
+ * API endpoints:
+ *   GET    /api/periods          — Danh sách kỳ kế toán
+ *   GET    /api/periods/{id}     — Chi tiết kỳ
+ *   POST   /api/periods          — Tạo kỳ mới
+ *   POST   /api/periods/{id}/close   — Đóng kỳ
+ *   POST   /api/periods/{id}/reopen  — Mở lại kỳ
+ *   POST   /api/periods/{id}/close-year — Kết chuyển năm (tạo kỳ mới)
+ *
+ * Rủi ro:
+ *   - R001 (CRITICAL): Post vào kỳ đã đóng → sai số liệu kỳ trước
+ *   - Đóng kỳ trước khi kết chuyển đầy đủ → BC02 sai
+ *   - Mở lại kỳ đã đóng → phải có audit trail lý do
+ *   - R005: Kết chuyển sai tài khoản → số dư 421 sai
+ *
+ * Tích hợp:
+ *   - PeriodService kiểm tra isPeriodOpen() trước mọi post request
+ *   - FsService dùng thông tin kỳ để xuất BC01/BC02/BC03
+ *   - JournalService kiểm tra period trước khi post entry
+ */
 class PeriodController
 {
     private PeriodService $period;
@@ -22,6 +51,12 @@ class PeriodController
         catch (\InvalidArgumentException $e) { JsonResponse::error($e->getMessage(), 404); }
     }
 
+    // NGHIỆP VỤ: Tạo kỳ kế toán mới — tháng/quý/năm
+    // Input: { period_type (monthly|quarterly|yearly), period_code (2025-01), name, start_date, end_date, created_by? }
+    // Output: { id, period_code, status: 'open' } — 201 Created
+    // Service: PeriodService.createPeriod()
+    // Rủi ro: Trùng period_code → 409. Ngày tháng phải không overlap với kỳ đã tồn tại
+    // Ràng buộc: Mỗi kỳ phải có start_date < end_date. Kỳ mới mặc định status = 'open'
     public function create(): void
     {
         $data = json_decode(file_get_contents('php://input'), true);
@@ -39,6 +74,14 @@ class PeriodController
         } catch (\InvalidArgumentException $e) { JsonResponse::error($e->getMessage()); }
     }
 
+    // NGHIỆP VỤ: Đóng kỳ kế toán — kỳ đã đóng là READ-ONLY, không post/sửa/xóa được
+    // Input: id (URL)
+    // Output: { period_id, status: 'closed', closed_by, closed_at }
+    // Service: PeriodService.closePeriod() — cập nhật status → closed
+    // Permission: system, edit (chỉ Kế toán trưởng)
+    // Rủi ro: R001 (CRITICAL) — Đóng kỳ sai → không thể post bổ sung. Nếu cần sửa → reOpen (audit trail)
+    // Pre-close: Nên chạy ReconciliationController.run() + canClose() trước khi close
+    // Audit trail: Lưu user đóng + lý do + thời gian
     public function close(int $id): void
     {
         Auth::requirePermission('system', 'edit');
@@ -48,6 +91,14 @@ class PeriodController
         } catch (\InvalidArgumentException $e) { JsonResponse::error($e->getMessage()); }
     }
 
+    // NGHIỆP VỤ: Mở lại kỳ đã đóng — chỉ khi có điều chỉnh hồi tố
+    // Input: id (URL)
+    // Output: { period_id, status: 'open', reopened_by, reason }
+    // Service: PeriodService.reOpenPeriod()
+    // Permission: system, edit (chỉ Kế toán trưởng)
+    // Rủi ro: R001 — Mở lại kỳ có thể gây sai lệch BCTC đã nộp. Cần audit trail lý do chi tiết
+    // Ràng buộc: Phải ghi nhận lý do reOpen (audit log). Cảnh báo: ảnh hưởng BCTC đã gửi cơ quan thuế
+    // Quy trình: ReOpen → điều chỉnh → close → phát hành BCTC điều chỉnh
     public function reOpen(int $id): void
     {
         Auth::requirePermission('system', 'edit');
@@ -62,6 +113,15 @@ class PeriodController
         JsonResponse::ok($this->period->canClose($id));
     }
 
+    // NGHIỆP VỤ: Thực hiện kết chuyển cuối kỳ — doanh thu, chi phí → 911 → 421
+    // Input: id (URL)
+    // Output: { message: 'Closing entries executed' }
+    // Service: PeriodService.executeClosingEntries() → JournalService.postEntry
+    // Permission: system, edit (Kế toán trưởng)
+    // Quy trình kết chuyển: (1) Kết chuyển 511,515,711 → 911 (2) Kết chuyển 632,635,641,642,811 → 911
+    // (3) Kết chuyển 911 → 421 (lợi nhuận sau thuế). Nếu lỗ: Nợ 421 / Có 911
+    // Rủi ro: R005 — Kết chuyển sai tài khoản → số dư 421 sai → BC02 sai
+    // Ràng buộc: Phải chạy trước khi closePeriod. Không chạy lại nếu đã close
     public function executeClosing(int $id): void
     {
         Auth::requirePermission('system', 'edit');
@@ -71,12 +131,86 @@ class PeriodController
         } catch (\InvalidArgumentException $e) { JsonResponse::error($e->getMessage()); }
     }
 
+    // NGHIỆP VỤ: Lưu trữ kỳ kế toán — chụp snapshot dữ liệu, không sửa được nữa
+    // Input: id (URL)
+    // Output: { period_id, status: 'archived', snapshot_id }
+    // Service: PeriodService.archivePeriod() — tạo accounting_period_snapshots
+    // Permission: system, edit
+    // Rủi ro: Sau archive, không thể mở lại (khác với close). Phục hồi cần DBA
+    // Mục đích: Giữ dữ liệu BCTC cố định cho mục đích kiểm toán và lưu trữ pháp lý
     public function archive(int $id): void
     {
         Auth::requirePermission('system', 'edit');
         try {
             $result = $this->period->archivePeriod($id, $_SESSION['user']['username'] ?? 'system');
             JsonResponse::ok($result);
+        } catch (\InvalidArgumentException $e) { JsonResponse::error($e->getMessage()); }
+    }
+
+    // NGHIỆP VỤ: Đóng kỳ với checklist — pre-close checks → closePeriod
+    // Input: id (URL)
+    // Output: { period_id, status, checks: [{check_name, passed, details}] }
+    // Service: PeriodService.canClose() kiểm tra: Trial Balance Dr=Cr, all posted, closing entries done
+    // Nếu can_close=false → trả về 422 kèm danh sách checks fail để kế toán xử lý
+    // Rủi ro: R001 — Bỏ qua fail check và close → sai số liệu → phải reOpen
+    // Ràng buộc: Đây là flow chuẩn. Gọi close() trực tiếp (không checklist) cần phê duyệt riêng
+    // KỲ KẾ TOÁN: Quy trình đóng kỳ gồm 2 bước:
+    // 1. Kiểm tra pre-close checklist (canClose) — nếu fail, trả về 422 kèm chi tiết
+    // 2. Thực hiện đóng kỳ (closePeriod) — chỉ chạy nếu tất cả checks pass
+    public function closeWithChecklist(int $id): void
+    {
+        Auth::requirePermission('system', 'edit');
+        try {
+            $checklist = $this->period->canClose($id);
+            if (!$checklist['can_close']) {
+                JsonResponse::error([
+                    'message' => 'Pre-close checks failed. Fix issues before closing.',
+                    'checks' => $checklist['checks'],
+                ], 422);
+                return;
+            }
+            $result = $this->period->closePeriod($id, $_SESSION['user']['username'] ?? 'system');
+            $result['checks'] = $checklist['checks'];
+            JsonResponse::ok($result);
+        } catch (\InvalidArgumentException $e) { JsonResponse::error($e->getMessage()); }
+    }
+
+    // NGHIỆP VỤ: Thiết lập hạn chót (deadline) cho kỳ kế toán — sau deadline không post thêm
+    // Input: { deadline (datetime) }
+    // Output: { period_id, deadline, set_by }
+    // Service: PeriodService.setDeadline()
+    // Permission: system, edit (Kế toán trưởng)
+    // Rủi ro: Deadline quá sớm → chưa kịp ghi nhận hết nghiệp vụ. Quá muộn → chậm BCTC
+    // Mục đích: Quản lý tiến độ khóa sổ, cảnh báo khi đến gần deadline
+    // HARD DEADLINE: Kế toán trưởng thiết lập deadline cho kỳ
+    public function setDeadline(int $id): void
+    {
+        Auth::requirePermission('system', 'edit');
+        $data = json_decode(file_get_contents('php://input'), true);
+        if (!$data || !isset($data['deadline'])) {
+            JsonResponse::error('deadline required');
+            return;
+        }
+        try {
+            JsonResponse::ok($this->period->setDeadline($id, $data['deadline'], $_SESSION['user']['username'] ?? 'system'));
+        } catch (\InvalidArgumentException $e) { JsonResponse::error($e->getMessage()); }
+    }
+
+    // NGHIỆP VỤ: Ghi đè deadline — cho phép ghi nhận bổ sung sau deadline
+    // Input: { reason? }
+    // Output: { period_id, original_deadline, new_deadline, override_by, reason }
+    // Service: PeriodService.overrideDeadline()
+    // Permission: system, edit (chỉ Kế toán trưởng)
+    // Rủi ro: Override deadline làm giảm tính kỷ luật kế toán. Phải ghi rõ lý do trong audit trail
+    // Audit trail: Lưu user override, thời gian, lý do. Báo cáo số lần override mỗi kỳ
+    // HARD DEADLINE: Kế toán trưởng override deadline để cho phép ghi nhận bổ sung
+    public function overrideDeadline(int $id): void
+    {
+        Auth::requirePermission('system', 'edit');
+        $data = json_decode(file_get_contents('php://input'), true);
+        $reason = $data['reason'] ?? 'Override by Chief Accountant';
+        try {
+            JsonResponse::ok($this->period->overrideDeadline($id, $reason, $_SESSION['user']['username'] ?? 'system'));
         } catch (\InvalidArgumentException $e) { JsonResponse::error($e->getMessage()); }
     }
 }

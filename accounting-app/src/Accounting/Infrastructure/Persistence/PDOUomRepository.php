@@ -1,4 +1,5 @@
 <?php
+// Quản lý dữ liệu: danh mục đơn vị tính
 namespace Accounting\Infrastructure\Persistence;
 
 use Accounting\Domain\Model\Uom;

@@ -1,4 +1,5 @@
 <?php
+// Thêm bảng phân loại TSCĐ và khấu hao chi tiết
 return function (PDO $pdo) {
     $pdo->exec('ALTER TABLE fixed_assets
         ADD COLUMN fa_category ENUM("tangible","intangible","finance_lease") NOT NULL DEFAULT "tangible" AFTER status,
