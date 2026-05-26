@@ -15,6 +15,10 @@ use Accounting\Infrastructure\Persistence\PDOTransactionRepository;
 $pdo = new PDO("mysql:host=127.0.0.1;dbname=accounting_db;charset=utf8mb4","dev","123456",
     [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 
+// Đảm bảo kỳ 2026-05 đang mở cho test
+$pdo->exec("INSERT IGNORE INTO accounting_periods (period_code, start_date, end_date, status) VALUES ('2026-05', '2026-05-01', '2026-05-31', 'open')");
+$pdo->exec("UPDATE accounting_periods SET status = 'open' WHERE period_code = '2026-05'");
+
 $accountRepo = new PDOAccountRepository($pdo);
 $txnRepo = new PDOTransactionRepository($pdo);
 $journal = new JournalService($accountRepo, $txnRepo, $pdo);
@@ -106,7 +110,36 @@ echo "\n=== Test 9: Customer statement ===\n";
 $stmt = $ar->getCustomerStatement($cid);
 assertTrue(count($stmt) >= 1, 'Statement non-empty');
 
-echo "\n=== Test 10: Trial balance ===\n";
+echo "\n=== Test 10: Multi-invoice receipt allocation ===\n";
+$allocInv1 = $ar->recordInvoice($cid, 'REC-ALLOC-001', '2026-05-20', '2026-06-20', 4000000, 400000, 10, 'Receipt alloc test 1', 'tester');
+$allocInv2 = $ar->recordInvoice($cid, 'REC-ALLOC-002', '2026-05-20', '2026-06-20', 6000000, 600000, 10, 'Receipt alloc test 2', 'tester');
+$totalAlloc = $allocInv1['amount'] + $allocInv2['amount'];
+assertEq(11000000, $totalAlloc, 'Total invoices = 4.4M + 6.6M = 11M');
+
+$alloc = $ar->allocateReceipt([
+    ['invoice_id' => $allocInv1['invoice_id'], 'amount' => 4400000],
+    ['invoice_id' => $allocInv2['invoice_id'], 'amount' => 6600000],
+], '112', 'Bulk receipt', 'tester');
+assertEq(11000000, $alloc['total_amount'], 'Allocation total = 11M');
+assertEq('paid', $ar->getInvoice($allocInv1['invoice_id'])['status'], 'Invoice 1 paid');
+assertEq('paid', $ar->getInvoice($allocInv2['invoice_id'])['status'], 'Invoice 2 paid');
+
+$allDet = $ar->getReceiptAllocationDetails($alloc['transaction_id']);
+assertEq(2, count($allDet), 'Allocation has 2 entries');
+
+// Different customer → should fail
+$otherCust = $customers[1]['id'] ?? null;
+if ($otherCust) {
+    $otherInv = $ar->recordInvoice($otherCust, 'REC-OTHER', '2026-05-20', '2026-06-20', 1000000, 100000, 10, 'Other customer', 'tester');
+    try {
+        $ar->allocateReceipt([['invoice_id' => $otherInv['invoice_id'], 'amount' => 1000]], '112', 'Different customer', 'tester');
+        assertTrue(false, 'Should reject different customer');
+    } catch (\InvalidArgumentException $e) {
+        assertTrue(true, 'Different customer rejected');
+    }
+}
+
+echo "\n=== Test 11: Trial balance ===\n";
 $all = $accountRepo->findAll();
 $totalDr = 0; $totalCr = 0;
 foreach ($all as $a) {

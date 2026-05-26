@@ -391,4 +391,92 @@ class ApService
         $rows = $this->pdo->query('SELECT id, code, name, balance FROM suppliers ORDER BY name')->fetchAll(\PDO::FETCH_ASSOC);
         return $rows;
     }
+
+    //
+    // PHÂN BỔ THANH TOÁN NHIỀU HÓA ĐƠN: 1 lần chi tiền thanh toán nhiều hóa đơn NCC.
+    // Input: allocations = [['invoice_id' => 1, 'amount' => 500000], ...]
+    // Yêu cầu: Tất cả hóa đơn phải cùng một NCC và không được vượt quá số dư từng hóa đơn.
+    //
+    // NGHIỆP VỤ THỰC TẾ: Cuối tháng kế toán tổng hợp các hóa đơn cần thanh toán cho 1 NCC,
+    // lập ủy nhiệm chi tổng số tiền, sau đó phân bổ vào từng hóa đơn.
+    // Hạch toán: Nợ 331 (tổng số tiền) — Có 112 (tổng số tiền).
+    //
+    public function allocatePayment(array $allocations, string $paymentAccount, string $description, string $createdBy): array
+    {
+        $this->pdo->beginTransaction();
+        try {
+            $totalAmount = 0;
+            $supplierId = null;
+            $validated = [];
+
+            foreach ($allocations as $i => $alloc) {
+                $invoice = $this->getInvoice($alloc['invoice_id']);
+                if (!$invoice) throw new \InvalidArgumentException("Invoice not found: {$alloc['invoice_id']}");
+                if ($i === 0) { $supplierId = $invoice['supplier_id']; }
+                if ($invoice['supplier_id'] !== $supplierId) {
+                    throw new \InvalidArgumentException("All invoices must belong to the same supplier");
+                }
+                if ($invoice['status'] === 'paid') {
+                    throw new \InvalidArgumentException("Invoice {$alloc['invoice_id']} already paid");
+                }
+                $amt = min($alloc['amount'], $invoice['balance']);
+                if ($amt <= 0) throw new \InvalidArgumentException("No balance to allocate on invoice {$alloc['invoice_id']}");
+                if ($amt != $alloc['amount']) {
+                    throw new \InvalidArgumentException("Allocation {$amt} exceeds balance {$invoice['balance']} on invoice {$alloc['invoice_id']}");
+                }
+                $totalAmount += $amt;
+                $validated[] = ['invoice' => $invoice, 'amount' => $amt];
+            }
+
+            $txn = $this->journal->postEntry("AP allocation: {$description}", "ALLOC-{$supplierId}", [
+                ['account_code' => '331', 'amount' => $totalAmount, 'is_debit' => true],
+                ['account_code' => $paymentAccount, 'amount' => $totalAmount, 'is_debit' => false],
+            ], $createdBy);
+
+            $payStmt = $this->pdo->prepare('INSERT INTO payment_allocations (payment_type, transaction_id, invoice_id, amount) VALUES (?, ?, ?, ?)');
+            $invUpd = $this->pdo->prepare('UPDATE ap_invoices SET paid_amount = paid_amount + ?, balance = GREATEST(balance - ?, 0), status = ? WHERE id = ?');
+
+            foreach ($validated as $v) {
+                $inv = $v['invoice'];
+                $amt = $v['amount'];
+                $newPaid = $inv['paid_amount'] + $amt;
+                $newBal = $inv['gross_amount'] - $newPaid;
+                $newStatus = $newBal <= 1 ? 'paid' : ($newPaid > 0 ? 'partial' : 'unpaid');
+
+                $payId = $txn->getId();
+                $payStmt->execute(['ap', $payId, $inv['id'], $amt]);
+                $invUpd->execute([$amt, $amt, $newStatus, $inv['id']]);
+            }
+
+            $supplier = $this->supplierRepo->findById($supplierId);
+            if ($supplier) {
+                $supplier->setBalance(max(0, $supplier->getBalance() - $totalAmount));
+                $this->supplierRepo->save($supplier);
+            }
+
+            $this->auditLogger?->log('ap.allocate', 'ap_payment', (string)$txn->getId(),
+                null, ['allocations' => $allocations, 'total' => $totalAmount], $createdBy);
+
+            $this->pdo->commit();
+            return ['transaction_id' => $txn->getId(), 'total_amount' => $totalAmount, 'allocations' => $validated];
+        } catch (\Throwable $e) { $this->pdo->rollBack(); throw $e; }
+    }
+
+    //
+    // LẤY PHÂN BỔ THANH TOÁN: Trả về danh sách các hóa đơn được thanh toán từ 1 giao dịch.
+    // Kết hợp dữ liệu từ payment_allocations với thông tin hóa đơn để hiển thị chi tiết.
+    //
+    public function getAllocationDetails(string $transactionId): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT pa.*, i.invoice_number, i.supplier_id, s.name as supplier_name
+             FROM payment_allocations pa
+             JOIN ap_invoices i ON i.id = pa.invoice_id
+             JOIN suppliers s ON s.id = i.supplier_id
+             WHERE pa.payment_type = ? AND pa.transaction_id = ?
+             ORDER BY pa.id'
+        );
+        $stmt->execute(['ap', $transactionId]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC);
+    }
 }

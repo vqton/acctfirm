@@ -16,6 +16,10 @@ use Accounting\Infrastructure\Persistence\PDOSupplierRepository;
 $pdo = new PDO("mysql:host=127.0.0.1;dbname=accounting_db;charset=utf8mb4","dev","123456",
     [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 
+// Đảm bảo kỳ 2026-05 đang mở cho test
+$pdo->exec("INSERT IGNORE INTO accounting_periods (period_code, start_date, end_date, status) VALUES ('2026-05', '2026-05-01', '2026-05-31', 'open')");
+$pdo->exec("UPDATE accounting_periods SET status = 'open' WHERE period_code = '2026-05'");
+
 $accountRepo = new PDOAccountRepository($pdo);
 $txnRepo = new PDOTransactionRepository($pdo);
 $supplierRepo = new PDOSupplierRepository($pdo);
@@ -122,6 +126,31 @@ assertEq('written_off', $woInv2['status'], 'Status = written_off');
 echo "\n=== Test 10: Supplier statement ===\n";
 $stmt = $ap->getSupplierStatement($supplierId);
 assertTrue(count($stmt) >= 1, 'Supplier statement non-empty');
+
+echo "\n=== Test 10b: Multi-invoice payment allocation ===\n";
+$allocInv1 = $ap->recordInvoice($supplierId, 'ALLOC-001', '2026-05-20', '2026-06-20', 3000000, 300000, 10, 'Alloc test 1', '156', 'tester');
+$allocInv2 = $ap->recordInvoice($supplierId, 'ALLOC-002', '2026-05-20', '2026-06-20', 5000000, 500000, 10, 'Alloc test 2', '156', 'tester');
+$totalAlloc = $allocInv1['amount'] + $allocInv2['amount'];
+assertEq(8800000, $totalAlloc, 'Total invoices = 3.3M + 5.5M = 8.8M');
+
+$alloc = $ap->allocatePayment([
+    ['invoice_id' => $allocInv1['invoice_id'], 'amount' => 3300000],
+    ['invoice_id' => $allocInv2['invoice_id'], 'amount' => 5500000],
+], '112', 'Bulk payment', 'tester');
+assertEq(8800000, $alloc['total_amount'], 'Allocation total = 8.8M');
+assertEq('paid', $ap->getInvoice($allocInv1['invoice_id'])['status'], 'Invoice 1 paid');
+assertEq('paid', $ap->getInvoice($allocInv2['invoice_id'])['status'], 'Invoice 2 paid');
+
+$allDet = $ap->getAllocationDetails($alloc['transaction_id']);
+assertEq(2, count($allDet), 'Allocation has 2 entries');
+
+// Different supplier → should fail
+try {
+    $ap->allocatePayment([['invoice_id' => $allocInv1['invoice_id'], 'amount' => 1000]], '112', 'Different supplier', 'tester');
+    assertTrue(false, 'Should reject different supplier');
+} catch (\InvalidArgumentException $e) {
+    assertTrue(true, 'Different supplier rejected');
+}
 
 echo "\n=== Test 11: Trial balance after all AP transactions ===\n";
 $all = $accountRepo->findAll();

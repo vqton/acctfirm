@@ -357,4 +357,87 @@ class ArService
     {
         $this->pdo->prepare('UPDATE customers SET balance = balance + ? WHERE id = ?')->execute([$amount, $customerId]);
     }
+
+    //
+    // PHÂN BỔ THU TIỀN NHIỀU HÓA ĐƠN: 1 lần thu tiền từ KH thanh toán nhiều hóa đơn.
+    // Input: allocations = [['invoice_id' => 1, 'amount' => 500000], ...]
+    // Yêu cầu: Tất cả hóa đơn phải cùng một KH và không vượt quá số dư từng hóa đơn.
+    //
+    // NGHIỆP VỤ THỰC TẾ: KH chuyển khoản tổng số tiền cho nhiều hóa đơn chưa thanh toán.
+    // Kế toán ghi 1 phiếu thu và phân bổ vào từng hóa đơn.
+    // Hạch toán: Nợ 112 (tổng số tiền) — Có 131 (tổng số tiền).
+    //
+    public function allocateReceipt(array $allocations, string $receiptAccount, string $description, string $createdBy): array
+    {
+        $this->pdo->beginTransaction();
+        try {
+            $totalAmount = 0;
+            $customerId = null;
+            $validated = [];
+
+            foreach ($allocations as $i => $alloc) {
+                $inv = $this->getInvoice($alloc['invoice_id']);
+                if (!$inv) throw new \InvalidArgumentException("Invoice not found: {$alloc['invoice_id']}");
+                if ($i === 0) { $customerId = $inv['customer_id']; }
+                if ($inv['customer_id'] !== $customerId) {
+                    throw new \InvalidArgumentException("All invoices must belong to the same customer");
+                }
+                if ($inv['status'] === 'paid') {
+                    throw new \InvalidArgumentException("Invoice {$alloc['invoice_id']} already paid");
+                }
+                $amt = min($alloc['amount'], $inv['balance']);
+                if ($amt <= 0) throw new \InvalidArgumentException("No balance to allocate on invoice {$alloc['invoice_id']}");
+                if ($amt != $alloc['amount']) {
+                    throw new \InvalidArgumentException("Allocation {$amt} exceeds balance {$inv['balance']} on invoice {$alloc['invoice_id']}");
+                }
+                $totalAmount += $amt;
+                $validated[] = ['invoice' => $inv, 'amount' => $amt];
+            }
+
+            $txn = $this->journal->postEntry("AR receipt: {$description}", "ALLOC-{$customerId}", [
+                ['account_code' => $receiptAccount, 'amount' => $totalAmount, 'is_debit' => true],
+                ['account_code' => '131', 'amount' => $totalAmount, 'is_debit' => false],
+            ], $createdBy);
+
+            $payStmt = $this->pdo->prepare('INSERT INTO payment_allocations (payment_type, transaction_id, invoice_id, amount) VALUES (?, ?, ?, ?)');
+            $invUpd = $this->pdo->prepare('UPDATE ar_invoices SET paid_amount = paid_amount + ?, balance = GREATEST(balance - ?, 0), status = ? WHERE id = ?');
+
+            foreach ($validated as $v) {
+                $inv = $v['invoice'];
+                $amt = $v['amount'];
+                $newPaid = $inv['paid_amount'] + $amt;
+                $newBal = $inv['gross_amount'] - $newPaid;
+                $newStatus = $newBal <= 1 ? 'paid' : ($newPaid > 0 ? 'partial' : 'unpaid');
+
+                $payId = $txn->getId();
+                $payStmt->execute(['ar', $payId, $inv['id'], $amt]);
+                $invUpd->execute([$amt, $amt, $newStatus, $inv['id']]);
+            }
+
+            $this->updateCustomerBalance($customerId, -$totalAmount);
+
+            $this->auditLogger?->log('ar.allocate', 'ar_payment', (string)$txn->getId(),
+                null, ['allocations' => $allocations, 'total' => $totalAmount], $createdBy);
+
+            $this->pdo->commit();
+            return ['transaction_id' => $txn->getId(), 'total_amount' => $totalAmount, 'allocations' => $validated];
+        } catch (\Throwable $e) { $this->pdo->rollBack(); throw $e; }
+    }
+
+    //
+    // LẤY PHÂN BỔ THU TIỀN: Trả về danh sách các hóa đơn được thu từ 1 giao dịch.
+    //
+    public function getReceiptAllocationDetails(string $transactionId): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT pa.*, i.invoice_number, i.customer_id, c.name as customer_name
+             FROM payment_allocations pa
+             JOIN ar_invoices i ON i.id = pa.invoice_id
+             JOIN customers c ON c.id = i.customer_id
+             WHERE pa.payment_type = ? AND pa.transaction_id = ?
+             ORDER BY pa.id'
+        );
+        $stmt->execute(['ar', $transactionId]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC);
+    }
 }
