@@ -39,6 +39,11 @@ class PeriodService
         if (!$pdo) return true; // no period management yet
         $date ??= date('Y-m-d');
 
+        // Nếu chưa có kỳ kế toán nào → cho phép post (chưa thiết lập quản lý kỳ)
+        // RỦI RO: COUNT(*) rẻ hơn EXISTS cho bảng nhỏ — chấp nhận được.
+        $stmt = $pdo->query("SELECT COUNT(*) FROM accounting_periods");
+        if ((int)$stmt->fetchColumn() === 0) return true;
+
         $stmt = $pdo->prepare(
             "SELECT COUNT(*) FROM accounting_periods WHERE ? BETWEEN start_date AND end_date AND status = ?"
         );
@@ -239,9 +244,47 @@ class PeriodService
         }
         $checks[] = ['check' => 'Financial statements generated', 'passed' => $fsPass, 'note' => $fsNote];
 
+        // 8. Kiểm tra tiền lương: đã hạch toán lương cho kỳ này chưa
+        // CẢNH BÁO — KHÔNG CHẶN: Theo Thông tư 99/2025/TT-BTC Điều 13, doanh nghiệp
+        // phải khóa sổ cuối kỳ để lập BCTC. Việc chặn khóa sổ vì thiếu lương có thể
+        // dẫn đến chậm nộp BCTC (phạt 20-30tr theo Nghị định 41/2018).
+        //
+        // Tuy nhiên, nếu lương chưa hạch toán:
+        // - BC01 chỉ tiêu 315 (Phải trả NLĐ - TK 334) thiếu số dư
+        // - BC02 chỉ tiêu 26 (CP QLDN - TK 642) thiếu chi phí lương
+        // - Lợi nhuận trước thuế bị sai → thuế TNDN tạm tính sai
+        // - Báo cáo BHXH (D02-LT, D01-TS) thiếu dữ liệu
+        //
+        // Xử lý: Cảnh báo để Kế toán trưởng quyết định — nếu đã trả lương nhưng chưa
+        // hạch toán, cần ghi nhận bổ sung trước khi khóa sổ. Nếu lương kỳ này chưa đến
+        // hạn trả, kế toán có thể ghi nhận dồn tích (accrual) hoặc bỏ qua.
+        //
+        // RỦI RO: Không ghi nhận lương → BC02 thiếu chi phí → lợi nhuận cao hơn thực tế
+        // → cổ đông/quỹ đầu tư ra quyết định sai dựa trên BC sai.
+        // Nếu cố tình không ghi nhận để giảm lợi nhuận, có thể bị coi là khai man BCTC
+        // (phạt 40-50tr theo Nghị định 41/2018 Điều 11 khoản 4).
+        $payrollPass = true;
+        $payrollNote = 'OK';
+        $payrollCheck = $this->pdo->prepare("
+            SELECT COUNT(*) FROM payroll_entries pe
+            JOIN payroll_periods pp ON pp.id = pe.period_id
+            WHERE pp.start_date <= ? AND pp.end_date >= ?
+              AND pe.status = 'posted'
+        ");
+        $payrollCheck->execute([$period['end_date'], $period['start_date']]);
+        $payrollPosted = (int)$payrollCheck->fetchColumn();
+        if ($payrollPosted === 0) {
+            // CẢNH BÁO nhưng không chặn — Kế toán trưởng quyết định
+            $payrollNote = 'No posted payroll entries — salary cost (642) and payable (334) may be missing from FS';
+            $this->auditLogger?->log('period.warning_payroll_not_posted', 'accounting_period', (string)$id,
+                null, ['warning' => $payrollNote, 'period_code' => $period['period_code']],
+                'system');
+        }
+        $checks[] = ['check' => 'Payroll posted', 'passed' => $payrollPass, 'note' => $payrollNote];
+
         return [
             'can_close' => $allPass,
-            'checks' => $checks,
+            'checks' => $checks
         ];
     }
 

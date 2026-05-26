@@ -16,6 +16,7 @@ $svc = new ReconciliationService($pdo);
 // Mỗi module trả về: gl_balance, subledger_balance, difference, status
 // Nếu fail → không phát hiện được chênh lệch giữa các module → sai báo cáo
 // Giả định: Tất cả module đã có dữ liệu
+$all = $svc->reconcileAll();
 echo "\n";
 assertTrue(count($all) >= 6, 'All 6 reconciliation types returned');
 assertTrue(isset($all['ar']), 'AR present');

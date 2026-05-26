@@ -93,12 +93,14 @@ $parent = $repo->findByCode('128');
 $child = $repo->findByCode('1281');
 assertTrue($parent !== null, 'Parent account 128 exists');
 assertTrue($child !== null, 'Child account 1281 exists');
-assertEq($parent->getCode(), $child->getParentId(), '1281 parent_id references code 128');
+assertEq($parent->getId(), $child->getParentId(), '1281 parent_id matches 128');
 
 // Verify deeper hierarchy (level 3 accounts)
+$parent3331 = $repo->findByCode('3331');
 $sub = $repo->findByCode('33311');
+assertTrue($parent3331 !== null, 'Parent account 3331 exists');
 assertTrue($sub !== null, 'Level 3 account 33311 exists');
-assertEq('3331', $sub->getParentId(), '33311 parent is 3331');
+assertEq($parent3331->getId(), $sub->getParentId(), '33311 parent_id matches 3331');
 
 // Nghiệp vụ: Kiểm tra tính chất số dư (bên Nợ/bên Có) của từng loại tài khoản
 // Tài sản (111) = Dư Nợ, Nợ phải trả (331) = Dư Có, Doanh thu (511) = Dư Có

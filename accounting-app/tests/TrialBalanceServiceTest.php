@@ -15,6 +15,7 @@ $svc = new TrialBalanceService($pdo);
 // Kiểm tra cấu trúc trả về: items, grand_total_dr, grand_total_cr, balanced
 // Nếu fail → không thể xem bảng cân đối tài khoản → audit fail
 // Giả định: Có ít nhất 1 tài khoản có số dư
+$tb = $svc->getTrialBalance();
 echo "\n";
 assertTrue(isset($tb['items']), 'TB has items');
 assertTrue(isset($tb['grand_total_dr']), 'TB has grand total dr');

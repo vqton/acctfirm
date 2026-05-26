@@ -150,5 +150,5 @@
   ["8211","Chi phí thuế TNDN hiện hành","expense","8","D","821"],
   ["82112","Chi phí thuế tối thiểu toàn cầu","expense","8","D","821"],
   ["8212","Chi phí thuế TNDN hoãn lại","expense","8","D","821"],
-  ["911","Xác định kết quả kinh doanh","expense","9","D"]
+  ["911","Xác định kết quả kinh doanh","equity","9","C"]
 ]

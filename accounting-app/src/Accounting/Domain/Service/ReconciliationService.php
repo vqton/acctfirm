@@ -78,6 +78,21 @@ class ReconciliationService
         return false;
     }
 
+    // Lấy số dư GL cho một tài khoản theo mã tài khoản
+    // Công thức: SUM(is_debit=1) - SUM(is_debit=0) = debit-normal balance
+    // Với TK có normal balance = credit (như 331), kết quả sẽ âm (dư Có)
+    private function glBalance(string $accountCode): float
+    {
+        $stmt = $this->pdo->prepare("
+            SELECT COALESCE(SUM(CASE WHEN le.is_debit = 1 THEN le.amount ELSE -le.amount END), 0)
+            FROM ledger_entries le
+            JOIN accounts a ON a.id = le.account_id
+            WHERE a.code = ?
+        ");
+        $stmt->execute([$accountCode]);
+        return (float)$stmt->fetchColumn();
+    }
+
     // Tạo cấu trúc kết quả đối chiếu cho một loại tài khoản
     //
     // Đầu vào: type (ar/ap/cash...), GL balance, Sub-ledger balance, label

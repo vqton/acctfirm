@@ -88,14 +88,14 @@ assertEq($revStart + 1000000, $revBalance, 'Revenue increased by 1,000,000 on cr
 // Nếu fail → không ghi nhận được chi phí qua ngân hàng, sai BC02
 // Giả định: TK 641, 112 tồn tại
 echo "\n=== Test 2: Post Dr Expense — Cr Bank ===\n";
+$bankStart = $accountRepo->findByCode('112')->getBalance();
 $txn2 = $svc->postEntry('Test expense', 'REF-002', [
     ['account_code' => '641', 'amount' => 500000, 'is_debit' => true],
     ['account_code' => '112', 'amount' => 500000, 'is_debit' => false],
 ], 'test_user');
 
-// Bank (asset) starts at 0, credit decreases it → negative balance (overdraft)
 $bankBalance = $accountRepo->findByCode('112')->getBalance();
-assertEq(-500000, $bankBalance, 'Bank (asset) decreased by 500,000 on credit');
+assertEq($bankStart - 500000, $bankBalance, 'Bank (asset) decreased by 500,000 on credit');
 assertEq('posted', $txn2->getStatus(), 'Expense entry posted');
 
 // Ràng buộc kế toán: tổng Dr ≠ tổng Cr → throw InvalidArgumentException

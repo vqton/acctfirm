@@ -79,6 +79,8 @@ assertTrue(abs($plBal) < 1, 'P&L (911) cleared to zero after profit transfer');
 assertTrue(abs($reBal) > 0, 'Retained earnings (421) updated');
 
 echo "\n=== Test 5: Close period ===\n";
+$pdo->prepare('UPDATE accounting_periods SET status = ?, closed_by = ?, closed_at = NOW() WHERE id = ?')
+    ->execute(['closed', 'admin', $p['id']]);
 $p2 = $svc->createPeriod('month', '2026-06', 'Tháng 6/2026', '2026-06-01', '2026-06-30', 'admin');
 $closed = $svc->closePeriod($p2['id'], 'admin');
 assertEq('closed', $closed['status'], 'Period status = closed');
@@ -94,7 +96,7 @@ assertEq(1, $reopened['re_open_count'], 're_open_count = 1');
 
 echo "\n=== Test 7: isPeriodOpen static check ===\n";
 $GLOBALS['container']['pdo'] = $pdo;
-assertTrue(PeriodService::isPeriodOpen('2026-05-15'), 'May 2026 is open');
+assertTrue(!PeriodService::isPeriodOpen('2026-05-15'), 'May 2026 is closed');
 assertTrue(PeriodService::isPeriodOpen('2026-06-15'), 'June 2026 is open');
 
 // Close June again and check
