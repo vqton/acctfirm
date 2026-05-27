@@ -64,12 +64,12 @@ class ReturnToSupplierController
         Auth::requirePermission('inventory', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['item_id'], $data['qty'])) {
-            JsonResponse::error('item_id, qty required');
+            JsonResponse::error('Vui lòng nhập mã vật tư và số lượng');
             return;
         }
         $qty = (float)$data['qty'];
         if ($qty <= 0) {
-            JsonResponse::error('qty must be positive');
+            JsonResponse::error('Số lượng phải lớn hơn 0');
             return;
         }
         try {

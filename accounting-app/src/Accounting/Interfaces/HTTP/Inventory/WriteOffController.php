@@ -62,12 +62,12 @@ class WriteOffController
         Auth::requirePermission('inventory', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['item_id'], $data['qty'], $data['reason'])) {
-            JsonResponse::error('item_id, qty, reason required');
+            JsonResponse::error('Vui lòng nhập mã vật tư, số lượng và lý do xuất hủy');
             return;
         }
         $qty = (float)$data['qty'];
         if ($qty <= 0) {
-            JsonResponse::error('qty must be positive');
+            JsonResponse::error('Số lượng phải lớn hơn 0');
             return;
         }
         try {

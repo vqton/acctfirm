@@ -59,7 +59,7 @@ class PettyCashController
         Auth::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['fund_name'], $data['imprest_amount'])) {
-            JsonResponse::error('fund_name, imprest_amount required', 400);
+            JsonResponse::error('Vui lòng nhập tên quỹ và hạn mức tạm ứng', 400);
             return;
         }
         try {
@@ -86,7 +86,7 @@ class PettyCashController
         Auth::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['fund_id'], $data['amount'])) {
-            JsonResponse::error('fund_id, amount required', 400);
+            JsonResponse::error('Vui lòng nhập mã quỹ và số tiền', 400);
             return;
         }
         try {
@@ -114,7 +114,7 @@ class PettyCashController
         Auth::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['fund_id'], $data['expense_account'], $data['total_amount'])) {
-            JsonResponse::error('fund_id, expense_account, total_amount required', 400);
+            JsonResponse::error('Vui lòng nhập mã quỹ, tài khoản chi phí và tổng số tiền', 400);
             return;
         }
         try {
@@ -142,7 +142,7 @@ class PettyCashController
         Auth::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['fund_id'])) {
-            JsonResponse::error('fund_id required', 400);
+            JsonResponse::error('Vui lòng nhập mã quỹ', 400);
             return;
         }
         try {

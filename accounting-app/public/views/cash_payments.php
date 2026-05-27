@@ -136,7 +136,7 @@ $('#paymentForm').submit(function(e){e.preventDefault();
         vat_rate: $('#vatRateGroup').is(':visible')?parseInt($('#vatRate').val())||0:0,
     };
     $.ajax({url:'/api/cash/payments',method:'POST',contentType:'application/json',headers:{'X-CSRF-Token':csrf},data:JSON.stringify(data),
-        success:function(){$('#paymentModal').modal('hide');$('#paymentForm')[0].reset();showToast('Phiếu chi tạo thành công','success');loadData();},
+        success:function(){$('#paymentModal').modal('hide');$('#paymentForm')[0].reset();showToast('Đã tạo phiếu chi thành công.','success');loadData();},
         error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}
     });
 });

@@ -66,11 +66,11 @@ $.get('/api/items', function(items) {
     });
 });
 $('#adjustForm').submit(function(e){e.preventDefault();
-    $.ajax({url:'/api/physical-count/adjust',method:'POST',contentType:'application/json',data:JSON.stringify({item_id:$('#adjItemId').val(),actual_qty:parseFloat($('#adjQty').val()),reference:$('#adjRef').val()||undefined}),success:function(){$('#adjustModal').modal('hide');$('#adjustForm')[0].reset();showToast('Điều chỉnh thành công','success');loadData();},error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}});
+    $.ajax({url:'/api/physical-count/adjust',method:'POST',contentType:'application/json',data:JSON.stringify({item_id:$('#adjItemId').val(),actual_qty:parseFloat($('#adjQty').val()),reference:$('#adjRef').val()||undefined}),success:function(){$('#adjustModal').modal('hide');$('#adjustForm')[0].reset();showToast('Đã điều chỉnh tồn kho thành công.','success');loadData();},error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}});
 });
 $('#sessionForm').submit(function(e){e.preventDefault();
     var lines=[];$('#sessionLines tr').each(function(){lines.push({item_id:$(this).find('.sl-item').val(),actual_qty:parseFloat($(this).find('.sl-actual').val())});});
-    $.ajax({url:'/api/physical-count/sessions',method:'POST',contentType:'application/json',data:JSON.stringify({lines:lines,reference:$('#sessionRef').val()||undefined,notes:$('#sessionNotes').val()}),success:function(){$('#sessionModal').modal('hide');showToast('Tạo phiên kiểm kê thành công','success');loadData();},error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}});
+    $.ajax({url:'/api/physical-count/sessions',method:'POST',contentType:'application/json',data:JSON.stringify({lines:lines,reference:$('#sessionRef').val()||undefined,notes:$('#sessionNotes').val()}),success:function(){$('#sessionModal').modal('hide');showToast('Đã tạo phiên kiểm kê thành công.','success');loadData();},error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}});
 });
 $(document).ready(function(){loadData();});
 </script>

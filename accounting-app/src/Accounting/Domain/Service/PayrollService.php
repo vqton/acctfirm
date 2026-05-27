@@ -258,8 +258,8 @@ class PayrollService
     public function processPayroll(string $periodId, ?string $createdBy = null, array $employeeOverrides = []): PayrollEntry
     {
         $period = $this->payrollPeriodRepo->findById($periodId);
-        if (!$period) throw new \InvalidArgumentException("Payroll period not found: {$periodId}");
-        if ($period->getStatus() !== 'open') throw new \InvalidArgumentException("Payroll period is not open");
+        if (!$period) throw new \InvalidArgumentException("Không tìm thấy kỳ lương mã {$periodId}.");
+        if ($period->getStatus() !== 'open') throw new \InvalidArgumentException("Kỳ lương không ở trạng thái mở. Vui lòng kiểm tra lại.");
 
         // Chuyen status sang processing
         $period->setStatus('processing');
@@ -268,7 +268,7 @@ class PayrollService
         $employees = $this->employeeRepo->findAll();
         // Chi lay nhan vien active
         $employees = array_filter($employees, fn(Employee $e) => $e->isStatus());
-        if (count($employees) === 0) throw new \RuntimeException('No active employees found');
+        if (count($employees) === 0) throw new \RuntimeException('Không tìm thấy nhân viên đang hoạt động');
 
         $entryId = uniqid('prl_');
         $entry = new PayrollEntry($entryId, $periodId, 'draft', 0);
@@ -346,20 +346,20 @@ class PayrollService
     public function postPayroll(string $entryId, string $postedBy, array $accountOverrides = []): array
     {
         if (!$this->journalService) {
-            throw new \RuntimeException('JournalService not configured for payroll posting');
+            throw new \RuntimeException('JournalService chưa được cấu hình cho hạch toán lương');
         }
         if (!$this->pdo) {
-            throw new \RuntimeException('PDO not configured for payroll posting');
+            throw new \RuntimeException('PDO chưa được cấu hình cho hạch toán lương');
         }
 
         $entry = $this->payrollEntryRepo->findById($entryId);
-        if (!$entry) throw new \InvalidArgumentException("Payroll entry not found: {$entryId}");
+        if (!$entry) throw new \InvalidArgumentException("Không tìm thấy bảng lương mã {$entryId}.");
         if (!in_array($entry->getStatus(), ['draft', 'approved'])) {
-            throw new \InvalidArgumentException("Payroll entry must be draft or approved to post");
+            throw new \InvalidArgumentException("Bảng lương phải ở trạng thái nháp hoặc đã duyệt mới có thể ghi sổ.");
         }
 
         $details = $this->payrollEntryRepo->findDetailsByEntry($entryId);
-        if (count($details) === 0) throw new \RuntimeException('No payroll details to post');
+        if (count($details) === 0) throw new \RuntimeException('Không có chi tiết lương để hạch toán');
 
         // Lay tai khoan chi phi mac dinh (co the override)
         $costAccount = $accountOverrides['cost_account'] ?? '642';
@@ -552,9 +552,9 @@ class PayrollService
     public function approvePayroll(string $entryId, string $approvedBy): PayrollEntry
     {
         $entry = $this->payrollEntryRepo->findById($entryId);
-        if (!$entry) throw new \InvalidArgumentException("Payroll entry not found: {$entryId}");
+        if (!$entry) throw new \InvalidArgumentException("Không tìm thấy bảng lương mã {$entryId}.");
         if ($entry->getStatus() !== 'draft') {
-            throw new \InvalidArgumentException("Payroll entry must be in draft status to approve");
+            throw new \InvalidArgumentException("Bảng lương phải ở trạng thái nháp mới có thể phê duyệt.");
         }
 
         $entry->setStatus('approved');
@@ -570,9 +570,9 @@ class PayrollService
     public function closePayroll(string $periodId, string $closedBy): PayrollPeriod
     {
         $period = $this->payrollPeriodRepo->findById($periodId);
-        if (!$period) throw new \InvalidArgumentException("Payroll period not found: {$periodId}");
+        if (!$period) throw new \InvalidArgumentException("Không tìm thấy kỳ lương mã {$periodId}.");
         if ($period->getStatus() !== 'open') {
-            throw new \InvalidArgumentException("Payroll period must be open to close");
+            throw new \InvalidArgumentException("Kỳ lương phải ở trạng thái mở mới có thể đóng.");
         }
 
         $period->setStatus('closed');
@@ -591,9 +591,9 @@ class PayrollService
     public function adjustPayroll(string $originalEntryId, string $createdBy, array $adjustments): PayrollEntry
     {
         $original = $this->payrollEntryRepo->findById($originalEntryId);
-        if (!$original) throw new \InvalidArgumentException("Original payroll entry not found: {$originalEntryId}");
+        if (!$original) throw new \InvalidArgumentException("Không tìm thấy bảng lương gốc mã {$originalEntryId}.");
         if ($original->getStatus() !== 'posted') {
-            throw new \InvalidArgumentException("Can only adjust posted payroll entries");
+            throw new \InvalidArgumentException("Chỉ có thể điều chỉnh bảng lương đã ghi sổ.");
         }
 
         $entryId = uniqid('prl_');

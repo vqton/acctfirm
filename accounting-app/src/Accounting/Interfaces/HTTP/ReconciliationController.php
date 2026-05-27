@@ -51,7 +51,7 @@ class ReconciliationController
             $results = $this->service->reconcileAll();
         } else {
             $method = 'reconcile' . ucfirst($type);
-            $results = method_exists($this->service, $method) ? [$type => $this->service->$method()] : ['error' => 'Unknown type'];
+            $results = method_exists($this->service, $method) ? [$type => $this->service->$method()] : ['error' => 'Loại đối chiếu không hợp lệ'];
         }
         JsonResponse::ok($results);
     }

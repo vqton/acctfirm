@@ -127,7 +127,7 @@ $('#transitForm').submit(function(e) {
         success: function() {
             $('#transitModal').modal('hide');
             $('#transitForm')[0].reset();
-            showToast('Ghi nhận hàng đi đường thành công', 'success');
+            showToast('Đã ghi nhận hàng mua đang đi đường thành công.', 'success');
             loadData();
         },
         error: function(xhr) {
@@ -152,7 +152,7 @@ $('#receiveForm').submit(function(e) {
         success: function() {
             $('#receiveModal').modal('hide');
             $('#receiveForm')[0].reset();
-            showToast('Nhập kho thành công', 'success');
+            showToast('Đã nhập kho thành công.', 'success');
             loadData();
         },
         error: function(xhr) {

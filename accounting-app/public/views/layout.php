@@ -299,8 +299,8 @@ function confirmDelete(id,api,name){
 document.getElementById('confirmBtn').addEventListener('click',function(){
     if(deleteId&&deleteApi){
         fetch(deleteApi+'/'+deleteId,{method:'DELETE'})
-            .then(function(){showToast('Đã xóa thành công','success');loadData();})
-            .catch(function(){showToast('Lỗi khi xóa','error');});
+            .then(function(){showToast('Đã xóa dữ liệu thành công.','success');loadData();})
+            .catch(function(){showToast('Có lỗi xảy ra khi xóa dữ liệu. Vui lòng thử lại.','error');});
     }
     hideConfirm();
 });
@@ -308,7 +308,7 @@ document.getElementById('confirmBtn').addEventListener('click',function(){
 $(function(){
     $('.sidebar-scroll .nav-link-s[href="#"]').on('click',function(e){
         e.preventDefault();
-        showToast('Module đang phát triển','info');
+        showToast('Chức năng này đang được phát triển. Vui lòng quay lại sau.','info');
     });
 });
 </script>

@@ -96,7 +96,7 @@ class Auth
         $token = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? $_POST['_csrf'] ?? null;
         if (!$token || $token !== self::csrfToken()) {
             http_response_code(419);
-            echo json_encode(['error' => 'CSRF token mismatch'], JSON_UNESCAPED_UNICODE);
+            echo json_encode(['error' => 'Mã bảo vệ CSRF không hợp lệ. Vui lòng tải lại trang và thử lại.'], JSON_UNESCAPED_UNICODE);
             exit;
         }
     }

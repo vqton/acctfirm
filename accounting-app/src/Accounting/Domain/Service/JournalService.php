@@ -61,7 +61,7 @@ class JournalService
         if ($this->postingRuleService->hasBlock($results)) {
             $blocked = array_values(array_filter($results, fn($r) => $r['severity'] === 'block'));
             throw new \InvalidArgumentException(
-                'Posting rule violation: ' . ($blocked[0]['message'] ?? 'blocked pair')
+                'Vi phạm quy tắc hạch toán: ' . ($blocked[0]['message'] ?? 'cặp tài khoản bị chặn')
             );
         }
     }
@@ -91,7 +91,7 @@ class JournalService
     ): Transaction
     {
         if (count($lines) < 2) {
-            throw new \InvalidArgumentException('Journal entry must have at least 2 lines');
+            throw new \InvalidArgumentException('Bút toán phải có ít nhất 2 dòng (Nợ và Có)');
         }
 
         $totalDr = 0.0;
@@ -100,15 +100,15 @@ class JournalService
 
         foreach ($lines as $line) {
             if ($line['amount'] <= 0) {
-                throw new \InvalidArgumentException('Amount must be positive');
+                throw new \InvalidArgumentException('Số tiền phải lớn hơn 0');
             }
             $account = $this->accountRepo->findByCode($line['account_code']);
             if (!$account) {
-                throw new \InvalidArgumentException("Account not found: {$line['account_code']}");
+                throw new \InvalidArgumentException("Không tìm thấy tài khoản: {$line['account_code']}");
             }
             if ($account->isControl() && !$allowControl) {
                 throw new \InvalidArgumentException(
-                    "Account {$line['account_code']} ({$account->getName()}) is a control account"
+                    "Tài khoản {$line['account_code']} ({$account->getName()}) là tài khoản tổng hợp — vui lòng hạch toán vào tài khoản chi tiết"
                 );
             }
             if ($line['is_debit']) $totalDr += $line['amount'];
@@ -122,7 +122,7 @@ class JournalService
         // RỦI RO: Tolerance quá nhỏ → từ chối bút toán hợp lệ do rounding error
         // (VD: phân bổ 100.000đ cho 3 dòng: 33.333,33 + 33.333,33 + 33.333,34 = 100.000).
         if (abs($totalDr - $totalCr) > 10) {
-            throw new \InvalidArgumentException("Debit ($totalDr) does not equal Credit ($totalCr)");
+            throw new \InvalidArgumentException("Tổng Nợ ($totalDr) không bằng tổng Có ($totalCr)");
         }
 
         $this->validatePostingRules($lines, $module);
@@ -160,7 +160,7 @@ class JournalService
     {
         $txn = $this->txnRepo->findById($txnId);
         if (!$txn) {
-            throw new \InvalidArgumentException("Transaction not found: {$txnId}");
+            throw new \InvalidArgumentException("Không tìm thấy bút toán mã {$txnId}");
         }
         $txn->submit();
         $this->txnRepo->save($txn);
@@ -177,7 +177,7 @@ class JournalService
     {
         $txn = $this->txnRepo->findById($txnId);
         if (!$txn) {
-            throw new \InvalidArgumentException("Transaction not found: {$txnId}");
+            throw new \InvalidArgumentException("Không tìm thấy bút toán mã {$txnId}");
         }
         $txn->approve();
         $this->txnRepo->save($txn);
@@ -194,7 +194,7 @@ class JournalService
     {
         $txn = $this->txnRepo->findById($txnId);
         if (!$txn) {
-            throw new \InvalidArgumentException("Transaction not found: {$txnId}");
+            throw new \InvalidArgumentException("Không tìm thấy bút toán mã {$txnId}");
         }
         $txn->reject();
         $this->txnRepo->save($txn);
@@ -212,7 +212,7 @@ class JournalService
     {
         $txn = $this->txnRepo->findById($txnId);
         if (!$txn) {
-            throw new \InvalidArgumentException("Transaction not found: {$txnId}");
+            throw new \InvalidArgumentException("Không tìm thấy bút toán mã {$txnId}");
         }
         $txn->returnToDraft();
         $this->txnRepo->save($txn);
@@ -237,12 +237,12 @@ class JournalService
     {
         $txn = $this->txnRepo->findById($txnId);
         if (!$txn || $txn->getStatus() !== 'pending') {
-            throw new \InvalidArgumentException('Draft not found or already posted');
+            throw new \InvalidArgumentException('Bút toán nháp không tồn tại hoặc đã được ghi sổ');
         }
 
         $draftDate = $txn->getDate()->format('Y-m-d');
         if (!PeriodService::isPeriodOpen($draftDate, $this->pdo)) {
-            throw new \RuntimeException("Cannot post draft: date {$draftDate} is in a closed period");
+            throw new \RuntimeException("Không thể ghi sổ: ngày {$draftDate} thuộc kỳ kế toán đã đóng");
         }
 
         // Validate posting rules on approval too (rules may have changed since draft)
@@ -308,7 +308,7 @@ class JournalService
     public function generateVoucherNo(string $prefix = 'JV'): string
     {
         if (!$this->voucherService) {
-            throw new \RuntimeException('VoucherService not configured');
+            throw new \RuntimeException('VoucherService chưa được cấu hình');
         }
         return $this->voucherService->nextNumber($prefix);
     }
@@ -331,12 +331,12 @@ class JournalService
     public function postEntry(string $description, string $reference, array $lines, string $createdBy, bool $allowControl = false, ?string $module = null, ?string $date = null, ?string $voucherType = null, ?string $sourceModule = null, string $currency = 'VND', float $exchangeRate = 1.0): Transaction
     {
         if (count($lines) < 2) {
-            throw new \InvalidArgumentException('Journal entry must have at least 2 lines');
+            throw new \InvalidArgumentException('Bút toán phải có ít nhất 2 dòng (Nợ và Có)');
         }
 
         $postDate = $date ?? date('Y-m-d');
         if (!PeriodService::isPeriodOpen($postDate, $this->pdo)) {
-            throw new \RuntimeException("Cannot post: date {$postDate} is in a closed period");
+            throw new \RuntimeException("Không thể ghi sổ: ngày {$postDate} thuộc kỳ kế toán đã đóng");
         }
 
         // KỲ KẾ TOÁN: Kiểm tra hard deadline — nếu quá hạn, từ chối ghi nhận
@@ -357,7 +357,7 @@ class JournalService
             $stmt->execute([$postDate]);
             if ((int)$stmt->fetchColumn() > 0) {
                 throw new \RuntimeException(
-                    "Cannot post: hard deadline passed for date {$postDate}. Contact Chief Accountant for override."
+                    "Không thể ghi sổ: hạn chót kỳ kế toán ngày {$postDate} đã qua. Vui lòng liên hệ Kế toán trưởng để được xử lý."
                 );
             }
         }
@@ -379,18 +379,18 @@ class JournalService
 
             foreach ($lines as $line) {
                 if ($line['amount'] <= 0) {
-                    throw new \InvalidArgumentException('Amount must be positive');
+                    throw new \InvalidArgumentException('Số tiền phải lớn hơn 0');
                 }
 
                 $account = $this->accountRepo->findByCode($line['account_code']);
                 if (!$account) {
-                    throw new \InvalidArgumentException("Account not found: {$line['account_code']}");
+                    throw new \InvalidArgumentException("Không tìm thấy tài khoản: {$line['account_code']}");
                 }
 
                 // BR15: Block posting to control accounts unless override
                 if ($account->isControl() && !$allowControl) {
                     throw new \InvalidArgumentException(
-                        "Account {$line['account_code']} ({$account->getName()}) is a control account — post to a detail sub-account instead"
+                        "Tài khoản {$line['account_code']} ({$account->getName()}) là tài khoản tổng hợp — vui lòng hạch toán vào tài khoản chi tiết"
                     );
                 }
 
@@ -405,9 +405,9 @@ class JournalService
 
             // Phase 2: Check Dr = Cr BEFORE any balance changes
             if (abs($totalDr - $totalCr) > 10) {
-                throw new \InvalidArgumentException(
-                    "Debit ({$totalDr}) does not equal Credit ({$totalCr})"
-                );
+                    throw new \InvalidArgumentException(
+                        "Tổng Nợ ({$totalDr}) không bằng tổng Có ({$totalCr})"
+                    );
             }
 
             $this->validatePostingRules($lines, $module);

@@ -85,7 +85,7 @@ class JournalController
     public function get(string $id): void
     {
         $txn = $this->txnRepo->findById($id);
-        if (!$txn) { JsonResponse::error('Not found', 404); return; }
+        if (!$txn) { JsonResponse::error('Không tìm thấy bút toán', 404); return; }
         $lines = [];
         foreach ($txn->getLedgerEntries() as $e) {
             $a = $this->accountRepo->findById($e->getAccountId());
@@ -119,7 +119,7 @@ class JournalController
     {
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['lines']) || count($data['lines']) < 2) {
-            JsonResponse::error('Requires at least 2 lines with account_code, amount, is_debit', 400);
+            JsonResponse::error('Bút toán phải có ít nhất 2 dòng với mã tài khoản, số tiền và loại Nợ/Có', 400);
             return;
         }
         try {
@@ -177,7 +177,7 @@ class JournalController
     {
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['lines']) || count($data['lines']) < 2) {
-            JsonResponse::error('Requires at least 2 lines with account_code, amount, is_debit', 400);
+            JsonResponse::error('Bút toán phải có ít nhất 2 dòng với mã tài khoản, số tiền và loại Nợ/Có', 400);
             return;
         }
         try {

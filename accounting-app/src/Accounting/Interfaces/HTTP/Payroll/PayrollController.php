@@ -51,7 +51,7 @@ class PayrollController
     {
         Auth::requirePermission('payroll', 'read');
         $period = $this->payrollService->findPeriodById($id);
-        if (!$period) { JsonResponse::error('Payroll period not found', 404); return; }
+        if (!$period) { JsonResponse::error('Không tìm thấy kỳ lương', 404); return; }
         JsonResponse::ok($period->toArray());
     }
 
@@ -91,7 +91,7 @@ class PayrollController
     {
         Auth::requirePermission('payroll', 'read');
         $entry = $this->payrollService->findEntryById($id);
-        if (!$entry) { JsonResponse::error('Payroll entry not found', 404); return; }
+        if (!$entry) { JsonResponse::error('Không tìm thấy bảng lương', 404); return; }
         JsonResponse::ok($entry->toArray());
     }
 
@@ -99,7 +99,7 @@ class PayrollController
     {
         Auth::requirePermission('payroll', 'read');
         $entry = $this->payrollService->findEntryById($id);
-        if (!$entry) { JsonResponse::error('Payroll entry not found', 404); return; }
+        if (!$entry) { JsonResponse::error('Không tìm thấy bảng lương', 404); return; }
         $details = $this->payrollService->findDetailsByEntry($id);
         JsonResponse::ok(['entry' => $entry->toArray(), 'details' => $details]);
     }
@@ -111,7 +111,7 @@ class PayrollController
         Auth::requirePermission('payroll', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
         $periodId = $data['period_id'] ?? '';
-        if (!$periodId) { JsonResponse::error('period_id required', 400); return; }
+        if (!$periodId) { JsonResponse::error('Vui lòng chọn kỳ lương', 400); return; }
         $overrides = $data['employee_overrides'] ?? [];
         $entry = $this->payrollService->processPayroll($periodId, $_SESSION['user_id'] ?? 'system', $overrides);
         JsonResponse::ok($entry->toArray(), 201);
@@ -141,7 +141,7 @@ class PayrollController
         Auth::requirePermission('payroll', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!isset($data['adjustments']) || !is_array($data['adjustments'])) {
-            JsonResponse::error('adjustments array required', 400); return;
+            JsonResponse::error('Vui lòng nhập danh sách điều chỉnh', 400); return;
         }
         $entry = $this->payrollService->adjustPayroll($id, $_SESSION['user_id'] ?? 'system', $data['adjustments']);
         JsonResponse::ok($entry->toArray(), 201);
@@ -174,7 +174,7 @@ class PayrollController
         Auth::requirePermission('payroll', 'read');
         $employeeId = $_GET['employee_id'] ?? '';
         $employee = $this->employeeRepo->findById($employeeId);
-        if (!$employee) { JsonResponse::error('Employee not found', 404); return; }
+        if (!$employee) { JsonResponse::error('Không tìm thấy nhân viên', 404); return; }
         $override = [];
         if (isset($_GET['gross'])) $override['gross_salary'] = (float)$_GET['gross'];
         $result = $this->payrollService->calculateEmployeePay($employee, $override);

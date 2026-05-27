@@ -62,7 +62,7 @@ class GlService
     public function getGeneralLedger(string $accountCode, ?string $fromDate = null, ?string $toDate = null): array
     {
         $account = $this->accountRepo->findByCode($accountCode);
-        if (!$account) throw new \InvalidArgumentException("Account not found: {$accountCode}");
+        if (!$account) throw new \InvalidArgumentException("Không tìm thấy tài khoản kế toán mã {$accountCode}.");
 
         $isDebitNormal = in_array($account->getType(), ['asset', 'expense']);
 
@@ -198,7 +198,7 @@ class GlService
     public function getMonthlyLedger(string $accountCode, ?string $fromDate = null, ?string $toDate = null): array
     {
         $account = $this->accountRepo->findByCode($accountCode);
-        if (!$account) throw new \InvalidArgumentException("Account not found: {$accountCode}");
+        if (!$account) throw new \InvalidArgumentException("Không tìm thấy tài khoản kế toán mã {$accountCode}.");
 
         $isDebitNormal = in_array($account->getType(), ['asset', 'expense']);
         $accountId = $account->getId();

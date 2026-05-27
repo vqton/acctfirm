@@ -5,7 +5,7 @@ $title = 'Người dùng'; $activeMenu = 'users'; ob_start(); ?>
     <div><button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#userModal"><i class="bi bi-plus-lg"></i> Thêm người dùng</button></div>
 </div>
 <div class="card-table"><table class="table table-hover">
-    <thead><tr><th>Username</th><th>Họ tên</th><th>Email</th><th>Vai trò</th><th>Trạng thái</th><th>Lần cuối</th><th></th></tr></thead>
+    <thead><tr><th>Tên đăng nhập</th><th>Họ tên</th><th>Thư điện tử</th><th>Vai trò</th><th>Trạng thái</th><th>Lần cuối</th><th></th></tr></thead>
     <tbody id="dataBody"></tbody>
 </table></div>
 
@@ -17,7 +17,7 @@ $title = 'Người dùng'; $activeMenu = 'users'; ob_start(); ?>
     <div class="mb-3"><label>Tên đăng nhập</label><input type="text" class="form-control" id="username" required></div>
     <div class="mb-3"><label>Mật khẩu</label><input type="password" class="form-control" id="password" placeholder="Để trống nếu không đổi"></div>
     <div class="mb-3"><label>Họ tên</label><input type="text" class="form-control" id="fullName" required></div>
-    <div class="mb-3"><label>Email</label><input type="email" class="form-control" id="email"></div>
+    <div class="mb-3"><label>Thư điện tử</label><input type="email" class="form-control" id="email"></div>
     <div class="mb-3"><label>Vai trò</label>
         <div id="roleCheckboxes" class="border rounded p-2" style="max-height:200px;overflow-y:auto"></div>
     </div>
@@ -71,9 +71,9 @@ $('#userForm').submit(function(e){e.preventDefault();
     var payload={username:$('#username').val(),password:$('#password').val(),full_name:$('#fullName').val(),email:$('#email').val(),role_ids:roleIds};
     var url=editId?'/api/users/'+editId:'/api/users';
     var method=editId?'PUT':'POST';
-    if(!editId && !payload.password){showToast('Mật khẩu là bắt buộc','error');return;}
+    if(!editId && !payload.password){showToast('Vui lòng nhập mật khẩu cho người dùng mới.','error');return;}
     $.ajax({url:url,method:method,contentType:'application/json',data:JSON.stringify(payload),
-        success:function(){$('#userModal').modal('hide');$('#userForm')[0].reset();$('#editId').val('');showToast('Thành công','success');loadData();},
+        success:function(){$('#userModal').modal('hide');$('#userForm')[0].reset();$('#editId').val('');showToast('Thao tác thành công.','success');loadData();},
         error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}
     });
 });

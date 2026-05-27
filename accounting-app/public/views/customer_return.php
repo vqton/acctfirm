@@ -90,8 +90,8 @@ $('#returnForm').submit(function(e) {
         qty: parseFloat($('#qty').val()),
         reference: $('#reference').val() || undefined
     };
-    if (!data.item_id) { showToast('Vui lòng chọn vật tư', 'error'); return; }
-    if (!data.qty || data.qty <= 0) { showToast('Số lượng phải lớn hơn 0', 'error'); return; }
+    if (!data.item_id) { showToast('Vui lòng chọn mã vật tư/hàng hóa.', 'error'); return; }
+    if (!data.qty || data.qty <= 0) { showToast('Số lượng phải lớn hơn 0.', 'error'); return; }
     $.ajax({
         url: '/api/inventory/customer-return',
         method: 'POST',
@@ -100,7 +100,7 @@ $('#returnForm').submit(function(e) {
         success: function() {
             $('#returnModal').modal('hide');
             $('#returnForm')[0].reset();
-            showToast('Nhập hàng trả lại thành công', 'success');
+            showToast('Đã nhập hàng bán trả lại thành công.', 'success');
             loadData();
         },
         error: function(xhr) {

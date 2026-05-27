@@ -74,7 +74,7 @@ $('#amount,#vatRate').on('input',function(){if($('#vatRateGroup').is(':visible')
 // Nếu có VAT: Nợ 1331/Có 33311 (thuế GTGT)
 $('#creditForm').submit(function(e){e.preventDefault();
     $.ajax({url:'/api/bank/receipt',method:'POST',contentType:'application/json',headers:{'X-CSRF-Token':csrf},data:JSON.stringify({amount:parseFloat($('#amount').val()),credit_account_code:$('#creditAccount').val(),description:$('#description').val(),vat_amount:$('#vatRateGroup').is(':visible')?parseInt($('#vatAmount').val())||0:0,vat_rate:$('#vatRateGroup').is(':visible')?parseInt($('#vatRate').val())||0:0,}),
-        success:function(){$('#creditModal').modal('hide');$('#creditForm')[0].reset();showToast('Ghi nhận báo Có thành công','success');loadData();},
+        success:function(){$('#creditModal').modal('hide');$('#creditForm')[0].reset();showToast('Đã ghi nhận giấy báo Có thành công.','success');loadData();},
         error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}
     });
 });
@@ -82,7 +82,7 @@ $('#creditForm').submit(function(e){e.preventDefault();
 // Nghiệp vụ: Nợ 1121/Có 515 (Doanh thu hoạt động tài chính)
 $('#interestForm').submit(function(e){e.preventDefault();
     $.ajax({url:'/api/bank/interest',method:'POST',contentType:'application/json',headers:{'X-CSRF-Token':csrf},data:JSON.stringify({amount:parseFloat($('#intAmount').val()),description:$('#intDescription').val()}),
-        success:function(){$('#interestModal').modal('hide');$('#interestForm')[0].reset();showToast('Ghi nhận lãi NH thành công','success');loadData();},
+        success:function(){$('#interestModal').modal('hide');$('#interestForm')[0].reset();showToast('Đã ghi nhận lãi ngân hàng thành công.','success');loadData();},
         error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}
     });
 });

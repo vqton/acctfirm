@@ -61,7 +61,7 @@ class PeriodController
     {
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['period_type'], $data['period_code'], $data['name'], $data['start_date'], $data['end_date'])) {
-            JsonResponse::error('period_type, period_code, name, start_date, end_date required');
+            JsonResponse::error('Vui lòng nhập loại kỳ, mã kỳ, tên, ngày bắt đầu và ngày kết thúc');
             return;
         }
         try {
@@ -127,7 +127,7 @@ class PeriodController
         Auth::requirePermission('system', 'edit');
         try {
             $this->period->executeClosingEntries($_SESSION['user']['username'] ?? 'system');
-            JsonResponse::ok(['message' => 'Closing entries executed']);
+            JsonResponse::ok(['message' => 'Đã thực hiện kết chuyển cuối kỳ']);
         } catch (\InvalidArgumentException $e) { JsonResponse::error($e->getMessage()); }
     }
 
@@ -164,7 +164,7 @@ class PeriodController
             $checklist = $this->period->canClose($id);
             if (!$checklist['can_close']) {
                 JsonResponse::error([
-                    'message' => 'Pre-close checks failed. Fix issues before closing.',
+                    'message' => 'Kiểm tra trước khi đóng kỳ thất bại. Vui lòng khắc phục trước khi đóng.',
                     'checks' => $checklist['checks'],
                 ], 422);
                 return;
@@ -188,7 +188,7 @@ class PeriodController
         Auth::requirePermission('system', 'edit');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['deadline'])) {
-            JsonResponse::error('deadline required');
+            JsonResponse::error('Vui lòng nhập hạn chót');
             return;
         }
         try {
@@ -208,7 +208,7 @@ class PeriodController
     {
         Auth::requirePermission('system', 'edit');
         $data = json_decode(file_get_contents('php://input'), true);
-        $reason = $data['reason'] ?? 'Override by Chief Accountant';
+        $reason = $data['reason'] ?? 'Ghi đè bởi Kế toán trưởng';
         try {
             JsonResponse::ok($this->period->overrideDeadline($id, $reason, $_SESSION['user']['username'] ?? 'system'));
         } catch (\InvalidArgumentException $e) { JsonResponse::error($e->getMessage()); }

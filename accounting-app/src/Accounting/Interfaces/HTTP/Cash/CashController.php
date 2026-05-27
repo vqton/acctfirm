@@ -80,7 +80,7 @@ class CashController
         Auth::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['amount'], $data['credit_account_code'])) {
-            JsonResponse::error('amount, credit_account_code required');
+            JsonResponse::error('Vui lòng nhập số tiền và tài khoản đối ứng');
             return;
         }
         try {
@@ -141,7 +141,7 @@ class CashController
         Auth::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['amount'], $data['debit_account_code'])) {
-            JsonResponse::error('amount, debit_account_code required');
+            JsonResponse::error('Vui lòng nhập số tiền và tài khoản đối ứng');
             return;
         }
         try {
@@ -204,7 +204,7 @@ class CashController
         Auth::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['amount'])) {
-            JsonResponse::error('amount required', 400);
+            JsonResponse::error('Vui lòng nhập số tiền', 400);
             return;
         }
         try {
@@ -232,7 +232,7 @@ class CashController
         Auth::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['amount'])) {
-            JsonResponse::error('amount required', 400);
+            JsonResponse::error('Vui lòng nhập số tiền', 400);
             return;
         }
         try {
@@ -260,7 +260,7 @@ class CashController
         Auth::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['amount'], $data['credit_account_code'])) {
-            JsonResponse::error('amount, credit_account_code required', 400);
+            JsonResponse::error('Vui lòng nhập số tiền và tài khoản đối ứng', 400);
             return;
         }
         try {
@@ -288,7 +288,7 @@ class CashController
         Auth::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['amount'], $data['debit_account_code'])) {
-            JsonResponse::error('amount, debit_account_code required', 400);
+            JsonResponse::error('Vui lòng nhập số tiền và tài khoản đối ứng', 400);
             return;
         }
         try {
@@ -316,7 +316,7 @@ class CashController
         Auth::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['amount'])) {
-            JsonResponse::error('amount required', 400);
+            JsonResponse::error('Vui lòng nhập số tiền', 400);
             return;
         }
         try {
@@ -343,7 +343,7 @@ class CashController
         Auth::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['amount'])) {
-            JsonResponse::error('amount required', 400);
+            JsonResponse::error('Vui lòng nhập số tiền', 400);
             return;
         }
         try {
@@ -380,7 +380,7 @@ class CashController
         Auth::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['amount'])) {
-            JsonResponse::error('amount required', 400);
+            JsonResponse::error('Vui lòng nhập số tiền', 400);
             return;
         }
         try {
@@ -407,7 +407,7 @@ class CashController
         Auth::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['transit_id'])) {
-            JsonResponse::error('transit_id required', 400);
+            JsonResponse::error('Vui lòng nhập mã giao dịch tạm giữ', 400);
             return;
         }
         try {
@@ -431,7 +431,7 @@ class CashController
         Auth::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['transit_id'])) {
-            JsonResponse::error('transit_id required', 400);
+            JsonResponse::error('Vui lòng nhập mã giao dịch tạm giữ', 400);
             return;
         }
         try {
@@ -484,7 +484,7 @@ class CashController
         Auth::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['account_code'], $data['currency_code'], $data['closing_rate'])) {
-            JsonResponse::error('account_code, currency_code, closing_rate required');
+            JsonResponse::error('Vui lòng nhập mã tài khoản, mã ngoại tệ và tỷ giá cuối kỳ');
             return;
         }
         try {

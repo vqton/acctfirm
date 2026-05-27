@@ -1,7 +1,7 @@
 <?php // Màn hình: Trang tổng quan hệ thống
-$title = 'Dashboard'; $activeMenu = 'dashboard'; ob_start(); ?>
+$title = 'Tổng quan'; $activeMenu = 'dashboard'; ob_start(); ?>
 <div class="toolbar">
-    <h5>Dashboard</h5>
+    <h5>Tổng quan</h5>
 </div>
 
 <div class="row g-3 mb-4" id="kpiCards"></div>

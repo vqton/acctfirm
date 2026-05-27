@@ -105,7 +105,7 @@ $('#toWarehouseId').change(function() {
     var from = $('#fromWarehouseId').val();
     var to = $(this).val();
     if (from && to && from === to) {
-        showToast('Kho nguồn và kho đích phải khác nhau', 'error');
+        showToast('Kho xuất và kho nhập phải khác nhau.', 'error');
         $(this).val('');
     }
 });
@@ -113,7 +113,7 @@ $('#fromWarehouseId').change(function() {
     var from = $(this).val();
     var to = $('#toWarehouseId').val();
     if (from && to && from === to) {
-        showToast('Kho nguồn và kho đích phải khác nhau', 'error');
+        showToast('Kho xuất và kho nhập phải khác nhau.', 'error');
         $(this).val('');
     }
 });
@@ -130,9 +130,9 @@ $('#transferForm').submit(function(e) {
         to_warehouse_id: $('#toWarehouseId').val(),
         reference: $('#reference').val() || undefined
     };
-    if (!data.item_id) { showToast('Vui lòng chọn vật tư', 'error'); return; }
-    if (!data.to_warehouse_id) { showToast('Vui lòng chọn kho đích', 'error'); return; }
-    if (data.from_warehouse_id === data.to_warehouse_id) { showToast('Kho nguồn và kho đích phải khác nhau', 'error'); return; }
+    if (!data.item_id) { showToast('Vui lòng chọn mã vật tư/hàng hóa.', 'error'); return; }
+    if (!data.to_warehouse_id) { showToast('Vui lòng chọn kho nhận hàng.', 'error'); return; }
+    if (data.from_warehouse_id === data.to_warehouse_id) { showToast('Kho xuất và kho nhập phải khác nhau.', 'error'); return; }
     $.ajax({
         url: '/api/transfers',
         method: 'POST',
@@ -141,7 +141,7 @@ $('#transferForm').submit(function(e) {
         success: function() {
             $('#transferModal').modal('hide');
             $('#transferForm')[0].reset();
-            showToast('Điều chuyển thành công', 'success');
+            showToast('Đã điều chuyển hàng hóa thành công.', 'success');
             loadData();
         },
         error: function(xhr) {

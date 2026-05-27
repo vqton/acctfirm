@@ -99,7 +99,7 @@ class ApprovalController
         Auth::requirePermission('journal', 'approve');
         $userId = $_SESSION['user']['username'] ?? '';
         $input = json_decode(file_get_contents('php://input'), true) ?? [];
-        $reason = $input['reason'] ?? 'No reason provided';
+        $reason = $input['reason'] ?? 'Không có lý do từ chối';
 
         $txn = $this->journalService->rejectEntry($txnId, $userId, $reason);
         JsonResponse::ok(['id' => $txn->getId(), 'status' => $txn->getStatus()]);

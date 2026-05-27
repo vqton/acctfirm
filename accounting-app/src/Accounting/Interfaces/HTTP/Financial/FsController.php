@@ -139,7 +139,7 @@ class FsController
         $errors = $this->fs->validateBC03($data);
         $ms70 = $this->findValue($data, '70');
         if (abs($ms70 - $bc01Cash) > 1) {
-            $errors[] = "BC 03 closing cash ({$ms70}) != BC 01 cash & equivalents ({$bc01Cash})";
+            $errors[] = "Tiền cuối kỳ trên BC 03 ({$ms70}) không khớp với Tiền trên BC 01 ({$bc01Cash})";
         }
         $prior = $this->fs->getPriorPeriodValues('BC03', $period);
 

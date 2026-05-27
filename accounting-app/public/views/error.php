@@ -1,5 +1,5 @@
 <?php // Màn hình: Trang thông báo lỗi hệ thống
-$title = $title ?? 'Error'; ob_start(); ?>
+$title = $title ?? 'Lỗi'; ob_start(); ?>
 <div class="container py-4">
     <h5><?= $title ?></h5>
     <p><?= htmlspecialchars(\Accounting\Interfaces\HTTP\HttpError::$message) ?></p>

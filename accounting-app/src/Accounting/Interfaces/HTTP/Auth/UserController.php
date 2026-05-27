@@ -61,7 +61,7 @@ class UserController
         Auth::requirePermission('system', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['username'], $data['password'], $data['full_name'])) {
-            JsonResponse::error('username, password, full_name required'); return;
+            JsonResponse::error('Vui lòng nhập tên đăng nhập, mật khẩu và họ tên'); return;
         }
         $id = uniqid('u_');
         $hash = password_hash($data['password'], PASSWORD_DEFAULT);
@@ -87,10 +87,10 @@ class UserController
     {
         Auth::requirePermission('system', 'edit');
         $data = json_decode(file_get_contents('php://input'), true);
-        if (!$data) { JsonResponse::error('No data'); return; }
+        if (!$data) { JsonResponse::error('Không có dữ liệu đầu vào'); return; }
         $user = $this->pdo->prepare('SELECT * FROM users WHERE id = ?');
         $user->execute([$id]);
-        if (!$user->fetch()) { JsonResponse::error('Not found', 404); return; }
+        if (!$user->fetch()) { JsonResponse::error('Không tìm thấy người dùng', 404); return; }
 
         if (isset($data['full_name']))
             $this->pdo->prepare('UPDATE users SET full_name = ? WHERE id = ?')->execute([$data['full_name'], $id]);
@@ -106,7 +106,7 @@ class UserController
             $ins = $this->pdo->prepare('INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)');
             foreach ($data['role_ids'] as $rid) $ins->execute([$id, $rid]);
         }
-        JsonResponse::ok(['message' => 'Updated']);
+        JsonResponse::ok(['message' => 'Đã cập nhật thông tin người dùng']);
     }
 
     // NGHIỆP VỤ: Vô hiệu hóa người dùng (soft delete) — không xóa khỏi DB
@@ -119,8 +119,8 @@ class UserController
     public function delete(string $id): void
     {
         Auth::requirePermission('system', 'delete');
-        if ($id === 'admin') { JsonResponse::error('Cannot delete admin'); return; }
+        if ($id === 'admin') { JsonResponse::error('Không thể xóa tài khoản quản trị viên mặc định'); return; }
         $this->pdo->prepare('UPDATE users SET status = ? WHERE id = ?')->execute(['inactive', $id]);
-        JsonResponse::ok(['message' => 'Deactivated']);
+        JsonResponse::ok(['message' => 'Đã vô hiệu hóa tài khoản người dùng']);
     }
 }

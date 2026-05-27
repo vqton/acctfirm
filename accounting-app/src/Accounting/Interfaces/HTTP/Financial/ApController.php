@@ -59,7 +59,7 @@ class ApController
     {
         $d = json_decode(file_get_contents('php://input'), true);
         if (!$d || !isset($d['supplier_id'], $d['invoice_number'], $d['net_amount']))
-            { JsonResponse::error('supplier_id, invoice_number, net_amount required'); return; }
+            { JsonResponse::error('Vui lòng nhập mã nhà cung cấp, số hóa đơn và tiền hàng'); return; }
         try {
             $r = $this->ap->recordInvoice($d['supplier_id'], $d['invoice_number'], $d['invoice_date'] ?? date('Y-m-d'),
                 $d['due_date'] ?? date('Y-m-d', strtotime('+30 days')),
@@ -94,7 +94,7 @@ class ApController
     {
         $d = json_decode(file_get_contents('php://input'), true);
         if (!$d || !isset($d['supplier_id'], $d['amount']))
-            { JsonResponse::error('supplier_id, amount required'); return; }
+            { JsonResponse::error('Vui lòng nhập mã nhà cung cấp và số tiền tạm ứng'); return; }
         try { JsonResponse::ok($this->ap->recordPrepayment($d['supplier_id'], (float)$d['amount'], $d['description'] ?? '', $d['created_by'] ?? 'system')); }
         catch (\Throwable $e) { JsonResponse::error($e->getMessage()); }
     }

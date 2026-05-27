@@ -48,7 +48,7 @@ class LedgerEntry
         int $lineOrder = 0
     ) {
         if ($amount < 0) {
-            throw new \InvalidArgumentException('Amount cannot be negative');
+            throw new \InvalidArgumentException('Số tiền không được âm. Vui lòng kiểm tra lại.');
         }
         $this->id = $id;
         $this->accountId = $accountId;

@@ -23,7 +23,7 @@ trait CrudControllerTrait
     public function get(string $id): void
     {
         $entity = $this->repo()->findById($id);
-        if (!$entity) { JsonResponse::error('Not found', 404); return; }
+        if (!$entity) { JsonResponse::error('Không tìm thấy bản ghi', 404); return; }
         JsonResponse::ok($entity->toArray());
     }
 
@@ -33,13 +33,13 @@ trait CrudControllerTrait
         $data = json_decode(file_get_contents('php://input'), true);
         foreach ($this->requiredFields() as $f) {
             if (!isset($data[$f])) {
-                JsonResponse::error(implode(', ', $this->requiredFields()) . ' required', 400);
+                JsonResponse::error('Vui lòng nhập các trường bắt buộc: ' . implode(', ', $this->requiredFields()), 400);
                 return;
             }
         }
         $cf = $this->codeField();
         if (isset($data[$cf]) && method_exists($this->repo(), 'findByCode') && $this->repo()->findByCode($data[$cf])) {
-            JsonResponse::error('Code already exists', 409); return;
+            JsonResponse::error('Mã đã tồn tại trong hệ thống', 409); return;
         }
         if (!isset($data['id'])) $data['id'] = uniqid($this->idPrefix());
         $entity = $this->createEntity($data);
@@ -51,14 +51,14 @@ trait CrudControllerTrait
     {
         Auth::checkCsrf();
         $entity = $this->repo()->findById($id);
-        if (!$entity) { JsonResponse::error('Not found', 404); return; }
+        if (!$entity) { JsonResponse::error('Không tìm thấy bản ghi', 404); return; }
         $data = json_decode(file_get_contents('php://input'), true);
-        if (!$data) { JsonResponse::error('Invalid data', 400); return; }
+        if (!$data) { JsonResponse::error('Dữ liệu không hợp lệ. Vui lòng kiểm tra lại.', 400); return; }
         $cf = $this->codeField();
         if (isset($data[$cf]) && method_exists($this->repo(), 'findByCode')) {
             $existing = $this->repo()->findByCode($data[$cf]);
             if ($existing && $existing->getId() !== $id) {
-                JsonResponse::error('Code already exists', 409); return;
+                JsonResponse::error('Mã đã tồn tại trong hệ thống', 409); return;
             }
         }
         $this->updateEntity($entity, $data);
@@ -70,9 +70,9 @@ trait CrudControllerTrait
     {
         Auth::checkCsrf();
         if (!$this->repo()->findById($id)) {
-            JsonResponse::error('Not found', 404); return;
+            JsonResponse::error('Không tìm thấy bản ghi', 404); return;
         }
         $this->repo()->delete($id);
-        JsonResponse::ok(['message' => 'Deleted']);
+        JsonResponse::ok(['message' => 'Đã xóa thành công']);
     }
 }

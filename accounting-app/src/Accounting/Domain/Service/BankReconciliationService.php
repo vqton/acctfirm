@@ -65,7 +65,7 @@ class BankReconciliationService
     public function startSession(string $bankAccountCode, string $statementDate, float $statementBalance, string $createdBy): array
     {
         $bank = $this->accountRepo->findByCode($bankAccountCode);
-        if (!$bank) throw new \InvalidArgumentException("Bank account not found: {$bankAccountCode}");
+        if (!$bank) throw new \InvalidArgumentException("Không tìm thấy tài khoản ngân hàng: {$bankAccountCode}");
 
         $bookBalance = $bank->getBalance();
 
@@ -125,8 +125,8 @@ class BankReconciliationService
     public function addStatementEntry(int $sessionId, float $amount, string $description, string $reference, string $date, string $type): int
     {
         $session = $this->getSessionRaw($sessionId);
-        if (!$session) throw new \InvalidArgumentException("Session not found: {$sessionId}");
-        if ($session['status'] !== 'in_progress') throw new \InvalidArgumentException('Session is not in progress');
+        if (!$session) throw new \InvalidArgumentException("Không tìm thấy phiên đối chiếu: {$sessionId}");
+        if ($session['status'] !== 'in_progress') throw new \InvalidArgumentException('Phiên đối chiếu không ở trạng thái đang xử lý');
 
         $stmtType = in_array($type, ['receipt', 'payment']) ? $type : 'receipt';
 
@@ -156,7 +156,7 @@ class BankReconciliationService
     public function autoMatch(int $sessionId): array
     {
         $session = $this->getSessionRaw($sessionId);
-        if (!$session) throw new \InvalidArgumentException("Session not found: {$sessionId}");
+        if (!$session) throw new \InvalidArgumentException("Không tìm thấy phiên đối chiếu: {$sessionId}");
 
         $bookItems = $this->pdo->prepare(
             'SELECT * FROM bank_reconciliation_items WHERE session_id = ? AND source = ? AND match_status = ? ORDER BY id'
@@ -259,7 +259,7 @@ class BankReconciliationService
     public function addAdjustingEntry(int $sessionId, string $debitAccount, string $creditAccount, float $amount, string $description, string $createdBy): array
     {
         $session = $this->getSessionRaw($sessionId);
-        if (!$session) throw new \InvalidArgumentException("Session not found: {$sessionId}");
+        if (!$session) throw new \InvalidArgumentException("Không tìm thấy phiên đối chiếu: {$sessionId}");
 
         $txn = $this->journal->postEntry("Bank recon adj: {$description}", "RECON-ADJ-{$sessionId}", [
             ['account_code' => $debitAccount, 'amount' => $amount, 'is_debit' => true],
@@ -309,8 +309,8 @@ class BankReconciliationService
     public function complete(int $sessionId): array
     {
         $session = $this->getSessionRaw($sessionId);
-        if (!$session) throw new \InvalidArgumentException("Session not found: {$sessionId}");
-        if ($session['status'] !== 'in_progress') throw new \InvalidArgumentException('Session already completed');
+        if (!$session) throw new \InvalidArgumentException("Không tìm thấy phiên đối chiếu: {$sessionId}");
+        if ($session['status'] !== 'in_progress') throw new \InvalidArgumentException('Phiên đối chiếu đã hoàn tất');
 
         $items = $this->pdo->prepare(
             'SELECT source, type, amount FROM bank_reconciliation_items WHERE session_id = ? AND match_status = ?'
@@ -345,7 +345,7 @@ class BankReconciliationService
 
         if (abs($adjustedBook - $stmtBalance) > 1) {
             throw new \InvalidArgumentException(
-                "Reconciliation out of balance: adjusted book ({$adjustedBook}) != statement balance ({$stmtBalance}). Difference: " . round($stmtBalance - $adjustedBook, 0)
+                "Đối chiếu mất cân đối: sổ sau điều chỉnh ({$adjustedBook}) != số dư sao kê ({$stmtBalance}). Chênh lệch: " . round($stmtBalance - $adjustedBook, 0)
             );
         }
 
@@ -373,7 +373,7 @@ class BankReconciliationService
     public function getSession(int $sessionId): array
     {
         $row = $this->getSessionRaw($sessionId);
-        if (!$row) throw new \InvalidArgumentException("Session not found: {$sessionId}");
+        if (!$row) throw new \InvalidArgumentException("Không tìm thấy phiên đối chiếu: {$sessionId}");
         return [
             'id' => (int)$row['id'],
             'bank_account_code' => $row['bank_account_code'],

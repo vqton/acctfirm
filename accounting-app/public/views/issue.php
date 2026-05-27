@@ -103,8 +103,8 @@ $('#issueForm').submit(function(e) {
         issue_type: $('#issueType').val(),
         reference: $('#reference').val() || undefined
     };
-    if (!data.item_id) { showToast('Vui lòng chọn vật tư', 'error'); return; }
-    if (!data.qty || data.qty <= 0) { showToast('Số lượng phải lớn hơn 0', 'error'); return; }
+    if (!data.item_id) { showToast('Vui lòng chọn mã vật tư/hàng hóa.', 'error'); return; }
+    if (!data.qty || data.qty <= 0) { showToast('Số lượng phải lớn hơn 0.', 'error'); return; }
     $.ajax({
         url: '/api/inventory/issue',
         method: 'POST',
@@ -113,7 +113,7 @@ $('#issueForm').submit(function(e) {
         success: function() {
             $('#issueModal').modal('hide');
             $('#issueForm')[0].reset();
-            showToast('Xuất kho thành công', 'success');
+            showToast('Đã xuất kho thành công.', 'success');
             loadData();
         },
         error: function(xhr) {

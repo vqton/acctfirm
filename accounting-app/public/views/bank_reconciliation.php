@@ -57,7 +57,7 @@ function viewSession(id){
 // Người dùng nhập số dư từ sao kê NH, hệ thống tự động tính chênh lệch với sổ sách
 $('#startForm').submit(function(e){e.preventDefault();
     $.ajax({url:'/api/bank-reconciliation/start',method:'POST',contentType:'application/json',headers:{'X-CSRF-Token':csrf},data:JSON.stringify({bank_account_code:$('#bankAccount').val(),statement_date:$('#statementDate').val(),statement_balance:parseFloat($('#statementBalance').val())}),
-        success:function(r){$('#startModal').modal('hide');showToast('Đã tạo phiên đối chiếu','success');loadData();},
+        success:function(r){$('#startModal').modal('hide');showToast('Đã tạo phiên đối chiếu ngân hàng thành công.','success');loadData();},
         error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}
     });
 });

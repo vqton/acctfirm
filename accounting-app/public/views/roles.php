@@ -84,14 +84,14 @@ function savePerms() {
         });
     });
     $.ajax({url:'/api/roles/'+id+'/permissions',method:'PUT',contentType:'application/json',data:JSON.stringify(data),
-        success:function(){$('#permModal').modal('hide');showToast('Đã lưu quyền','success');},
+        success:function(){$('#permModal').modal('hide');showToast('Đã cập nhật phân quyền thành công.','success');},
         error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}
     });
 }
 
 $('#roleForm').submit(function(e){e.preventDefault();
     $.ajax({url:'/api/roles',method:'POST',contentType:'application/json',data:JSON.stringify({id:$('#roleId').val(),name:$('#roleName').val(),description:$('#roleDesc').val()}),
-        success:function(){$('#roleModal').modal('hide');$('#roleForm')[0].reset();showToast('Thêm vai trò thành công','success');loadRoles();},
+        success:function(){$('#roleModal').modal('hide');$('#roleForm')[0].reset();showToast('Đã thêm vai trò mới thành công.','success');loadRoles();},
         error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}
     });
 });

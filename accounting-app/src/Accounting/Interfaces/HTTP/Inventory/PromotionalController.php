@@ -52,7 +52,7 @@ class PromotionalController
         Auth::requirePermission('inventory', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['item_id'], $data['qty'])) {
-            JsonResponse::error('item_id, qty required');
+            JsonResponse::error('Vui lòng nhập mã vật tư và số lượng');
             return;
         }
         try {

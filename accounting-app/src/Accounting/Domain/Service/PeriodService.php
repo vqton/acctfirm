@@ -79,7 +79,7 @@ class PeriodService
         $stmt = $this->pdo->prepare('SELECT * FROM accounting_periods WHERE id = ?');
         $stmt->execute([$id]);
         $r = $stmt->fetch(\PDO::FETCH_ASSOC);
-        if (!$r) throw new \InvalidArgumentException("Period not found: {$id}");
+        if (!$r) throw new \InvalidArgumentException("Không tìm thấy kỳ kế toán mã {$id}.");
         return [
             'id' => (int)$r['id'],
             'period_type' => $r['period_type'],
@@ -114,7 +114,7 @@ class PeriodService
         $prev->execute([$start]);
         $prevPeriod = $prev->fetch(\PDO::FETCH_ASSOC);
         if ($prevPeriod && $prevPeriod['status'] === 'open') {
-            throw new \InvalidArgumentException("Cannot create period {$code}: previous period ({$prevPeriod['id']}) is still open. Close it first.");
+            throw new \InvalidArgumentException("Không thể tạo kỳ {$code} vì kỳ trước đó (mã {$prevPeriod['id']}) vẫn đang mở. Vui lòng khóa sổ kỳ trước trước khi tạo kỳ mới.");
         }
 
         $this->pdo->prepare(
@@ -142,7 +142,7 @@ class PeriodService
     {
         $period = $this->getPeriod($id);
         if ($period['status'] !== 'open') {
-            return ['can_close' => false, 'reason' => 'Period is not open'];
+            return ['can_close' => false, 'reason' => 'Kỳ kế toán không ở trạng thái mở'];
         }
 
         $checks = [];
@@ -224,7 +224,7 @@ class PeriodService
         if ($nextPeriod && $nextPeriod['status'] === 'closed') {
             $seqPass = false;
             $allPass = false;
-            $seqNote = "Later period ({$nextPeriod['id']}) already closed — close sequentially";
+            $seqNote = "Kỳ sau (mã {$nextPeriod['id']}) đã đóng — vui lòng đóng tuần tự";
         }
         $checks[] = ['check' => 'Sequential period close', 'passed' => $seqPass, 'note' => $seqNote];
 
@@ -240,7 +240,7 @@ class PeriodService
         if ($snapCount === 0) {
             $fsPass = false;
             $allPass = false;
-            $fsNote = 'No FS snapshots found for this period';
+            $fsNote = 'Chưa có báo cáo tài chính cho kỳ này';
         }
         $checks[] = ['check' => 'Financial statements generated', 'passed' => $fsPass, 'note' => $fsNote];
 
@@ -275,7 +275,7 @@ class PeriodService
         $payrollPosted = (int)$payrollCheck->fetchColumn();
         if ($payrollPosted === 0) {
             // CẢNH BÁO nhưng không chặn — Kế toán trưởng quyết định
-            $payrollNote = 'No posted payroll entries — salary cost (642) and payable (334) may be missing from FS';
+            $payrollNote = 'Chưa có bảng lương được ghi sổ — chi phí lương (642) và phải trả NLĐ (334) có thể thiếu trên BCTC';
             $this->auditLogger?->log('period.warning_payroll_not_posted', 'accounting_period', (string)$id,
                 null, ['warning' => $payrollNote, 'period_code' => $period['period_code']],
                 'system');
@@ -306,7 +306,7 @@ class PeriodService
     {
         $period = $this->getPeriod($id);
         if ($period['status'] !== 'open') {
-            throw new \InvalidArgumentException("Period {$id} is not open (status: {$period['status']})");
+            throw new \InvalidArgumentException("Kỳ kế toán mã {$id} không ở trạng thái mở (trạng thái hiện tại: {$period['status']}). Chỉ có thể thao tác trên kỳ đang mở.");
         }
 
         // Bước 1: Chụp tồn kho cuối kỳ + đối chiếu số lượng thực tế với sổ sách
@@ -368,7 +368,7 @@ class PeriodService
     {
         $period = $this->getPeriod($id);
         if ($period['status'] !== 'closed') {
-            throw new \InvalidArgumentException("Period {$id} is not closed");
+            throw new \InvalidArgumentException("Kỳ kế toán mã {$id} chưa được khóa sổ. Vui lòng khóa sổ trước khi thực hiện thao tác này.");
         }
 
         // Chụp toàn bộ số dư tài khoản tại thời điểm cuối kỳ — dùng để đối chiếu sau này
@@ -407,7 +407,7 @@ class PeriodService
     {
         $period = $this->getPeriod($id);
         if ($period['status'] !== 'closed') {
-            throw new \InvalidArgumentException("Period {$id} is not closed");
+            throw new \InvalidArgumentException("Kỳ kế toán mã {$id} chưa được khóa sổ.");
         }
 
         // CẢNH BÁO RỦI RO NGHIÊM TRỌNG — MỞ LẠI KỲ ĐÃ ĐÓNG:

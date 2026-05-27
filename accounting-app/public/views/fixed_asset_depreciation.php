@@ -75,7 +75,7 @@ function postDepreciation() {
         if (d.error) { $('#postResult').text('Lỗi: '+d.error); return; }
         $('#postResult').text('Đã ghi '+d.posted+' bút toán khấu hao');
         loadData();
-        showToast('Đã ghi '+d.posted+' bút toán','success');
+        showToast('Đã ghi '+d.posted+' bút toán khấu hao. Vui lòng kiểm tra sổ sách kế toán.','success');
     }).catch(function(e){$('#postResult').text('Lỗi: '+e.message);});
 }
 

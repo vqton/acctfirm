@@ -72,7 +72,7 @@ $('#amount,#vatRate').on('input',function(){if($('#vatRateGroup').is(':visible')
 // Nếu có VAT: Nợ 1331 (thuế GTGT đầu vào)
 $('#debitForm').submit(function(e){e.preventDefault();
     $.ajax({url:'/api/bank/payment',method:'POST',contentType:'application/json',headers:{'X-CSRF-Token':csrf},data:JSON.stringify({amount:parseFloat($('#amount').val()),debit_account_code:$('#debitAccount').val(),description:$('#description').val(),vat_amount:$('#vatRateGroup').is(':visible')?parseInt($('#vatAmount').val())||0:0,vat_rate:$('#vatRateGroup').is(':visible')?parseInt($('#vatRate').val())||0:0,}),
-        success:function(){$('#debitModal').modal('hide');$('#debitForm')[0].reset();showToast('Ghi nhận báo Nợ thành công','success');loadData();},
+        success:function(){$('#debitModal').modal('hide');$('#debitForm')[0].reset();showToast('Đã ghi nhận giấy báo Nợ thành công.','success');loadData();},
         error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}
     });
 });
@@ -80,7 +80,7 @@ $('#debitForm').submit(function(e){e.preventDefault();
 // Nghiệp vụ: Nợ 635 (Chi phí tài chính)/Có 1121 (tiền gửi ngân hàng)
 $('#chargeForm').submit(function(e){e.preventDefault();
     $.ajax({url:'/api/bank/charge',method:'POST',contentType:'application/json',headers:{'X-CSRF-Token':csrf},data:JSON.stringify({amount:parseFloat($('#chgAmount').val()),description:$('#chgDescription').val()}),
-        success:function(){$('#chargeModal').modal('hide');$('#chargeForm')[0].reset();showToast('Ghi nhận phí NH thành công','success');loadData();},
+        success:function(){$('#chargeModal').modal('hide');$('#chargeForm')[0].reset();showToast('Đã ghi nhận phí ngân hàng thành công.','success');loadData();},
         error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}
     });
 });

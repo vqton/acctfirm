@@ -61,7 +61,7 @@ class ImpairmentController
         Auth::requirePermission('inventory', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['item_id'], $data['amount'])) {
-            JsonResponse::error('item_id, amount required');
+            JsonResponse::error('Vui lòng nhập mã vật tư và số tiền dự phòng');
             return;
         }
         try {
@@ -89,7 +89,7 @@ class ImpairmentController
         Auth::requirePermission('inventory', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['impairment_id'], $data['amount'])) {
-            JsonResponse::error('impairment_id, amount required');
+            JsonResponse::error('Vui lòng nhập mã dự phòng và số tiền');
             return;
         }
         try {

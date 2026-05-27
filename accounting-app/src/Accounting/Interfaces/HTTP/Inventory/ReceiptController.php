@@ -67,13 +67,13 @@ class ReceiptController
         Auth::requirePermission('inventory', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['item_id'], $data['qty'], $data['unit_price'])) {
-            JsonResponse::error('item_id, qty, unit_price required');
+            JsonResponse::error('Vui lòng nhập mã vật tư, số lượng và đơn giá');
             return;
         }
         $qty = (float)$data['qty'];
         $unitPrice = (float)$data['unit_price'];
         if ($qty <= 0 || $unitPrice <= 0) {
-            JsonResponse::error('qty and unit_price must be positive');
+            JsonResponse::error('Số lượng và đơn giá phải lớn hơn 0');
             return;
         }
         try {

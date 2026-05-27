@@ -39,7 +39,7 @@ class PettyCashService
 
     public function establishPettyCash(string $fundName, float $imprestAmount, string $createdBy): array
     {
-        if ($imprestAmount <= 0) throw new \InvalidArgumentException('Imprest amount must be positive');
+        if ($imprestAmount <= 0) throw new \InvalidArgumentException('Số tiền tạm ứng phải lớn hơn 0');
 
         $fundId = uniqid('pc_');
         if ($this->pdo) {
@@ -76,13 +76,13 @@ class PettyCashService
     // Hạch toán kép sẽ được thực hiện khi replenish (khi có chứng từ chi tiết)
     public function disbursePettyCash(string $fundId, float $amount, string $description, string $reference, string $createdBy): array
     {
-        if ($amount <= 0) throw new \InvalidArgumentException('Amount must be positive');
+        if ($amount <= 0) throw new \InvalidArgumentException('Số tiền phải lớn hơn 0');
 
         $fund = $this->getPettyCashFundById($fundId);
-        if (!$fund) throw new \InvalidArgumentException("Petty cash fund not found: {$fundId}");
-        if ($fund['status'] !== 'active') throw new \InvalidArgumentException('Fund is not active');
+        if (!$fund) throw new \InvalidArgumentException("Không tìm thấy quỹ tạm ứng: {$fundId}");
+        if ($fund['status'] !== 'active') throw new \InvalidArgumentException('Quỹ tạm ứng không ở trạng thái hoạt động');
         if ($fund['current_balance'] < $amount) {
-            throw new \InvalidArgumentException("Insufficient fund balance: have {$fund['current_balance']}, need {$amount}");
+            throw new \InvalidArgumentException("Số dư quỹ không đủ: hiện có {$fund['current_balance']}, cần {$amount}");
         }
 
         $txId = uniqid('pctx_');
@@ -128,10 +128,10 @@ class PettyCashService
     public function replenishPettyCash(string $fundId, string $expenseAccount, float $totalAmount, string $description, string $reference, string $createdBy): array
     {
         $fund = $this->getPettyCashFundById($fundId);
-        if (!$fund) throw new \InvalidArgumentException("Petty cash fund not found: {$fundId}");
-        if ($fund['status'] !== 'active') throw new \InvalidArgumentException('Fund is not active');
+        if (!$fund) throw new \InvalidArgumentException("Không tìm thấy quỹ tạm ứng: {$fundId}");
+        if ($fund['status'] !== 'active') throw new \InvalidArgumentException('Quỹ tạm ứng không ở trạng thái hoạt động');
 
-        if ($totalAmount <= 0) throw new \InvalidArgumentException('Amount must be positive');
+        if ($totalAmount <= 0) throw new \InvalidArgumentException('Số tiền phải lớn hơn 0');
 
         $txn = $this->journal->postEntry("Petty cash replenishment: {$description}", $reference, [
             ['account_code' => $expenseAccount, 'amount' => $totalAmount, 'is_debit' => true],
@@ -178,8 +178,8 @@ class PettyCashService
     public function closePettyCash(string $fundId, float $returnAmount, string $createdBy): array
     {
         $fund = $this->getPettyCashFundById($fundId);
-        if (!$fund) throw new \InvalidArgumentException("Petty cash fund not found: {$fundId}");
-        if ($fund['status'] !== 'active') throw new \InvalidArgumentException('Fund is not active');
+        if (!$fund) throw new \InvalidArgumentException("Không tìm thấy quỹ tạm ứng: {$fundId}");
+        if ($fund['status'] !== 'active') throw new \InvalidArgumentException('Quỹ tạm ứng không ở trạng thái hoạt động');
 
         $txn = $this->journal->postEntry("Petty cash fund closure: {$fund['fund_name']}", "CLOSE-{$fundId}", [
             ['account_code' => '111', 'amount' => $returnAmount, 'is_debit' => true],

@@ -41,7 +41,7 @@ $.get('/api/items', function(items) {
     items.forEach(function(it){$('#itemId').append('<option value="'+esc(it.id)+'">'+esc(it.code)+' - '+esc(it.name)+'</option>');});
 });
 $('#impairForm').submit(function(e){e.preventDefault();
-    $.ajax({url:'/api/impairments',method:'POST',contentType:'application/json',data:JSON.stringify({item_id:$('#itemId').val(),amount:parseFloat($('#amount').val()),notes:$('#notes').val()}),success:function(){$('#impairModal').modal('hide');$('#impairForm')[0].reset();showToast('Ghi nhận dự phòng thành công','success');loadData();},error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}});
+    $.ajax({url:'/api/impairments',method:'POST',contentType:'application/json',data:JSON.stringify({item_id:$('#itemId').val(),amount:parseFloat($('#amount').val()),notes:$('#notes').val()}),success:function(){$('#impairModal').modal('hide');$('#impairForm')[0].reset();showToast('Đã ghi nhận dự phòng giảm giá hàng tồn kho thành công.','success');loadData();},error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}});
 });
 $(document).ready(function(){loadData();});
 </script>

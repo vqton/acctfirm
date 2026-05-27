@@ -81,7 +81,7 @@ class InventoryService
     {
         $date ??= date('Y-m-d');
         if (!PeriodService::isPeriodOpen($date, $this->pdo)) {
-            throw new \InvalidArgumentException("Cannot modify inventory in a closed period. Date: {$date}");
+            throw new \InvalidArgumentException("Không thể thay đổi tồn kho trong kỳ đã khóa. Ngày: {$date}. Vui lòng kiểm tra lại kỳ kế toán.");
         }
     }
 
@@ -104,7 +104,7 @@ class InventoryService
         return $this->wrapInTransaction(function () use ($itemId, $qty, $unitPrice, $addonCosts, $reference, $createdBy, $batchCode, $expiryDate) {
             $this->assertPeriodOpen();
             $item = $this->itemRepo->findById($itemId);
-            if (!$item) throw new \InvalidArgumentException("Item not found: {$itemId}");
+            if (!$item) throw new \InvalidArgumentException("Không tìm thấy mặt hàng mã {$itemId}. Vui lòng kiểm tra lại mã vật tư/hàng hóa.");
 
             $inventoryCode = $this->inventoryAccountMap[$item->getItemType()] ?? '152';
             $itemCost = $qty * $unitPrice;
@@ -155,10 +155,10 @@ class InventoryService
         return $this->wrapInTransaction(function () use ($itemId, $qty, $issueType, $reference, $createdBy) {
             $this->assertPeriodOpen();
             $item = $this->itemRepo->findById($itemId);
-            if (!$item) throw new \InvalidArgumentException("Item not found: {$itemId}");
+            if (!$item) throw new \InvalidArgumentException("Không tìm thấy mặt hàng mã {$itemId}. Vui lòng kiểm tra lại mã vật tư/hàng hóa.");
             if (!$item->getAllowNegativeStock() && $item->getStockQty() < $qty) {
                 throw new \InvalidArgumentException(
-                    "Insufficient stock: have {$item->getStockQty()}, need {$qty}"
+                    "Tồn kho không đủ. Hiện có {$item->getStockQty()}, cần {$qty}."
                 );
             }
 
@@ -169,7 +169,7 @@ class InventoryService
                 'production' => '154',
                 'construction' => '241',
                 'sale' => '632',
-                default => throw new \InvalidArgumentException("Invalid issue type: {$issueType}"),
+                default => throw new \InvalidArgumentException("Loại xuất kho không hợp lệ: {$issueType}. Vui lòng kiểm tra lại."),
             };
 
             $lines = [
@@ -207,14 +207,14 @@ class InventoryService
         return $this->wrapInTransaction(function () use ($itemId, $qty, $fromWarehouseId, $toWarehouseId, $reference, $createdBy) {
             $this->assertPeriodOpen();
             $item = $this->itemRepo->findById($itemId);
-            if (!$item) throw new \InvalidArgumentException("Item not found: {$itemId}");
+            if (!$item) throw new \InvalidArgumentException("Không tìm thấy mặt hàng mã {$itemId}. Vui lòng kiểm tra lại mã vật tư/hàng hóa.");
 
             if ($fromWarehouseId !== null) {
                 $from = $this->warehouseRepo->findById($fromWarehouseId);
-                if (!$from) throw new \InvalidArgumentException("Source warehouse not found: {$fromWarehouseId}");
+                if (!$from) throw new \InvalidArgumentException("Không tìm thấy kho xuất mã {$fromWarehouseId}.");
             }
             $to = $this->warehouseRepo->findById($toWarehouseId);
-            if (!$to) throw new \InvalidArgumentException("Destination warehouse not found: {$toWarehouseId}");
+            if (!$to) throw new \InvalidArgumentException("Không tìm thấy kho nhập mã {$toWarehouseId}.");
 
             $pdo = $this->getPdo();
             if ($fromWarehouseId !== null) {
@@ -226,7 +226,7 @@ class InventoryService
             }
             $sourceStock = (float)$stmt->fetchColumn();
             if (!$item->getAllowNegativeStock() && $sourceStock < $qty) {
-                throw new \InvalidArgumentException("Insufficient stock in source: have {$sourceStock}, need {$qty}");
+                throw new \InvalidArgumentException("Tồn kho không đủ tại kho xuất. Hiện có {$sourceStock}, cần {$qty}.");
             }
 
             if ($fromWarehouseId !== null) {
@@ -297,7 +297,7 @@ class InventoryService
         return $this->wrapInTransaction(function () use ($itemId, $qty, $unitPrice, $addonCosts, $reference, $createdBy) {
             $this->assertPeriodOpen();
             $item = $this->itemRepo->findById($itemId);
-            if (!$item) throw new \InvalidArgumentException("Item not found: {$itemId}");
+            if (!$item) throw new \InvalidArgumentException("Không tìm thấy mặt hàng mã {$itemId}. Vui lòng kiểm tra lại mã vật tư/hàng hóa.");
 
             $itemCost = $qty * $unitPrice;
             $totalAddon = array_sum(array_column($addonCosts, 'amount'));
@@ -339,13 +339,13 @@ class InventoryService
             $stmt = $pdo->prepare("SELECT * FROM inventory_in_transit WHERE id = ?");
             $stmt->execute([$transitId]);
             $transit = $stmt->fetch(\PDO::FETCH_ASSOC);
-            if (!$transit) throw new \InvalidArgumentException("Transit record not found: {$transitId}");
+            if (!$transit) throw new \InvalidArgumentException("Không tìm thấy lô hàng đi đường mã {$transitId}.");
             if ($transit['qty'] < $qty) {
-                throw new \InvalidArgumentException("Insufficient in transit: have {$transit['qty']}, need {$qty}");
+                throw new \InvalidArgumentException("Hàng đi đường không đủ. Hiện có {$transit['qty']}, cần {$qty}.");
             }
 
             $item = $this->itemRepo->findById($transit['item_id']);
-            if (!$item) throw new \InvalidArgumentException("Item not found: {$transit['item_id']}");
+            if (!$item) throw new \InvalidArgumentException("Không tìm thấy mặt hàng mã {$transit['item_id']}.");
 
             $unitCost = (float)$transit['unit_cost'];
             $addonPerUnit = (float)$transit['addon_per_unit'];
@@ -392,9 +392,9 @@ class InventoryService
         return $this->wrapInTransaction(function () use ($itemId, $qty, $consignee, $reference, $createdBy) {
             $this->assertPeriodOpen();
             $item = $this->itemRepo->findById($itemId);
-            if (!$item) throw new \InvalidArgumentException("Item not found: {$itemId}");
+            if (!$item) throw new \InvalidArgumentException("Không tìm thấy mặt hàng mã {$itemId}. Vui lòng kiểm tra lại mã vật tư/hàng hóa.");
             if (!$item->getAllowNegativeStock() && $item->getStockQty() < $qty) {
-                throw new \InvalidArgumentException("Insufficient stock: have {$item->getStockQty()}, need {$qty}");
+                throw new \InvalidArgumentException("Tồn kho không đủ. Hiện có {$item->getStockQty()}, cần {$qty}.");
             }
 
             $inventoryCode = $this->inventoryAccountMap[$item->getItemType()] ?? '152';
@@ -438,9 +438,9 @@ class InventoryService
             $stmt = $pdo->prepare("SELECT * FROM inventory_consignment WHERE id = ?");
             $stmt->execute([$consignmentId]);
             $record = $stmt->fetch(\PDO::FETCH_ASSOC);
-            if (!$record) throw new \InvalidArgumentException("Consignment record not found: {$consignmentId}");
+            if (!$record) throw new \InvalidArgumentException("Không tìm thấy phiếu ký gửi mã {$consignmentId}.");
             if ($record['qty'] < $qty) {
-                throw new \InvalidArgumentException("Insufficient consignment: have {$record['qty']}, need {$qty}");
+                throw new \InvalidArgumentException("Hàng ký gửi không đủ. Hiện có {$record['qty']}, cần {$qty}.");
             }
 
             $unitCost = (float)$record['unit_cost'] + (float)$record['addon_per_unit'];
@@ -479,13 +479,13 @@ class InventoryService
             $stmt = $pdo->prepare("SELECT * FROM inventory_consignment WHERE id = ?");
             $stmt->execute([$consignmentId]);
             $record = $stmt->fetch(\PDO::FETCH_ASSOC);
-            if (!$record) throw new \InvalidArgumentException("Consignment record not found: {$consignmentId}");
+            if (!$record) throw new \InvalidArgumentException("Không tìm thấy phiếu ký gửi mã {$consignmentId}.");
             if ($record['qty'] < $qty) {
-                throw new \InvalidArgumentException("Insufficient consignment for return: have {$record['qty']}, need {$qty}");
+                throw new \InvalidArgumentException("Hàng ký gửi không đủ để trả lại. Hiện có {$record['qty']}, cần {$qty}.");
             }
 
             $item = $this->itemRepo->findById($record['item_id']);
-            if (!$item) throw new \InvalidArgumentException("Item not found: {$record['item_id']}");
+            if (!$item) throw new \InvalidArgumentException("Không tìm thấy mặt hàng mã {$record['item_id']}.");
 
             $unitCost = (float)$record['unit_cost'] + (float)$record['addon_per_unit'];
             $totalCost = $qty * $unitCost;
@@ -530,7 +530,7 @@ class InventoryService
         return $this->wrapInTransaction(function () use ($itemId, $actualQty, $reference, $createdBy) {
             $this->assertPeriodOpen();
             $item = $this->itemRepo->findById($itemId);
-            if (!$item) throw new \InvalidArgumentException("Item not found: {$itemId}");
+            if (!$item) throw new \InvalidArgumentException("Không tìm thấy mặt hàng mã {$itemId}. Vui lòng kiểm tra lại mã vật tư/hàng hóa.");
 
             $systemQty = $item->getStockQty();
             $diff = $actualQty - $systemQty;
@@ -649,8 +649,8 @@ class InventoryService
         return $this->wrapInTransaction(function () use ($itemId, $amount, $reference, $notes, $createdBy) {
             $this->assertPeriodOpen();
             $item = $this->itemRepo->findById($itemId);
-            if (!$item) throw new \InvalidArgumentException("Item not found: {$itemId}");
-            if ($amount <= 0) throw new \InvalidArgumentException("Provision amount must be positive");
+            if (!$item) throw new \InvalidArgumentException("Không tìm thấy mặt hàng mã {$itemId}. Vui lòng kiểm tra lại mã vật tư/hàng hóa.");
+            if ($amount <= 0) throw new \InvalidArgumentException("Số tiền dự phòng giảm giá phải lớn hơn 0.");
 
             $txn = $this->journal->postEntry("Impairment: {$item->getName()}", $reference, [
                 ['account_code' => '632', 'amount' => $amount, 'is_debit' => true],
@@ -685,9 +685,9 @@ class InventoryService
             $stmt = $pdo->prepare("SELECT * FROM inventory_impairment WHERE id = ?");
             $stmt->execute([$impairmentId]);
             $record = $stmt->fetch(\PDO::FETCH_ASSOC);
-            if (!$record) throw new \InvalidArgumentException("Impairment record not found: {$impairmentId}");
+            if (!$record) throw new \InvalidArgumentException("Không tìm thấy phiếu dự phòng mã {$impairmentId}.");
             if ($record['remaining_amount'] < $amount) {
-                throw new \InvalidArgumentException("Insufficient remaining provision: have {$record['remaining_amount']}, need {$amount}");
+                throw new \InvalidArgumentException("Dự phòng còn lại không đủ. Hiện còn {$record['remaining_amount']}, cần {$amount}.");
             }
 
             $item = $this->itemRepo->findById($record['item_id']);
@@ -726,9 +726,9 @@ class InventoryService
         return $this->wrapInTransaction(function () use ($itemId, $qty, $reference, $createdBy, $deemedSaleValue, $vatRate) {
             $this->assertPeriodOpen();
             $item = $this->itemRepo->findById($itemId);
-            if (!$item) throw new \InvalidArgumentException("Item not found: {$itemId}");
+            if (!$item) throw new \InvalidArgumentException("Không tìm thấy mặt hàng mã {$itemId}. Vui lòng kiểm tra lại mã vật tư/hàng hóa.");
             if (!$item->getAllowNegativeStock() && $item->getStockQty() < $qty) {
-                throw new \InvalidArgumentException("Insufficient stock: have {$item->getStockQty()}, need {$qty}");
+                throw new \InvalidArgumentException("Tồn kho không đủ. Hiện có {$item->getStockQty()}, cần {$qty}.");
             }
 
             $inventoryCode = $this->inventoryAccountMap[$item->getItemType()] ?? '152';
@@ -770,14 +770,14 @@ class InventoryService
         return $this->wrapInTransaction(function () use ($itemId, $qty, $batchCode, $issueType, $reference, $createdBy) {
             $this->assertPeriodOpen();
             $item = $this->itemRepo->findById($itemId);
-            if (!$item) throw new \InvalidArgumentException("Item not found: {$itemId}");
+            if (!$item) throw new \InvalidArgumentException("Không tìm thấy mặt hàng mã {$itemId}. Vui lòng kiểm tra lại mã vật tư/hàng hóa.");
 
             $pdo = $this->getPdo();
             $stmt = $pdo->prepare("SELECT COALESCE(SUM(qty),0) FROM inventory_cost_layers WHERE item_id = ? AND batch_code = ? AND qty > 0");
             $stmt->execute([$itemId, $batchCode]);
             $available = (float)$stmt->fetchColumn();
             if (!$item->getAllowNegativeStock() && $available < $qty) {
-                throw new \InvalidArgumentException("Insufficient stock in batch {$batchCode}: have {$available}, need {$qty}");
+                throw new \InvalidArgumentException("Tồn kho không đủ trong lô {$batchCode}. Hiện có {$available}, cần {$qty}.");
             }
 
             $stmt = $pdo->prepare("SELECT id, qty, unit_cost, addon_per_unit FROM inventory_cost_layers WHERE item_id = ? AND batch_code = ? AND qty > 0 ORDER BY created_at ASC");
@@ -798,7 +798,7 @@ class InventoryService
                 'production' => '154',
                 'construction' => '241',
                 'sale' => '632',
-                default => throw new \InvalidArgumentException("Invalid issue type: {$issueType}"),
+                default => throw new \InvalidArgumentException("Loại xuất kho không hợp lệ: {$issueType}. Vui lòng kiểm tra lại."),
             };
 
             $txn = $this->journal->postEntry("Goods issue: {$item->getName()}", $reference, [
@@ -823,7 +823,7 @@ class InventoryService
         $stmt = $pdo->prepare("SELECT rate FROM exchange_rates WHERE currency_code = ? ORDER BY rate_date DESC LIMIT 1");
         $stmt->execute([$currencyCode]);
         $row = $stmt->fetch(\PDO::FETCH_ASSOC);
-        if (!$row) throw new \InvalidArgumentException("Exchange rate not found for: {$currencyCode}");
+        if (!$row) throw new \InvalidArgumentException("Không tìm thấy tỷ giá cho ngoại tệ: {$currencyCode}. Vui lòng cập nhật tỷ giá.");
         return (float)$row['rate'];
     }
 
@@ -842,7 +842,7 @@ class InventoryService
         return $this->wrapInTransaction(function () use ($itemId, $qty, $unitPriceFC, $addonCosts, $currencyCode, $exchangeRate, $reference, $createdBy) {
             $this->assertPeriodOpen();
             $item = $this->itemRepo->findById($itemId);
-            if (!$item) throw new \InvalidArgumentException("Item not found: {$itemId}");
+            if (!$item) throw new \InvalidArgumentException("Không tìm thấy mặt hàng mã {$itemId}. Vui lòng kiểm tra lại mã vật tư/hàng hóa.");
 
             $rate = $exchangeRate ?? $this->getExchangeRate($currencyCode);
             $inventoryCode = $this->inventoryAccountMap[$item->getItemType()] ?? '152';
@@ -890,8 +890,8 @@ class InventoryService
         return $this->wrapInTransaction(function () use ($itemId, $qty, $reference, $createdBy) {
             $this->assertPeriodOpen();
             $item = $this->itemRepo->findById($itemId);
-            if (!$item) throw new \InvalidArgumentException("Item not found: {$itemId}");
-            if ($qty <= 0) throw new \InvalidArgumentException("Qty must be positive");
+            if (!$item) throw new \InvalidArgumentException("Không tìm thấy mặt hàng mã {$itemId}. Vui lòng kiểm tra lại mã vật tư/hàng hóa.");
+            if ($qty <= 0) throw new \InvalidArgumentException("Số lượng phải lớn hơn 0.");
 
             $inventoryCode = $this->inventoryAccountMap[$item->getItemType()] ?? '152';
 
@@ -932,10 +932,10 @@ class InventoryService
         return $this->wrapInTransaction(function () use ($itemId, $qty, $reference, $createdBy) {
             $this->assertPeriodOpen();
             $item = $this->itemRepo->findById($itemId);
-            if (!$item) throw new \InvalidArgumentException("Item not found: {$itemId}");
-            if ($qty <= 0) throw new \InvalidArgumentException("Qty must be positive");
+            if (!$item) throw new \InvalidArgumentException("Không tìm thấy mặt hàng mã {$itemId}. Vui lòng kiểm tra lại mã vật tư/hàng hóa.");
+            if ($qty <= 0) throw new \InvalidArgumentException("Số lượng phải lớn hơn 0.");
             if ($item->getStockQty() < $qty) {
-                throw new \InvalidArgumentException("Insufficient stock for return: have {$item->getStockQty()}, need {$qty}");
+                throw new \InvalidArgumentException("Tồn kho không đủ để nhập hàng trả lại. Hiện có {$item->getStockQty()}, cần {$qty}.");
             }
 
             $inventoryCode = $this->inventoryAccountMap[$item->getItemType()] ?? '152';
@@ -991,16 +991,16 @@ class InventoryService
     {
         $validReasons = ['damaged', 'expired', 'obsolete', 'lost', 'other'];
         if (!in_array($reason, $validReasons)) {
-            throw new \InvalidArgumentException("Invalid reason: {$reason}. Valid: " . implode(', ', $validReasons));
+            throw new \InvalidArgumentException("Lý do xuất hủy không hợp lệ: {$reason}. Lý do hợp lệ: " . implode(', ', $validReasons));
         }
 
         return $this->wrapInTransaction(function () use ($itemId, $qty, $reason, $expenseAccount, $reference, $createdBy, $notes) {
             $this->assertPeriodOpen();
             $item = $this->itemRepo->findById($itemId);
-            if (!$item) throw new \InvalidArgumentException("Item not found: {$itemId}");
-            if ($qty <= 0) throw new \InvalidArgumentException("Qty must be positive");
+            if (!$item) throw new \InvalidArgumentException("Không tìm thấy mặt hàng mã {$itemId}. Vui lòng kiểm tra lại mã vật tư/hàng hóa.");
+            if ($qty <= 0) throw new \InvalidArgumentException("Số lượng phải lớn hơn 0.");
             if ($item->getStockQty() < $qty) {
-                throw new \InvalidArgumentException("Insufficient stock: have {$item->getStockQty()}, need {$qty}");
+                throw new \InvalidArgumentException("Tồn kho không đủ. Hiện có {$item->getStockQty()}, cần {$qty}.");
             }
 
             $inventoryCode = $this->inventoryAccountMap[$item->getItemType()] ?? '152';
@@ -1042,7 +1042,7 @@ class InventoryService
         return $this->wrapInTransaction(function () use ($itemId, $closingQty, $closingUnitCost, $reference, $createdBy) {
             $this->assertPeriodOpen();
             $item = $this->itemRepo->findById($itemId);
-            if (!$item) throw new \InvalidArgumentException("Item not found: {$itemId}");
+            if (!$item) throw new \InvalidArgumentException("Không tìm thấy mặt hàng mã {$itemId}. Vui lòng kiểm tra lại mã vật tư/hàng hóa.");
 
             $pdo = $this->getPdo();
             $stmt = $pdo->prepare("SELECT COALESCE(SUM(qty), 0) as total_qty, COALESCE(SUM(qty * unit_cost + qty * addon_per_unit), 0) as total_value FROM inventory_cost_layers WHERE item_id = ?");
@@ -1163,10 +1163,10 @@ class InventoryService
         $stmt = $pdo->prepare("SELECT * FROM period_inventory_snapshots WHERE period_id = ? ORDER BY created_at DESC LIMIT 1");
         $stmt->execute([$periodId]);
         $snapshot = $stmt->fetch(\PDO::FETCH_ASSOC);
-        if (!$snapshot) throw new \InvalidArgumentException("No inventory snapshot found for period {$periodId}");
+        if (!$snapshot) throw new \InvalidArgumentException("Không tìm thấy dữ liệu kiểm kê tồn kho cho kỳ {$periodId}. Vui lòng thực hiện kiểm kê cuối kỳ.");
 
         $layers = json_decode($snapshot['data'], true);
-        if (!is_array($layers)) throw new \InvalidArgumentException("Corrupt snapshot data");
+        if (!is_array($layers)) throw new \InvalidArgumentException("Dữ liệu kiểm kê tồn kho bị lỗi. Vui lòng kiểm tra lại.");
 
         // CẢNH BÁO RỦI RO CỰC KỲ NGHIÊM TRỌNG — CHỈ SỬ DỤNG KHI THẬT SỰ CẦN:
         // Thao tác này XÓA TOÀN BỘ cost layer hiện tại và khôi phục từ snapshot cũ.
@@ -1454,7 +1454,7 @@ class InventoryService
         // số lượng tồn kho âm oan, BC02 chỉ tiêu 24 sai.
         if ($methodCode === 'specific_id') {
             if (!$batchCode) {
-                throw new \InvalidArgumentException("Specific ID costing requires a batch code");
+                throw new \InvalidArgumentException("Phương pháp tính giá theo từng lô yêu cầu nhập mã lô.");
             }
             $stmt = $pdo->prepare("SELECT id, qty, unit_cost, addon_per_unit FROM inventory_cost_layers WHERE item_id = ? AND batch_code = ? AND qty > 0 ORDER BY created_at ASC");
             $stmt->execute([$itemId, $batchCode]);

@@ -105,9 +105,9 @@ $('#receiptForm').submit(function(e) {
     };
     var addon = parseFloat($('#addonCost').val()) || 0;
     if (addon > 0) data.addon_costs.push({ description: 'Phụ phí', amount: addon });
-    if (!data.item_id) { showToast('Vui lòng chọn vật tư', 'error'); return; }
-    if (!data.qty || data.qty <= 0) { showToast('Số lượng phải lớn hơn 0', 'error'); return; }
-    if (!data.unit_price || data.unit_price <= 0) { showToast('Đơn giá phải lớn hơn 0', 'error'); return; }
+    if (!data.item_id) { showToast('Vui lòng chọn mã vật tư/hàng hóa.', 'error'); return; }
+    if (!data.qty || data.qty <= 0) { showToast('Số lượng phải lớn hơn 0.', 'error'); return; }
+    if (!data.unit_price || data.unit_price <= 0) { showToast('Đơn giá phải lớn hơn 0.', 'error'); return; }
     $.ajax({
         url: '/api/inventory/receive',
         method: 'POST',
@@ -117,7 +117,7 @@ $('#receiptForm').submit(function(e) {
             $('#receiptModal').modal('hide');
             $('#receiptForm')[0].reset();
             $('#addonCost').val(0);
-            showToast('Nhập kho thành công', 'success');
+            showToast('Đã nhập kho thành công.', 'success');
             loadData();
         },
         error: function(xhr) {

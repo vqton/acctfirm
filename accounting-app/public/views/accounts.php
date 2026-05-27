@@ -40,7 +40,7 @@ ob_start();
                     <option value="expense">Chi phí</option>
                 </select>
             </div>
-            <div class="col-3"><label>Class</label>
+            <div class="col-3"><label>Phân loại</label>
                 <select name="account_class" id="f_class" class="form-select form-select-sm">
                     <option value="">--</option><option value="1">1</option><option value="2">2</option>
                     <option value="3">3</option><option value="4">4</option><option value="5">5</option>

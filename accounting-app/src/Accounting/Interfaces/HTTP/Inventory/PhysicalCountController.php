@@ -71,7 +71,7 @@ class PhysicalCountController
         Auth::requirePermission('inventory', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['lines']) || count($data['lines']) === 0) {
-            JsonResponse::error('lines required');
+            JsonResponse::error('Vui lòng nhập danh sách kiểm kê');
             return;
         }
         try {
@@ -98,7 +98,7 @@ class PhysicalCountController
         Auth::requirePermission('inventory', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['item_id'], $data['actual_qty'])) {
-            JsonResponse::error('item_id, actual_qty required');
+            JsonResponse::error('Vui lòng nhập mã vật tư và số lượng thực tế');
             return;
         }
         try {

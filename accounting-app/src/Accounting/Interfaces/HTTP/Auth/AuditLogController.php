@@ -70,7 +70,7 @@ class AuditLogController
         $stmt = $this->pdo->prepare('SELECT * FROM audit_log WHERE id = ?');
         $stmt->execute([$id]);
         $row = $stmt->fetch(\PDO::FETCH_ASSOC);
-        if (!$row) { JsonResponse::error('Not found', 404); return; }
+        if (!$row) { JsonResponse::error('Không tìm thấy bản ghi nhật ký', 404); return; }
         JsonResponse::ok($row);
     }
 }

@@ -3,7 +3,7 @@
 <div class="card-table p-3">
   <div class="row g-3 mb-3">
     <div class="col-md-3"><label class="form-label">Nhân viên</label><select class="form-select" id="calcEmployee"></select></div>
-    <div class="col-md-2"><label class="form-label">Lương gross</label><input class="form-control" id="calcGross" value="10000000"></div>
+    <div class="col-md-2"><label class="form-label">Tổng lương</label><input class="form-control" id="calcGross" value="10000000"></div>
     <div class="col-md-2"><label class="form-label">Phụ cấp</label><input class="form-control" id="calcAllowance" value="0"></div>
     <div class="col-md-2"><label class="form-label">Khấu trừ</label><input class="form-control" id="calcDeduction" value="0"></div>
     <div class="col-md-2"><label class="form-label">Tăng ca</label><input class="form-control" id="calcOvertime" value="0"></div>
@@ -13,9 +13,9 @@
 </div>
 <script>
 $.get('/api/payroll/employees').done(function(r){var s='<option value="">-- Chọn --</option>';if(r.data)r.data.forEach(function(e){s+='<option value="'+e.id+'">'+e.code+' - '+esc(e.name)+'</option>';});$('#calcEmployee').html(s);});
-function doCalc(){var eid=$('#calcEmployee').val();if(!eid){showToast('Chọn nhân viên','error');return;}
+function doCalc(){var eid=$('#calcEmployee').val();if(!eid){showToast('Vui lòng chọn nhân viên để tính lương.','error');return;}
   var g=$('#calcGross').val();
-  $.get('/api/payroll/calculate/employee',{employee_id:eid,gross:g}).done(function(r){if(!r.data){showToast('Không có kết quả','error');return;}
+  $.get('/api/payroll/calculate/employee',{employee_id:eid,gross:g}).done(function(r){if(!r.data){showToast('Không có dữ liệu kết quả tính lương cho nhân viên này.','error');return;}
     var d=r.data;var h='<div class="card-table mt-2"><table class="table"><thead><tr><th>Chỉ tiêu</th><th class="text-end">Giá trị</th></tr></thead><tbody>';
     h+='<tr><td>Lương gross</td><td class="text-end">'+fmt(d.gross_salary)+'</td></tr>';
     h+='<tr><td>Phụ cấp</td><td class="text-end">'+fmt(d.allowances)+'</td></tr>';

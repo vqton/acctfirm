@@ -184,7 +184,7 @@ function defineRoutes(Router $router): void
     });
     $router->get('/api/fixed-assets/:id/schedule', function($id) use ($c) {
         $asset = $c['fixedAssetRepository']->findById($id);
-        if (!$asset) { JsonResponse::error('Asset not found', 404); return; }
+        if (!$asset) { JsonResponse::error('Không tìm thấy tài sản cố định', 404); return; }
         JsonResponse::ok($c['fixedAssetService']->calculateSchedule($asset));
     });
 

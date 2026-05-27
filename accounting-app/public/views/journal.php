@@ -100,7 +100,7 @@ function loadData(){
 function approveEntry(id){
     if(!confirm('Duyệt bút toán này? Giao dịch sẽ được ghi sổ.'))return;
     $.ajax({url:'/api/journal/approve/'+id,method:'POST',headers:{'X-CSRF-Token':csrf},
-        success:function(){showToast('Đã ghi sổ bút toán','success');loadData();},
+        success:function(){showToast('Đã ghi sổ bút toán thành công.','success');loadData();},
         error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}
     });
 }
@@ -149,13 +149,13 @@ $('#entryForm').submit(function(e){e.preventDefault();
         var ac=$(this).find('.acc-picker').val();var amt=$(this).find('.amount-input').val();var dr=$(this).find('.dr-cr').val();
         if(ac&&amt)lines.push({account_code:ac,amount:parseFloat(amt),is_debit:parseInt(dr)?true:false});
     });
-    if(lines.length<2){showToast('Cần ít nhất 2 dòng định khoản','error');return;}
+    if(lines.length<2){showToast('Bút toán cần có ít nhất 2 dòng định khoản (Nợ và Có).','error');return;}
     var totalDr=0,totalCr=0;
     lines.forEach(function(l){if(l.is_debit)totalDr+=l.amount;else totalCr+=l.amount;});
-    if(Math.abs(totalDr-totalCr)>10){showToast('Nợ và Có không cân bằng','error');return;}
+    if(Math.abs(totalDr-totalCr)>10){showToast('Tổng Nợ và tổng Có chưa cân bằng. Vui lòng kiểm tra lại số tiền các dòng định khoản.','error');return;}
     $.ajax({url:'/api/journal/draft',method:'POST',contentType:'application/json',headers:{'X-CSRF-Token':csrf},
         data:JSON.stringify({description:$('#description').val(),reference:$('#reference').val(),lines:lines,transaction_date:$('#txnDate').val()}),
-        success:function(){$('#entryModal').modal('hide');$('#entryForm')[0].reset();$('#linesContainer .line-row:not(:first)').remove();showToast('Đã lưu bút toán nháp','success');loadData();},
+        success:function(){$('#entryModal').modal('hide');$('#entryForm')[0].reset();$('#linesContainer .line-row:not(:first)').remove();showToast('Đã lưu bút toán nháp thành công.','success');loadData();},
         error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}
     });
 });

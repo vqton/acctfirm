@@ -53,7 +53,7 @@ class Router
             }
         }
 
-        HttpError::notFound('Route not found: ' . $method . ' ' . $uri);
+        HttpError::notFound('Không tìm thấy đường dẫn: ' . $method . ' ' . $uri);
     }
 
     public function get(string $pattern, $handler): void { $this->addRoute('GET', $pattern, $handler); }

@@ -69,7 +69,7 @@ class FxRevaluationService
         // đánh giá lại sai toàn bộ → ảnh hưởng đến tất cả TK tiền tệ
         $endRates = $this->getPeriodEndRates($period['end_date']);
         if (empty($endRates)) {
-            return ['status' => 'skipped', 'message' => 'No exchange rates found for period end date', 'results' => []];
+            return ['status' => 'skipped', 'message' => 'Không tìm thấy tỷ giá cho ngày cuối kỳ', 'results' => []];
         }
 
         // Bước 3: Duyệt từng tài khoản tiền tệ, tính số dư ngoại tệ ròng (Dr - Cr) theo từng loại tiền
@@ -258,7 +258,7 @@ class FxRevaluationService
         $stmt = $this->pdo->prepare('SELECT * FROM accounting_periods WHERE id = ?');
         $stmt->execute([$id]);
         $r = $stmt->fetch(\PDO::FETCH_ASSOC);
-        if (!$r) throw new \InvalidArgumentException("Period not found: {$id}");
+        if (!$r) throw new \InvalidArgumentException("Không tìm thấy kỳ kế toán: {$id}");
         return $r;
     }
 

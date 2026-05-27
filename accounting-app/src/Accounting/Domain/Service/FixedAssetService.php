@@ -120,7 +120,7 @@ class FixedAssetService
     public function postMonthlyDepreciation(string $period, string $createdBy): array
     {
         if (!PeriodService::isPeriodOpen($period . '-01', $this->pdo)) {
-            throw new \RuntimeException("Period {$period} is closed");
+            throw new \RuntimeException("Kỳ kế toán {$period} đã đóng");
         }
 
         $assets = $this->faRepo->findAll();

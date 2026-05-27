@@ -83,7 +83,7 @@ class Transaction
     public function submit(): void
     {
         if (!$this->isValidTransition('submitted')) {
-            throw new \InvalidArgumentException("Cannot submit: current status is '{$this->status}'");
+            throw new \InvalidArgumentException("Không thể trình duyệt: trạng thái hiện tại là '{$this->status}'.");
         }
         $this->status = 'submitted';
     }
@@ -93,7 +93,7 @@ class Transaction
     public function approve(): void
     {
         if (!$this->isValidTransition('approved')) {
-            throw new \InvalidArgumentException("Cannot approve: current status is '{$this->status}'");
+            throw new \InvalidArgumentException("Không thể phê duyệt: trạng thái hiện tại là '{$this->status}'.");
         }
         $this->status = 'approved';
     }
@@ -103,7 +103,7 @@ class Transaction
     public function reject(): void
     {
         if (!$this->isValidTransition('rejected')) {
-            throw new \InvalidArgumentException("Cannot reject: current status is '{$this->status}'");
+            throw new \InvalidArgumentException("Không thể từ chối: trạng thái hiện tại là '{$this->status}'.");
         }
         $this->status = 'rejected';
     }
@@ -113,7 +113,7 @@ class Transaction
     public function returnToDraft(): void
     {
         if ($this->status !== 'rejected') {
-            throw new \InvalidArgumentException("Cannot return to draft: current status is '{$this->status}'");
+            throw new \InvalidArgumentException("Không thể quay lại trạng thái nháp: trạng thái hiện tại là '{$this->status}'.");
         }
         $this->status = 'pending';
     }
@@ -148,7 +148,7 @@ class Transaction
     public function post(string $createdBy): void
     {
         if (!in_array($this->status, ['pending', 'approved'], true)) {
-            throw new \InvalidArgumentException('Transaction cannot be posted from status: ' . $this->status);
+            throw new \InvalidArgumentException('Bút toán không thể ghi sổ từ trạng thái hiện tại: ' . $this->status . '.');
         }
 
         $debitTotal = 0.0;
@@ -163,7 +163,7 @@ class Transaction
         }
 
         if ($debitTotal !== $creditTotal) {
-            throw new \InvalidArgumentException('Debit and credit totals must balance');
+            throw new \InvalidArgumentException('Tổng Nợ và tổng Có phải cân bằng. Vui lòng kiểm tra lại.');
         }
 
         $this->status = 'posted';
@@ -177,7 +177,7 @@ class Transaction
     public function reverse(string $reversedBy): void
     {
         if ($this->status !== 'posted') {
-            throw new \InvalidArgumentException('Only posted transactions can be reversed');
+            throw new \InvalidArgumentException('Chỉ có thể hoàn nhập bút toán đã ghi sổ.');
         }
 
         $this->status = 'reversed';

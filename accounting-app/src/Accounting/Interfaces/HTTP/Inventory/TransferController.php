@@ -71,7 +71,7 @@ class TransferController
         Auth::requirePermission('inventory', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['item_id'], $data['qty'], $data['to_warehouse_id'])) {
-            JsonResponse::error('item_id, qty, to_warehouse_id required');
+            JsonResponse::error('Vui lòng nhập mã vật tư, số lượng và kho đích');
             return;
         }
 
@@ -80,7 +80,7 @@ class TransferController
         $qty = (float)$data['qty'];
 
         if ($qty <= 0) {
-            JsonResponse::error('qty must be positive');
+            JsonResponse::error('Số lượng phải lớn hơn 0');
             return;
         }
 

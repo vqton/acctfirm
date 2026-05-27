@@ -68,7 +68,7 @@ function loadEmployees(){$.get('/api/employees',function(l){var o='';l.forEach(f
 // RỦI RO: Sau khi đóng, không thể tạm ứng thêm; số dư còn lại phải được hoàn ứng trước
 function closeFund(id){if(!confirm('Đóng quỹ này?'))return;
     $.ajax({url:'/api/petty-cash/close',method:'POST',contentType:'application/json',headers:{'X-CSRF-Token':csrf},data:JSON.stringify({fund_id:id}),
-        success:function(){showToast('Đã đóng quỹ','success');loadData();loadFunds();},
+        success:function(){showToast('Đã đóng quỹ tạm ứng thành công.','success');loadData();loadFunds();},
         error:function(x){showToast('Lỗi','error');}
     });
 }
@@ -76,7 +76,7 @@ function closeFund(id){if(!confirm('Đóng quỹ này?'))return;
 // Nghiệp vụ: Nợ 141 (TK tạm ứng)/Có 1111 (tiền mặt) — cấp quỹ cho nhân viên
 $('#fundForm').submit(function(e){e.preventDefault();
     $.ajax({url:'/api/petty-cash/funds',method:'POST',contentType:'application/json',headers:{'X-CSRF-Token':csrf},data:JSON.stringify({employee_id:$('#fundEmployee').val(),amount:parseFloat($('#fundAmount').val())}),
-        success:function(){$('#fundModal').modal('hide');$('#fundForm')[0].reset();showToast('Lập quỹ thành công','success');loadData();loadFunds();},
+        success:function(){$('#fundModal').modal('hide');$('#fundForm')[0].reset();showToast('Đã lập quỹ tạm ứng thành công.','success');loadData();loadFunds();},
         error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}
     });
 });
@@ -84,7 +84,7 @@ $('#fundForm').submit(function(e){e.preventDefault();
 // Nghiệp vụ: Nợ 141/Có 1111 — trích quỹ tạm ứng, giảm số dư quỹ
 $('#disburseForm').submit(function(e){e.preventDefault();
     $.ajax({url:'/api/petty-cash/disburse',method:'POST',contentType:'application/json',headers:{'X-CSRF-Token':csrf},data:JSON.stringify({fund_id:$('#dFund').val(),amount:parseFloat($('#dAmount').val()),description:$('#dDesc').val()}),
-        success:function(){$('#disburseModal').modal('hide');$('#disburseForm')[0].reset();showToast('Tạm ứng thành công','success');loadData();loadFunds();},
+        success:function(){$('#disburseModal').modal('hide');$('#disburseForm')[0].reset();showToast('Đã ghi nhận tạm ứng thành công.','success');loadData();loadFunds();},
         error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}
     });
 });
@@ -92,7 +92,7 @@ $('#disburseForm').submit(function(e){e.preventDefault();
 // Nghiệp vụ: Nợ 1111/Có 141 — nhân viên hoàn lại tiền tạm ứng chưa sử dụng
 $('#repForm').submit(function(e){e.preventDefault();
     $.ajax({url:'/api/petty-cash/replenish',method:'POST',contentType:'application/json',headers:{'X-CSRF-Token':csrf},data:JSON.stringify({fund_id:$('#rFund').val(),amount:parseFloat($('#rAmount').val())}),
-        success:function(){$('#repModal').modal('hide');$('#repForm')[0].reset();showToast('Hoàn ứng thành công','success');loadData();loadFunds();},
+        success:function(){$('#repModal').modal('hide');$('#repForm')[0].reset();showToast('Đã ghi nhận hoàn ứng thành công.','success');loadData();loadFunds();},
         error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}
     });
 });

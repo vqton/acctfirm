@@ -66,7 +66,7 @@ class ConsignmentController
         Auth::requirePermission('inventory', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['item_id'], $data['qty'], $data['consignee'])) {
-            JsonResponse::error('item_id, qty, consignee required');
+            JsonResponse::error('Vui lòng nhập mã vật tư, số lượng và bên nhận ký gửi');
             return;
         }
         try {
@@ -93,7 +93,7 @@ class ConsignmentController
         Auth::requirePermission('inventory', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['consignment_id'], $data['qty'])) {
-            JsonResponse::error('consignment_id, qty required');
+            JsonResponse::error('Vui lòng nhập mã ký gửi và số lượng');
             return;
         }
         try {
@@ -119,7 +119,7 @@ class ConsignmentController
         Auth::requirePermission('inventory', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['consignment_id'], $data['qty'])) {
-            JsonResponse::error('consignment_id, qty required');
+            JsonResponse::error('Vui lòng nhập mã ký gửi và số lượng');
             return;
         }
         try {

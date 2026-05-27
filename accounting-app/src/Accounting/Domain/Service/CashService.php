@@ -37,10 +37,10 @@ class CashService
 
     public function recordReceipt(float $amount, string $creditAccountCode, string $description, string $reference, string $createdBy): array
     {
-        if ($amount <= 0) throw new \InvalidArgumentException('Amount must be positive');
+        if ($amount <= 0) throw new \InvalidArgumentException('Số tiền phải lớn hơn 0.');
 
         $creditAccount = $this->accountRepo->findByCode($creditAccountCode);
-        if (!$creditAccount) throw new \InvalidArgumentException("Account not found: {$creditAccountCode}");
+        if (!$creditAccount) throw new \InvalidArgumentException("Không tìm thấy tài khoản: {$creditAccountCode}");
 
         
         $txn = $this->journal->postEntry("Cash receipt: {$description}", $reference, [
@@ -66,10 +66,10 @@ class CashService
 
     public function recordPayment(float $amount, string $debitAccountCode, string $description, string $reference, string $createdBy): array
     {
-        if ($amount <= 0) throw new \InvalidArgumentException('Amount must be positive');
+        if ($amount <= 0) throw new \InvalidArgumentException('Số tiền phải lớn hơn 0.');
 
         $debitAccount = $this->accountRepo->findByCode($debitAccountCode);
-        if (!$debitAccount) throw new \InvalidArgumentException("Account not found: {$debitAccountCode}");
+        if (!$debitAccount) throw new \InvalidArgumentException("Không tìm thấy tài khoản: {$debitAccountCode}");
 
         // KIỂM TRA SỐ DƯ TIỀN MẶT: Duy trì nguyên tắc thận trọng (prudence concept) —
         // không được ghi nhận chi tiêu vượt quá số dư hiện có (trừ khi có thỏa thuận thấu chi).
@@ -80,7 +80,7 @@ class CashService
         // Tuy nhiên, constraint này phụ thuộc vào implementation của AccountRepository.
         $cash = $this->accountRepo->findByCode('111');
         if ($cash && $cash->getBalance() < $amount) {
-            throw new \InvalidArgumentException("Insufficient cash balance: have {$cash->getBalance()}, need {$amount}");
+            throw new \InvalidArgumentException("Số dư tiền mặt không đủ: hiện có {$cash->getBalance()}, cần {$amount}");
         }
 
         
@@ -104,11 +104,11 @@ class CashService
 
     public function recordBankDeposit(float $amount, string $description, string $reference, string $createdBy): array
     {
-        if ($amount <= 0) throw new \InvalidArgumentException('Amount must be positive');
+        if ($amount <= 0) throw new \InvalidArgumentException('Số tiền phải lớn hơn 0.');
 
         $cash = $this->accountRepo->findByCode('111');
         if ($cash && $cash->getBalance() < $amount) {
-            throw new \InvalidArgumentException("Insufficient cash balance: have {$cash->getBalance()}, need {$amount}");
+            throw new \InvalidArgumentException("Số dư tiền mặt không đủ: hiện có {$cash->getBalance()}, cần {$amount}");
         }
 
         
@@ -131,11 +131,11 @@ class CashService
 
     public function recordBankWithdrawal(float $amount, string $description, string $reference, string $createdBy): array
     {
-        if ($amount <= 0) throw new \InvalidArgumentException('Amount must be positive');
+        if ($amount <= 0) throw new \InvalidArgumentException('Số tiền phải lớn hơn 0.');
 
         $bank = $this->accountRepo->findByCode('112');
         if ($bank && $bank->getBalance() < $amount) {
-            throw new \InvalidArgumentException("Insufficient bank balance: have {$bank->getBalance()}, need {$amount}");
+            throw new \InvalidArgumentException("Số dư ngân hàng không đủ: hiện có {$bank->getBalance()}, cần {$amount}");
         }
 
         
@@ -158,10 +158,10 @@ class CashService
 
     public function recordBankReceipt(float $amount, string $creditAccountCode, string $description, string $reference, string $createdBy): array
     {
-        if ($amount <= 0) throw new \InvalidArgumentException('Amount must be positive');
+        if ($amount <= 0) throw new \InvalidArgumentException('Số tiền phải lớn hơn 0.');
 
         $creditAccount = $this->accountRepo->findByCode($creditAccountCode);
-        if (!$creditAccount) throw new \InvalidArgumentException("Account not found: {$creditAccountCode}");
+        if (!$creditAccount) throw new \InvalidArgumentException("Không tìm thấy tài khoản: {$creditAccountCode}");
 
         
         $txn = $this->journal->postEntry("Bank receipt: {$description}", $reference, [
@@ -184,14 +184,14 @@ class CashService
 
     public function recordBankPayment(float $amount, string $debitAccountCode, string $description, string $reference, string $createdBy): array
     {
-        if ($amount <= 0) throw new \InvalidArgumentException('Amount must be positive');
+        if ($amount <= 0) throw new \InvalidArgumentException('Số tiền phải lớn hơn 0.');
 
         $debitAccount = $this->accountRepo->findByCode($debitAccountCode);
-        if (!$debitAccount) throw new \InvalidArgumentException("Account not found: {$debitAccountCode}");
+        if (!$debitAccount) throw new \InvalidArgumentException("Không tìm thấy tài khoản: {$debitAccountCode}");
 
         $bank = $this->accountRepo->findByCode('112');
         if ($bank && $bank->getBalance() < $amount) {
-            throw new \InvalidArgumentException("Insufficient bank balance: have {$bank->getBalance()}, need {$amount}");
+            throw new \InvalidArgumentException("Số dư ngân hàng không đủ: hiện có {$bank->getBalance()}, cần {$amount}");
         }
 
         
@@ -215,7 +215,7 @@ class CashService
 
     public function recordBankInterest(float $amount, string $description, string $reference, string $createdBy): array
     {
-        if ($amount <= 0) throw new \InvalidArgumentException('Amount must be positive');
+        if ($amount <= 0) throw new \InvalidArgumentException('Số tiền phải lớn hơn 0.');
 
         
         $txn = $this->journal->postEntry("Bank interest: {$description}", $reference, [
@@ -239,11 +239,11 @@ class CashService
 
     public function recordBankCharge(float $amount, string $description, string $reference, string $createdBy): array
     {
-        if ($amount <= 0) throw new \InvalidArgumentException('Amount must be positive');
+        if ($amount <= 0) throw new \InvalidArgumentException('Số tiền phải lớn hơn 0.');
 
         $bank = $this->accountRepo->findByCode('112');
         if ($bank && $bank->getBalance() < $amount) {
-            throw new \InvalidArgumentException("Insufficient bank balance: have {$bank->getBalance()}, need {$amount}");
+            throw new \InvalidArgumentException("Số dư ngân hàng không đủ: hiện có {$bank->getBalance()}, cần {$amount}");
         }
 
         
@@ -269,11 +269,11 @@ class CashService
 
     public function recordTransit(float $amount, string $description, string $reference, string $createdBy): array
     {
-        if ($amount <= 0) throw new \InvalidArgumentException('Amount must be positive');
+        if ($amount <= 0) throw new \InvalidArgumentException('Số tiền phải lớn hơn 0.');
 
         $cash = $this->accountRepo->findByCode('111');
         if ($cash && $cash->getBalance() < $amount) {
-            throw new \InvalidArgumentException("Insufficient cash balance: have {$cash->getBalance()}, need {$amount}");
+            throw new \InvalidArgumentException("Số dư tiền mặt không đủ: hiện có {$cash->getBalance()}, cần {$amount}");
         }
 
         
@@ -313,14 +313,14 @@ class CashService
     public function confirmTransit(string $transitId, string $createdBy): array
     {
         if (!$this->pdo) {
-            throw new \RuntimeException('PDO not available for transit tracking');
+            throw new \RuntimeException('PDO không khả dụng cho theo dõi tiền đang chuyển');
         }
 
         $stmt = $this->pdo->prepare('SELECT amount FROM cash_transit WHERE id = ? AND status = ?');
         $stmt->execute([$transitId, 'in_transit']);
         $row = $stmt->fetch(\PDO::FETCH_ASSOC);
         if (!$row) {
-            throw new \InvalidArgumentException("Transit record not found or already resolved: {$transitId}");
+            throw new \InvalidArgumentException("Không tìm thấy bản ghi tiền đang chuyển hoặc đã được xử lý: {$transitId}");
         }
 
         $amount = (float)$row['amount'];
@@ -367,10 +367,10 @@ class CashService
 
                 return ['transaction_id' => $txn->getId(), 'transit_id' => $transitId, 'type' => 'transit_reverse'];
             }
-            throw new \InvalidArgumentException("Transit record not found or already resolved: {$transitId}");
+            throw new \InvalidArgumentException("Không tìm thấy bản ghi tiền đang chuyển hoặc đã được xử lý: {$transitId}");
         }
 
-        throw new \RuntimeException('PDO not available for transit tracking');
+        throw new \RuntimeException('PDO không khả dụng cho theo dõi tiền đang chuyển');
     }
 
     // ── Cash Book (computed view of TK 111 ledger entries with running balance) ──
@@ -389,7 +389,7 @@ class CashService
     public function getCashBook(string $fromDate = null, string $toDate = null): array
     {
         if (!$this->pdo) {
-            throw new \RuntimeException('PDO not available for cash book');
+            throw new \RuntimeException('PDO không khả dụng cho sổ quỹ tiền mặt');
         }
 
         $sql = "SELECT t.id, t.description, t.reference, t.created_at, le.amount, le.is_debit
@@ -457,13 +457,13 @@ class CashService
 
     public function recordReceiptFC(float $fcAmount, string $creditAccountCode, string $currencyCode, float $exchangeRate, string $description, string $reference, string $createdBy): array
     {
-        if ($fcAmount <= 0) throw new \InvalidArgumentException('Amount must be positive');
-        if ($exchangeRate <= 0) throw new \InvalidArgumentException('Exchange rate must be positive');
+        if ($fcAmount <= 0) throw new \InvalidArgumentException('Số tiền phải lớn hơn 0.');
+        if ($exchangeRate <= 0) throw new \InvalidArgumentException('Tỷ giá phải lớn hơn 0');
 
         $vndAmount = round($fcAmount * $exchangeRate);
 
         $creditAccount = $this->accountRepo->findByCode($creditAccountCode);
-        if (!$creditAccount) throw new \InvalidArgumentException("Account not found: {$creditAccountCode}");
+        if (!$creditAccount) throw new \InvalidArgumentException("Không tìm thấy tài khoản: {$creditAccountCode}");
 
         
         $txn = $this->journal->postEntry("FC receipt: {$description}", $reference, [
@@ -488,18 +488,18 @@ class CashService
 
     public function recordPaymentFC(float $fcAmount, string $debitAccountCode, string $currencyCode, float $exchangeRate, string $description, string $reference, string $createdBy): array
     {
-        if ($fcAmount <= 0) throw new \InvalidArgumentException('Amount must be positive');
-        if ($exchangeRate <= 0) throw new \InvalidArgumentException('Exchange rate must be positive');
+        if ($fcAmount <= 0) throw new \InvalidArgumentException('Số tiền phải lớn hơn 0.');
+        if ($exchangeRate <= 0) throw new \InvalidArgumentException('Tỷ giá phải lớn hơn 0');
 
         $vndAmount = round($fcAmount * $exchangeRate);
 
         $bank = $this->accountRepo->findByCode('112');
         if ($bank && $bank->getBalance() < $vndAmount) {
-            throw new \InvalidArgumentException("Insufficient bank balance: have {$bank->getBalance()}, need {$vndAmount}");
+            throw new \InvalidArgumentException("Số dư ngân hàng không đủ: hiện có {$bank->getBalance()}, cần {$vndAmount}");
         }
 
         $debitAccount = $this->accountRepo->findByCode($debitAccountCode);
-        if (!$debitAccount) throw new \InvalidArgumentException("Account not found: {$debitAccountCode}");
+        if (!$debitAccount) throw new \InvalidArgumentException("Không tìm thấy tài khoản: {$debitAccountCode}");
 
         
         $txn = $this->journal->postEntry("FC payment: {$description}", $reference, [

@@ -50,7 +50,7 @@ class AuthController
     {
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['username'], $data['password'])) {
-            JsonResponse::error('username, password required');
+            JsonResponse::error('Vui lòng nhập tên đăng nhập và mật khẩu');
             return;
         }
 
@@ -59,7 +59,7 @@ class AuthController
         $user = $stmt->fetch(\PDO::FETCH_ASSOC);
 
         if (!$user || !password_verify($data['password'], $user['password_hash'])) {
-            JsonResponse::error('Sai tên đăng nhập hoặc mật khẩu', 401);
+            JsonResponse::error('Tên đăng nhập hoặc mật khẩu không chính xác. Vui lòng kiểm tra lại.', 401);
             return;
         }
 
@@ -132,7 +132,7 @@ class AuthController
     public function me(): void
     {
         if (!isset($_SESSION['user'])) {
-            JsonResponse::error('Not authenticated', 401);
+            JsonResponse::error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.', 401);
             return;
         }
         JsonResponse::ok([

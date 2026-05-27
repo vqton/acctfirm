@@ -139,7 +139,7 @@ $('#receiptForm').submit(function(e){e.preventDefault();
         vat_rate: $('#vatRateGroup').is(':visible')?parseInt($('#vatRate').val())||0:0,
     };
     $.ajax({url:'/api/cash/receipts',method:'POST',contentType:'application/json',headers:{'X-CSRF-Token':csrf},data:JSON.stringify(data),
-        success:function(){$('#receiptModal').modal('hide');$('#receiptForm')[0].reset();showToast('Phiếu thu tạo thành công','success');loadData();},
+        success:function(){$('#receiptModal').modal('hide');$('#receiptForm')[0].reset();showToast('Đã tạo phiếu thu thành công. Số phiếu thu sẽ được hệ thống tự động cập nhật.','success');loadData();},
         error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}
     });
 });

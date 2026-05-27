@@ -62,7 +62,7 @@ class PeriodicController
         Auth::requirePermission('inventory', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['item_id'], $data['closing_qty'], $data['closing_unit_cost'])) {
-            JsonResponse::error('item_id, closing_qty, closing_unit_cost required');
+            JsonResponse::error('Vui lòng nhập mã vật tư, số lượng tồn cuối và đơn giá cuối kỳ');
             return;
         }
         try {

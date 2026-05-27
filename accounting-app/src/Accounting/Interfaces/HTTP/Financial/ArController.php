@@ -57,7 +57,7 @@ class ArController
     {
         $d = json_decode(file_get_contents('php://input'), true);
         if (!$d || !isset($d['customer_id'], $d['invoice_number'], $d['net_amount']))
-            { JsonResponse::error('customer_id, invoice_number, net_amount required'); return; }
+            { JsonResponse::error('Vui lòng nhập mã khách hàng, số hóa đơn và tiền hàng'); return; }
         try {
             $r = $this->ar->recordInvoice($d['customer_id'], $d['invoice_number'], $d['invoice_date'] ?? date('Y-m-d'),
                 $d['due_date'] ?? date('Y-m-d', strtotime('+30 days')),
@@ -91,7 +91,7 @@ class ArController
     public function prepay(): void
     {
         $d = json_decode(file_get_contents('php://input'), true);
-        if (!$d || !isset($d['customer_id'], $d['amount'])) { JsonResponse::error('customer_id, amount required'); return; }
+        if (!$d || !isset($d['customer_id'], $d['amount'])) { JsonResponse::error('Vui lòng nhập mã khách hàng và số tiền tạm ứng'); return; }
         try { JsonResponse::ok($this->ar->recordPrepayment($d['customer_id'], (float)$d['amount'], $d['description'] ?? '', $d['created_by'] ?? 'system')); }
         catch (\Throwable $e) { JsonResponse::error($e->getMessage()); }
     }

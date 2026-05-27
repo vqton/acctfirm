@@ -51,13 +51,13 @@ class ArService
         $this->pdo->beginTransaction();
         try {
             $customer = $this->getCustomer($customerId);
-            if (!$customer) throw new \InvalidArgumentException("Customer not found: {$customerId}");
+            if (!$customer) throw new \InvalidArgumentException("Không tìm thấy khách hàng: {$customerId}. Vui lòng kiểm tra lại mã khách hàng.");
 
             $totalAmount = $netAmount + $vatAmount;
             $newBal = (float)$customer['balance'] + $totalAmount;
             $cl = (float)($customer['credit_limit'] ?? 0);
             if ($cl > 0 && $newBal > $cl) {
-                throw new \InvalidArgumentException("Credit limit exceeded: balance {$newBal} > limit {$cl} for customer {$customer['name']}");
+                throw new \InvalidArgumentException("Công nợ phải thu vượt quá hạn mức tín dụng của khách hàng {$customer['name']}. Số dư hiện tại {$newBal} VND, hạn mức {$cl} VND.");
             }
 
             $lines = [
@@ -101,10 +101,10 @@ class ArService
             $stmt = $this->pdo->prepare('SELECT * FROM ar_invoices WHERE id = ? FOR UPDATE');
             $stmt->execute([$invoiceId]);
             $inv = $stmt->fetch(\PDO::FETCH_ASSOC);
-            if (!$inv) throw new \InvalidArgumentException("Invoice not found");
-            if ($inv['status'] === 'paid') throw new \InvalidArgumentException("Invoice already paid");
+            if (!$inv) throw new \InvalidArgumentException("Không tìm thấy hóa đơn trong hệ thống.");
+            if ($inv['status'] === 'paid') throw new \InvalidArgumentException("Hóa đơn này đã được khách hàng thanh toán. Không thể thực hiện lại.");
             $payAmt = min($amount, $inv['balance']);
-            if ($payAmt <= 0) throw new \InvalidArgumentException("No balance to pay");
+            if ($payAmt <= 0) throw new \InvalidArgumentException("Hóa đơn không còn số dư phải thu.");
 
             $txn = $this->journal->postEntry("AR payment: {$inv['invoice_number']}", "PAY-{$invoiceId}", [
                 ['account_code' => '112', 'amount' => $payAmt, 'is_debit' => true],
@@ -142,7 +142,7 @@ class ArService
         $this->pdo->beginTransaction();
         try {
             $customer = $this->getCustomer($customerId);
-            if (!$customer) throw new \InvalidArgumentException("Customer not found");
+            if (!$customer) throw new \InvalidArgumentException("Không tìm thấy thông tin khách hàng.");
 
             $txn = $this->journal->postEntry("AR prepayment: {$description}", "PRE-{$customerId}", [
                 ['account_code' => '112', 'amount' => $amount, 'is_debit' => true],
@@ -172,8 +172,8 @@ class ArService
         $this->pdo->beginTransaction();
         try {
             $inv = $this->getInvoice($invoiceId);
-            if ($inv['balance'] <= 0) throw new \InvalidArgumentException("Invoice fully paid");
-            if ($returnAmount > $inv['gross_amount']) throw new \InvalidArgumentException("Return exceeds invoice total");
+            if ($inv['balance'] <= 0) throw new \InvalidArgumentException("Hóa đơn đã được thanh toán đủ.");
+            if ($returnAmount > $inv['gross_amount']) throw new \InvalidArgumentException("Giá trị hàng trả lại không được vượt quá tổng giá trị hóa đơn gốc.");
 
             $vatReverse = $inv['vat_rate'] > 0 ? round($returnAmount * $inv['vat_rate'] / (100 + $inv['vat_rate']), 0) : 0;
             $netReturn = $returnAmount - $vatReverse;
@@ -210,7 +210,7 @@ class ArService
         $this->pdo->beginTransaction();
         try {
             $inv = $this->getInvoice($invoiceId);
-            if ($discountAmount > $inv['balance']) throw new \InvalidArgumentException("Discount exceeds balance");
+            if ($discountAmount > $inv['balance']) throw new \InvalidArgumentException("Số tiền chiết khấu không được lớn hơn số dư còn lại của hóa đơn.");
 
             $txn = $this->journal->postEntry("AR settlement discount: {$inv['invoice_number']}", "DISC-{$invoiceId}", [
                 ['account_code' => '635', 'amount' => $discountAmount, 'is_debit' => true],
@@ -241,7 +241,7 @@ class ArService
         $this->pdo->beginTransaction();
         try {
             $inv = $this->getInvoice($invoiceId);
-            if ($inv['balance'] <= 0) throw new \InvalidArgumentException("No balance to write off");
+            if ($inv['balance'] <= 0) throw new \InvalidArgumentException("Hóa đơn không còn số dư để xóa sổ.");
 
             $amount = $inv['balance'];
             $provision = $this->accountRepo->findByCode('2293');
@@ -452,18 +452,18 @@ class ArService
 
             foreach ($allocations as $i => $alloc) {
                 $inv = $this->getInvoice($alloc['invoice_id']);
-                if (!$inv) throw new \InvalidArgumentException("Invoice not found: {$alloc['invoice_id']}");
+                if (!$inv) throw new \InvalidArgumentException("Không tìm thấy hóa đơn mã {$alloc['invoice_id']} trong hệ thống.");
                 if ($i === 0) { $customerId = $inv['customer_id']; }
                 if ($inv['customer_id'] !== $customerId) {
-                    throw new \InvalidArgumentException("All invoices must belong to the same customer");
+                    throw new \InvalidArgumentException("Tất cả hóa đơn phân bổ phải cùng một khách hàng.");
                 }
                 if ($inv['status'] === 'paid') {
-                    throw new \InvalidArgumentException("Invoice {$alloc['invoice_id']} already paid");
+                    throw new \InvalidArgumentException("Hóa đơn {$alloc['invoice_id']} đã được thanh toán xong.");
                 }
                 $amt = min($alloc['amount'], $inv['balance']);
-                if ($amt <= 0) throw new \InvalidArgumentException("No balance to allocate on invoice {$alloc['invoice_id']}");
+                if ($amt <= 0) throw new \InvalidArgumentException("Hóa đơn {$alloc['invoice_id']} không còn số dư để phân bổ.");
                 if ($amt != $alloc['amount']) {
-                    throw new \InvalidArgumentException("Allocation {$amt} exceeds balance {$inv['balance']} on invoice {$alloc['invoice_id']}");
+                    throw new \InvalidArgumentException("Số tiền phân bổ {$amt} VND vượt quá số dư {$inv['balance']} VND của hóa đơn {$alloc['invoice_id']}.");
                 }
                 $totalAmount += $amt;
                 $validated[] = ['invoice' => $inv, 'amount' => $amt];

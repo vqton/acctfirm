@@ -55,7 +55,7 @@ class RoleController
     {
         Auth::requirePermission('system', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
-        if (!$data || !isset($data['id'], $data['name'])) { JsonResponse::error('id, name required'); return; }
+        if (!$data || !isset($data['id'], $data['name'])) { JsonResponse::error('Vui lòng nhập mã và tên vai trò'); return; }
         $this->pdo->prepare('INSERT INTO roles (id, name, description) VALUES (?, ?, ?)')
             ->execute([$data['id'], $data['name'], $data['description'] ?? null]);
 
@@ -70,10 +70,10 @@ class RoleController
     {
         Auth::requirePermission('system', 'edit');
         $data = json_decode(file_get_contents('php://input'), true);
-        if (!$data) { JsonResponse::error('No data'); return; }
+        if (!$data) { JsonResponse::error('Không có dữ liệu đầu vào'); return; }
         $this->pdo->prepare('UPDATE roles SET name = ?, description = ? WHERE id = ?')
             ->execute([$data['name'] ?? '', $data['description'] ?? null, $id]);
-        JsonResponse::ok(['message' => 'Updated']);
+        JsonResponse::ok(['message' => 'Đã cập nhật vai trò thành công']);
     }
 
     public function delete(string $id): void
@@ -82,10 +82,10 @@ class RoleController
         $chk = $this->pdo->prepare('SELECT is_system FROM roles WHERE id = ?');
         $chk->execute([$id]);
         $r = $chk->fetch();
-        if (!$r) { JsonResponse::error('Not found', 404); return; }
-        if ($r['is_system']) { JsonResponse::error('Cannot delete system role'); return; }
+        if (!$r) { JsonResponse::error('Không tìm thấy vai trò', 404); return; }
+        if ($r['is_system']) { JsonResponse::error('Không thể xóa vai trò hệ thống mặc định'); return; }
         $this->pdo->prepare('DELETE FROM roles WHERE id = ?')->execute([$id]);
-        JsonResponse::ok(['message' => 'Deleted']);
+        JsonResponse::ok(['message' => 'Đã xóa vai trò thành công']);
     }
 
     public function getPermissions(string $id): void
@@ -118,7 +118,7 @@ class RoleController
     {
         Auth::requirePermission('system', 'edit');
         $data = json_decode(file_get_contents('php://input'), true);
-        if (!$data) { JsonResponse::error('No data'); return; }
+        if (!$data) { JsonResponse::error('Không có dữ liệu đầu vào'); return; }
         $this->pdo->prepare('DELETE FROM role_permissions WHERE role_id = ?')->execute([$id]);
         $ins = $this->pdo->prepare(
             'INSERT INTO role_permissions (role_id, module, can_view, can_create, can_edit, can_delete, can_post, can_print) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
@@ -134,6 +134,6 @@ class RoleController
                 (int)($p['can_print'] ?? 0),
             ]);
         }
-        JsonResponse::ok(['message' => 'Permissions updated']);
+        JsonResponse::ok(['message' => 'Đã cập nhật phân quyền thành công']);
     }
 }

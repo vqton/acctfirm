@@ -6,12 +6,41 @@ $title = 'Công nợ phải thu'; $activeMenu = 'ar_invoices'; ob_start(); ?>
 <div class="toolbar">
     <h5>Công nợ phải thu khách hàng <span class="stats">(TK 131)</span></h5>
     <div>
-        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#invModal"><i class="bi bi-plus-lg"></i> Hóa đơn bán hàng</button>
+        <button class="btn btn-outline-secondary btn-sm" onclick="exportCSV()" title="Xuất Excel"><i class="bi bi-download"></i> Excel</button>
+        <button class="btn btn-primary btn-sm ms-1" data-bs-toggle="modal" data-bs-target="#invModal"><i class="bi bi-plus-lg"></i> Hóa đơn bán hàng</button>
         <button class="btn btn-outline-primary btn-sm ms-1" data-bs-toggle="modal" data-bs-target="#prepayModal"><i class="bi bi-credit-card"></i> Nhận tạm ứng</button>
     </div>
 </div>
+<div class="card p-2 mb-3 border-0 shadow-sm bg-white" style="font-size:13px;">
+    <div class="row g-2 align-items-end">
+        <div class="col-auto">
+            <input class="form-control form-control-sm" id="filterSearch" placeholder="🔍 Tìm số HĐ..." style="width:160px;">
+        </div>
+        <div class="col-auto">
+            <select class="form-select form-select-sm" id="filterStatus" style="width:140px;">
+                <option value="">Tất cả trạng thái</option>
+                <option value="unpaid">Chưa thanh toán</option>
+                <option value="paid">Đã thanh toán</option>
+                <option value="written_off">Đã xóa sổ</option>
+            </select>
+        </div>
+        <div class="col-auto">
+            <select class="form-select form-select-sm" id="filterCustomer" style="width:200px;"><option value="">Tất cả KH</option></select>
+        </div>
+        <div class="col-auto">
+            <input type="date" class="form-control form-control-sm" id="filterDateFrom" title="Từ ngày" style="width:150px;">
+        </div>
+        <div class="col-auto">
+            <input type="date" class="form-control form-control-sm" id="filterDateTo" title="Đến ngày" style="width:150px;">
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-sm btn-outline-primary" onclick="applyFilters()"><i class="bi bi-funnel"></i> Lọc</button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="clearFilters()"><i class="bi bi-x-lg"></i></button>
+        </div>
+    </div>
+</div>
 <div class="card-table"><table class="table table-hover">
-    <thead><tr><th>Hóa đơn</th><th>Khách hàng</th><th>Ngày</th><th>Hạn</th><th class="text-end">Tổng</th><th class="text-end">Đã thu</th><th class="text-end">Còn lại</th><th>Trạng thái</th><th></th></tr></thead>
+    <thead><tr><th>Hóa đơn</th><th>Khách hàng</th><th>Ngày</th><th>Hạn</th><th class="text-end">Tổng</th><th class="text-end">Đã thu</th><th class="text-end">Còn lại</th><th class="text-end">Quá hạn</th><th>Trạng thái</th><th></th></tr></thead>
     <tbody id="dataBody"></tbody>
 </table></div>
 
@@ -53,27 +82,88 @@ $title = 'Công nợ phải thu'; $activeMenu = 'ar_invoices'; ob_start(); ?>
 </div></div></div>
 
 <script>
+var allData=[];
 function loadCustomers(cb){
     $.get('/api/ar/customers', function(l){
-        var o=''; l.forEach(function(s){o+='<option value="'+esc(s.id)+'">'+esc(s.name)+' ('+parseFloat(s.balance).toLocaleString()+' VND)</option>';});
-        $('#customerId,#prepayCust').html(o); if(cb)cb();
+        var o='',fo='<option value="">Tất cả KH</option>';
+        l.forEach(function(s){
+            o+='<option value="'+esc(s.id)+'">'+esc(s.name)+' ('+parseFloat(s.balance).toLocaleString()+' VND)</option>';
+            fo+='<option value="'+esc(s.id)+'">'+esc(s.name)+'</option>';
+        });
+        $('#customerId,#prepayCust').html(o);
+        $('#filterCustomer').html(fo);
+        if(cb)cb();
     });
 }
-// Tải danh sách hóa đơn phải thu — GET /api/ar/invoices
-// Hiển thị: số HĐ, KH, ngày, hạn, tổng, đã thu, còn lại, trạng thái
-// Nút thu tiền chỉ hiển thị khi HĐ chưa thanh toán và balance > 1
+function calcAgingDays(dueDate){
+    var parts=dueDate.split('-');
+    var due=new Date(parts[0],parts[1]-1,parts[2]);
+    var today=new Date();today.setHours(0,0,0,0);
+    var diff=Math.floor((today-due)/(86400000));
+    return due<today?diff:0;
+}
+function renderRows(data){
+    var tbody=$('#dataBody');tbody.empty();
+    data.forEach(function(r){
+        var badge=r.status==='paid'?'badge-active':(r.status==='written_off'?'badge-inactive':'badge-warning');
+        var acts='';
+        var aging=calcAgingDays(r.due_date);
+        var rowClass='';
+        if(aging>90){rowClass=' class="table-danger"';}
+        else if(aging>30){rowClass=' class="table-warning"';}
+        if(r.status!=='paid'&&r.status!=='written_off'&&r.balance>1) acts+='<button class="btn btn-sm btn-outline-success me-1" onclick="openPay('+r.id+','+r.balance+')"><i class="bi bi-cash"></i></button>';
+        var agingLabel=aging>0?aging+' ngày':'';
+        tbody.append('<tr'+rowClass+'><td>'+esc(r.invoice_number)+'</td><td>'+esc(r.customer_name)+'</td><td style="font-size:12px">'+esc(r.invoice_date)+'</td><td style="font-size:12px">'+esc(r.due_date)+'</td><td class="text-end font-monospace">'+parseFloat(r.gross_amount).toLocaleString()+'</td><td class="text-end font-monospace">'+parseFloat(r.paid_amount).toLocaleString()+'</td><td class="text-end font-monospace">'+parseFloat(r.balance).toLocaleString()+'</td><td class="text-end font-monospace" style="font-size:11px">'+agingLabel+'</td><td><span class="badge-status '+badge+'">'+esc(r.status)+'</span></td><td>'+acts+'</td></tr>');
+    });
+    if(!data.length) tbody.append('<tr><td colspan="10" class="empty-state"><i class="bi bi-inbox"></i> Không có hóa đơn nào</td></tr>');
+}
+function applyFilters(){
+    var s=$('#filterSearch').val().toLowerCase().trim();
+    var st=$('#filterStatus').val();
+    var cu=$('#filterCustomer').val();
+    var dFrom=$('#filterDateFrom').val();
+    var dTo=$('#filterDateTo').val();
+    var filtered=allData.filter(function(r){
+        if(s && !r.invoice_number.toLowerCase().includes(s))return false;
+        if(st){
+            if(st==='unpaid' && (r.status==='paid'||r.status==='written_off'||r.balance<=1))return false;
+            else if(st!=='unpaid' && r.status!==st)return false;
+        }
+        if(cu && r.customer_id!==cu)return false;
+        if(dFrom && r.invoice_date<dFrom)return false;
+        if(dTo && r.invoice_date>dTo)return false;
+        return true;
+    });
+    renderRows(filtered);
+}
+function clearFilters(){
+    $('#filterSearch').val('');
+    $('#filterStatus').val('');
+    $('#filterCustomer').val('');
+    $('#filterDateFrom').val('');
+    $('#filterDateTo').val('');
+    renderRows(allData);
+}
 function loadData(){
     $.get('/api/ar/invoices', function(data){
-        var tbody=$('#dataBody'); tbody.empty();
-        data.forEach(function(r){
-            var badge=r.status==='paid'?'badge-active':(r.status==='written_off'?'badge-inactive':'badge-warning');
-            var acts='';
-            if(r.status!=='paid'&&r.status!=='written_off'&&r.balance>1) acts+='<button class="btn btn-sm btn-outline-success me-1" onclick="openPay('+r.id+','+r.balance+')"><i class="bi bi-cash"></i></button>';
-            tbody.append('<tr><td>'+esc(r.invoice_number)+'</td><td>'+esc(r.customer_name)+'</td><td style="font-size:12px">'+esc(r.invoice_date)+'</td><td style="font-size:12px">'+esc(r.due_date)+'</td><td class="text-end font-monospace">'+parseFloat(r.gross_amount).toLocaleString()+'</td><td class="text-end font-monospace">'+parseFloat(r.paid_amount).toLocaleString()+'</td><td class="text-end font-monospace">'+parseFloat(r.balance).toLocaleString()+'</td><td><span class="badge-status '+badge+'">'+esc(r.status)+'</span></td><td>'+acts+'</td></tr>');
-        });
+        allData=data;
+        renderRows(allData);
     });
 }
-// Mở modal thu tiền — tự động điền số dư còn lại làm mặc định
+function exportCSV(){
+    var rows=[['Hóa đơn','Khách hàng','Ngày HĐ','Hạn TT','Tổng tiền','Đã thu','Còn lại','Quá hạn (ngày)','Trạng thái']];
+    allData.forEach(function(r){
+        var aging=calcAgingDays(r.due_date);
+        rows.push([r.invoice_number,r.customer_name,r.invoice_date,r.due_date,r.gross_amount,r.paid_amount,r.balance,aging,r.status]);
+    });
+    var csv='\uFEFF';
+    rows.forEach(function(row){
+        csv+=row.map(function(v){return'"'+String(v).replace(/"/g,'""')+'"';}).join(',')+'\n';
+    });
+    var blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+    var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='ar_invoices_'+new Date().toISOString().slice(0,10)+'.csv';
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+}
 function openPay(id,bal){$('#payInvId').val(id);$('#payBalance').text(parseFloat(bal).toLocaleString());$('#payAmount').val(bal);$('#payModal').modal('show');}
 function calcVat(){var n=parseFloat($('#netAmount').val())||0;var r=parseFloat($('#vatRate').val())||0;$('#vatAmount').val(Math.round(n*r/100));}
 $('#netAmount,#vatRate').on('input',calcVat);

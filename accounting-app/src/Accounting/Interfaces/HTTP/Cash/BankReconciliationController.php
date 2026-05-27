@@ -61,7 +61,7 @@ class BankReconciliationController
         Auth::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['bank_account_code'], $data['statement_date'], $data['statement_balance'])) {
-            JsonResponse::error('bank_account_code, statement_date, statement_balance required', 400);
+            JsonResponse::error('Vui lòng nhập mã tài khoản ngân hàng, ngày sao kê và số dư sao kê', 400);
             return;
         }
         try {
@@ -106,7 +106,7 @@ class BankReconciliationController
         Auth::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['amount'], $data['type'])) {
-            JsonResponse::error('amount, type required', 400);
+            JsonResponse::error('Vui lòng nhập số tiền và loại giao dịch', 400);
             return;
         }
         try {
@@ -131,7 +131,7 @@ class BankReconciliationController
         Auth::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['statement_item_id'], $data['book_item_id'])) {
-            JsonResponse::error('statement_item_id, book_item_id required', 400);
+            JsonResponse::error('Vui lòng nhập mã mục sao kê và mã mục sổ sách', 400);
             return;
         }
         try {
@@ -153,7 +153,7 @@ class BankReconciliationController
         Auth::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['statement_item_id'], $data['book_item_id'])) {
-            JsonResponse::error('statement_item_id, book_item_id required', 400);
+            JsonResponse::error('Vui lòng nhập mã mục sao kê và mã mục sổ sách', 400);
             return;
         }
         try {
@@ -177,7 +177,7 @@ class BankReconciliationController
         Auth::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['debit_account'], $data['credit_account'], $data['amount'])) {
-            JsonResponse::error('debit_account, credit_account, amount required', 400);
+            JsonResponse::error('Vui lòng nhập tài khoản Nợ, tài khoản Có và số tiền', 400);
             return;
         }
         try {

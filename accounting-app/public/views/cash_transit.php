@@ -39,7 +39,7 @@ function loadData(){
 // Nghiệp vụ: Nợ 1121/Có 113 — chuyển từ tiền đang chuyển sang tiền gửi NH
 function confirmTransit(id){
     $.ajax({url:'/api/cash/transit/confirm',method:'POST',contentType:'application/json',headers:{'X-CSRF-Token':csrf},data:JSON.stringify({id:id}),
-        success:function(){showToast('Đã xác nhận tiền về NH','success');loadData();},
+        success:function(){showToast('Đã xác nhận tiền về tài khoản ngân hàng thành công.','success');loadData();},
         error:function(x){showToast('Lỗi','error');}
     });
 }
@@ -48,7 +48,7 @@ function confirmTransit(id){
 function reverseTransit(id){
     if(!confirm('Hủy giao dịch chuyển tiền này?'))return;
     $.ajax({url:'/api/cash/transit/reverse',method:'POST',contentType:'application/json',headers:{'X-CSRF-Token':csrf},data:JSON.stringify({id:id}),
-        success:function(){showToast('Đã hủy chuyển tiền','success');loadData();},
+        success:function(){showToast('Đã hủy giao dịch chuyển tiền.','success');loadData();},
         error:function(x){showToast('Lỗi','error');}
     });
 }
@@ -56,7 +56,7 @@ function reverseTransit(id){
 // Nghiệp vụ: Nợ 113/Có 1111 — rút tiền mặt để nộp vào ngân hàng
 $('#transitForm').submit(function(e){e.preventDefault();
     $.ajax({url:'/api/cash/transit',method:'POST',contentType:'application/json',headers:{'X-CSRF-Token':csrf},data:JSON.stringify({amount:parseFloat($('#amount').val()),description:$('#description').val()}),
-        success:function(){$('#transitModal').modal('hide');$('#transitForm')[0].reset();showToast('Ghi nhận chuyển tiền thành công','success');loadData();},
+        success:function(){$('#transitModal').modal('hide');$('#transitForm')[0].reset();showToast('Đã ghi nhận tiền đang chuyển thành công.','success');loadData();},
         error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}
     });
 });

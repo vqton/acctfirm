@@ -2,7 +2,7 @@
 <div class="toolbar"><div><h5>Tính bảo hiểm</h5></div></div>
 <div class="card-table p-3">
   <div class="row g-3 mb-3">
-    <div class="col-md-3"><label class="form-label">Lương gross</label><input class="form-control" id="insGross" value="15000000"></div>
+    <div class="col-md-3"><label class="form-label">Tổng lương</label><input class="form-control" id="insGross" value="15000000"></div>
     <div class="col-md-3"><label class="form-label">Lương tham gia BH</label><input class="form-control" id="insSalary" value="15000000"></div>
     <div class="col-md-2"><label class="form-label">Vùng</label><select class="form-select" id="insRegion"><option value="I">Vùng I</option><option value="II">Vùng II</option><option value="III">Vùng III</option><option value="IV" selected>Vùng IV</option></select></div>
     <div class="col-md-2"><label class="form-label">BHXH tối đa</label><input class="form-control" id="insCeiling" readonly></div>

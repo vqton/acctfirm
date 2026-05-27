@@ -6,12 +6,41 @@ $title = 'Công nợ phải trả'; $activeMenu = 'ap_invoices'; ob_start(); ?>
 <div class="toolbar">
     <h5>Công nợ phải trả nhà cung cấp <span class="stats">(TK 331)</span></h5>
     <div>
-        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#invModal"><i class="bi bi-plus-lg"></i> Ghi nhận hóa đơn</button>
+        <button class="btn btn-outline-secondary btn-sm" onclick="exportCSV()" title="Xuất Excel"><i class="bi bi-download"></i> Excel</button>
+        <button class="btn btn-primary btn-sm ms-1" data-bs-toggle="modal" data-bs-target="#invModal"><i class="bi bi-plus-lg"></i> Ghi nhận hóa đơn</button>
         <button class="btn btn-outline-primary btn-sm ms-1" data-bs-toggle="modal" data-bs-target="#prepayModal"><i class="bi bi-credit-card"></i> Tạm ứng</button>
     </div>
 </div>
+<div class="card p-2 mb-3 border-0 shadow-sm bg-white" style="font-size:13px;">
+    <div class="row g-2 align-items-end">
+        <div class="col-auto">
+            <input class="form-control form-control-sm" id="filterSearch" placeholder="🔍 Tìm số HĐ..." style="width:160px;">
+        </div>
+        <div class="col-auto">
+            <select class="form-select form-select-sm" id="filterStatus" style="width:140px;">
+                <option value="">Tất cả trạng thái</option>
+                <option value="unpaid">Chưa thanh toán</option>
+                <option value="paid">Đã thanh toán</option>
+                <option value="written_off">Đã xóa sổ</option>
+            </select>
+        </div>
+        <div class="col-auto">
+            <select class="form-select form-select-sm" id="filterSupplier" style="width:200px;"><option value="">Tất cả NCC</option></select>
+        </div>
+        <div class="col-auto">
+            <input type="date" class="form-control form-control-sm" id="filterDateFrom" title="Từ ngày" style="width:150px;">
+        </div>
+        <div class="col-auto">
+            <input type="date" class="form-control form-control-sm" id="filterDateTo" title="Đến ngày" style="width:150px;">
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-sm btn-outline-primary" onclick="applyFilters()"><i class="bi bi-funnel"></i> Lọc</button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="clearFilters()"><i class="bi bi-x-lg"></i></button>
+        </div>
+    </div>
+</div>
 <div class="card-table"><table class="table table-hover">
-    <thead><tr><th>Hóa đơn</th><th>Nhà cung cấp</th><th>Ngày</th><th>Hạn</th><th class="text-end">Tổng</th><th class="text-end">Đã trả</th><th class="text-end">Còn lại</th><th>Trạng thái</th><th></th></tr></thead>
+    <thead><tr><th>Hóa đơn</th><th>Nhà cung cấp</th><th>Ngày</th><th>Hạn</th><th class="text-end">Tổng</th><th class="text-end">Đã trả</th><th class="text-end">Còn lại</th><th class="text-end">Quá hạn</th><th>Trạng thái</th><th></th></tr></thead>
     <tbody id="dataBody"></tbody>
 </table></div>
 
@@ -54,25 +83,89 @@ $title = 'Công nợ phải trả'; $activeMenu = 'ap_invoices'; ob_start(); ?>
 </div></div></div>
 
 <script>
+var allData=[];
 function loadSuppliers(cb){
     $.get('/api/ap/suppliers', function(list){
-        var opts=''; list.forEach(function(s){opts+='<option value="'+esc(s.id)+'">'+esc(s.name)+' ('+parseFloat(s.balance).toLocaleString()+' VND)</option>';});
+        var opts='',fopts='<option value="">Tất cả NCC</option>';
+        list.forEach(function(s){
+            opts+='<option value="'+esc(s.id)+'">'+esc(s.name)+' ('+parseFloat(s.balance).toLocaleString()+' VND)</option>';
+            fopts+='<option value="'+esc(s.id)+'">'+esc(s.name)+'</option>';
+        });
         $('#supplierId, #prepaySupplier').html(opts);
+        $('#filterSupplier').html(fopts);
         if(cb)cb();
     });
 }
+function calcAgingDays(dueDate){
+    var parts=dueDate.split('-');
+    var due=new Date(parts[0],parts[1]-1,parts[2]);
+    var today=new Date();today.setHours(0,0,0,0);
+    var diff=Math.floor((today-due)/(86400000));
+    return due<today?diff:0;
+}
+function renderRows(data){
+    var tbody=$('#dataBody');tbody.empty();
+    data.forEach(function(r){
+        var badge=r.status==='paid'?'badge-active':(r.status==='written_off'?'badge-inactive':'badge-warning');
+        var actions='';
+        var aging=calcAgingDays(r.due_date);
+        var rowClass='';
+        if(aging>90){rowClass=' class="table-danger"';}
+        else if(aging>30){rowClass=' class="table-warning"';}
+        if(r.status!=='paid'&&r.status!=='written_off'&&r.balance>1){
+            actions+='<button class="btn btn-sm btn-outline-success me-1" onclick="openPay('+r.id+','+r.balance+')"><i class="bi bi-cash"></i></button>';
+        }
+        var agingLabel=aging>0?aging+' ngày':'';
+        tbody.append('<tr'+rowClass+'><td>'+esc(r.invoice_number)+'</td><td>'+esc(r.supplier_name)+'</td><td style="font-size:12px">'+esc(r.invoice_date)+'</td><td style="font-size:12px">'+esc(r.due_date)+'</td><td class="text-end font-monospace">'+parseFloat(r.gross_amount).toLocaleString()+'</td><td class="text-end font-monospace">'+parseFloat(r.paid_amount).toLocaleString()+'</td><td class="text-end font-monospace">'+parseFloat(r.balance).toLocaleString()+'</td><td class="text-end font-monospace" style="font-size:11px">'+agingLabel+'</td><td><span class="badge-status '+badge+'">'+esc(r.status)+'</span></td><td>'+actions+'</td></tr>');
+    });
+    if(!data.length) tbody.append('<tr><td colspan="10" class="empty-state"><i class="bi bi-inbox"></i> Không có hóa đơn nào</td></tr>');
+}
+function applyFilters(){
+    var s=$('#filterSearch').val().toLowerCase().trim();
+    var st=$('#filterStatus').val();
+    var su=$('#filterSupplier').val();
+    var dFrom=$('#filterDateFrom').val();
+    var dTo=$('#filterDateTo').val();
+    var filtered=allData.filter(function(r){
+        if(s && !r.invoice_number.toLowerCase().includes(s))return false;
+        if(st){
+            if(st==='unpaid' && (r.status==='paid'||r.status==='written_off'||r.balance<=1))return false;
+            else if(st!=='unpaid' && r.status!==st)return false;
+        }
+        if(su && r.supplier_id!==su)return false;
+        if(dFrom && r.invoice_date<dFrom)return false;
+        if(dTo && r.invoice_date>dTo)return false;
+        return true;
+    });
+    renderRows(filtered);
+}
+function clearFilters(){
+    $('#filterSearch').val('');
+    $('#filterStatus').val('');
+    $('#filterSupplier').val('');
+    $('#filterDateFrom').val('');
+    $('#filterDateTo').val('');
+    renderRows(allData);
+}
 function loadData(){
     $.get('/api/ap/invoices', function(data){
-        var tbody=$('#dataBody'); tbody.empty();
-        data.forEach(function(r){
-            var badge=r.status==='paid'?'badge-active':(r.status==='written_off'?'badge-inactive':'badge-warning');
-            var actions='';
-            if(r.status!=='paid'&&r.status!=='written_off'&&r.balance>1){
-                actions+='<button class="btn btn-sm btn-outline-success me-1" onclick="openPay('+r.id+','+r.balance+')"><i class="bi bi-cash"></i></button>';
-            }
-            tbody.append('<tr><td>'+esc(r.invoice_number)+'</td><td>'+esc(r.supplier_name)+'</td><td style="font-size:12px">'+esc(r.invoice_date)+'</td><td style="font-size:12px">'+esc(r.due_date)+'</td><td class="text-end font-monospace">'+parseFloat(r.gross_amount).toLocaleString()+'</td><td class="text-end font-monospace">'+parseFloat(r.paid_amount).toLocaleString()+'</td><td class="text-end font-monospace">'+parseFloat(r.balance).toLocaleString()+'</td><td><span class="badge-status '+badge+'">'+esc(r.status)+'</span></td><td>'+actions+'</td></tr>');
-        });
+        allData=data;
+        renderRows(allData);
     });
+}
+function exportCSV(){
+    var rows=[['Hóa đơn','Nhà cung cấp','Ngày HĐ','Hạn TT','Tổng tiền','Đã trả','Còn lại','Quá hạn (ngày)','Trạng thái']];
+    allData.forEach(function(r){
+        var aging=calcAgingDays(r.due_date);
+        rows.push([r.invoice_number,r.supplier_name,r.invoice_date,r.due_date,r.gross_amount,r.paid_amount,r.balance,aging,r.status]);
+    });
+    var csv='\uFEFF';
+    rows.forEach(function(row){
+        csv+=row.map(function(v){return'"'+String(v).replace(/"/g,'""')+'"';}).join(',')+'\n';
+    });
+    var blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+    var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='ap_invoices_'+new Date().toISOString().slice(0,10)+'.csv';
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
 }
 function openPay(id,bal){$('#payInvId').val(id);$('#payBalance').text(parseFloat(bal).toLocaleString());$('#payAmount').val(bal);$('#payModal').modal('show');}
 function calcVat(){var net=parseFloat($('#netAmount').val())||0;var rate=parseFloat($('#vatRate').val())||0;$('#vatAmount').val(Math.round(net*rate/100));}

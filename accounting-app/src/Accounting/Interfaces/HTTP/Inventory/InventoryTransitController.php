@@ -64,7 +64,7 @@ class InventoryTransitController
         Auth::requirePermission('inventory', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['item_id'], $data['qty'], $data['unit_price'])) {
-            JsonResponse::error('item_id, qty, unit_price required');
+            JsonResponse::error('Vui lòng nhập mã vật tư, số lượng và đơn giá');
             return;
         }
         try {
@@ -91,7 +91,7 @@ class InventoryTransitController
         Auth::requirePermission('inventory', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['transit_id'], $data['qty'])) {
-            JsonResponse::error('transit_id, qty required');
+            JsonResponse::error('Vui lòng nhập mã hàng đi đường và số lượng');
             return;
         }
         try {

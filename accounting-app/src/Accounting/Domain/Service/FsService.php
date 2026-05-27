@@ -263,7 +263,7 @@ class FsService
         // 70 = 50+60+61
         $calc70 = ($values[50] ?? 0) + ($values[60] ?? 0) + ($values[61] ?? 0);
         if (abs(($values[70] ?? 0) - $calc70) > 1) {
-            $errors[] = "Closing cash (70) should be {$calc70}, got {$values[70]}";
+            $errors[] = "Tiền cuối kỳ (70) phải là {$calc70}, hiện tại là {$values[70]}";
         }
         // BC 01 cross-check: MS70 should equal BC01 MS110 (cash + equivalents)
         // This validation happens in controller level since we need BC01 data
@@ -390,7 +390,7 @@ class FsService
 
         $errors = [];
         if (abs($values[280] - $values[440]) > 1) {
-            $errors[] = "Assets ({$values[280]}) != Liabilities + Equity ({$values[440]}). Diff: " . ($values[280] - $values[440]);
+            $errors[] = "Tổng tài sản ({$values[280]}) không bằng Nợ phải trả + VCSH ({$values[440]}). Chênh lệch: " . ($values[280] - $values[440]);
         }
         return $errors;
     }
@@ -410,12 +410,12 @@ class FsService
         // 50 = 30+40
         $calc50 = ($values[30] ?? 0) + ($values[40] ?? 0);
         if (abs(($values[50] ?? 0) - $calc50) > 1) {
-            $errors[] = "Pre-tax profit (50) should be {$calc50}, got {$values[50]}";
+            $errors[] = "Lợi nhuận trước thuế (50) phải là {$calc50}, hiện tại là {$values[50]}";
         }
         // 60 = 50-(51+52)
         $calc60 = ($values[50] ?? 0) - (($values[51] ?? 0) + ($values[52] ?? 0));
         if (abs(($values[60] ?? 0) - $calc60) > 1) {
-            $errors[] = "Net profit (60) should be {$calc60}, got {$values[60]}";
+            $errors[] = "Lợi nhuận sau thuế (60) phải là {$calc60}, hiện tại là {$values[60]}";
         }
         return $errors;
     }

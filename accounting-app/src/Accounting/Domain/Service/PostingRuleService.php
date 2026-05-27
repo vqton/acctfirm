@@ -86,7 +86,7 @@ class PostingRuleService
         if ($rule) {
             return [
                 'severity' => $rule['severity'],
-                'message' => "{$debitAccountCode}->{$creditAccountCode}: " . ($rule['severity'] === 'block' ? 'blocked by rule' : 'warning by rule'),
+                'message' => "{$debitAccountCode}->{$creditAccountCode}: " . ($rule['severity'] === 'block' ? 'bị chặn bởi quy tắc hạch toán' : 'cảnh báo theo quy tắc hạch toán'),
                 'rule_id' => (int)$rule['id'],
             ];
         }
@@ -102,7 +102,7 @@ class PostingRuleService
         if ($rule) {
             return [
                 'severity' => $rule['severity'],
-                'message' => "{$debitAccountCode}->{$creditAccountCode}: " . ($rule['severity'] === 'block' ? 'blocked by rule' : 'warning by rule'),
+                'message' => "{$debitAccountCode}->{$creditAccountCode}: " . ($rule['severity'] === 'block' ? 'bị chặn bởi quy tắc hạch toán' : 'cảnh báo theo quy tắc hạch toán'),
                 'rule_id' => (int)$rule['id'],
             ];
         }
@@ -110,7 +110,7 @@ class PostingRuleService
         // Fallback: không có rule nào match → cho phép
         // Lưu ý: pass không có nghĩa là nghiệp vụ đúng — chỉ là không có rule cấm.
         // Kế toán trưởng nên review định kỳ các cặp pass để bổ sung rule nếu cần.
-        return ['severity' => 'pass', 'message' => 'No rule matched', 'rule_id' => null];
+        return ['severity' => 'pass', 'message' => 'Không có quy tắc hạch toán', 'rule_id' => null];
     }
 
     /**

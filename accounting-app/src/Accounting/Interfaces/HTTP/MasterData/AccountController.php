@@ -47,7 +47,7 @@ class AccountController
     public function get(string $id): void
     {
         $x = $this->repo->findById($id);
-        if (!$x) { JsonResponse::error('Not found', 404); return; }
+        if (!$x) { JsonResponse::error('Không tìm thấy tài khoản', 404); return; }
         JsonResponse::ok($x->toArray());
     }
 
@@ -55,10 +55,10 @@ class AccountController
     {
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['code'], $data['name'], $data['type'])) {
-            JsonResponse::error('code, name, type required', 400); return;
+            JsonResponse::error('Vui lòng nhập mã tài khoản, tên tài khoản và loại tài khoản', 400); return;
         }
         if ($this->repo->findByCode($data['code'])) {
-            JsonResponse::error('Code already exists', 409); return;
+            JsonResponse::error('Mã tài khoản đã tồn tại trong hệ thống', 409); return;
         }
         $x = new Account(
             $data['id'] ?? uniqid('coa_'), $data['code'], $data['name'], $data['type'],
@@ -73,9 +73,9 @@ class AccountController
     public function update(string $id): void
     {
         $x = $this->repo->findById($id);
-        if (!$x) { JsonResponse::error('Not found', 404); return; }
+        if (!$x) { JsonResponse::error('Không tìm thấy tài khoản', 404); return; }
         $data = json_decode(file_get_contents('php://input'), true);
-        if (!$data) { JsonResponse::error('Invalid data', 400); return; }
+        if (!$data) { JsonResponse::error('Dữ liệu không hợp lệ. Vui lòng kiểm tra lại.', 400); return; }
         $old = $x->toArray();
         if (isset($data['code'])) $x->setCode($data['code']);
         if (isset($data['name'])) $x->setName($data['name']);
@@ -93,11 +93,11 @@ class AccountController
     public function delete(string $id): void
     {
         $x = $this->repo->findById($id);
-        if (!$x) { JsonResponse::error('Not found', 404); return; }
+        if (!$x) { JsonResponse::error('Không tìm thấy tài khoản', 404); return; }
         $old = $x->toArray();
         $this->repo->delete($id);
         $this->auditLogger->log('account.delete', 'account', $id, $old, null, $_SERVER['PHP_AUTH_USER'] ?? 'system');
-        JsonResponse::ok(['message' => 'Deleted']);
+        JsonResponse::ok(['message' => 'Đã xóa tài khoản thành công']);
     }
 
     // NGHIỆP VỤ: Seed (khởi tạo/cập nhật) toàn bộ Hệ thống Tài khoản Circular 99
@@ -114,7 +114,7 @@ class AccountController
     {
         $path = __DIR__ . '/../../../../data/coa_circular_99.json';
         $coa = json_decode(file_get_contents($path), true);
-        if (!$coa) { JsonResponse::error('COA data file not found', 500); return; }
+        if (!$coa) { JsonResponse::error('Không tìm thấy file dữ liệu hệ thống tài khoản', 500); return; }
 
         // Seeding: create new + update existing (handles renames)
         $count = 0;
@@ -148,6 +148,6 @@ class AccountController
         }
 
         $this->auditLogger->log('account.seed', 'account', null, null, ['new' => $count, 'updated' => $updateCount], $_SERVER['PHP_AUTH_USER'] ?? 'system');
-        JsonResponse::ok(['message' => 'Seeded', 'new' => $count, 'updated' => $updateCount]);
+        JsonResponse::ok(['message' => 'Đã khởi tạo dữ liệu', 'new' => $count, 'updated' => $updateCount]);
     }
 }

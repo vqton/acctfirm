@@ -51,7 +51,7 @@ try {
     echo "FAIL: Control account was not rejected\n";
     $failed++;
 } catch (\InvalidArgumentException $e) {
-    assertTrue(str_contains($e->getMessage(), 'control account'), 'Control account rejected with correct message');
+    assertTrue(str_contains($e->getMessage(), 'tài khoản tổng hợp'), 'Control account rejected with correct message');
 }
 
 // Nghiệp vụ: Post vào TK tổng hợp với override ($allowControl = true)
