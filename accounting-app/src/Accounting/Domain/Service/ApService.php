@@ -57,6 +57,11 @@ class ApService
             if (!$supplier) throw new \InvalidArgumentException("Supplier not found: {$supplierId}");
 
             $totalAmount = $netAmount + $vatAmount;
+            $newBal = $supplier->getBalance() + $totalAmount;
+            $cl = $supplier->getCreditLimit();
+            if ($cl > 0 && $newBal > $cl) {
+                throw new \InvalidArgumentException("AP credit limit exceeded: balance {$newBal} > limit {$cl} for supplier {$supplier->getName()}");
+            }
             $vatRatePct = $vatRatePct ?? $vatRate;
 
             $lines = [['account_code' => $inventoryAccount, 'amount' => $netAmount, 'is_debit' => true]];

@@ -54,6 +54,11 @@ class ArService
             if (!$customer) throw new \InvalidArgumentException("Customer not found: {$customerId}");
 
             $totalAmount = $netAmount + $vatAmount;
+            $newBal = (float)$customer['balance'] + $totalAmount;
+            $cl = (float)($customer['credit_limit'] ?? 0);
+            if ($cl > 0 && $newBal > $cl) {
+                throw new \InvalidArgumentException("Credit limit exceeded: balance {$newBal} > limit {$cl} for customer {$customer['name']}");
+            }
 
             $lines = [
                 ['account_code' => '131', 'amount' => $totalAmount, 'is_debit' => true],

@@ -19,6 +19,9 @@ $pdo = new PDO("mysql:host=127.0.0.1;dbname=accounting_db;charset=utf8mb4","dev"
 // Đảm bảo kỳ 2026-05 đang mở cho test
 $pdo->exec("INSERT IGNORE INTO accounting_periods (period_code, start_date, end_date, status) VALUES ('2026-05', '2026-05-01', '2026-05-31', 'open')");
 $pdo->exec("UPDATE accounting_periods SET status = 'open' WHERE period_code = '2026-05'");
+// Reset credit limits từ test trước
+$pdo->exec("UPDATE suppliers SET credit_limit = 0");
+$pdo->exec("UPDATE customers SET credit_limit = 0");
 
 $accountRepo = new PDOAccountRepository($pdo);
 $txnRepo = new PDOTransactionRepository($pdo);
@@ -152,7 +155,19 @@ try {
     assertTrue(true, 'Different supplier rejected');
 }
 
-echo "\n=== Test 11: Trial balance after all AP transactions ===\n";
+echo "\n=== Test 11: Credit limit enforcement ===\n";
+$pdo->prepare("UPDATE suppliers SET credit_limit = 500000, balance = 0 WHERE id = ?")->execute([$supplierId]);
+try {
+    $ap->recordInvoice($supplierId, 'OVER-LIMIT', '2026-05-25', '2026-06-25', 1000000, 100000, 10, 'Over limit test', '156', 'tester');
+    assertTrue(false, 'Should reject over-limit AP invoice');
+} catch (\InvalidArgumentException $e) {
+    assertTrue(true, 'Over-limit AP invoice rejected');
+}
+$under = $ap->recordInvoice($supplierId, 'UNDER-LIMIT', '2026-05-25', '2026-06-25', 300000, 30000, 10, 'Under limit test', '156', 'tester');
+assertTrue($under['invoice_id'] > 0, 'Under-limit AP invoice allowed');
+$pdo->prepare("UPDATE suppliers SET credit_limit = 0 WHERE id = ?")->execute([$supplierId]);
+
+echo "\n=== Test 12: Trial balance after all AP transactions ===\n";
 $all = $accountRepo->findAll();
 $totalDr = 0; $totalCr = 0;
 foreach ($all as $a) {

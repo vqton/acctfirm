@@ -18,6 +18,8 @@ $pdo = new PDO("mysql:host=127.0.0.1;dbname=accounting_db;charset=utf8mb4","dev"
 // Đảm bảo kỳ 2026-05 đang mở cho test
 $pdo->exec("INSERT IGNORE INTO accounting_periods (period_code, start_date, end_date, status) VALUES ('2026-05', '2026-05-01', '2026-05-31', 'open')");
 $pdo->exec("UPDATE accounting_periods SET status = 'open' WHERE period_code = '2026-05'");
+// Reset credit limits từ test trước
+$pdo->exec("UPDATE customers SET credit_limit = 0");
 
 $accountRepo = new PDOAccountRepository($pdo);
 $txnRepo = new PDOTransactionRepository($pdo);
@@ -139,7 +141,20 @@ if ($otherCust) {
     }
 }
 
-echo "\n=== Test 11: Trial balance ===\n";
+echo "\n=== Test 11: Credit limit enforcement ===\n";
+$creditCid = $customers[count($customers) - 1]['id']; // Use last customer (likely 0 balance)
+$pdo->prepare("UPDATE customers SET credit_limit = 500000, balance = 0 WHERE id = ?")->execute([$creditCid]);
+try {
+    $ar->recordInvoice($creditCid, 'OVER-LIMIT', '2026-05-25', '2026-06-25', 1000000, 100000, 10, 'Over limit', 'tester');
+    assertTrue(false, 'Should reject over-limit AR invoice');
+} catch (\InvalidArgumentException $e) {
+    assertTrue(true, 'Over-limit AR invoice rejected');
+}
+$under = $ar->recordInvoice($creditCid, 'UNDER-LIMIT', '2026-05-25', '2026-06-25', 300000, 30000, 10, 'Under limit', 'tester');
+assertTrue($under['invoice_id'] > 0, 'Under-limit AR invoice allowed');
+$pdo->prepare("UPDATE customers SET credit_limit = 0 WHERE id = ?")->execute([$creditCid]);
+
+echo "\n=== Test 12: Trial balance ===\n";
 $all = $accountRepo->findAll();
 $totalDr = 0; $totalCr = 0;
 foreach ($all as $a) {
