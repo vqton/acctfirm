@@ -154,7 +154,27 @@ $under = $ar->recordInvoice($creditCid, 'UNDER-LIMIT', '2026-05-25', '2026-06-25
 assertTrue($under['invoice_id'] > 0, 'Under-limit AR invoice allowed');
 $pdo->prepare("UPDATE customers SET credit_limit = 0 WHERE id = ?")->execute([$creditCid]);
 
-echo "\n=== Test 12: Trial balance ===\n";
+echo "\n=== Test 12: Provision rate calc (TT 48/2019) ===\n";
+assertEq(0, $ar->getProvisionRate(0), 'Current = 0%');
+assertEq(0, $ar->getProvisionRate(180), '6 months = 0%');
+assertEq(30, $ar->getProvisionRate(181), '6-12 months = 30%');
+assertEq(30, $ar->getProvisionRate(365), '12 months = 30%');
+assertEq(50, $ar->getProvisionRate(366), '12-18 months = 50%');
+assertEq(50, $ar->getProvisionRate(545), '18 months = 50%');
+assertEq(70, $ar->getProvisionRate(546), '18-36 months = 70%');
+assertEq(70, $ar->getProvisionRate(1095), '36 months = 70%');
+assertEq(100, $ar->getProvisionRate(1096), '>36 months = 100%');
+
+echo "\n=== Test 13: Provision summary ===\n";
+$prov = $ar->getProvisionSummary();
+assertTrue($prov['total_balance'] > 0, 'Provision balance > 0');
+assertTrue($prov['total_provision'] >= 0, 'Provision amount >= 0');
+assertTrue(count($prov['buckets']) === 5, '5 TT48 buckets');
+assertTrue(count($prov['details']) > 0, 'Provision details non-empty');
+assertTrue(isset($prov['details'][0]['provision_rate']), 'Each detail has rate');
+assertTrue(isset($prov['details'][0]['provision_amount']), 'Each detail has provision amount');
+
+echo "\n=== Test 14: Trial balance ===\n";
 $all = $accountRepo->findAll();
 $totalDr = 0; $totalCr = 0;
 foreach ($all as $a) {

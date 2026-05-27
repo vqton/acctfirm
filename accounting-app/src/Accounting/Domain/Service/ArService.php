@@ -298,10 +298,80 @@ class ArService
             elseif ($days <= 90) { $bucket = '61-90'; }
             else { $bucket = '90plus'; }
             $r['aging_days'] = $isOverdue ? $days : 0;
+            $r['provision_rate'] = $this->getProvisionRate($r['aging_days']);
+            $r['provision_amount'] = round($r['balance'] * $r['provision_rate'] / 100, 0);
             $buckets[$bucket][] = $r;
             $totals[$bucket] += $r['balance'];
         }
         return ['buckets' => $buckets, 'totals' => $totals, 'grand_total' => array_sum($totals)];
+    }
+
+    // TỶ LỆ TRÍCH LẬP DỰ PHÒNG THEO TT 48/2019/TT-BTC
+    // Nợ quá hạn 6-12 tháng → 30%, 12-18 tháng → 50%, 18-36 tháng → 70%, >36 tháng → 100%
+    public function getProvisionRate(int $daysOverdue): float
+    {
+        if ($daysOverdue <= 180) return 0;
+        if ($daysOverdue <= 365) return 30;
+        if ($daysOverdue <= 545) return 50;
+        if ($daysOverdue <= 1095) return 70;
+        return 100;
+    }
+
+    //
+    // BÁO CÁO TRÍCH LẬP DỰ PHÒNG: Tổng hợp số dư và dự phòng theo các khung thời gian TT 48/2019
+    // Mục đích: Căn cứ để ghi nhận dự phòng phải thu khó đòi (TK 2293) cuối kỳ
+    // Ảnh hưởng BC01: MS 229 (Dự phòng — giảm trừ tài sản), BC02: MS 25 (Chi phí QLDN - 642)
+    //
+    public function getProvisionSummary(): array
+    {
+        $rows = $this->pdo->query(
+            "SELECT i.id, i.balance, i.due_date, i.customer_id, c.name as customer_name
+             FROM ar_invoices i JOIN customers c ON c.id = i.customer_id
+             WHERE i.balance > 1 AND i.status NOT IN ('paid','prepayment','written_off')
+             ORDER BY i.due_date"
+        )->fetchAll(\PDO::FETCH_ASSOC);
+
+        $buckets = [
+            '0-180d'   => ['label' => '0-6 tháng', 'rate' => 0,  'balance' => 0, 'provision' => 0],
+            '181-365d' => ['label' => '6-12 tháng', 'rate' => 30, 'balance' => 0, 'provision' => 0],
+            '366-545d' => ['label' => '12-18 tháng', 'rate' => 50, 'balance' => 0, 'provision' => 0],
+            '546-1095d'=> ['label' => '18-36 tháng', 'rate' => 70, 'balance' => 0, 'provision' => 0],
+            '1096d+'   => ['label' => '>36 tháng', 'rate' => 100, 'balance' => 0, 'provision' => 0],
+        ];
+        $totalBalance = 0;
+        $totalProvision = 0;
+        $details = [];
+
+        foreach ($rows as $r) {
+            $days = (int)date_diff(date_create($r['due_date']), date_create('today'))->format('%a');
+            $isOverdue = date_create($r['due_date']) < date_create('today');
+            $agingDays = $isOverdue ? $days : 0;
+            $rate = $this->getProvisionRate($agingDays);
+            $provAmt = round($r['balance'] * $rate / 100, 0);
+
+            if ($agingDays <= 180) $key = '0-180d';
+            elseif ($agingDays <= 365) $key = '181-365d';
+            elseif ($agingDays <= 545) $key = '366-545d';
+            elseif ($agingDays <= 1095) $key = '546-1095d';
+            else $key = '1096d+';
+
+            $buckets[$key]['balance'] += $r['balance'];
+            $buckets[$key]['provision'] += $provAmt;
+            $totalBalance += $r['balance'];
+            $totalProvision += $provAmt;
+
+            $r['aging_days'] = $agingDays;
+            $r['provision_rate'] = $rate;
+            $r['provision_amount'] = $provAmt;
+            $details[] = $r;
+        }
+
+        return [
+            'buckets' => $buckets,
+            'total_balance' => $totalBalance,
+            'total_provision' => $totalProvision,
+            'details' => $details,
+        ];
     }
 
     //
