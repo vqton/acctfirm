@@ -946,6 +946,22 @@ Khi thêm entity mới, thực hiện theo thứ tự:
 [ ] 12. Audit: AuditLogger::log() trong controller/service
 ```
 
+### 18.1 Definition of Done
+
+Mọi task/feature phải đáp ứng tất cả các tiêu chí sau trước khi merge:
+
+```
+[ ] Code tuân thủ §5 conventions (naming, formatting, types)
+[ ] Full test suite: 0 failures (for f in tests/*.php; do php "$f"; done)
+[ ] Happy path + ít nhất 1 failure case cho mọi service method mới
+[ ] PHP syntax check: php -l trên mọi file thay đổi
+[ ] AUDIT: AuditLogger::log() cho mọi thay đổi dữ liệu quan trọng
+[ ] BACKWARD COMPATIBLE: Không breaking change không cần thiết
+[ ] DOCS: AGENTS.md cập nhật nếu có quy tắc mới
+[ ] ADR: Viết ADR nếu là architectural decision
+[ ] CLEAN: Không debug code, không comment-out code, không TODO
+```
+
 ---
 
 ## 19. Skill Selection Matrix
