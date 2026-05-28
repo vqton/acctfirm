@@ -64,6 +64,8 @@ Hệ thống kế toán doanh nghiệp Việt Nam — web application, PHP backe
 | Domain-driven structure | Tách biệt nghiệp vụ khỏi infrastructure | `docs/decisions/adr-003.md` |
 | JSON API + jQuery AJAX | Đơn giản, đủ cho ERP nội bộ | `docs/decisions/adr-004.md` |
 | ActionJournal (JSON Lines) | Audit trail bất biến, dễ export | `docs/decisions/adr-005.md` |
+| Vietnamese message audit | Toàn bộ thông báo người dùng sang tiếng Việt | `docs/decisions/adr-006.md` |
+| CompositeDB declined | Pre-1.0 library, adds Composer (trái §4.2), no ROI | `docs/decisions/adr-007.md` |
 
 ---
 
@@ -1007,7 +1009,7 @@ karpathy-guidelines (simplicity first, surgical changes)
 
 | Version | Date | Changes |
 |---|---|---|
-| 2.4 | 2026-05-28 | **CodeGraph Workflow section refactored.** Consolidated 3 scattered spots (§12.1, §15, §16) into single 5-step implementation workflow + budget rules. **Vietnamese Audit Phase 2 complete.** Final 8 English strings translated (Router, BankReconciliation, Auth, 4 views, test assertion). **ADR-007: CompositeDB declined.** |
+| 2.4 | 2026-05-28 | **Governance document overhaul.** Added §4.3 Environment Requirements, §11.5 Static Analysis & CI Gates, §18.1 Definition of Done. Fixed v2.0→2.4 header, English examples in §7.3 & §9.1→Vietnamese. Deduplicated §12.1 items 3+6. Added ADR-006, ADR-007 to decision table. CodeGraph Workflow refactored into single 5-step workflow + budget rules. Vietnamese Audit Phase 2 complete. |
 | 2.3 | 2026-05-27 | **Vietnamese Language Audit — toàn bộ thông báo người dùng sang tiếng Việt chuyên nghiệp.** ~200 messages từ controllers, services, models, views được dịch. |
 | 2.2 | 2026-05-27 | **Phase 5: Views & UX — AP/AR views.** Filter bar (status/supplier/search/date), CSV export, overdue highlighting, aging column, dự phòng phải thu. |
 | 2.1 | 2026-05-26 | **Phase 2.2+2.3: Aging + Provision + Credit Limit.** getProvisionRate(), getProvisionSummary() TT 48/2019. Credit limit check trong recordInvoice. |
