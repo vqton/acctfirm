@@ -24,7 +24,7 @@
 13. [CI/CD & DevOps Standards](#13-cicd--devops-standards)
 14. [Operational Risk Register](#14-operational-risk-register)
 15. [Quick Commands](#15-quick-commands)
-16. [CodeGraph Reference](#16-codegraph-reference)
+16. [CodeGraph Workflow](#16-codegraph-workflow)
 17. [Directory Structure](#17-directory-structure)
 18. [New Entity Checklist](#18-new-entity-checklist)
 19. [Skill Selection Matrix](#19-skill-selection-matrix)
@@ -688,17 +688,16 @@ assertEq($row['total_dr'], $row['total_cr'], 'Trial balance: Dr = Cr');
 2. **REQUIRED:** Never assume business rules. If unsure about accounting treatment → stop and ask.
 3. **REQUIRED:** Run full test suite after every change. 0 new failures.
 4. **REQUIRED:** Write in Vietnamese for business logic comments. Write in English for code (identifiers, strings).
-5. **REQUIRED:** Use CodeGraph for structural queries (find definitions, callers, callees) — not grep.
-6. **REQUIRED:** Sync CodeGraph index after editing (`codegraph sync`).
-7. **REQUIRED:** Verify all existing tests still pass before marking task complete.
-8. **REQUIRED:** Never introduce new dependencies (Composer, libraries) without explicit approval.
-9. **REQUIRED:** Never refactor code that isn't part of the task scope.
-10. **REQUIRED:** Never modify migration files that have already been executed.
-11. **RECOMMENDED:** Load skill `karpathy-guidelines` + `caveman` by default.
-12. **RECOMMENDED:** Use `incremental-implementation` for multi-file features.
-13. **RECOMMENDED:** Use `doubt-driven-development` for high-stakes accounting logic.
-14. **FORBIDDEN:** Never modify test assertions without verifying the expected value is correct.
-15. **FORBIDDEN:** Never disable validation (posting rules, control account checks) in production code.
+5. **REQUIRED:** Follow the [CodeGraph Workflow (§16)](#16-codegraph-workflow) for every task — context → impact → implement → sync → test. Never grep where CodeGraph suffices.
+6. **REQUIRED:** Verify all existing tests still pass before marking task complete.
+7. **REQUIRED:** Never introduce new dependencies (Composer, libraries) without explicit approval.
+8. **REQUIRED:** Never refactor code that isn't part of the task scope.
+9. **REQUIRED:** Never modify migration files that have already been executed.
+10. **RECOMMENDED:** Load skill `karpathy-guidelines` + `caveman` by default.
+11. **RECOMMENDED:** Use `incremental-implementation` for multi-file features.
+12. **RECOMMENDED:** Use `doubt-driven-development` for high-stakes accounting logic.
+13. **FORBIDDEN:** Never modify test assertions without verifying the expected value is correct.
+14. **FORBIDDEN:** Never disable validation (posting rules, control account checks) in production code.
 
 ### 12.2 Decision Making Hierarchy
 
@@ -797,41 +796,59 @@ for f in tests/*.php; do php "$f"; done
 # Run single test
 php tests/JournalServiceTest.php
 
-# Sync CodeGraph index
-codegraph sync
-
-# CodeGraph query
-codegraph context "journal posting flow"
-codegraph explore "JournalService postEntry createDraft"
-codegraph callers -s "JournalService::postEntry"
-codegraph impact -s "JournalService::postEntry"
 ```
 
 ---
 
-## 16. CodeGraph Reference
+## 16. CodeGraph Workflow
 
-### 16.1 When to Use
+### 16.1 Implementation Workflow
 
-| Question | Tool |
+Mỗi task đi qua 5 bước. Stick to this sequence — nó tiết kiệm 50-70% context so với grep+read loop.
+
+```
+┌─ 1. CONTEXT ──────────────────────────┐
+│  codegraph_context "task description"  │  ← 1 call = entry points + key symbols + callers
+└────────────────────────────────────────┘
+         ↓
+┌─ 2. DEEP DIVE (if needed) ────────────┐
+│  codegraph_explore "Symbol1 Symbol2"  │  ← 1 call = source of several symbols grouped by file
+│  codegraph_trace from → to            │  ← 1 call = full call path incl. dynamic hops
+└────────────────────────────────────────┘
+         ↓
+┌─ 3. IMPACT ───────────────────────────┐
+│  codegraph_impact Symbol              │  ← 1 call = everything affected by the change
+└────────────────────────────────────────┘
+         ↓
+┌─ 4. IMPLEMENT ────────────────────────┐
+│  Edit code (surgical, no scope creep) │
+└────────────────────────────────────────┘
+         ↓
+┌─ 5. VERIFY ───────────────────────────┐
+│  codegraph sync  (after file save)    │
+│  for f in tests/*.php; do php "$f";   │  ← 0 new failures
+└────────────────────────────────────────┘
+```
+
+### 16.2 Quick Reference
+
+| When you need to... | 1 call, done |
 |---|---|
-| "Where is X defined?" | `codegraph_search` |
-| "What calls function Y?" | `codegraph_callers` |
-| "What does Y call?" | `codegraph_callees` |
-| "How does X reach/become Y?" | `codegraph_trace` |
-| "What would break if I changed Z?" | `codegraph_impact` |
-| "Show me Y's signature / source" | `codegraph_node` |
-| "Give me focused context" | `codegraph_context` |
-| "See several related symbols" | `codegraph_explore` |
-| "What files exist under path/" | `codegraph_files` |
-| "Is the index healthy?" | `codegraph_status` |
+| Understand a feature/module before coding | `codegraph_context "..."` |
+| See actual source of several symbols | `codegraph_explore "Sym1 Sym2"` |
+| Trace how A reaches B (full path) | `codegraph_trace A → B` |
+| Check what breaks if you change X | `codegraph_impact X` |
+| Find where X is defined | `codegraph_search X` |
+| See X's signature + source | `codegraph_node X --code` |
+| List files under a path | `codegraph_files path` |
 
-### 16.2 Rules
+### 16.3 Budget Rules
 
-- **Trust results** — full AST parse, không cần re-verify bằng grep
-- **Answer directly** — không chain search+node trong loop
-- **Sync after edits** — `codegraph sync` sau mỗi lần sửa file
-- **Don't grep first** — codegraph nhanh hơn grep cho structural queries
+- **1 context call first** — enough for most tasks. Only then deep-dive.
+- **1 explore call, not N node calls** — `codegraph_explore` returns multiple symbols' source in one call. Chain of `codegraph_search` + `codegraph_node` × N costs more.
+- **Trust the AST** — CodeGraph is a full tree-sitter parse. Grep/Read to verify = waste. If it says a symbol is defined at `File.php:42`, it is.
+- **Sync after every edit** — `codegraph sync` (index lags ~500ms behind file writes; wait, then query).
+- **Never grep for structural questions.** Grep is for: log messages, comments, literal string contents. CodeGraph is for: definitions, callers, callees, types, imports, class hierarchies.
 
 ---
 
@@ -936,6 +953,11 @@ karpathy-guidelines (simplicity first, surgical changes)
 
 | Version | Date | Changes |
 |---|---|---|
+| 2.4 | 2026-05-28 | **CodeGraph Workflow section refactored.** Consolidated 3 scattered spots (§12.1, §15, §16) into single 5-step implementation workflow + budget rules. **Vietnamese Audit Phase 2 complete.** Final 8 English strings translated (Router, BankReconciliation, Auth, 4 views, test assertion). **ADR-007: CompositeDB declined.** |
+| 2.3 | 2026-05-27 | **Vietnamese Language Audit — toàn bộ thông báo người dùng sang tiếng Việt chuyên nghiệp.** ~200 messages từ controllers, services, models, views được dịch. |
+| 2.2 | 2026-05-27 | **Phase 5: Views & UX — AP/AR views.** Filter bar (status/supplier/search/date), CSV export, overdue highlighting, aging column, dự phòng phải thu. |
+| 2.1 | 2026-05-26 | **Phase 2.2+2.3: Aging + Provision + Credit Limit.** getProvisionRate(), getProvisionSummary() TT 48/2019. Credit limit check trong recordInvoice. |
+| 2.0.1 | 2026-05-26 | **Phase 2.1: Payment Allocation Engine.** payment_allocations table, allocatePayment/allocateReceipt multi-invoice. |
 | 2.0 | 2026-05-25 | Enterprise rewrite: governance tiers, Vietnamese comments, risk register, AI agent policy |
 | 1.0 | 2025 | Initial: Golden Rules, Quick Commands, Code Patterns, Gotchas |
 

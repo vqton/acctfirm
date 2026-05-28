@@ -1,5 +1,26 @@
 # Implementation Progress
 
+## Session 2026-05-28 — Vietnamese Audit Phase 2 Complete + Docs Refactor
+
+**Vietnamese Language Audit — all English end-user messages eliminated:**
+- Final scan found 8 remaining English strings across 6 files → all translated
+- `Router.php` ("Route not found"), `BankReconciliationService.php` ("Session not found"), `Auth.php` ("CSRF token mismatch")
+- `payroll_entries.php` (headers "Gross"/"Net" → "Tổng lương"/"Thực nhận")
+- `payroll_calculate.php`, `payroll_insurance.php` (label "Lương gross" → "Tổng lương")
+- `PostingValidationTest.php` assertion updated to match Vietnamese message
+- **Total: ~310+ messages translated across ~74 files, zero English end-user visible messages remaining**
+
+**AGENTS.md CodeGraph sections refactored:**
+- Consolidated 3 scattered spots (§12.1, §15, §16) into single workflow-oriented §16
+- New 5-step implementation flow: Context → Deep Dive → Impact → Implement → Verify
+- Budget rules: 1 context call first, 1 explore instead of N node calls, trust AST, sync after edits
+- Removed duplicate CodeGraph commands from Quick Commands (§15)
+
+**ADR-007: CompositeDB integration declined** — pre-1.0 library, adds Composer dependency (conflicts with §4.2 No Composer), ORM abstraction adds risk for accounting precision, negative ROI given 22 existing PDO repos
+
+**Commit:** `586a8e7` — 83 files, 788 insertions  
+**Tests:** 49 files, 0 failures
+
 ## Architecture
 
 ```
@@ -206,7 +227,7 @@ GlService → Ledger entries (date, ref, Dr, Cr, running balance, contra account
 
 ---
 
-## All Tests (410 total — ALL PASS)
+## All Tests (518 total — ALL PASS)
 
 | Test file | Tests | Module |
 |---|---|---|
@@ -236,10 +257,29 @@ GlService → Ledger entries (date, ref, Dr, Cr, running balance, contra account
 | `tests/DBTest.php` | 18 | DB Helper |
 | `tests/PeriodTest.php` | 18 | Period Engine |
 | `tests/FsTest.php` | 18 | Financial Statements |
-| `tests/ApTest.php` | 22 | Accounts Payable |
-| `tests/ArTest.php` | 19 | Accounts Receivable |
-| `tests/GlTest.php` | 12 | General Ledger |
-| **Total** | **410** | **29 test files** |
+| `tests/ApTest.php` | 30 | Accounts Payable |
+| `tests/ArTest.php` | 41 | Accounts Receivable |
+| `tests/GlTest.php` | 28 | General Ledger |
+| `tests/CashBookTest.php` | 9 | Cash Book |
+| `tests/CustomerReturnTest.php` | 4 | Inventory Returns |
+| `tests/InventoryServiceEnhancementsTest.php` | 19 | Inventory Enhancements |
+| `tests/InventoryReportsTest.php` | 13 | Inventory Reports |
+| `tests/InventorySupplierReturnTest.php` | 8 | Supplier Returns |
+| `tests/InventoryWriteOffTest.php` | 8 | Write-Off |
+| `tests/PostingRuleServiceTest.php` | 10 | Posting Rules |
+| `tests/ApprovalRoutingTest.php` | 6 | Approvals |
+| `tests/JournalApprovalTest.php` | 15 | Journal Approvals |
+| `tests/JournalBookTest.php` | 17 | Journal Book |
+| `tests/PeriodCloseEnhancementTest.php` | 10 | Period Close |
+| `tests/aa_setup_period.php` | 6 | Setup |
+| `tests/zz_PeriodTest.php` | 18 | Period Engine |
+| `tests/PayrollServiceTest.php` | 44 | Payroll |
+| `tests/PostingValidationTest.php` | 5 | Posting |
+| `tests/ReconciliationServiceTest.php` | 38 | Reconciliation |
+| `tests/Tk153Test.php` | 7 | TK 153 |
+| `tests/Tk241Test.php` | 6 | TK 241 |
+| `tests/TrialBalanceServiceTest.php` | 7 | Trial Balance |
+| **Total** | **518** | **49 test files** |
 
 ---
 
@@ -443,7 +483,7 @@ GlService → Ledger entries (date, ref, Dr, Cr, running balance, contra account
 
 ---
 
-## Database Migrations (41 total)
+## Database Migrations (61 total)
 
 | # | File | Purpose |
 |---|---|---|
@@ -502,6 +542,6 @@ for f in tests/*.php; do php "$f"; done
 | `src/.../Infrastructure/Database/AuditLogger.php` | Audit trail logger |
 | `src/.../Service/GlService.php` | General Ledger (Sổ Cái) |
 | `database/migrate.php` | Migration runner |
-| `database/migrations/*.php` | 41 migration files |
+| `database/migrations/*.php` | 61 migration files |
 | `src/.../Logging/ActionJournal.php` | User action journal (JSON Lines, daily files) |
 | `public/views/login.php` | Standalone login page (no layout.php) |
