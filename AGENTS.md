@@ -210,6 +210,14 @@ Control accounts (có sub-accounts: 111, 112, 131, 331, 333, 411...) bị block 
 - **No migration library:** Script `database/migrate.php` tự phát hiện file mới.
 - **No test framework:** `assertEq`/`assertTrue` helpers trong `tests/bootstrap.php`.
 
+### 4.3 Environment Requirements
+
+- **PHP 8.4+** với extensions: `pdo`, `pdo_mysql`, `mbstring`, `json`, `session`, `fileinfo`
+- **MySQL 8.0+ / MariaDB 10.6+** với: InnoDB engine, `utf8mb4` charset, `binary logging` có thể tắt ở dev
+- **Development server:** PHP built-in (`php -S`) — không cần Apache/Nginx cho dev
+- **OS:** Linux (production), bất kỳ (dev) — không có platform-specific dependency
+- **Disk:** Thư mục `logs/` và `session save path` phải writable
+
 ---
 
 ## 5. Code Standards & Conventions
