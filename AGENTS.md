@@ -686,6 +686,37 @@ $row = $stmt->fetch(PDO::FETCH_ASSOC);
 assertEq($row['total_dr'], $row['total_cr'], 'Trial balance: Dr = Cr');
 ```
 
+### 11.5 Static Analysis & CI Gates
+
+**RECOMMENDED:** Add PHPStan (level 6+) for static analysis before production launch.
+
+```sh
+# Install (one-time):
+composer require --dev phpstan/phpstan
+
+# Run:
+vendor/bin/phpstan analyse --level 6 src/
+
+# Generate baseline (first run, suppress existing errors):
+vendor/bin/phpstan analyse --level 6 --generate-baseline src/
+```
+
+Pre-commit hook (bash, `.git/hooks/pre-commit`):
+```sh
+#!/bin/sh
+for f in $(git diff --cached --name-only --diff-filter=AM '*.php'); do
+    php -l "$f" > /dev/null || exit 1
+done
+```
+
+CI pipeline (GitHub Actions — RECOMMENDED):
+```yaml
+# .github/workflows/ci.yml
+steps:
+  - run: php -l src/
+  - run: for f in tests/*.php; do php "$f"; done
+```
+
 ---
 
 ## 12. AI Agent Operational Policy
