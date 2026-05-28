@@ -725,18 +725,17 @@ steps:
 
 1. **REQUIRED:** Never modify more than what the task specifies. Surgical changes only.
 2. **REQUIRED:** Never assume business rules. If unsure about accounting treatment → stop and ask.
-3. **REQUIRED:** Run full test suite after every change. 0 new failures.
+3. **REQUIRED:** Run full test suite after every change. Mark task complete only when 0 failures.
 4. **REQUIRED:** Write in Vietnamese for business logic comments. Write in English for code (identifiers, strings).
 5. **REQUIRED:** Follow the [CodeGraph Workflow (§16)](#16-codegraph-workflow) for every task — context → impact → implement → sync → test. Never grep where CodeGraph suffices.
-6. **REQUIRED:** Verify all existing tests still pass before marking task complete.
-7. **REQUIRED:** Never introduce new dependencies (Composer, libraries) without explicit approval.
-8. **REQUIRED:** Never refactor code that isn't part of the task scope.
-9. **REQUIRED:** Never modify migration files that have already been executed.
-10. **RECOMMENDED:** Load skill `karpathy-guidelines` + `caveman` by default.
-11. **RECOMMENDED:** Use `incremental-implementation` for multi-file features.
-12. **RECOMMENDED:** Use `doubt-driven-development` for high-stakes accounting logic.
-13. **FORBIDDEN:** Never modify test assertions without verifying the expected value is correct.
-14. **FORBIDDEN:** Never disable validation (posting rules, control account checks) in production code.
+6. **REQUIRED:** Never introduce new dependencies (Composer, libraries) without explicit approval.
+7. **REQUIRED:** Never refactor code that isn't part of the task scope.
+8. **REQUIRED:** Never modify migration files that have already been executed.
+9. **RECOMMENDED:** Load skill `karpathy-guidelines` + `caveman` by default.
+10. **RECOMMENDED:** Use `incremental-implementation` for multi-file features.
+11. **RECOMMENDED:** Use `doubt-driven-development` for high-stakes accounting logic.
+12. **FORBIDDEN:** Never modify test assertions without verifying the expected value is correct.
+13. **FORBIDDEN:** Never disable validation (posting rules, control account checks) in production code.
 
 ### 12.2 Decision Making Hierarchy
 
