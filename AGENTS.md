@@ -1,6 +1,6 @@
 # AGENTS.md — Enterprise Engineering Governance Document
 
-> **Phiên bản:** 2.0  
+> **Phiên bản:** 2.4  
 > **Phạm vi:** Toàn bộ hệ thống kế toán doanh nghiệp Việt Nam  
 > **Đối tượng:** Developers, AI agents, Architects, DevOps, Auditors, Onboarding engineers  
 > **Nguyên tắc:** Mọi thay đổi phải đảm bảo **tính đúng đắn nghiệp vụ kế toán**, **không phá vỡ backward compatibility**, **có kiểm chứng bằng test**
@@ -458,7 +458,7 @@ Module-scoped rules (ví dụ rule chỉ áp dụng cho module `purchase`).
 $line = ['account_code' => '1111', 'amount' => 100000, 'is_debit' => true];
 // Sai — post vào TK tổng hợp:
 $line = ['account_code' => '111', 'amount' => 100000, 'is_debit' => true];
-// => InvalidArgumentException: "Account 111 (Tiền mặt) is a control account"
+// => InvalidArgumentException: "Tài khoản 111 (Tiền mặt) là tài khoản tổng hợp. Vui lòng hạch toán vào tài khoản chi tiết."
 ```
 
 Override: Post vào control account nếu `$allowControl = true` (chỉ Kế toán trưởng).
@@ -543,10 +543,10 @@ return function (PDO $pdo) {
 { "data": { "id": "jrn_abc", "status": "posted" } }
 
 // Error:
-{ "error": "Account not found: 999" }
+{ "error": "Không tìm thấy tài khoản: 999" }
 
 // Validation error:
-{ "error": "Debit (100000) does not equal Credit (90000)" }
+{ "error": "Số phát sinh Nợ (100000) không khớp với số phát sinh Có (90000)" }
 ```
 
 ### 9.2 HTTP Status Codes
