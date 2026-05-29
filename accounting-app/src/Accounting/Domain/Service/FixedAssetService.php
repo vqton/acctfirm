@@ -404,4 +404,264 @@ class FixedAssetService
         );
         $stmt->execute([$id, $faId, $period, $amount, $accBefore, $accAfter, $nbvBefore, $nbvAfter, $txnId]);
     }
+
+    // NGHIỆP VỤ: Ghi tăng TSCĐ (Acquisition)
+    //
+    // Mục đích: Ghi nhận tài sản cố định mới vào sổ kế toán kèm bút toán ghi tăng.
+    // Hạch toán tùy theo hình thức acquisitionType:
+    //   purchase_cash:    Nợ 211 (nguyên giá) / Có 111 (tiền mặt)
+    //   purchase_bank:    Nợ 211 (nguyên giá) / Có 112 (tiền gửi)
+    //   purchase_credit:  Nợ 211 (nguyên giá) / Có 331 (phải trả NCC)
+    //   capital_contribution: Nợ 211 (NG theo định giá) / Có 411 (vốn góp)
+    //   gift:             Nợ 211 (NG theo giá thị trường) / Có 711 (thu nhập khác)
+    //
+    // Input:
+    //   $data: Mảng chứa thông tin TSCĐ (code, name, purchase_date, original_cost, useful_life...)
+    //   $acquisitionType: Loại hình ghi tăng
+    //   $counterpartyAccount: TK đối ứng (111, 112, 331, 411, 711...)
+    //   $createdBy: Người tạo
+    //
+    // Output: ['fixed_asset_id' => string, 'transaction_id' => string, 'reference' => string]
+    //
+    // RỦI RO: Nếu acquisitionType là purchase_cash/purchase_bank và số dư TK không đủ →
+    //   JournalService sẽ từ chối. Cần kiểm tra số dư trước khi ghi nhận.
+    // RỦI RO: R005 — Sai tài khoản đối ứng (control account) → JournalService từ chối.
+    // Ảnh hưởng: BC01 chỉ tiêu 227 (Nguyên giá) tăng. BC02 chỉ tiêu chi phí qua khấu hao.
+    // Audit trail: Bắt buộc ghi Biên bản giao nhận TSCĐ (mẫu 01-TSCĐ) kèm chứng từ gốc.
+    public function recordAcquisition(
+        array $faData,
+        string $acquisitionType,
+        string $counterpartyAccount,
+        string $createdBy,
+        float $vatAmount = 0,
+        string $vatAccount = '1332'
+    ): array {
+        $allowedTypes = ['purchase_cash', 'purchase_bank', 'purchase_credit', 'capital_contribution', 'gift'];
+        if (!in_array($acquisitionType, $allowedTypes)) {
+            throw new \InvalidArgumentException("Loại hình ghi tăng không hợp lệ: {$acquisitionType}");
+        }
+
+        if (empty($faData['code']) || empty($faData['name']) || empty($faData['original_cost'])) {
+            throw new \InvalidArgumentException('Vui lòng nhập mã, tên và nguyên giá TSCĐ');
+        }
+
+        $ng = (float)$faData['original_cost'];
+        if ($ng <= 0) throw new \InvalidArgumentException('Nguyên giá phải lớn hơn 0');
+
+        $counterparty = $this->accountRepo->findByCode($counterpartyAccount);
+        if (!$counterparty) {
+            throw new \InvalidArgumentException("Không tìm thấy tài khoản đối ứng: {$counterpartyAccount}");
+        }
+
+        $faId = $faData['id'] ?? uniqid('fa_');
+        $usefulLife = (int)($faData['useful_life'] ?? 0);
+        $salvageValue = (float)($faData['salvage_value'] ?? 0);
+
+        $fa = new FixedAsset(
+            $faId,
+            $faData['code'],
+            $faData['name'],
+            $faData['purchase_date'] ?? date('Y-m-d'),
+            $ng,
+            $faData['depreciation_method'] ?? 'straight_line',
+            $usefulLife,
+            $salvageValue,
+            monthlyDepreciation: $usefulLife > 0 ? ($ng - $salvageValue) / ($usefulLife * 12) : 0,
+            accumulatedDepreciation: 0,
+            netBookValue: $ng,
+            faCategory: $faData['fa_category'] ?? 'tangible',
+            faType: $faData['fa_type'] ?? null,
+            totalEstimatedUnits: isset($faData['total_estimated_units']) ? (float)$faData['total_estimated_units'] : null,
+            purchaseCost: (float)($faData['purchase_cost'] ?? $ng),
+            departmentId: $faData['department_id'] ?? null,
+            employeeId: $faData['employee_id'] ?? null,
+            location: $faData['location'] ?? null,
+            status: 'in_use',
+            notes: $faData['notes'] ?? null
+        );
+
+        $inTransaction = $this->pdo !== null && !$this->pdo->inTransaction();
+        if ($inTransaction) $this->pdo->beginTransaction();
+
+        try {
+            $this->faRepo->save($fa);
+
+            $lines = [];
+
+            if ($acquisitionType === 'purchase_cash' || $acquisitionType === 'purchase_bank') {
+                $totalPay = $ng + $vatAmount;
+                $lines[] = ['account_code' => '211', 'amount' => $ng, 'is_debit' => true];
+                if ($vatAmount > 0) {
+                    $lines[] = ['account_code' => $vatAccount, 'amount' => $vatAmount, 'is_debit' => true];
+                }
+                $lines[] = ['account_code' => $counterpartyAccount, 'amount' => $totalPay, 'is_debit' => false];
+            } elseif ($acquisitionType === 'purchase_credit') {
+                $totalPay = $ng + $vatAmount;
+                $lines[] = ['account_code' => '211', 'amount' => $ng, 'is_debit' => true];
+                if ($vatAmount > 0) {
+                    $lines[] = ['account_code' => $vatAccount, 'amount' => $vatAmount, 'is_debit' => true];
+                }
+                $lines[] = ['account_code' => '331', 'amount' => $totalPay, 'is_debit' => false];
+            } elseif ($acquisitionType === 'capital_contribution') {
+                $lines[] = ['account_code' => '211', 'amount' => $ng, 'is_debit' => true];
+                $lines[] = ['account_code' => '41111', 'amount' => $ng, 'is_debit' => false];
+            } elseif ($acquisitionType === 'gift') {
+                $lines[] = ['account_code' => '211', 'amount' => $ng, 'is_debit' => true];
+                $lines[] = ['account_code' => '711', 'amount' => $ng, 'is_debit' => false];
+            }
+
+            $description = "Ghi tang TSCD {$fa->getCode()} - {$fa->getName()}";
+            $reference = $faData['reference'] ?? uniqid('FA-');
+
+            $txn = $this->journalService->postEntry(
+                description: $description,
+                reference: $reference,
+                lines: $lines,
+                createdBy: $createdBy,
+                module: 'fixed_asset',
+                date: $fa->getPurchaseDate(),
+                voucherType: 'JV'
+            );
+
+            if ($inTransaction) $this->pdo->commit();
+        } catch (\Throwable $e) {
+            if ($inTransaction) $this->pdo->rollBack();
+            throw $e;
+        }
+
+        $this->auditLogger?->log('fixed_asset.acquisition', 'fixed_asset', $fa->getId(), null, [
+            'code' => $fa->getCode(), 'name' => $fa->getName(), 'original_cost' => $ng,
+            'acquisition_type' => $acquisitionType, 'counterparty' => $counterpartyAccount,
+        ], $createdBy);
+
+        return [
+            'fixed_asset_id' => $fa->getId(),
+            'transaction_id' => $txn->getId(),
+            'reference' => $txn->getReference(),
+        ];
+    }
+
+    // NGHIỆP VỤ: Giảm TSCĐ — Thanh lý, nhượng bán
+    //
+    // Mục đích: Ghi nhận giảm TSCĐ khi thanh lý hoặc nhượng bán.
+    // Hạch toán:
+    //   Nợ 214 (hao mòn lũy kế — full)
+    //   Nợ 811 (lỗ thanh lý, nếu NBV > proceeds - costs)
+    //   Có 211 (nguyên giá — full)
+    //   Có 711 (lãi thanh lý, nếu proceeds - costs > NBV)
+    //   Nợ 111/112 (tiền bán — nếu có)
+    //   Có 3331 (VAT đầu ra 10% trên giá bán)
+    //   Nợ 811 (chi phí thanh lý — nếu có)
+    //   Có 111/112/152/334
+    //
+    // Input:
+    //   $fixedAssetId: ID TSCĐ cần giảm
+    //   $disposalType: 'liquidation' (thanh lý) | 'sale' (nhượng bán)
+    //   $proceeds: Số tiền thu từ thanh lý/nhượng bán (0 nếu thanh lý)
+    //   $proceedsAccount: TK nhận tiền (111/112)
+    //   $costs: Chi phí thanh lý (0 nếu không có)
+    //   $costsAccount: TK chi phí thanh lý (111/112)
+    //   $disposalDate: Ngày thanh lý
+    //   $createdBy: Người tạo
+    //
+    // Output: ['transaction_id' => string, 'fixed_asset_id' => string, 'gain_loss' => float]
+    //
+    // RỦI RO: R004 — Không xóa dữ liệu TSCĐ, chỉ set status = 'liquidated'.
+    // Ảnh hưởng: BC01 chỉ tiêu 227 (Nguyên giá) giảm. BC02 tăng chi phí khác (811).
+    // Audit trail: Bắt buộc Biên bản thanh lý TSCĐ (mẫu 02-TSCĐ).
+    public function recordDisposal(
+        string $fixedAssetId,
+        string $disposalType,
+        float $proceeds,
+        ?string $proceedsAccount,
+        float $costs,
+        ?string $costsAccount,
+        string $disposalDate,
+        string $createdBy
+    ): array {
+        $fa = $this->faRepo->findById($fixedAssetId);
+        if (!$fa) throw new \InvalidArgumentException("Không tìm thấy TSCĐ: {$fixedAssetId}");
+        if ($fa->getStatus() === 'liquidated') {
+            throw new \InvalidArgumentException("TSCĐ {$fa->getCode()} đã được thanh lý trước đó");
+        }
+
+        $ng = $fa->getOriginalCost();
+        $accumDeprec = $fa->getAccumulatedDepreciation();
+        $nbv = $ng - $accumDeprec;
+
+        $inTransaction = $this->pdo !== null && !$this->pdo->inTransaction();
+        if ($inTransaction) $this->pdo->beginTransaction();
+
+        try {
+            $lines = [];
+
+            // Bước 1: Xóa TSCĐ khỏi sổ — Nợ 214 (hao mòn) + Nợ 811 (GTCL) / Có 211 (nguyên giá)
+            // GTCL được đưa hết vào 811 (chi phí khác). Tiền thu từ nhượng bán sẽ ghi vào 711.
+            // Kết quả: Chi phí thuần = GTCL + chi phí thanh lý - tiền thu (chưa VAT)
+            $lines[] = ['account_code' => '2141', 'amount' => $accumDeprec, 'is_debit' => true];
+            $lines[] = ['account_code' => '211', 'amount' => $ng, 'is_debit' => false];
+            if ($nbv > 0) {
+                $lines[] = ['account_code' => '811', 'amount' => $nbv, 'is_debit' => true];
+            }
+
+            // Bước 2: Ghi nhận tiền thu từ nhượng bán (nếu có)
+            // Nợ 111/112 (tổng tiền thu) / Có 711 (tiền chưa VAT) + Có 3331 (VAT đầu ra)
+            $proceedsExclVat = 0;
+            if ($disposalType === 'sale' && $proceeds > 0 && $proceedsAccount) {
+                $proceedsAccountEntity = $this->accountRepo->findByCode($proceedsAccount);
+                if (!$proceedsAccountEntity) {
+                    throw new \InvalidArgumentException("Không tìm thấy tài khoản: {$proceedsAccount}");
+                }
+                $vatSale = round($proceeds * 10 / 110, 0);
+                $proceedsExclVat = $proceeds - $vatSale;
+                $lines[] = ['account_code' => $proceedsAccount, 'amount' => $proceeds, 'is_debit' => true];
+                $lines[] = ['account_code' => '711', 'amount' => $proceedsExclVat, 'is_debit' => false];
+                $lines[] = ['account_code' => '33311', 'amount' => $vatSale, 'is_debit' => false];
+            }
+
+            // Bước 3: Chi phí thanh lý (nếu có) — Nợ 811 / Có 111/112
+            if ($costs > 0 && $costsAccount) {
+                $costsAccountEntity = $this->accountRepo->findByCode($costsAccount);
+                if (!$costsAccountEntity) {
+                    throw new \InvalidArgumentException("Không tìm thấy tài khoản: {$costsAccount}");
+                }
+                $lines[] = ['account_code' => '811', 'amount' => $costs, 'is_debit' => true];
+                $lines[] = ['account_code' => $costsAccount, 'amount' => $costs, 'is_debit' => false];
+            }
+
+            $gainLoss = $proceedsExclVat - $nbv - $costs;
+            $description = "Thanh ly TSCD {$fa->getCode()} - {$fa->getName()} ngay {$disposalDate}";
+
+            $txn = $this->journalService->postEntry(
+                description: $description,
+                reference: uniqid('TL-'),
+                lines: $lines,
+                createdBy: $createdBy,
+                module: 'fixed_asset',
+                date: $disposalDate,
+                voucherType: 'JV'
+            );
+
+            $fa->setStatus('liquidated');
+            $fa->setLastDepreciationDate($disposalDate);
+            $this->faRepo->save($fa);
+
+            if ($inTransaction) $this->pdo->commit();
+        } catch (\Throwable $e) {
+            if ($inTransaction) $this->pdo->rollBack();
+            throw $e;
+        }
+
+        $this->auditLogger?->log('fixed_asset.disposal', 'fixed_asset', $fa->getId(), [
+            'original_cost' => $ng, 'accumulated_depreciation' => $accumDeprec, 'nbv' => $nbv,
+        ], [
+            'disposal_type' => $disposalType, 'proceeds' => $proceeds, 'costs' => $costs, 'gain_loss' => $gainLoss,
+        ], $createdBy);
+
+        return [
+            'fixed_asset_id' => $fa->getId(),
+            'transaction_id' => $txn->getId(),
+            'gain_loss' => $gainLoss,
+        ];
+    }
 }

@@ -159,6 +159,11 @@ class FsController
         require __DIR__ . '/../../../../../public/views/fs_bc03.php';
     }
 
+    public function viewTT99(): void
+    {
+        require __DIR__ . '/../../../../../public/views/bc09.php';
+    }
+
     private function findValue(array $items, string $maSo): float
     {
         foreach ($items as $r) {

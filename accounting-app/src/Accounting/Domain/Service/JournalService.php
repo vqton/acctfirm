@@ -313,6 +313,145 @@ class JournalService
         return $this->voucherService->nextNumber($prefix);
     }
 
+    public function createSupplementaryEntry(string $originalTxnId, array $correctLines, string $reason, string $createdBy, bool $allowControl = false): Transaction
+    {
+        $original = $this->txnRepo->findById($originalTxnId);
+        if (!$original) {
+            throw new \InvalidArgumentException("Không tìm thấy bút toán gốc mã {$originalTxnId}");
+        }
+
+        $txn = $this->postEntry(
+            description: "BS: {$original->getDescription()} — {$reason}",
+            reference: '',
+            lines: $correctLines,
+            createdBy: $createdBy,
+            allowControl: $allowControl,
+            module: 'correction',
+            date: date('Y-m-d'),
+            voucherType: 'JV'
+        );
+
+        $txn->setIsCorrection(true);
+        $txn->setCorrectionType('supplementary');
+        $txn->setOriginalTransactionId($originalTxnId);
+        $txn->setCorrectionReason($reason);
+        $this->txnRepo->save($txn);
+
+        $this->auditLogger?->log('correction.supplementary', 'transaction', $txn->getId(),
+            ['original_id' => $originalTxnId],
+            ['type' => 'supplementary', 'reason' => $reason, 'lines' => $correctLines],
+            $createdBy);
+
+        return $txn;
+    }
+
+    public function createNegativeEntry(string $originalTxnId, string $reason, string $createdBy, bool $allowControl = false): Transaction
+    {
+        $original = $this->txnRepo->findById($originalTxnId);
+        if (!$original) {
+            throw new \InvalidArgumentException("Không tìm thấy bút toán gốc mã {$originalTxnId}");
+        }
+        if ($original->getStatus() !== 'posted') {
+            throw new \InvalidArgumentException("Chỉ có thể điều chỉnh bút toán đã ghi sổ");
+        }
+
+        $this->pdo->beginTransaction();
+        try {
+            $reverseLines = [];
+            foreach ($original->getLedgerEntries() as $entry) {
+                $acct = $this->accountRepo->findById($entry->getAccountId());
+                $reverseLines[] = [
+                    'account_code' => $acct ? $acct->getCode() : $entry->getAccountId(),
+                    'amount' => $entry->getAmount(),
+                    'is_debit' => !$entry->isDebit(),
+                ];
+            }
+
+            $txn = $this->postEntry(
+                description: "RĐ: Đảo bút toán {$original->getReference()} — {$reason}",
+                reference: '',
+                lines: $reverseLines,
+                createdBy: $createdBy,
+                allowControl: $allowControl,
+                module: 'correction',
+                date: date('Y-m-d'),
+                voucherType: 'JV'
+            );
+
+            $txn->setIsCorrection(true);
+            $txn->setCorrectionType('negative');
+            $txn->setOriginalTransactionId($originalTxnId);
+            $txn->setCorrectionReason($reason);
+            $this->txnRepo->save($txn);
+
+            $original->reverse($createdBy);
+            $this->txnRepo->save($original);
+
+            $this->pdo->commit();
+
+            $this->auditLogger?->log('correction.negative', 'transaction', $txn->getId(),
+                ['original_id' => $originalTxnId, 'original_status' => 'posted'],
+                ['type' => 'negative', 'reason' => $reason, 'reversed_amount' => $txn->getLedgerEntries()],
+                $createdBy);
+
+            return $txn;
+        } catch (\Exception $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
+    }
+
+    public function createAdjustingEntry(string $originalTxnId, array $movingLines, string $reason, string $createdBy, bool $allowControl = false): Transaction
+    {
+        $original = $this->txnRepo->findById($originalTxnId);
+        if (!$original) {
+            throw new \InvalidArgumentException("Không tìm thấy bút toán gốc mã {$originalTxnId}");
+        }
+
+        $txn = $this->postEntry(
+            description: "ĐC: Điều chỉnh bút toán {$original->getReference()} — {$reason}",
+            reference: '',
+            lines: $movingLines,
+            createdBy: $createdBy,
+            allowControl: $allowControl,
+            module: 'correction',
+            date: date('Y-m-d'),
+            voucherType: 'JV'
+        );
+
+        $txn->setIsCorrection(true);
+        $txn->setCorrectionType('adjusting');
+        $txn->setOriginalTransactionId($originalTxnId);
+        $txn->setCorrectionReason($reason);
+        $this->txnRepo->save($txn);
+
+        $this->auditLogger?->log('correction.adjusting', 'transaction', $txn->getId(),
+            ['original_id' => $originalTxnId],
+            ['type' => 'adjusting', 'reason' => $reason, 'lines' => $movingLines],
+            $createdBy);
+
+        return $txn;
+    }
+
+    public function getCorrectionHistory(string $transactionId): array
+    {
+        $corrections = $this->txnRepo->getCorrectionsByOriginalId($transactionId);
+        $result = [];
+        foreach ($corrections as $txn) {
+            $result[] = [
+                'id' => $txn->getId(),
+                'date' => $txn->getDate()->format('Y-m-d'),
+                'reference' => $txn->getReference(),
+                'description' => $txn->getDescription(),
+                'correction_type' => $txn->getCorrectionType(),
+                'correction_reason' => $txn->getCorrectionReason(),
+                'status' => $txn->getStatus(),
+                'created_by' => $txn->getCreatedBy(),
+            ];
+        }
+        return $result;
+    }
+
     // NGHIỆP VỤ: Post bút toán trực tiếp (không qua workflow draft → submit → approve).
     // Dành cho: giao dịch tự động (kết chuyển cuối kỳ, khấu hao TSCĐ, phân bổ chi phí),
     // hoặc nghiệp vụ đã được duyệt trước bên ngoài hệ thống.

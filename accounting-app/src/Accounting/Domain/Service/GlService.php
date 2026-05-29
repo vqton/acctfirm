@@ -310,6 +310,155 @@ class GlService
         ];
     }
 
+    // SỔ CHI TIẾT TÀI KHOẢN (Subsidiary Ledger)
+    //
+    // Input: accountCode, fromDate, toDate, groupBy (optional: 'customer', 'supplier', 'employee', 'project', null)
+    // Output: Grouped by object if groupBy specified, otherwise flat detail (same as getGeneralLedger)
+    //
+    // Khác với sổ cái tổng hợp, sổ chi tiết hiển thị phát sinh tách biệt theo từng
+    // đối tượng hạch toán (khách hàng 131, nhà cung cấp 331, nhân viên 334, dự án, ...)
+    //
+    // ĐỐI SOÁT: Sổ chi tiết phải khớp với sổ cái tổng hợp của cùng tài khoản.
+    // Nếu có chênh lệch → dữ liệu hạch toán bị phân tán.
+    //
+    public function getSubsidiaryLedger(string $accountCode, ?string $fromDate = null, ?string $toDate = null, ?string $groupBy = null): array
+    {
+        $account = $this->accountRepo->findByCode($accountCode);
+        if (!$account) throw new \InvalidArgumentException("Không tìm thấy tài khoản kế toán mã {$accountCode}.");
+
+        $isDebitNormal = in_array($account->getType(), ['asset', 'expense']);
+        $accountId = $account->getId();
+
+        $params = [$accountId];
+        $dateWhere = '';
+        if ($fromDate) { $dateWhere .= ' AND t.created_at >= ?'; $params[] = $fromDate; }
+        if ($toDate) { $dateWhere .= ' AND t.created_at <= ?'; $params[] = $toDate . ' 23:59:59'; }
+
+        // Tính số dư đầu kỳ
+        $openWhere = '';
+        $openParams = [$accountId];
+        if ($fromDate) {
+            $openWhere = ' AND t.created_at < ?';
+            $openParams[] = $fromDate;
+        }
+
+        // Xác định cột object
+        $objectField = '';
+        $objectLabel = '';
+        $objectTable = '';
+        switch ($groupBy) {
+            case 'customer': $objectField = ', le.customer_id, c.code as object_code, c.name as object_name'; $objectLabel = 'Khách hàng'; $objectTable = 'LEFT JOIN customers c ON c.id = le.customer_id'; break;
+            case 'supplier': $objectField = ', le.supplier_id, s.code as object_code, s.name as object_name'; $objectLabel = 'Nhà cung cấp'; $objectTable = 'LEFT JOIN suppliers s ON s.id = le.supplier_id'; break;
+            case 'employee': $objectField = ', le.employee_id, e.code as object_code, e.name as object_name'; $objectLabel = 'Nhân viên'; $objectTable = 'LEFT JOIN employees e ON e.id = le.employee_id'; break;
+            case 'project': $objectField = ', le.project_id, p.code as object_code, p.name as object_name'; $objectLabel = 'Dự án'; $objectTable = 'LEFT JOIN projects p ON p.id = le.project_id'; break;
+        }
+
+        if ($groupBy && !$objectField) {
+            throw new \InvalidArgumentException("Nhóm không hợp lệ: {$groupBy}. Chỉ hỗ trợ: customer, supplier, employee, project.");
+        }
+
+        if ($groupBy) {
+            // Sổ chi tiết có nhóm — query từ ledger_entries với object join
+            $openGroupSql = "
+                SELECT
+                    {$objectField},
+                    COALESCE(SUM(CASE WHEN le.is_debit = 1 THEN le.amount ELSE 0 END), 0) as total_dr,
+                    COALESCE(SUM(CASE WHEN le.is_debit = 0 THEN le.amount ELSE 0 END), 0) as total_cr
+                FROM ledger_entries le
+                JOIN transactions t ON t.id = le.transaction_id
+                {$objectTable}
+                WHERE le.account_id = ? {$openWhere}
+                GROUP BY " . ($groupBy === 'customer' ? 'le.customer_id' : ($groupBy === 'supplier' ? 'le.supplier_id' : ($groupBy === 'employee' ? 'le.employee_id' : 'le.project_id'))) . "
+                HAVING (total_dr + total_cr) > 0
+                ORDER BY object_name ASC
+            ";
+            $openGroups = $this->pdo->prepare($openGroupSql);
+            $openGroups->execute($openParams);
+            $groupOpenBalances = $openGroups->fetchAll(\PDO::FETCH_ASSOC);
+
+            // Query phát sinh trong kỳ có nhóm
+            $periodSql = "
+                SELECT t.id, t.description, t.reference, t.created_at as date,
+                       le.amount, le.is_debit
+                       {$objectField}
+                FROM ledger_entries le
+                JOIN transactions t ON t.id = le.transaction_id
+                {$objectTable}
+                WHERE le.account_id = ? {$dateWhere}
+                ORDER BY t.created_at ASC, le.id ASC
+            ";
+            $periodRows = $this->pdo->prepare($periodSql);
+            $periodRows->execute($params);
+            $rows = $periodRows->fetchAll(\PDO::FETCH_ASSOC);
+
+            // Phát sinh trong kỳ và tính số dư theo từng object
+            $objectGroups = [];
+            foreach ($groupOpenBalances as $gob) {
+                $objKey = $gob['object_code'] ?: 'N/A';
+                $objectGroups[$objKey] = [
+                    'object_code' => $gob['object_code'] ?? '',
+                    'object_name' => $gob['object_name'] ?? '(Không có)',
+                    'opening_balance' => $isDebitNormal
+                        ? ((float)$gob['total_dr'] - (float)$gob['total_cr'])
+                        : ((float)$gob['total_cr'] - (float)$gob['total_dr']),
+                    'entries' => [],
+                    'total_debit' => 0,
+                    'total_credit' => 0,
+                ];
+            }
+
+            foreach ($rows as $r) {
+                $objKey = $r['object_code'] ?: 'N/A';
+                if (!isset($objectGroups[$objKey])) {
+                    $objectGroups[$objKey] = [
+                        'object_code' => $r['object_code'] ?? '',
+                        'object_name' => $r['object_name'] ?? '(Không có)',
+                        'opening_balance' => 0,
+                        'entries' => [],
+                        'total_debit' => 0,
+                        'total_credit' => 0,
+                    ];
+                }
+                $dr = $r['is_debit'] ? (float)$r['amount'] : 0;
+                $cr = $r['is_debit'] ? 0 : (float)$r['amount'];
+                $objectGroups[$objKey]['entries'][] = [
+                    'date' => substr($r['date'], 0, 10),
+                    'reference' => $r['reference'],
+                    'description' => $r['description'],
+                    'debit' => $dr,
+                    'credit' => $cr,
+                ];
+                $objectGroups[$objKey]['total_debit'] += $dr;
+                $objectGroups[$objKey]['total_credit'] += $cr;
+            }
+
+            // Tính số dư cuối
+            foreach ($objectGroups as &$og) {
+                $extra = $isDebitNormal
+                    ? ($og['total_debit'] - $og['total_credit'])
+                    : ($og['total_credit'] - $og['total_debit']);
+                $og['closing_balance'] = round($og['opening_balance'] + $extra, 2);
+            }
+            unset($og);
+            $objectGroups = array_values($objectGroups);
+
+            return [
+                'account_code' => $accountCode,
+                'account_name' => $account->getName(),
+                'account_type' => $account->getType(),
+                'mode' => 'subsidiary',
+                'group_by' => $groupBy,
+                'group_label' => $objectLabel,
+                'from_date' => $fromDate,
+                'to_date' => $toDate,
+                'objects' => $objectGroups,
+            ];
+        }
+
+        // Không có group — trả về sổ cái chi tiết như getGeneralLedger
+        return $this->getGeneralLedger($accountCode, $fromDate, $toDate);
+    }
+
     public function getAccounts(): array
     {
         $stmt = $this->pdo->query("SELECT code, name, type, balance FROM accounts WHERE is_control = 0 ORDER BY code");

@@ -18,4 +18,6 @@ interface TransactionRepositoryInterface
     public function getTransactionsByDateRange(\DateTimeInterface $start, \DateTimeInterface $end): array;
 
     public function getTransactionsByPeriod(string $periodCode): array;
+
+    public function getCorrectionsByOriginalId(string $originalId): array;
 }

@@ -288,6 +288,24 @@ class PeriodService
         ];
     }
 
+    // Lấy checklist đóng kỳ cho giao diện người dùng
+    public function getCloseChecklist(int $id): array
+    {
+        $period = $this->getPeriod($id);
+        $result = $this->canClose($id);
+
+        return [
+            'period_id' => $id,
+            'period_code' => $period['period_code'],
+            'period_name' => $period['name'],
+            'status' => $period['status'],
+            'can_close' => $result['can_close'],
+            'checks' => $result['checks'],
+            'passed_count' => count(array_filter($result['checks'], fn($c) => $c['passed'])),
+            'total_count' => count($result['checks']),
+        ];
+    }
+
     // KHÓA SỔ: Đóng kỳ kế toán — thực hiện các bút toán kết chuyển và khóa sổ
     //
     // Nghiệp vụ: Khi đóng kỳ, hệ thống thực hiện theo thứ tự:

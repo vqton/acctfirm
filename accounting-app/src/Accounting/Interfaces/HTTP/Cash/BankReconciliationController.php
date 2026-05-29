@@ -209,6 +209,35 @@ class BankReconciliationController
         }
     }
 
+    // NGHIỆP VỤ: Import sao kê ngân hàng từ file CSV
+    // Input: multipart/form-data với field 'file' (CSV file) + session_id
+    // Output: { imported, errors, session_id }
+    // Service: BankReconciliationService.importStatementCsv()
+    // Hỗ trợ định dạng CSV từ hầu hết ngân hàng Việt Nam
+    // Rủi ro: File CSV sai mã hóa, sai định dạng → import lỗi. Cần xác nhận trước khi match
+    public function importCsv(int $sessionId): void
+    {
+        Auth::checkCsrf();
+        if (!isset($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
+            JsonResponse::error('Vui lòng chọn file CSV', 400);
+            return;
+        }
+        $content = file_get_contents($_FILES['file']['tmp_name']);
+        if ($content === false || trim($content) === '') {
+            JsonResponse::error('File rỗng hoặc không đọc được', 400);
+            return;
+        }
+        try {
+            $result = $this->recon->importStatementCsv(
+                $sessionId, $content,
+                $_SESSION['user_id'] ?? 'system'
+            );
+            JsonResponse::ok($result);
+        } catch (\InvalidArgumentException $e) {
+            JsonResponse::error($e->getMessage(), 400);
+        }
+    }
+
     public function bankAccounts(): void
     {
         $all = $this->accountRepo->findAll();

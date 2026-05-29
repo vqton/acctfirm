@@ -84,11 +84,16 @@ class CashController
             return;
         }
         try {
+            // THUẾ GTGT: Nếu vat_amount > 0 → hạch toán tách thuế:
+            //   Nợ 111 (tổng) / Có credit_account (chưa thuế) + Có 33311 (VAT)
+            $vatAmount = (float)($data['vat_amount'] ?? 0);
+            $vatRate = (float)($data['vat_rate'] ?? 0);
             $result = $this->cash->recordReceipt(
                 (float)$data['amount'], $data['credit_account_code'],
                 $data['description'] ?? 'Cash receipt',
                 $data['reference'] ?? Helpers::nextVoucherNo('PT'),
-                $data['created_by'] ?? 'system'
+                $data['created_by'] ?? 'system',
+                $vatAmount, $vatRate
             );
             // Save payer info and transaction date
             $txnId = $result['transaction_id'] ?? null;
@@ -145,11 +150,14 @@ class CashController
             return;
         }
         try {
+            $vatAmount = (float)($data['vat_amount'] ?? 0);
+            $vatRate = (float)($data['vat_rate'] ?? 0);
             $result = $this->cash->recordPayment(
                 (float)$data['amount'], $data['debit_account_code'],
                 $data['description'] ?? 'Cash payment',
                 $data['reference'] ?? Helpers::nextVoucherNo('PC'),
-                $data['created_by'] ?? 'system'
+                $data['created_by'] ?? 'system',
+                $vatAmount, $vatRate
             );
             $txnId = $result['transaction_id'] ?? null;
             if ($txnId && ($data['payer_name'] ?? null)) {
@@ -264,11 +272,14 @@ class CashController
             return;
         }
         try {
+            $vatAmount = (float)($data['vat_amount'] ?? 0);
+            $vatRate = (float)($data['vat_rate'] ?? 0);
             $result = $this->cash->recordBankReceipt(
                 (float)$data['amount'], $data['credit_account_code'],
                 $data['description'] ?? 'Bank receipt',
                 $data['reference'] ?? uniqid('bc_'),
-                $data['created_by'] ?? 'system'
+                $data['created_by'] ?? 'system',
+                $vatAmount, $vatRate
             );
             JsonResponse::ok($result, 201);
         } catch (\InvalidArgumentException $e) {
@@ -292,11 +303,14 @@ class CashController
             return;
         }
         try {
+            $vatAmount = (float)($data['vat_amount'] ?? 0);
+            $vatRate = (float)($data['vat_rate'] ?? 0);
             $result = $this->cash->recordBankPayment(
                 (float)$data['amount'], $data['debit_account_code'],
                 $data['description'] ?? 'Bank payment',
                 $data['reference'] ?? uniqid('bn_'),
-                $data['created_by'] ?? 'system'
+                $data['created_by'] ?? 'system',
+                $vatAmount, $vatRate
             );
             JsonResponse::ok($result, 201);
         } catch (\InvalidArgumentException $e) {
@@ -347,11 +361,14 @@ class CashController
             return;
         }
         try {
+            $vatAmount = (float)($data['vat_amount'] ?? 0);
+            $vatRate = (float)($data['vat_rate'] ?? 0);
             $result = $this->cash->recordBankCharge(
                 (float)$data['amount'],
                 $data['description'] ?? 'Bank charge',
                 $data['reference'] ?? uniqid('bn_'),
-                $data['created_by'] ?? 'system'
+                $data['created_by'] ?? 'system',
+                $vatAmount, $vatRate
             );
             JsonResponse::ok($result, 201);
         } catch (\InvalidArgumentException $e) {

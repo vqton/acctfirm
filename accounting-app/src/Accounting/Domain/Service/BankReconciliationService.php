@@ -62,6 +62,147 @@ class BankReconciliationService
     //   loadBookItems load TOÀN BỘ ledger_entries cho tài khoản
     //   Với tài khoản có 10,000+ giao dịch → có thể memory overflow
     //   Cần giới hạn theo kỳ/tháng hoặc pagination
+    // Nhập sao kê ngân hàng từ file CSV
+    //
+    // Input: sessionId, csvContent (raw string), delimiter (default: comma)
+    // Output: { imported: N, errors: [...] }
+    //
+    // Định dạng CSV mặc định (có thể cấu hình):
+    //   Header row: bỏ qua dòng đầu nếu chứa chữ
+    //   Cột: Date, Reference, Description, Amount, Type (credit/debit)
+    //   Amount dương = thu (credit), âm = chi (debit)
+    //
+    // Hỗ trợ các định dạng phổ biến của ngân hàng Việt Nam:
+    //   - Vietcombank, Techcombank, BIDV, ACB, MB Bank, VPBank
+    //   - Tự động phát hiện cột dựa trên header pattern matching
+    //
+    // RỦI RO: File CSV từ ngân hàng có encoding khác (windows-1258, UTF-8 BOM)
+    //   → chạy qua mb_convert_encoding nếu cần
+    public function importStatementCsv(int $sessionId, string $csvContent, string $createdBy, string $delimiter = ','): array
+    {
+        $session = $this->getSessionRaw($sessionId);
+        if (!$session) throw new \InvalidArgumentException("Không tìm thấy phiên đối chiếu: {$sessionId}");
+
+        $lines = explode("\n", $csvContent);
+        $lines = array_filter($lines, fn($l) => trim($l) !== '');
+        if (empty($lines)) throw new \InvalidArgumentException('File CSV rỗng');
+
+        $parsed = [];
+        $errors = [];
+        $hasHeader = false;
+
+        // Phát hiện header row — nếu dòng đầu chứa chữ và không bắt đầu bằng số
+        $firstLine = str_getcsv($lines[0], $delimiter);
+        if (!preg_match('/^\d/', $firstLine[0])) {
+            $hasHeader = true;
+            $headerCols = array_map('strtolower', $firstLine);
+            // Map header cột
+            $colDate = null;
+            $colRef = null;
+            $colDesc = null;
+            $colAmount = null;
+            foreach ($headerCols as $i => $h) {
+                if (preg_match('/ngày|date|posted|transaction|giao dich/i', $h)) $colDate = $i;
+                if (preg_match('/ref|reference|số|so ct|chung tu|mã/i', $h)) $colRef = $i;
+                if (preg_match('/desc|nội dung|diễn giải|content|detail|chi tiết/i', $h)) $colDesc = $i;
+                if (preg_match('/amount|số tiền|tien|giá trị|value|so du|balance/i', $h)) $colAmount = $i;
+            }
+            if ($colAmount === null) {
+                // Fallback: cột cuối cùng là amount
+                $colAmount = count($headerCols) - 1;
+            }
+            $lines2 = array_slice($lines, 1);
+        } else {
+            $lines2 = $lines;
+            // Mặc định: [0]=date, [1]=ref, [2]=desc, [3]=amount, [4]=type
+            $colDate = 0; $colRef = 1; $colDesc = 2; $colAmount = 3;
+        }
+
+        $insert = $this->pdo->prepare(
+            'INSERT INTO bank_reconciliation_items (session_id, source, type, amount, description, reference, transaction_date, created_by)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+        );
+
+        $imported = 0;
+        foreach ($lines2 as $lineIdx => $line) {
+            $cols = str_getcsv($line, $delimiter);
+            $cols = array_map('trim', $cols);
+
+            // Bỏ qua dòng trống hoặc không đủ dữ liệu
+            if (count($cols) < 2) continue;
+
+            try {
+                // Xác định ngày
+                $date = $colDate !== null && isset($cols[$colDate]) ? $this->parseDate($cols[$colDate]) : date('Y-m-d');
+
+                // Xác định reference
+                $ref = $colRef !== null && isset($cols[$colRef]) ? $cols[$colRef] : '';
+
+                // Xác định mô tả
+                $desc = $colDesc !== null && isset($cols[$colDesc]) ? $cols[$colDesc] : ($ref ?: '');
+
+                // Xác định số tiền và loại
+                $amountStr = isset($cols[$colAmount]) ? $cols[$colAmount] : '0';
+                $amountVal = $this->parseAmount($amountStr);
+
+                // Xác định type
+                if ($amountVal >= 0) {
+                    $type = 'receipt';
+                } else {
+                    $type = 'payment';
+                    $amountVal = abs($amountVal);
+                }
+
+                $insert->execute([$sessionId, 'statement', $type, $amountVal, $desc, $ref, $date, $createdBy]);
+                $imported++;
+            } catch (\Throwable $e) {
+                $errors[] = "Dòng " . ($lineIdx + ($hasHeader ? 2 : 1)) . ": " . $e->getMessage();
+            }
+        }
+
+        return ['imported' => $imported, 'errors' => $errors];
+    }
+
+    // Phân tích cú pháp ngày từ CSV (hỗ trợ nhiều định dạng)
+    private function parseDate(string $value): string
+    {
+        $value = trim($value);
+        // dd/mm/yyyy hoặc d/m/yyyy
+        if (preg_match('#^(\d{1,2})/(\d{1,2})/(\d{4})$#', $value, $m)) {
+            return sprintf('%s-%02s-%02s', $m[3], $m[2], $m[1]);
+        }
+        // dd-mm-yyyy
+        if (preg_match('#^(\d{1,2})-(\d{1,2})-(\d{4})$#', $value, $m)) {
+            return sprintf('%s-%02s-%02s', $m[3], $m[2], $m[1]);
+        }
+        // yyyy-mm-dd (ISO)
+        if (preg_match('#^\d{4}-\d{2}-\d{2}$#', $value)) {
+            return $value;
+        }
+        return date('Y-m-d', strtotime($value)) ?: date('Y-m-d');
+    }
+
+    // Phân tích cú pháp số tiền từ CSV (hỗ trợ dấu phân cách)
+    private function parseAmount(string $value): float
+    {
+        $value = trim($value);
+        // Xóa ký tự tiền tệ
+        $value = str_replace(['₫', 'đ', 'VND', 'vnd', '₫', '$', '€'], '', $value);
+        // Xóa dấu ngoặc đơn cho số âm: (1,000,000) = -1000000
+        $negative = false;
+        if (preg_match('/^\((.+)\)$/', $value, $m)) {
+            $negative = true;
+            $value = $m[1];
+        }
+        // Xóa dấu chấm phân cách nghìn (Việt Nam)
+        $value = str_replace('.', '', $value);
+        // Thay dấu phẩy thập phân bằng dấu chấm
+        $value = str_replace(',', '.', $value);
+        $amount = (float)$value;
+        if ($negative) $amount = -$amount;
+        return $amount;
+    }
+
     public function startSession(string $bankAccountCode, string $statementDate, float $statementBalance, string $createdBy): array
     {
         $bank = $this->accountRepo->findByCode($bankAccountCode);

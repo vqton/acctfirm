@@ -8,6 +8,7 @@ $title = 'Sổ cái'; $activeMenu = 'so_cai'; ob_start(); ?>
     <h5>Sổ cái <span class="stats">(General Ledger — Mẫu S05-DN)</span></h5>
     <div class="d-flex gap-2">
         <button class="btn btn-outline-primary btn-sm" onclick="printLedger()"><i class="bi bi-printer"></i> In sổ</button>
+        <button class="btn btn-outline-success btn-sm" onclick="exportCsv()"><i class="bi bi-file-earmark-excel"></i> CSV</button>
     </div>
 </div>
 <div class="card p-3 mb-3 border-0 shadow-sm">
@@ -123,6 +124,16 @@ function getMonthLabel(period) {
     var parts = period.split('-');
     var names = ['', 'Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'];
     return names[parseInt(parts[1])] + ' năm ' + parts[0];
+}
+
+function exportCsv() {
+    var account = $('#accountSelect').val();
+    var from = $('#fromDate').val();
+    var to = $('#toDate').val();
+    var url = '/api/export/csv/ledger?account=' + encodeURIComponent(account);
+    if (from) url += '&from=' + encodeURIComponent(from);
+    if (to) url += '&to=' + encodeURIComponent(to);
+    window.location = url;
 }
 
 function printLedger() {

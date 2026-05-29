@@ -500,6 +500,118 @@ class FsService
         return $numStr === '' ? 0 : (float)$numStr;
     }
 
+    //
+    // BC09 — Thuyết minh Báo cáo tài chính
+    // Tuân thủ Thông tư 99/2025/TT-BTC — Mẫu B09-DN
+    // Cung cấp thông tin bổ sung cho BC01, BC02, BC03:
+    //   - Chính sách kế toán áp dụng
+    //   - Doanh thu theo tháng
+    //   - Chi phí theo yếu tố
+    //   - Tình hình tăng giảm TSCĐ
+    //   - Giao dịch bên liên quan (placeholder)
+    //   - Nợ tiềm tàng (placeholder)
+    //
+    public function tt99(array $params): array
+    {
+        $year = $params['year'] ?? date('Y');
+        $period = $params['period'] ?? $year;
+        $fromDate = $params['fromDate'] ?? $year . '-01-01';
+        $toDate = $params['toDate'] ?? $year . '-12-31';
+
+        // I. Chính sách kế toán
+        $policy = [
+            'accounting_policy' => 'Áp dụng chế độ kế toán theo Thông tư 99/2025/TT-BTC',
+            'currency' => 'VNĐ',
+            'fiscal_year' => $year,
+            'inventory_method' => 'Bình quân gia quyền',
+            'depreciation_method' => 'Đường thẳng',
+            'vat_method' => 'Khấu trừ',
+        ];
+
+        // II. Doanh thu theo tháng (TK 511)
+        $revenueBreakdown = [];
+        for ($m = 1; $m <= 12; $m++) {
+            $ms = str_pad((string)$m, 2, '0', STR_PAD_LEFT);
+            $monthStart = $year . '-' . $ms . '-01';
+            $monthEnd = date('Y-m-d', strtotime('+1 month -1 day', strtotime($monthStart)));
+
+            $stmt = $this->pdo->prepare(
+                "SELECT COALESCE(SUM(le.amount), 0)
+                 FROM ledger_entries le
+                 JOIN transactions t ON t.id = le.transaction_id
+                 JOIN accounts a ON a.id = le.account_id
+                 WHERE a.code = '511' AND t.status = 'posted'
+                 AND le.is_debit = 0
+                 AND t.transaction_date BETWEEN ? AND ?"
+            );
+            $stmt->execute([$monthStart, $monthEnd]);
+            $revenueBreakdown[] = [
+                'month' => $ms,
+                'amount' => (float)$stmt->fetchColumn(),
+            ];
+        }
+
+        // III. Chi phí theo yếu tố
+        $expenseAccounts = [
+            ['code' => '632', 'name' => 'Giá vốn hàng bán'],
+            ['code' => '641', 'name' => 'Chi phí bán hàng'],
+            ['code' => '642', 'name' => 'Chi phí quản lý doanh nghiệp'],
+            ['code' => '635', 'name' => 'Chi phí tài chính'],
+        ];
+        $expenseByNature = [];
+        foreach ($expenseAccounts as $acct) {
+            $stmt = $this->pdo->prepare(
+                "SELECT COALESCE(SUM(le.amount), 0)
+                 FROM ledger_entries le
+                 JOIN transactions t ON t.id = le.transaction_id
+                 JOIN accounts a ON a.id = le.account_id
+                 WHERE a.code = ? AND t.status = 'posted'
+                 AND le.is_debit = 1
+                 AND t.transaction_date BETWEEN ? AND ?"
+            );
+            $stmt->execute([$acct['code'], $fromDate, $toDate]);
+            $expenseByNature[] = [
+                'name' => $acct['name'],
+                'amount' => (float)$stmt->fetchColumn(),
+            ];
+        }
+
+        // IV. Tình hình TSCĐ
+        $assetMovements = [];
+        try {
+            $assetStmt = $this->pdo->query(
+                "SELECT
+                    COALESCE(SUM(original_cost), 0) as total_original_cost,
+                    COALESCE(SUM(accumulated_depreciation), 0) as total_accumulated_depreciation
+                 FROM fixed_assets"
+            );
+            $assetData = $assetStmt->fetch(\PDO::FETCH_ASSOC);
+            if ($assetData) {
+                $assetMovements[] = [
+                    'name' => 'TSCĐ hữu hình',
+                    'original_cost' => (float)$assetData['total_original_cost'],
+                    'accumulated_depreciation' => (float)$assetData['total_accumulated_depreciation'],
+                ];
+            }
+        } catch (\Exception $e) {
+            // fixed_assets table may not exist yet
+        }
+
+        return [
+            'accounting_policy' => $policy['accounting_policy'],
+            'currency' => $policy['currency'],
+            'fiscal_year' => $policy['fiscal_year'],
+            'inventory_method' => $policy['inventory_method'],
+            'depreciation_method' => $policy['depreciation_method'],
+            'vat_method' => $policy['vat_method'],
+            'revenue_breakdown' => $revenueBreakdown,
+            'expense_by_nature' => $expenseByNature,
+            'asset_movements' => $assetMovements,
+            'related_party_transactions' => [],
+            'contingencies' => [],
+        ];
+    }
+
     public function getPeriods(): array
     {
         $rows = $this->pdo->query(

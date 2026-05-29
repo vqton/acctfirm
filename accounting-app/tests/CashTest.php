@@ -101,5 +101,95 @@ foreach ($all as $a) {
 }
 assertEq(round($totalDr, 0), round($totalCr, 0), 'Trial balance: Dr = Cr');
 
+// ── VAT Tests ──
+// NGHIỆP VỤ: THU TIỀN CÓ VAT — bán hàng thu tiền mặt, tổng 11tr (hàng 10tr + VAT 1tr)
+// Hạch toán chuẩn: Nợ 111 (11tr) / Có 511 (10tr) + Có 33311 (1tr)
+echo "\n=== Test 8: Cash receipt with VAT output (Dr 111 — Cr 511 + Cr 33311) ===\n";
+$pdo->exec('UPDATE accounts SET balance = 0');
+$result = $svc->recordReceipt(11000000, '511', 'Cash sale with VAT', 'PT-VAT-001', 'tester', 1000000, 10);
+
+$cash8 = $accountRepo->findByCode('111')->getBalance();
+$rev8 = $accountRepo->findByCode('511')->getBalance();
+$vatOut = $accountRepo->findByCode('33311')->getBalance();
+assertEq(11000000, $cash8, 'Cash (111) = 11,000,000 (total)');
+assertEq(10000000, $rev8, 'Revenue (511) = 10,000,000 (net)');
+assertEq(1000000, $vatOut, 'VAT output (33311) = 1,000,000');
+
+// NGHIỆP VỤ: CHI TIỀN CÓ VAT — mua văn phòng phẩm 5.5tr (hàng 5tr + VAT 0.5tr)
+// Hạch toán chuẩn: Nợ 642 (5tr) + Nợ 1331 (0.5tr) / Có 111 (5.5tr)
+echo "\n=== Test 9: Cash payment with VAT input (Dr 642 + Dr 1331 — Cr 111) ===\n";
+$pdo->exec('UPDATE accounts SET balance = 0');
+// First add enough cash
+$svc->recordReceipt(50000000, '511', 'Initial cash', 'PT-INIT', 'tester');
+$result = $svc->recordPayment(5500000, '642', 'Office supplies with VAT', 'PC-VAT-001', 'tester', 500000, 10);
+
+$cash9 = $accountRepo->findByCode('111')->getBalance();
+$exp9 = $accountRepo->findByCode('642')->getBalance();
+$vatIn = $accountRepo->findByCode('1331')->getBalance();
+assertEq(44500000, $cash9, 'Cash (111) = 44,500,000 (50tr - 5.5tr)');
+assertEq(5000000, $exp9, 'Expense (642) = 5,000,000 (net)');
+assertEq(500000, $vatIn, 'VAT input (1331) = 500,000');
+
+// NGHIỆP VỤ: THU TIỀN QUA NH CÓ VAT — bán hàng thu qua bank 33tr (hàng 30tr + VAT 3tr)
+echo "\n=== Test 10: Bank receipt with VAT output (Dr 112 — Cr 511 + Cr 33311) ===\n";
+$pdo->exec('UPDATE accounts SET balance = 0');
+$result = $svc->recordBankReceipt(33000000, '511', 'Bank sale with VAT', 'BC-VAT-001', 'tester', 3000000, 10);
+
+$bank10 = $accountRepo->findByCode('112')->getBalance();
+$rev10 = $accountRepo->findByCode('511')->getBalance();
+$vatOut10 = $accountRepo->findByCode('33311')->getBalance();
+assertEq(33000000, $bank10, 'Bank (112) = 33,000,000');
+assertEq(30000000, $rev10, 'Revenue (511) = 30,000,000 (net)');
+assertEq(3000000, $vatOut10, 'VAT output (33311) = 3,000,000');
+
+// NGHIỆP VỤ: CHI TIỀN QUA NH CÓ VAT — mua TSCĐ 66tr (hàng 60tr + VAT 6tr)
+echo "\n=== Test 11: Bank payment with VAT input (Dr 211 + Dr 1331 — Cr 112) ===\n";
+$pdo->exec('UPDATE accounts SET balance = 0');
+$svc->recordBankReceipt(100000000, '511', 'Initial bank fund', 'BC-INIT', 'tester');
+$result = $svc->recordBankPayment(66000000, '211', 'Buy FA with VAT', 'BN-VAT-001', 'tester', 6000000, 10);
+
+$bank11 = $accountRepo->findByCode('112')->getBalance();
+$fa11 = $accountRepo->findByCode('211')->getBalance();
+$vatIn11 = $accountRepo->findByCode('1331')->getBalance();
+assertEq(34000000, $bank11, 'Bank (112) = 34,000,000 (100tr - 66tr)');
+assertEq(60000000, $fa11, 'FA (211) = 60,000,000 (net)');
+assertEq(6000000, $vatIn11, 'VAT input (1331) = 6,000,000');
+
+// NGHIỆP VỤ: PHÍ NGÂN HÀNG CÓ VAT — phí 2.2tr (phí 2tr + VAT 0.2tr)
+echo "\n=== Test 12: Bank charge with VAT input (Dr 642 + Dr 1331 — Cr 112) ===\n";
+$result = $svc->recordBankCharge(2200000, 'Bank fee with VAT', 'BN-VAT-002', 'tester', 200000, 10);
+
+$bank12 = $accountRepo->findByCode('112')->getBalance();
+$exp12 = $accountRepo->findByCode('642')->getBalance();
+$vatIn12 = $accountRepo->findByCode('1331')->getBalance();
+assertEq(31800000, $bank12, 'Bank (112) = 31,800,000 (34tr - 2.2tr)');
+assertEq(2000000, $exp12, 'Expense (642) = 2,000,000 (net)');
+assertEq(6200000, $vatIn12, 'VAT input (1331) = 6,200,000 (6tr + 0.2tr)');
+
+// KIỂM TRA Dr = Cr TOÀN HỆ THỐNG SAU CÁC GIAO DỊCH VAT
+echo "\n=== Test 13: Trial balance after VAT transactions ===\n";
+$all = $accountRepo->findAll();
+$totalDr = 0; $totalCr = 0;
+foreach ($all as $a) {
+    $bal = $a->getBalance();
+    if (abs($bal) < 1) continue;
+    if (in_array($a->getType(), ['asset', 'expense'])) {
+        $totalDr += $bal;
+    } else {
+        $totalCr += $bal;
+    }
+}
+assertEq(round($totalDr, 0), round($totalCr, 0), 'Trial balance: Dr = Cr after VAT transactions');
+
+// Ràng buộc: VAT amount > 0 nhưng <= tổng tiền
+echo "\n=== Test 14: VAT amount exceeds total (rejected) ===\n";
+try {
+    $svc->recordReceipt(10000000, '511', 'VAT > total', 'PT-VAT-BAD', 'tester', 15000000, 10);
+    echo "FAIL: VAT > total not rejected\n";
+    $failed++;
+} catch (\InvalidArgumentException $e) {
+    assertTrue(true, 'VAT > total rejected (Dr != Cr)');
+}
+
 echo "\n=== Results: {$total} tests, {$failed} failed ===\n";
 exit($failed > 0 ? 1 : 0);

@@ -35,20 +35,33 @@ class CashService
     // trước khi ghi nhận (Điều 8 Thông tư 219/2013/TT-BTC).
     // Audit trail: Số chứng từ bắt buộc có tiền tố PT (Phiếu thu), kèm chứng từ gốc.
 
-    public function recordReceipt(float $amount, string $creditAccountCode, string $description, string $reference, string $createdBy): array
+    public function recordReceipt(float $amount, string $creditAccountCode, string $description, string $reference, string $createdBy, float $vatAmount = 0, float $vatRate = 0): array
     {
         if ($amount <= 0) throw new \InvalidArgumentException('Số tiền phải lớn hơn 0.');
 
         $creditAccount = $this->accountRepo->findByCode($creditAccountCode);
         if (!$creditAccount) throw new \InvalidArgumentException("Không tìm thấy tài khoản: {$creditAccountCode}");
 
-        
-        $txn = $this->journal->postEntry("Cash receipt: {$description}", $reference, [
-            ['account_code' => '111', 'amount' => $amount, 'is_debit' => true],
-            ['account_code' => $creditAccountCode, 'amount' => $amount, 'is_debit' => false],
-        ], $createdBy);
+        // NGHIỆP VỤ THU TIỀN CÓ VAT:
+        // Nếu vatAmount > 0 → tách thành doanh thu chưa thuế và VAT đầu ra:
+        //   Nợ 111 (tổng tiền)
+        //   Có creditAccount (tiền chưa thuế)
+        //   Có 33311 (VAT đầu ra phải nộp)
+        // Nếu vatAmount = 0 → ghi nhận thẳng (thu hồi công nợ, vốn góp, ...)
+        $lines = ($vatAmount > 0)
+            ? [
+                ['account_code' => '111', 'amount' => $amount, 'is_debit' => true],
+                ['account_code' => $creditAccountCode, 'amount' => $amount - $vatAmount, 'is_debit' => false],
+                ['account_code' => '33311', 'amount' => $vatAmount, 'is_debit' => false],
+            ]
+            : [
+                ['account_code' => '111', 'amount' => $amount, 'is_debit' => true],
+                ['account_code' => $creditAccountCode, 'amount' => $amount, 'is_debit' => false],
+            ];
 
-        return ['transaction_id' => $txn->getId(), 'amount' => $amount, 'type' => 'receipt'];
+        $txn = $this->journal->postEntry("Cash receipt: {$description}", $reference, $lines, $createdBy);
+
+        return ['transaction_id' => $txn->getId(), 'amount' => $amount, 'vat_amount' => $vatAmount, 'type' => 'receipt'];
     }
 
     // ── Cash Payment ──
@@ -64,7 +77,7 @@ class CashService
     // (theo quy định giao dịch thanh toán của NHNN).
     // Audit trail: Số chứng từ bắt buộc có tiền tố PC (Phiếu chi), kèm chứng từ gốc.
 
-    public function recordPayment(float $amount, string $debitAccountCode, string $description, string $reference, string $createdBy): array
+    public function recordPayment(float $amount, string $debitAccountCode, string $description, string $reference, string $createdBy, float $vatAmount = 0, float $vatRate = 0): array
     {
         if ($amount <= 0) throw new \InvalidArgumentException('Số tiền phải lớn hơn 0.');
 
@@ -83,13 +96,26 @@ class CashService
             throw new \InvalidArgumentException("Số dư tiền mặt không đủ: hiện có {$cash->getBalance()}, cần {$amount}");
         }
 
-        
-        $txn = $this->journal->postEntry("Cash payment: {$description}", $reference, [
-            ['account_code' => $debitAccountCode, 'amount' => $amount, 'is_debit' => true],
-            ['account_code' => '111', 'amount' => $amount, 'is_debit' => false],
-        ], $createdBy);
+        // NGHIỆP VỤ CHI TIỀN CÓ VAT:
+        // Nếu vatAmount > 0 → tách thành chi phí chưa thuế và VAT đầu vào:
+        //   Nợ debitAccount (tiền chưa thuế)
+        //   Nợ 1331 (VAT đầu vào được khấu trừ)
+        //   Có 111 (tổng tiền)
+        // Nếu vatAmount = 0 → ghi nhận thẳng (trả nợ NCC, tạm ứng, ...)
+        $lines = ($vatAmount > 0)
+            ? [
+                ['account_code' => $debitAccountCode, 'amount' => $amount - $vatAmount, 'is_debit' => true],
+                ['account_code' => '1331', 'amount' => $vatAmount, 'is_debit' => true],
+                ['account_code' => '111', 'amount' => $amount, 'is_debit' => false],
+            ]
+            : [
+                ['account_code' => $debitAccountCode, 'amount' => $amount, 'is_debit' => true],
+                ['account_code' => '111', 'amount' => $amount, 'is_debit' => false],
+            ];
 
-        return ['transaction_id' => $txn->getId(), 'amount' => $amount, 'type' => 'payment'];
+        $txn = $this->journal->postEntry("Cash payment: {$description}", $reference, $lines, $createdBy);
+
+        return ['transaction_id' => $txn->getId(), 'amount' => $amount, 'vat_amount' => $vatAmount, 'type' => 'payment'];
     }
 
     // ── Bank Deposit (Dr 112 — Cr 111) ──
@@ -156,20 +182,29 @@ class CashService
     // Ảnh hưởng BC01: "Tiền gửi NH" tăng.
     // Audit trail: Bắt buộc đối chiếu với sao kê ngân hàng, lưu giấy báo Có.
 
-    public function recordBankReceipt(float $amount, string $creditAccountCode, string $description, string $reference, string $createdBy): array
+    public function recordBankReceipt(float $amount, string $creditAccountCode, string $description, string $reference, string $createdBy, float $vatAmount = 0, float $vatRate = 0): array
     {
         if ($amount <= 0) throw new \InvalidArgumentException('Số tiền phải lớn hơn 0.');
 
         $creditAccount = $this->accountRepo->findByCode($creditAccountCode);
         if (!$creditAccount) throw new \InvalidArgumentException("Không tìm thấy tài khoản: {$creditAccountCode}");
 
-        
-        $txn = $this->journal->postEntry("Bank receipt: {$description}", $reference, [
-            ['account_code' => '112', 'amount' => $amount, 'is_debit' => true],
-            ['account_code' => $creditAccountCode, 'amount' => $amount, 'is_debit' => false],
-        ], $createdBy);
+        // NGHIỆP VỤ THU TIỀN QUA NH CÓ VAT:
+        // Nếu vatAmount > 0 → tách: Nợ 112 (tổng) / Có creditAccount (net) + Có 33311 (VAT)
+        $lines = ($vatAmount > 0)
+            ? [
+                ['account_code' => '112', 'amount' => $amount, 'is_debit' => true],
+                ['account_code' => $creditAccountCode, 'amount' => $amount - $vatAmount, 'is_debit' => false],
+                ['account_code' => '33311', 'amount' => $vatAmount, 'is_debit' => false],
+            ]
+            : [
+                ['account_code' => '112', 'amount' => $amount, 'is_debit' => true],
+                ['account_code' => $creditAccountCode, 'amount' => $amount, 'is_debit' => false],
+            ];
 
-        return ['transaction_id' => $txn->getId(), 'amount' => $amount, 'type' => 'bank_receipt'];
+        $txn = $this->journal->postEntry("Bank receipt: {$description}", $reference, $lines, $createdBy);
+
+        return ['transaction_id' => $txn->getId(), 'amount' => $amount, 'vat_amount' => $vatAmount, 'type' => 'bank_receipt'];
     }
 
     // ── Bank Payment (Dr counterparty — Cr 112, e.g. supplier paid from bank) ──
@@ -182,7 +217,7 @@ class CashService
     // RỦI RO: Kiểm tra thụ hưởng và tài khoản đích để tránh chuyển nhầm.
     // Audit trail: Bắt buộc lưu ủy nhiệm chi / lệnh chuyển tiền.
 
-    public function recordBankPayment(float $amount, string $debitAccountCode, string $description, string $reference, string $createdBy): array
+    public function recordBankPayment(float $amount, string $debitAccountCode, string $description, string $reference, string $createdBy, float $vatAmount = 0, float $vatRate = 0): array
     {
         if ($amount <= 0) throw new \InvalidArgumentException('Số tiền phải lớn hơn 0.');
 
@@ -194,13 +229,22 @@ class CashService
             throw new \InvalidArgumentException("Số dư ngân hàng không đủ: hiện có {$bank->getBalance()}, cần {$amount}");
         }
 
-        
-        $txn = $this->journal->postEntry("Bank payment: {$description}", $reference, [
-            ['account_code' => $debitAccountCode, 'amount' => $amount, 'is_debit' => true],
-            ['account_code' => '112', 'amount' => $amount, 'is_debit' => false],
-        ], $createdBy);
+        // NGHIỆP VỤ CHI TIỀN QUA NH CÓ VAT:
+        // Nếu vatAmount > 0 → tách: Nợ debitAccount (net) + Nợ 1331 (VAT) / Có 112 (tổng)
+        $lines = ($vatAmount > 0)
+            ? [
+                ['account_code' => $debitAccountCode, 'amount' => $amount - $vatAmount, 'is_debit' => true],
+                ['account_code' => '1331', 'amount' => $vatAmount, 'is_debit' => true],
+                ['account_code' => '112', 'amount' => $amount, 'is_debit' => false],
+            ]
+            : [
+                ['account_code' => $debitAccountCode, 'amount' => $amount, 'is_debit' => true],
+                ['account_code' => '112', 'amount' => $amount, 'is_debit' => false],
+            ];
 
-        return ['transaction_id' => $txn->getId(), 'amount' => $amount, 'type' => 'bank_payment'];
+        $txn = $this->journal->postEntry("Bank payment: {$description}", $reference, $lines, $createdBy);
+
+        return ['transaction_id' => $txn->getId(), 'amount' => $amount, 'vat_amount' => $vatAmount, 'type' => 'bank_payment'];
     }
 
     // ── Bank Interest (Dr 112 — Cr 515) ──
@@ -237,7 +281,7 @@ class CashService
     // hạch toán tách thuế: Nợ 642 (chưa thuế) / Nợ 1331 (thuế) / Có 112.
     // Audit trail: Đối chiếu với sao kê ngân hàng hàng tháng.
 
-    public function recordBankCharge(float $amount, string $description, string $reference, string $createdBy): array
+    public function recordBankCharge(float $amount, string $description, string $reference, string $createdBy, float $vatAmount = 0, float $vatRate = 0): array
     {
         if ($amount <= 0) throw new \InvalidArgumentException('Số tiền phải lớn hơn 0.');
 
@@ -246,13 +290,22 @@ class CashService
             throw new \InvalidArgumentException("Số dư ngân hàng không đủ: hiện có {$bank->getBalance()}, cần {$amount}");
         }
 
-        
-        $txn = $this->journal->postEntry("Bank charge: {$description}", $reference, [
-            ['account_code' => '642', 'amount' => $amount, 'is_debit' => true],
-            ['account_code' => '112', 'amount' => $amount, 'is_debit' => false],
-        ], $createdBy);
+        // NGHIỆP VỤ PHÍ NGÂN HÀNG CÓ VAT:
+        // Nếu vatAmount > 0 → tách: Nợ 642 (net) + Nợ 1331 (VAT) / Có 112 (tổng)
+        $lines = ($vatAmount > 0)
+            ? [
+                ['account_code' => '642', 'amount' => $amount - $vatAmount, 'is_debit' => true],
+                ['account_code' => '1331', 'amount' => $vatAmount, 'is_debit' => true],
+                ['account_code' => '112', 'amount' => $amount, 'is_debit' => false],
+            ]
+            : [
+                ['account_code' => '642', 'amount' => $amount, 'is_debit' => true],
+                ['account_code' => '112', 'amount' => $amount, 'is_debit' => false],
+            ];
 
-        return ['transaction_id' => $txn->getId(), 'amount' => $amount, 'type' => 'bank_charge'];
+        $txn = $this->journal->postEntry("Bank charge: {$description}", $reference, $lines, $createdBy);
+
+        return ['transaction_id' => $txn->getId(), 'amount' => $amount, 'vat_amount' => $vatAmount, 'type' => 'bank_charge'];
     }
 
     // ── Cash in Transit (Dr 113 — Cr 111) ──

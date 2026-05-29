@@ -113,6 +113,11 @@ class PeriodController
         JsonResponse::ok($this->period->canClose($id));
     }
 
+    public function checklist(int $id): void
+    {
+        JsonResponse::ok($this->period->getCloseChecklist($id));
+    }
+
     // NGHIỆP VỤ: Thực hiện kết chuyển cuối kỳ — doanh thu, chi phí → 911 → 421
     // Input: id (URL)
     // Output: { message: 'Closing entries executed' }

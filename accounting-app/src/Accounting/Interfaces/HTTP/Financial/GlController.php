@@ -57,6 +57,25 @@ class GlController
         }
     }
 
+    // NGHIỆP VỤ: Sổ chi tiết tài khoản theo đối tượng (Subsidiary Ledger)
+    // Input: GET ?account=131&from=2025-01-01&to=2025-01-31&group_by=customer|supplier|employee|project
+    // Output: { account, objects: [{object_code, object_name, opening_balance, entries: [{...}], closing_balance}] }
+    // Service: GlService.getSubsidiaryLedger() — nhóm phát sinh theo khách hàng/NCC/NV
+    // Rủi ro: Nếu ledger_entries không có thông tin object, sẽ gom vào '(Không có)'
+    // Mục đích: Kiểm tra chi tiết công nợ theo từng đối tượng (phục vụ đối chiếu GL vs sub-ledger)
+    public function subsidiaryLedger(): void
+    {
+        $account = $_GET['account'] ?? '131';
+        $from = $_GET['from'] ?? null;
+        $to = $_GET['to'] ?? null;
+        $groupBy = $_GET['group_by'] ?? null;
+        try {
+            JsonResponse::ok($this->gl->getSubsidiaryLedger($account, $from, $to, $groupBy));
+        } catch (\InvalidArgumentException $e) {
+            JsonResponse::error($e->getMessage(), 404);
+        }
+    }
+
     public function accounts(): void
     {
         JsonResponse::ok($this->gl->getAccounts());
