@@ -194,6 +194,12 @@ class AccountController
         }
     }
 
+    // ── FS REPORT ──
+    public function fsReport(): void
+    {
+        JsonResponse::ok($this->accountService->getFsMappingReport());
+    }
+
     // ── BRANCH COA ──
     public function branchCoa(): void
     {

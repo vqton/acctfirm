@@ -256,6 +256,7 @@ function defineRoutes(Router $router): void
     $router->get('/api/coa/flat', function() use ($c) { $c['AccountController']->flatList(); });
     $router->get('/api/coa/search', function() use ($c) { $c['AccountController']->search(); });
     $router->get('/api/coa/type/:type', function($type) use ($c) { $c['AccountController']->byType($type); });
+    $router->get('/api/coa/fs-report', function() use ($c) { $c['AccountController']->fsReport(); });
     $router->post('/api/coa', function() use ($c) { $c['AccountController']->create(); });
     $router->post('/api/coa/seed', function() use ($c) { $c['AccountController']->seed(); });
     $router->post('/api/coa/merge', function() use ($c) { $c['AccountController']->merge(); });

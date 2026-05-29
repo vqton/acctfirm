@@ -373,6 +373,54 @@ class AccountService
         return $result;
     }
 
+    // ── FS REPORTING ──
+    // Báo cáo ánh xạ BCTC: tài khoản nào đã có/chưa có chỉ tiêu
+    public function getFsMappingReport(): array
+    {
+        $all = $this->repo->findAll();
+        $mapped = 0; $unmapped = 0;
+        $byType = [];
+        $unmappedList = [];
+
+        foreach ($all as $a) {
+            if (!$a->isStatus()) continue; // Only active accounts
+            if ($a->getAccountClass() === '0') continue; // Off-balance
+
+            if ($a->getFsMappingCode()) {
+                $mapped++;
+                $type = $a->getFsMappingType() ?? 'unknown';
+                $byType[$type][] = $a->getCode();
+            } else {
+                $unmapped++;
+                $unmappedList[] = ['code' => $a->getCode(), 'name' => $a->getName(), 'type' => $a->getType()];
+            }
+        }
+
+        return [
+            'total_active' => $mapped + $unmapped,
+            'mapped' => $mapped,
+            'unmapped' => $unmapped,
+            'completeness_pct' => ($mapped + $unmapped) > 0
+                ? round($mapped / ($mapped + $unmapped) * 100, 1) : 0,
+            'by_type' => $byType,
+            'unmapped_accounts' => $unmappedList,
+        ];
+    }
+
+    // Kiểm tra FS mapping trước khi đóng kỳ — trả về danh sách tài khoản chưa mapping
+    public function validateFsForPeriodClose(): array
+    {
+        $report = $this->getFsMappingReport();
+        if ($report['unmapped'] > 0) {
+            throw new \InvalidArgumentException(
+                'Còn ' . $report['unmapped'] . ' tài khoản đang hoạt động chưa có ánh xạ BCTC. ' .
+                'Vui lòng cập nhật trước khi đóng kỳ. Tài khoản: ' .
+                implode(', ', array_column($report['unmapped_accounts'], 'code'))
+            );
+        }
+        return $report;
+    }
+
     // ── QUERIES ──
     public function getTree(): array
     {

@@ -610,6 +610,22 @@ class PeriodService
     // sẽ phản ánh sai số dư lợi nhuận chưa phân phối.
     public function executeYearEndClose(array $period, string $createdBy): void
     {
+        // Bước 0: Kiểm tra ánh xạ BCTC — tất cả tài khoản active phải có FS mapping
+        // Trước khi khóa sổ cuối năm, đảm bảo mọi tài khoản có ánh xạ BCTC
+        // RỦI RO: Thiếu FS mapping → báo cáo tài chính thiếu chỉ tiêu → sai BC01/02
+        $stmt = $this->pdo->prepare(
+            "SELECT code, name FROM accounts WHERE status = 1 AND (account_class IS NULL OR account_class != '0') AND fs_mapping_code IS NULL LIMIT 20"
+        );
+        $stmt->execute();
+        $unmapped = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+        if (!empty($unmapped)) {
+            $codes = implode(', ', array_column($unmapped, 'code'));
+            throw new \RuntimeException(
+                'Còn ' . count($unmapped) . ' tài khoản chưa có ánh xạ BCTC: ' . $codes .
+                '. Vui lòng cập nhật trước khi khóa sổ cuối năm.'
+            );
+        }
+
         // Lấy số dư tài khoản 421 sau khi kết chuyển (sau executeClosingEntries)
         $accounts = $this->accountRepo->findAll();
         $retainedEarnings = 0;

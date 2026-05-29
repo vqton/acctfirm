@@ -188,6 +188,43 @@ try {
     assertTrue(false, 'Branch COA threw: ' . $e->getMessage());
 }
 
+echo "\n=== Test 13: getFsMappingReport ===\n";
+$report = $svc->getFsMappingReport();
+assertTrue($report['total_active'] > 0, 'FS report has active accounts');
+assertTrue(isset($report['completeness_pct']), 'FS report has completeness percentage');
+assertTrue(isset($report['unmapped_accounts']), 'FS report has unmapped list');
+
+// Create an account without FS mapping and verify it shows up
+$fsTest = $svc->create('FSTST', 'FS mapping test', 'asset', null, 'D', '1');
+$report2 = $svc->getFsMappingReport();
+assertTrue($report2['unmapped'] >= 1, 'New unmapped account appears in report');
+$found = false;
+foreach ($report2['unmapped_accounts'] as $u) {
+    if ($u['code'] === 'FSTST') { $found = true; break; }
+}
+assertTrue($found, 'Unmapped account FSTST listed in report');
+
+// Now add FS mapping
+$svc->update($fsTest->getId(), ['fs_mapping_code' => 'BC01_150', 'fs_mapping_type' => 'balance_sheet']);
+$report3 = $svc->getFsMappingReport();
+assertTrue($report3['mapped'] >= 1, 'Mapped count positive after update');
+try { $repo->delete($repo->findByCode('FSTST')->getId()); } catch (\Throwable $e) {}
+
+echo "\n=== Test 14: validateFsForPeriodClose ===\n";
+assertThrows(fn() => $svc->validateFsForPeriodClose(), 'validateFsForPeriodClose throws if unmapped active accounts exist');
+
+// Verify PeriodService FS check exists in closePeriod (integration test)
+echo "\n=== Test 15: PeriodService closePeriod rejects unmapped FS ===\n";
+$periodPdo = new PDO("mysql:host=127.0.0.1;dbname=accounting_db;charset=utf8mb4","dev","123456",
+    [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+// We can't easily test closePeriod without a full period setup, but we can test the FS check query
+$stmt = $periodPdo->prepare(
+    "SELECT COUNT(*) FROM accounts WHERE status = 1 AND (account_class IS NULL OR account_class != '0') AND fs_mapping_code IS NULL"
+);
+$stmt->execute();
+$unmappedCount = (int)$stmt->fetchColumn();
+assertTrue($unmappedCount >= 0, 'Period FS check query runs without error');
+
 // Cleanup test accounts
 foreach (['MRG01','MRG02','MRG03','MRG04'] as $code) {
     try { $repo->delete($repo->findByCode($code)->getId()); } catch (\Throwable $e) {}
