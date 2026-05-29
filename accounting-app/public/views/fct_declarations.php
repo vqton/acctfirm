@@ -95,6 +95,7 @@ ob_start();
     </div>
     <div class="modal-footer">
         <button class="btn btn-sm btn-outline-success" id="btnFinaliseFct"><i class="bi bi-lock"></i> Khóa tờ khai</button>
+        <button class="btn btn-sm btn-outline-primary" id="btnExportFctCsv"><i class="bi bi-download"></i> Xuất CSV</button>
         <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Đóng</button>
     </div>
 </div></div></div>
@@ -118,7 +119,7 @@ function loadDeclarations() {
         var tbody = $('#declBody').empty();
         d.forEach(function(r) {
             var badge = r.status === 'finalised' ? 'badge-active' : (r.status === 'draft' ? 'badge-warning' : 'badge-inactive');
-            tbody.append('<tr><td>' + r.period + '</td><td class="text-end font-monospace">' + parseInt(r.total_contract_value).toLocaleString() + '</td><td class="text-end font-monospace">' + parseInt(r.total_vat_withholding).toLocaleString() + '</td><td class="text-end font-monospace">' + parseInt(r.total_cit_withholding).toLocaleString() + '</td><td class="text-end">' + r.contract_count + '</td><td><span class="badge-status ' + badge + '">' + esc(r.status) + '</span></td><td><button class="btn btn-sm btn-outline-primary" onclick="viewFctDetail(\'' + r.id + '\')"><i class="bi bi-eye"></i></button></td></tr>');
+            tbody.append('<tr><td>' + r.period + '</td><td class="text-end font-monospace">' + parseInt(r.total_contract_value).toLocaleString() + '</td><td class="text-end font-monospace">' + parseInt(r.total_vat_withholding).toLocaleString() + '</td><td class="text-end font-monospace">' + parseInt(r.total_cit_withholding).toLocaleString() + '</td><td class="text-end">' + r.contract_count + '</td><td><span class="badge-status ' + badge + '">' + esc(r.status) + '</span></td><td><button class="btn btn-sm btn-outline-primary" onclick="viewFctDetail(\'' + r.id + '\')"><i class="bi bi-eye"></i></button> <button class="btn btn-sm btn-outline-success" onclick="exportFctCsv(\'' + r.id + '\')"><i class="bi bi-download"></i></button></td></tr>');
         });
     });
 }
@@ -145,6 +146,12 @@ function viewFctDetail(id) {
         $('#detailModal').modal('show');
     });
 }
+
+function exportFctCsv(id) {
+    window.location.href = '/api/fct/declarations/' + id + '/export';
+}
+
+$('#btnExportFctCsv').click(function() { if (currentFctDetailId) exportFctCsv(currentFctDetailId); });
 
 $('#btnFinaliseFct').click(function() {
     if (!currentFctDetailId || !confirm('Xác nhận khóa tờ khai FCT?')) return;

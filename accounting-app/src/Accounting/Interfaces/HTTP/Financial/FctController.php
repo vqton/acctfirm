@@ -110,6 +110,34 @@ class FctController
         }
     }
 
+    public function export(string $id): void
+    {
+        Auth::requirePermission('tax', 'read');
+        $decl = $this->fct->getDeclaration($id);
+        if (!$decl) { JsonResponse::error('Không tìm thấy tờ khai FCT', 404); return; }
+        // Build CSV from declaration data
+        $headers = ['Kỳ', 'Số HĐ', 'Nhà thầu', 'Quốc gia', 'Loại dịch vụ',
+            'Giá trị HĐ', 'VAT khấu trừ', 'TNDN khấu trừ', 'Thanh toán ròng', 'Trạng thái'];
+        $contracts = $this->fct->getContracts();
+        $rows = [];
+        foreach ($contracts as $c) {
+            $calc = $this->fct->calculateWithholding($c['service_type'], (float)$c['contract_value']);
+            $rows[] = [
+                $decl['period'], $c['contract_no'], $c['contractor_name'],
+                $c['contractor_country'], $c['service_type'],
+                (float)$c['contract_value'], $calc['vat_withholding'],
+                $calc['cit_withholding'], $calc['net_payment'], $c['status'],
+            ];
+        }
+        $csvService = $GLOBALS['container']['ReportExportService'] ?? null;
+        if (!$csvService) { JsonResponse::error('Dịch vụ xuất báo cáo không khả dụng', 500); return; }
+        $result = $csvService->exportCsv($headers, $rows, "fct_declaration_{$id}.csv");
+        header('Content-Type: ' . $result['mime']);
+        header('Content-Disposition: attachment; filename="' . $result['filename'] . '"');
+        echo $result['content'];
+        exit;
+    }
+
     public function view(): void
     {
         require __DIR__ . '/../../../../../public/views/fct_declarations.php';

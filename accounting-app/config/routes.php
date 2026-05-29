@@ -647,6 +647,7 @@ function defineRoutes(Router $router): void
     $router->get('/api/fct/declarations/:id', function($id) use ($c) { $c['FctController']->getDeclaration($id); });
     $router->post('/api/fct/declarations/prepare', function() use ($c) { $c['FctController']->prepareDeclaration(); });
     $router->post('/api/fct/declarations/:id/finalise', function($id) use ($c) { $c['FctController']->finaliseDeclaration($id); });
+    $router->get('/api/fct/declarations/:id/export', function($id) use ($c) { $c['FctController']->export($id); });
 
     $router->get('/kho/kiem-ke', function() { require __DIR__ . '/../public/views/physical_count.php'; });
     $router->get('/api/physical-count/sessions', function() use ($c) { $c['PhysicalCountController']->sessions(); });
