@@ -186,7 +186,7 @@ function createContainer(): array
     $payrollService = new PayrollService($payrollEntryRepository, $payrollPeriodRepository, $salaryComponentRepository, $employeeRepository, $journalService, $pdo, $auditLogger);
 
     // === COA SERVICE: Business logic cho Hệ thống Tài khoản ===
-    $accountService = new AccountService($accountRepository, $auditLogger);
+    $accountService = new AccountService($accountRepository, $auditLogger, $journalService);
 
     // === LỚP CONTROLLER: Tiếp nhận request từ Router, gọi Service ===
     // Controller KHÔNG chứa business logic — chỉ validate input + format response

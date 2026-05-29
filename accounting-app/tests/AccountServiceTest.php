@@ -35,11 +35,10 @@ function assertThrows(callable $fn, string $msg): void {
 }
 
 // Cleanup any leftover test accounts
-try { $repo->delete($repo->findByCode('SVC001')?->getId()); } catch (\Throwable $e) {}
-try { $repo->delete($repo->findByCode('SVC002')?->getId()); } catch (\Throwable $e) {}
-try { $repo->delete($repo->findByCode('SVC003')?->getId()); } catch (\Throwable $e) {}
-try { $repo->delete($repo->findByCode('SVC004')?->getId()); } catch (\Throwable $e) {}
-try { $repo->delete($repo->findByCode('SVC005')?->getId()); } catch (\Throwable $e) {}
+foreach (['SVC001','SVC002','SVC003','SVC004','SVC005','SVC006','SVC007',
+    'MRG01','MRG02','MRG03','MRG04','SVC0051'] as $code) {
+    try { $repo->delete($repo->findByCode($code)?->getId()); } catch (\Throwable $e) {}
+}
 
 echo "\n=== Test 1: AccountService::create ===\n";
 $a = $svc->create('SVC001', 'Service Test 1', 'asset', null, 'D', '1');
@@ -160,6 +159,37 @@ assertTrue($controls[0]->isControl(), 'First result is control');
 
 // Cleanup all test accounts
 foreach (['SVC001','SVC003','SVC004','SVC005','SVC0051','SVC006','SVC007'] as $code) {
+    try { $repo->delete($repo->findByCode($code)->getId()); } catch (\Throwable $e) {}
+}
+
+echo "\n=== Test 10: mergeAccounts validation ===\n";
+$m1 = $svc->create('MRG01', 'Merge source 1', 'asset', null, 'D', '1');
+$m2 = $svc->create('MRG02', 'Merge source 2', 'asset', null, 'D', '1');
+$m3 = $svc->create('MRG03', 'Merge target', 'asset', null, 'D', '1');
+$m4 = $svc->create('MRG04', 'Equity merge target', 'equity', null, 'C', '4');
+
+assertThrows(fn() => $svc->mergeAccounts(['MRG01'], 'MRG03', 'admin', 'test'), 'Merge needs 2+ sources');
+assertThrows(fn() => $svc->mergeAccounts(['NONEXIST', 'MRG02'], 'MRG03', 'admin', 'test'), 'Merge nonexistent source throws');
+assertThrows(fn() => $svc->mergeAccounts(['MRG01', 'MRG04'], 'MRG03', 'admin', 'test'), 'Merge diff type sources throws');
+
+// Cross-type merge without override
+assertThrows(fn() => $svc->mergeAccounts(['MRG01', 'MRG02'], 'MRG04', 'admin', 'test'), 'Cross-type merge without CFO throws');
+
+echo "\n=== Test 11: splitAccount validation ===\n";
+assertThrows(fn() => $svc->splitAccount('NONEXIST', [['code' => 'MRG03', 'amount' => 100]], 'admin', 'test'), 'Split nonexistent throws');
+assertThrows(fn() => $svc->splitAccount('MRG01', [['code' => 'MRG03', 'amount' => 100]], 'admin', 'test'), 'Split with wrong sum throws (balance=0, target=100)');
+
+echo "\n=== Test 12: createBranchCOA ===\n";
+try {
+    $result = $svc->createBranchCOA(999, 'test');
+    assertTrue($result['copied'] >= 100, 'Branch COA copies at least 100 accounts');
+    assertTrue($result['skipped'] > 0, 'Some accounts skipped (equity/IC/911)');
+} catch (\Throwable $e) {
+    assertTrue(false, 'Branch COA threw: ' . $e->getMessage());
+}
+
+// Cleanup test accounts
+foreach (['MRG01','MRG02','MRG03','MRG04'] as $code) {
     try { $repo->delete($repo->findByCode($code)->getId()); } catch (\Throwable $e) {}
 }
 

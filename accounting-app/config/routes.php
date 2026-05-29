@@ -258,6 +258,9 @@ function defineRoutes(Router $router): void
     $router->get('/api/coa/type/:type', function($type) use ($c) { $c['AccountController']->byType($type); });
     $router->post('/api/coa', function() use ($c) { $c['AccountController']->create(); });
     $router->post('/api/coa/seed', function() use ($c) { $c['AccountController']->seed(); });
+    $router->post('/api/coa/merge', function() use ($c) { $c['AccountController']->merge(); });
+    $router->post('/api/coa/split', function() use ($c) { $c['AccountController']->split(); });
+    $router->post('/api/coa/branch', function() use ($c) { $c['AccountController']->branchCoa(); });
     $router->get('/api/coa/:id', function($id) use ($c) { $c['AccountController']->get($id); });
     $router->put('/api/coa/:id', function($id) use ($c) { $c['AccountController']->update($id); });
     $router->delete('/api/coa/:id', function($id) use ($c) { $c['AccountController']->delete($id); });

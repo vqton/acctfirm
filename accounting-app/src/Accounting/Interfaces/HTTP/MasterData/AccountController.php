@@ -152,4 +152,63 @@ class AccountController
         $result = $this->accountService->seedFromArray($coa);
         JsonResponse::ok(['message' => 'Đã khởi tạo dữ liệu', 'new' => $result['new'], 'updated' => $result['updated']]);
     }
+
+    // ── MERGE ──
+    public function merge(): void
+    {
+        $data = json_decode(file_get_contents('php://input'), true);
+        if (!$data || !isset($data['source_codes'], $data['target_code'])) {
+            JsonResponse::error('Vui lòng nhập tài khoản nguồn và tài khoản đích', 400); return;
+        }
+        try {
+            $result = $this->accountService->mergeAccounts(
+                $data['source_codes'],
+                $data['target_code'],
+                $data['approved_by'] ?? ($_SERVER['PHP_AUTH_USER'] ?? 'system'),
+                $data['reason'] ?? 'Gộp tài khoản',
+                (bool)($data['cf_override'] ?? false)
+            );
+            JsonResponse::ok($result);
+        } catch (\InvalidArgumentException $e) {
+            JsonResponse::error($e->getMessage(), 422);
+        }
+    }
+
+    // ── SPLIT ──
+    public function split(): void
+    {
+        $data = json_decode(file_get_contents('php://input'), true);
+        if (!$data || !isset($data['source_code'], $data['targets'])) {
+            JsonResponse::error('Vui lòng nhập tài khoản nguồn và danh sách tài khoản đích', 400); return;
+        }
+        try {
+            $result = $this->accountService->splitAccount(
+                $data['source_code'],
+                $data['targets'],
+                $data['approved_by'] ?? ($_SERVER['PHP_AUTH_USER'] ?? 'system'),
+                $data['reason'] ?? 'Tách tài khoản'
+            );
+            JsonResponse::ok($result);
+        } catch (\InvalidArgumentException $e) {
+            JsonResponse::error($e->getMessage(), 422);
+        }
+    }
+
+    // ── BRANCH COA ──
+    public function branchCoa(): void
+    {
+        $data = json_decode(file_get_contents('php://input'), true);
+        if (!$data || !isset($data['entity_id'])) {
+            JsonResponse::error('Vui lòng nhập ID đơn vị kế toán', 400); return;
+        }
+        try {
+            $result = $this->accountService->createBranchCOA(
+                (int)$data['entity_id'],
+                $data['created_by'] ?? ($_SERVER['PHP_AUTH_USER'] ?? 'system')
+            );
+            JsonResponse::ok($result);
+        } catch (\InvalidArgumentException $e) {
+            JsonResponse::error($e->getMessage(), 422);
+        }
+    }
 }
