@@ -134,9 +134,9 @@ $(function() {
         var lines = '';
         var totalDr = 0, totalCr = 0;
         // Step 1: Remove asset
-        lines += '<tr><td>2141</td><td>HM lũy kế TSCĐ</td><td class="text-end">'+accum.toLocaleString()+'</td><td></td></tr>';
+        lines += '<tr><td>214</td><td>HM lũy kế TSCĐ</td><td class="text-end">'+accum.toLocaleString()+'</td><td></td></tr>';
         totalDr += accum;
-        lines += '<tr><td>2112</td><td>Nguyên giá TSCĐ</td><td></td><td class="text-end">'+ng.toLocaleString()+'</td></tr>';
+        lines += '<tr><td>211</td><td>Nguyên giá TSCĐ</td><td></td><td class="text-end">'+ng.toLocaleString()+'</td></tr>';
         totalCr += ng;
         if (nbv > 0) {
             if (type === 'sale') {

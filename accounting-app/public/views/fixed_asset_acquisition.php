@@ -98,7 +98,7 @@ $(function() {
         data.forEach(function(d){ var o=document.createElement('option'); o.value=d.id; o.textContent=d.name; sel.appendChild(o); });
     });
 
-    var acctNames = {purchase_cash:{dr:'1111',cr:'111',label:'Tiền mặt'},purchase_bank:{dr:'1121',cr:'112',label:'Tiền gửi NH'},purchase_credit:{dr:'331',cr:'331',label:'Phải trả NCC'},capital_contribution:{dr:'41111',cr:'411',label:'Vốn góp'},gift:{dr:'711',cr:'711',label:'Thu nhập khác'}};
+    var acctNames = {purchase_cash:{dr:'111',label:'Tiền mặt'},purchase_bank:{dr:'112',label:'Tiền gửi NH'},purchase_credit:{dr:'331',label:'Phải trả NCC'},capital_contribution:{dr:'411',label:'Vốn góp'},gift:{dr:'711',label:'Thu nhập khác'}};
 
     function updatePreview() {
         var type = document.getElementById('f_acquisition_type').value;
@@ -110,8 +110,11 @@ $(function() {
         var tfoot = document.getElementById('journalTotal');
         if (!ng) { prev.classList.add('d-none'); return; }
         prev.classList.remove('d-none');
+        var cat = document.querySelector('[name=fa_category]').value;
+        var faAcct = cat === 'intangible' ? '213' : cat === 'finance_lease' ? '212' : '211';
+        var faLabel = cat === 'intangible' ? 'TSCĐ vô hình' : cat === 'finance_lease' ? 'TSCĐ thuê TC' : 'TSCĐ hữu hình';
         var lines = '';
-        lines += '<tr><td>2112</td><td>Máy móc, thiết bị</td><td class="text-end">'+ng.toLocaleString()+'</td><td></td></tr>';
+        lines += '<tr><td>'+faAcct+'</td><td>'+faLabel+'</td><td class="text-end">'+ng.toLocaleString()+'</td><td></td></tr>';
         if (vat > 0) lines += '<tr><td>1332</td><td>Thuế GTGT TSCĐ</td><td class="text-end">'+vat.toLocaleString()+'</td><td></td></tr>';
         lines += '<tr><td>'+acct.dr+'</td><td>'+acct.label+'</td><td></td><td class="text-end">'+(ng+vat).toLocaleString()+'</td></tr>';
         tbody.innerHTML = lines;
