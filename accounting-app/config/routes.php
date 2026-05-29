@@ -617,6 +617,8 @@ function defineRoutes(Router $router): void
     $router->get('/api/vat/declarations/:id', function($id) use ($c) { $c['VatController']->get($id); });
     $router->post('/api/vat/declarations/prepare', function() use ($c) { $c['VatController']->prepare(); });
     $router->post('/api/vat/declarations/:id/finalise', function($id) use ($c) { $c['VatController']->finalise($id); });
+    $router->get('/api/vat/scan-non-deductible/:period', function($period) use ($c) { $c['VatController']->scanNonDeductible($period); });
+    $router->get('/api/vat/reconcile/:period', function($period) use ($c) { $c['VatController']->reconcile($period); });
 
     // === QUYẾT TOÁN THUẾ TNDN ===
     // CIT Finalization — tính thu nhập chịu thuế và thuế TNDN phải nộp
@@ -627,6 +629,8 @@ function defineRoutes(Router $router): void
     $router->get('/api/cit/calculations/:id', function($id) use ($c) { $c['CitController']->get($id); });
     $router->post('/api/cit/calculations/prepare', function() use ($c) { $c['CitController']->prepare(); });
     $router->post('/api/cit/calculations/:id/finalise', function($id) use ($c) { $c['CitController']->finalise($id); });
+    $router->get('/api/cit/scan-non-deductible/:period', function($period) use ($c) { $c['CitController']->scanNonDeductible($period); });
+    $router->get('/api/cit/loss-carryforward/:period', function($period) use ($c) { $c['CitController']->lossCarryforward($period); });
 
     // === THUẾ NHÀ THẦU NƯỚC NGOÀI (FCT) ===
     // Foreign Contractor Tax — khấu trừ thuế trước khi thanh toán cho nhà thầu nước ngoài

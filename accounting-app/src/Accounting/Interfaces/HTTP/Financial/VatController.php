@@ -50,6 +50,18 @@ class VatController
         }
     }
 
+    public function scanNonDeductible(string $period): void
+    {
+        Auth::requirePermission('tax', 'read');
+        JsonResponse::ok($this->vat->scanNonDeductibleVat($period));
+    }
+
+    public function reconcile(string $period): void
+    {
+        Auth::requirePermission('tax', 'read');
+        JsonResponse::ok($this->vat->reconcileVatDeclaration($period));
+    }
+
     public function view(): void
     {
         require __DIR__ . '/../../../../../public/views/vat_declarations.php';

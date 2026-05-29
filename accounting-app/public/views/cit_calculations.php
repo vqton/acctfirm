@@ -8,6 +8,24 @@ ob_start();
     <div>
         <input type="month" id="period" class="form-control d-inline-block" style="width:auto;display:inline" value="<?= date('Y-m') ?>">
         <button class="btn btn-primary btn-sm" id="btnPrepare"><i class="bi bi-calculator"></i> Chuẩn bị quyết toán TNDN</button>
+        <button class="btn btn-outline-warning btn-sm" id="btnScanNonDeductible"><i class="bi bi-search"></i> Chi phí không được trừ</button>
+        <button class="btn btn-outline-info btn-sm" id="btnLoss"><i class="bi bi-arrow-left-right"></i> Chuyển lỗ</button>
+    </div>
+</div>
+
+<div id="nonDeductibleSection" class="card mb-3 d-none">
+    <div class="card-header bg-warning text-dark py-1"><h6 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Chi phí không được trừ khi tính thuế TNDN</h6></div>
+    <div class="card-body p-2">
+        <div class="row g-2">
+            <div class="col-md-6"><table class="table table-sm table-bordered mb-0"><thead><tr><th>Chỉ tiêu</th><th>Phát sinh</th><th>Hạn mức</th><th>Vượt</th></tr></thead><tbody id="nonDeductibleBody"></tbody></table></div>
+        </div>
+    </div>
+</div>
+
+<div id="lossSection" class="card mb-3 d-none">
+    <div class="card-header bg-info text-white py-1"><h6 class="mb-0"><i class="bi bi-arrow-left-right"></i> Lỗ luân chuyển</h6></div>
+    <div class="card-body p-2">
+        <table class="table table-sm table-bordered mb-0"><thead><tr><th>Kỳ phát sinh lỗ</th><th>Số lỗ gốc</th><th>Đã sử dụng</th><th>Còn lại</th><th>Hạn sử dụng</th><th>Trạng thái</th></tr></thead><tbody id="lossBody"><tr><td colspan="6" class="text-muted text-center">Chưa có dữ liệu</td></tr></tbody></table>
     </div>
 </div>
 
@@ -116,6 +134,41 @@ $('#btnPrepare').click(function() {
     });
 });
 
-$(document).ready(function() { loadData(); });
+    // === Chi phí không được trừ ===
+    $('#btnScanNonDeductible').click(function() {
+        var period = $('#period').val();
+        var btn = $(this).prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
+        $.get('/api/cit/scan-non-deductible/' + period, function(r) {
+            var tbody = $('#nonDeductibleBody').empty();
+            tbody.append('<tr><td>Chi phí quảng cáo (641)</td><td class="text-end font-monospace">' + parseInt(r.advertising_expense).toLocaleString() + '</td><td class="text-end font-monospace">' + parseInt(r.advertising_limit_10pct).toLocaleString() + '</td><td class="text-end font-monospace text-danger' + (r.advertising_excess_non_deductible > 0 ? ' fw-bold' : '') + '">' + parseInt(r.advertising_excess_non_deductible).toLocaleString() + '</td></tr>');
+            tbody.append('<tr><td>Chi phí lãi vay (635)</td><td class="text-end font-monospace">' + parseInt(r.interest_expense).toLocaleString() + '</td><td class="text-end font-monospace">' + parseInt(r.interest_limit_30pct).toLocaleString() + '</td><td class="text-end font-monospace text-danger' + (r.interest_excess_non_deductible > 0 ? ' fw-bold' : '') + '">' + parseInt(r.interest_excess_non_deductible).toLocaleString() + '</td></tr>');
+            tbody.append('<tr class="fw-bold"><td>Tổng chi phí không được trừ</td><td colspan="3" class="text-end font-monospace text-danger">' + parseInt(r.total_non_deductible).toLocaleString() + '</td></tr>');
+            $('#nonDeductibleSection').removeClass('d-none');
+        }).fail(function(x) { showToast('Lỗi tải dữ liệu','error'); })
+        .always(function() { btn.prop('disabled', false).html('<i class="bi bi-search"></i> Chi phí không được trừ'); });
+    });
+
+    // === Chuyển lỗ ===
+    $('#btnLoss').click(function() {
+        var period = $('#period').val();
+        var btn = $(this).prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
+        $.get('/api/cit/loss-carryforward/' + period, function(r) {
+            var tbody = $('#lossBody').empty();
+            if (!r.losses || r.losses.length === 0) {
+                tbody.html('<tr><td colspan="6" class="text-success text-center">Không có lỗ luân chuyển</td></tr>');
+            } else {
+                r.losses.forEach(function(l) {
+                    var expiry = new Date(l.period);
+                    expiry.setFullYear(expiry.getFullYear() + 5);
+                    var active = l.remaining_amount > 0 && expiry > new Date();
+                    tbody.append('<tr><td>' + l.period + '</td><td class="text-end font-monospace">' + parseInt(l.loss_amount).toLocaleString() + '</td><td class="text-end font-monospace">' + parseInt((l.loss_amount - l.remaining_amount)).toLocaleString() + '</td><td class="text-end font-monospace">' + parseInt(l.remaining_amount).toLocaleString() + '</td><td>' + expiry.getFullYear() + '</td><td><span class="badge bg-' + (active ? 'warning' : 'secondary') + '">' + (active ? 'Có thể chuyển' : 'Hết hạn') + '</span></td></tr>');
+                });
+            }
+            $('#lossSection').removeClass('d-none');
+        }).fail(function(x) { showToast('Lỗi tải dữ liệu','error'); })
+        .always(function() { btn.prop('disabled', false).html('<i class="bi bi-arrow-left-right"></i> Chuyển lỗ'); });
+    });
+
+    $(document).ready(function() { loadData(); });
 </script>
 <?php $content = ob_get_clean(); require __DIR__ . '/layout.php'; ?>

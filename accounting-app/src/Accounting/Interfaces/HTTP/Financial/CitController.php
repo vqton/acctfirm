@@ -50,6 +50,35 @@ class CitController
         }
     }
 
+    public function scanNonDeductible(string $period): void
+    {
+        Auth::requirePermission('tax', 'read');
+        // Auto-detect revenue from ledger for scan
+        $pdo = $GLOBALS['container']['pdo'] ?? null;
+        $revenue = 0;
+        if ($pdo) {
+            $periodStart = $period . '-01';
+            $nextPeriod = date('Y-m', strtotime('+1 month', strtotime($periodStart)));
+            $periodEnd = date('Y-m-d', strtotime('-1 day', strtotime($nextPeriod . '-01')));
+            $stmtRev = $pdo->prepare(
+                "SELECT COALESCE(SUM(le.amount), 0) FROM ledger_entries le
+                 JOIN transactions t ON t.id = le.transaction_id
+                 JOIN accounts a ON a.id = le.account_id
+                 WHERE a.code = '511' AND t.status = 'posted'
+                 AND t.transaction_date BETWEEN ? AND ? AND le.is_debit = 0"
+            );
+            $stmtRev->execute([$periodStart, $periodEnd]);
+            $revenue = (float)$stmtRev->fetchColumn();
+        }
+        JsonResponse::ok($this->cit->scanNonDeductibleExpenses($period, $revenue));
+    }
+
+    public function lossCarryforward(string $period): void
+    {
+        Auth::requirePermission('tax', 'read');
+        JsonResponse::ok($this->cit->getLossCarryforward($period));
+    }
+
     public function view(): void
     {
         require __DIR__ . '/../../../../../public/views/cit_calculations.php';

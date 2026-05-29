@@ -8,6 +8,27 @@ ob_start();
     <div>
         <input type="month" id="period" class="form-control d-inline-block" style="width:auto;display:inline" value="<?= date('Y-m') ?>">
         <button class="btn btn-primary btn-sm" id="btnPrepare"><i class="bi bi-file-earmark-plus"></i> Chuẩn bị tờ khai</button>
+        <button class="btn btn-outline-danger btn-sm" id="btnScanNonDeductible"><i class="bi bi-search"></i> VAT không được khấu trừ</button>
+        <button class="btn btn-outline-info btn-sm" id="btnReconcile"><i class="bi bi-arrow-left-right"></i> Đối chiếu GL</button>
+    </div>
+</div>
+
+<div id="nonDeductibleSection" class="card mb-3 d-none">
+    <div class="card-header bg-danger text-white py-1"><h6 class="mb-0"><i class="bi bi-exclamation-triangle"></i> VAT không được khấu trừ (hóa đơn ≥ 5tr thanh toán tiền mặt)</h6></div>
+    <div class="card-body p-2">
+        <table class="table table-sm table-bordered mb-0"><thead><tr><th>Hóa đơn</th><th>Ngày</th><th>Giá trị</th><th>Tiền thuế</th><th>TK tiền</th></tr></thead><tbody id="nonDeductibleBody"><tr><td colspan="5" class="text-muted text-center">Chưa có dữ liệu</td></tr></tbody></table>
+    </div>
+</div>
+
+<div id="reconcileSection" class="card mb-3 d-none">
+    <div class="card-header bg-info text-white py-1"><h6 class="mb-0"><i class="bi bi-arrow-left-right"></i> Đối chiếu GL vs tờ khai</h6></div>
+    <div class="card-body p-2">
+        <div class="row g-2">
+            <div class="col-md-6">
+                <table class="table table-sm table-bordered mb-0"><thead><tr><th>Chỉ tiêu</th><th>Tờ khai</th><th>GL</th><th>Chênh lệch</th></tr></thead><tbody id="reconcileBody"></tbody></table>
+            </div>
+            <div class="col-md-6"><div id="reconcileMismatch" class="alert d-none"></div></div>
+        </div>
     </div>
 </div>
 
@@ -92,6 +113,50 @@ $('#btnPrepare').click(function() {
     });
 });
 
-$(document).ready(function() { loadData(); });
+    // === VAT không được khấu trừ ===
+    $('#btnScanNonDeductible').click(function() {
+        var period = $('#period').val();
+        var btn = $(this).prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
+        $.get('/api/vat/scan-non-deductible/' + period, function(data) {
+            var tbody = $('#nonDeductibleBody').empty();
+            if (!data || data.length === 0) {
+                tbody.html('<tr><td colspan="5" class="text-success text-center">Không phát hiện VAT không được khấu trừ</td></tr>');
+            } else {
+                data.forEach(function(r) {
+                    tbody.append('<tr><td>' + esc(r.invoice_number) + '</td><td>' + (r.invoice_date||'') + '</td><td class="text-end font-monospace">' + parseInt(r.total_amount).toLocaleString() + '</td><td class="text-end font-monospace">' + parseInt(r.vat_amount).toLocaleString() + '</td><td>' + esc(r.cash_account_code) + '</td></tr>');
+                });
+            }
+            $('#nonDeductibleSection').removeClass('d-none');
+        }).fail(function(x) { showToast('Lỗi tải dữ liệu','error'); })
+        .always(function() { btn.prop('disabled', false).html('<i class="bi bi-search"></i> VAT không được khấu trừ'); });
+    });
+
+    // === Đối chiếu GL ===
+    $('#btnReconcile').click(function() {
+        var period = $('#period').val();
+        var btn = $(this).prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
+        $.get('/api/vat/reconcile/' + period, function(r) {
+            var tbody = $('#reconcileBody').empty();
+            var rows = [
+                {label:'VAT đầu vào (1331)', decl:r.declaration.vat_input, gl:r.general_ledger.vat_input_1331, diff:r.difference.vat_input},
+                {label:'VAT đầu ra (33311)', decl:r.declaration.vat_output, gl:r.general_ledger.vat_output_33311, diff:r.difference.vat_output},
+                {label:'VAT phải nộp', decl:r.declaration.vat_payable, gl:r.general_ledger.vat_payable, diff:r.difference.vat_payable}
+            ];
+            rows.forEach(function(row) {
+                var cls = Math.abs(row.diff) > r.tolerance ? 'text-danger fw-bold' : '';
+                tbody.append('<tr><td>' + row.label + '</td><td class="text-end font-monospace">' + parseInt(row.decl).toLocaleString() + '</td><td class="text-end font-monospace">' + parseInt(row.gl).toLocaleString() + '</td><td class="text-end font-monospace ' + cls + '">' + parseInt(row.diff).toLocaleString() + '</td></tr>');
+            });
+            var alertBox = $('#reconcileMismatch');
+            if (r.has_mismatch) {
+                alertBox.removeClass('d-none alert-success').addClass('alert-danger').html('<i class="bi bi-exclamation-triangle"></i> Có chênh lệch > ' + r.tolerance.toLocaleString() + ' VND. Cần kiểm tra bút toán ghi nhận VAT.');
+            } else {
+                alertBox.removeClass('d-none alert-danger').addClass('alert-success').html('<i class="bi bi-check-circle"></i> Số liệu khớp trong ngưỡng cho phép.');
+            }
+            $('#reconcileSection').removeClass('d-none');
+        }).fail(function(x) { showToast('Lỗi tải dữ liệu','error'); })
+        .always(function() { btn.prop('disabled', false).html('<i class="bi bi-arrow-left-right"></i> Đối chiếu GL'); });
+    });
+
+    $(document).ready(function() { loadData(); });
 </script>
 <?php $content = ob_get_clean(); require __DIR__ . '/layout.php'; ?>
