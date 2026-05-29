@@ -40,6 +40,7 @@ use Accounting\Domain\Service\ArService;
 use Accounting\Domain\Service\GlService;
 use Accounting\Domain\Service\JournalBookService;
 use Accounting\Domain\Service\FixedAssetService;
+use Accounting\Domain\Service\AccountService;
 use Accounting\Domain\Service\CcdcAllocationService;
 use Accounting\Domain\Service\VatService;
 use Accounting\Domain\Service\FctService;
@@ -184,10 +185,13 @@ function createContainer(): array
     $reportExportService = new ReportExportService();
     $payrollService = new PayrollService($payrollEntryRepository, $payrollPeriodRepository, $salaryComponentRepository, $employeeRepository, $journalService, $pdo, $auditLogger);
 
+    // === COA SERVICE: Business logic cho Hệ thống Tài khoản ===
+    $accountService = new AccountService($accountRepository, $auditLogger);
+
     // === LỚP CONTROLLER: Tiếp nhận request từ Router, gọi Service ===
     // Controller KHÔNG chứa business logic — chỉ validate input + format response
     // Mỗi controller nhận dependency từ constructor — không dùng static/global trong controller
-    $accountController = new AccountController($accountRepository, $auditLogger);
+    $accountController = new AccountController($accountService);
     $approvalController = new ApprovalController($journalService, $pdo, $approvalRoutingService);
     $apController = new ApController($apService);
     $arController = new ArController($arService);

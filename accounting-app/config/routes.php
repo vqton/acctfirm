@@ -249,14 +249,22 @@ function defineRoutes(Router $router): void
     // === HỆ THỐNG TÀI KHOẢN (Circular 99) ===
     // COA — Chart of Accounts theo Thông tư 99/2025/TT-BTC
     // Seed: tạo mới 75+ tài khoản chuẩn từ data/coa_circular_99.json
-    // Mỗi tài khoản có: code, name, type (asset/liability/equity/revenue/expense), is_control
+    // AccountService: business logic cho CRUD, activate/deactivate, lock/unlock, FS mapping
+    // Các route KHÔNG có :id parameter phải đăng ký TRƯỚC route có :id (first-match routing)
     $router->get('/danh-muc/he-thong-tai-khoan', function() { require __DIR__ . '/../public/views/accounts.php'; });
     $router->get('/api/coa', function() use ($c) { $c['AccountController']->list(); });
-    $router->get('/api/coa/:id', function($id) use ($c) { $c['AccountController']->get($id); });
+    $router->get('/api/coa/flat', function() use ($c) { $c['AccountController']->flatList(); });
+    $router->get('/api/coa/search', function() use ($c) { $c['AccountController']->search(); });
+    $router->get('/api/coa/type/:type', function($type) use ($c) { $c['AccountController']->byType($type); });
     $router->post('/api/coa', function() use ($c) { $c['AccountController']->create(); });
+    $router->post('/api/coa/seed', function() use ($c) { $c['AccountController']->seed(); });
+    $router->get('/api/coa/:id', function($id) use ($c) { $c['AccountController']->get($id); });
     $router->put('/api/coa/:id', function($id) use ($c) { $c['AccountController']->update($id); });
     $router->delete('/api/coa/:id', function($id) use ($c) { $c['AccountController']->delete($id); });
-    $router->post('/api/coa/seed', function() use ($c) { $c['AccountController']->seed(); });
+    $router->post('/api/coa/:id/activate', function($id) use ($c) { $c['AccountController']->activate($id); });
+    $router->post('/api/coa/:id/deactivate', function($id) use ($c) { $c['AccountController']->deactivate($id); });
+    $router->post('/api/coa/:id/lock', function($id) use ($c) { $c['AccountController']->lockAccount($id); });
+    $router->post('/api/coa/:id/unlock', function($id) use ($c) { $c['AccountController']->unlockAccount($id); });
 
     // === BÚT TOÁN KẾ TOÁN & SỔ KẾ TOÁN ===
     // Journal entries — lõi của hệ thống: mọi giao dịch đều qua JournalService

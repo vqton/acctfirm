@@ -1,26 +1,6 @@
 <?php
 namespace Accounting\Domain\Model;
 
-/**
- * Tài khoản kế toán — Hệ thống tài khoản theo Thông tư 99/2025/TT-BTC.
- *
- * Đây là cốt lõi của hệ thống: mọi bút toán đều ghi Nợ/Có vào một tài khoản.
- * Mỗi tài khoản thuộc một loại (asset/liability/equity/revenue/expense) và có
- * normal balance (Dư Nợ hoặc Dư Có) để xác định số dư tăng bên nào.
- *
- * RỦI RO:
- * - Tài khoản tổng hợp (control account: 111, 112, 131, 331...) không được
- *   post trực tiếp — chỉ post vào tài khoản con. Posting engine phải kiểm tra
- *   $isControl trước khi ghi nhận.
- * - $balance là số dư tạm thời trong bộ nhớ; số dư chính xác luôn được tính
- *   từ ledger_entries để tránh sai lệch do concurrent update.
- *
- * LIÊN KẾT:
- * - AccountRepository → định nghĩa interface truy xuất
- * - LedgerEntry → mỗi dòng bút toán tham chiếu đến một account
- * - PostingRuleService → kiểm tra cặp Dr-Cr có hợp lệ không
- * - FsService → đọc số dư tài khoản để lập BC01/02/03
- */
 class Account
 {
     private string $id;
@@ -34,19 +14,55 @@ class Account
     private ?string $description;
     private bool $status;
     private bool $isControl;
+    private ?string $fsMappingCode;
+    private ?string $fsMappingType;
+    private bool $isLocked;
+    private ?string $lockedBy;
+    private ?string $lockedReason;
+    private ?string $lockedAt;
+    private bool $isSystem;
+    private ?string $alternativeCode;
+    private ?string $detailBy;
     private \DateTimeImmutable $createdAt;
 
-    public function __construct(string $id, string $code, string $name, string $type,
-        ?string $parentId = null, string $normalBalance = 'D', ?string $accountClass = null,
-        ?string $description = null)
-    {
-        $this->id = $id; $this->code = $code; $this->name = $name;
-        $this->type = $type; $this->parentId = $parentId;
-        $this->normalBalance = $normalBalance; $this->accountClass = $accountClass;
-        $this->balance = 0.0; $this->description = $description;
-        $this->status = true; $this->isControl = false;
+    public function __construct(
+        string $id,
+        string $code,
+        string $name,
+        string $type,
+        ?string $parentId = null,
+        string $normalBalance = 'D',
+        ?string $accountClass = null,
+        ?string $description = null,
+        ?string $fsMappingCode = null,
+        ?string $fsMappingType = null,
+        ?string $alternativeCode = null,
+        ?string $detailBy = null
+    ) {
+        $this->id = $id;
+        $this->code = $code;
+        $this->name = $name;
+        $this->type = $type;
+        $this->parentId = $parentId;
+        $this->normalBalance = $normalBalance;
+        $this->accountClass = $accountClass;
+        $this->balance = 0.0;
+        $this->description = $description;
+        $this->status = true;
+        $this->isControl = false;
+        $this->fsMappingCode = $fsMappingCode;
+        $this->fsMappingType = $fsMappingType;
+        $this->isLocked = false;
+        $this->lockedBy = null;
+        $this->lockedReason = null;
+        $this->lockedAt = null;
+        $this->isSystem = false;
+        $this->alternativeCode = $alternativeCode;
+        $this->detailBy = $detailBy;
         $this->createdAt = new \DateTimeImmutable();
     }
+
+    // ─── Getters ───
 
     public function getId(): string { return $this->id; }
     public function getCode(): string { return $this->code; }
@@ -59,7 +75,18 @@ class Account
     public function getDescription(): ?string { return $this->description; }
     public function isStatus(): bool { return $this->status; }
     public function isControl(): bool { return $this->isControl; }
+    public function getFsMappingCode(): ?string { return $this->fsMappingCode; }
+    public function getFsMappingType(): ?string { return $this->fsMappingType; }
+    public function isLocked(): bool { return $this->isLocked; }
+    public function getLockedBy(): ?string { return $this->lockedBy; }
+    public function getLockedReason(): ?string { return $this->lockedReason; }
+    public function getLockedAt(): ?string { return $this->lockedAt; }
+    public function isSystem(): bool { return $this->isSystem; }
+    public function getAlternativeCode(): ?string { return $this->alternativeCode; }
+    public function getDetailBy(): ?string { return $this->detailBy; }
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
+
+    // ─── Setters ───
 
     public function setCode(string $v): void { $this->code = $v; }
     public function setName(string $v): void { $this->name = $v; }
@@ -70,30 +97,60 @@ class Account
     public function setDescription(?string $v): void { $this->description = $v; }
     public function setStatus(bool $v): void { $this->status = $v; }
     public function setControl(bool $v): void { $this->isControl = $v; }
+    public function setFsMappingCode(?string $v): void { $this->fsMappingCode = $v; }
+    public function setFsMappingType(?string $v): void { $this->fsMappingType = $v; }
+    public function setIsLocked(bool $v): void { $this->isLocked = $v; }
+    public function setLockedBy(?string $v): void { $this->lockedBy = $v; }
+    public function setLockedReason(?string $v): void { $this->lockedReason = $v; }
+    public function setLockedAt(?string $v): void { $this->lockedAt = $v; }
+    public function setIsSystem(bool $v): void { $this->isSystem = $v; }
+    public function setAlternativeCode(?string $v): void { $this->alternativeCode = $v; }
+    public function setDetailBy(?string $v): void { $this->detailBy = $v; }
 
-    // Ghi tăng (credit) số dư tài khoản: dùng cho dòng Có trong bút toán.
-    // Lưu ý: Đây chỉ là cập nhật trong bộ nhớ. Số dư thực tế luôn tính từ ledger_entries.
-    // Đối với tài khoản nguồn vốn (liability/equity), credit làm tăng số dư.
     public function credit(float $amount): void { $this->balance += $amount; }
-
-    // Ghi giảm (debit) số dư tài khoản: dùng cho dòng Nợ trong bút toán.
-    // Đối với tài khoản tài sản (asset), debit làm tăng số dư.
-    // RỦI RO: Chỉ gọi qua JournalService — không gọi trực tiếp từ controller.
     public function debit(float $amount): void { $this->balance -= $amount; }
     public function setBalance(float $v): void { $this->balance = $v; }
 
-    // Chuyển đổi model thành mảng để response API.
-    // 'type': asset/liability/equity/revenue/expense — xác định vị trí trên BC01/02.
-    // 'normal_balance': 'D' (dư Nợ) — tài sản, chi phí; 'C' (dư Có) — nguồn vốn, doanh thu.
-    // 'is_control': true = tài khoản tổng hợp — không được post trực tiếp.
+    // Lock / unlock
+    public function lock(string $by, string $reason): void
+    {
+        $this->isLocked = true;
+        $this->lockedBy = $by;
+        $this->lockedReason = $reason;
+        $this->lockedAt = date('Y-m-d H:i:s');
+    }
+
+    public function unlock(): void
+    {
+        $this->isLocked = false;
+        $this->lockedBy = null;
+        $this->lockedReason = null;
+        $this->lockedAt = null;
+    }
+
     public function toArray(): array
     {
         return [
-            'id' => $this->id, 'code' => $this->code, 'name' => $this->name,
-            'type' => $this->type, 'parent_id' => $this->parentId,
-            'normal_balance' => $this->normalBalance, 'account_class' => $this->accountClass,
-            'balance' => $this->balance, 'description' => $this->description,
-            'status' => $this->status, 'is_control' => $this->isControl,
+            'id' => $this->id,
+            'code' => $this->code,
+            'name' => $this->name,
+            'type' => $this->type,
+            'parent_id' => $this->parentId,
+            'normal_balance' => $this->normalBalance,
+            'account_class' => $this->accountClass,
+            'balance' => $this->balance,
+            'description' => $this->description,
+            'status' => $this->status,
+            'is_control' => $this->isControl,
+            'fs_mapping_code' => $this->fsMappingCode,
+            'fs_mapping_type' => $this->fsMappingType,
+            'is_locked' => $this->isLocked,
+            'locked_by' => $this->lockedBy,
+            'locked_reason' => $this->lockedReason,
+            'locked_at' => $this->lockedAt,
+            'is_system' => $this->isSystem,
+            'alternative_code' => $this->alternativeCode,
+            'detail_by' => $this->detailBy,
             'created_at' => $this->createdAt->format('Y-m-d H:i:s'),
         ];
     }
