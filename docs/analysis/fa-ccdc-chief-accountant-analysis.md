@@ -1824,10 +1824,9 @@ Phase 7: Multi-Branch + Advanced Features
 | VAT splitting for all types | ✅ DONE | Dr 1332 for deductible VAT |
 | recordDisposal() — liquidation + sale | ✅ DONE | Standard 3-step VN accounting |
 | LifecycleController | ✅ DONE | acquire + dispose endpoints |
-| Views: acquisition + disposal | ⚠️ BASIC | Missing journal preview, document numbers, asset detail cards |
+| Views: acquisition + disposal | ✅ DONE | Journal preview, account code fixes, category-dynamic FA acct |
 | All posting rules pass | ✅ DONE | Dr = Cr verified for every transaction |
-
-**Gap:** Views need production polish. Accountant cannot use without journal preview + 01-TSCĐ reference numbers.
+| Views: list / search | ✅ DONE | Client-side search, record count, pagination info |
 
 ### Phase 3 — CCDC Full Lifecycle (NOT STARTED)
 
@@ -1899,7 +1898,7 @@ Phase 7: Multi-Branch + Advanced Features
 HIGH + MUST HAVE (Month 1):
   └─ CCDC lifecycle (Phase 3)
   └─ Mẫu 05 + 06 forms (Phase 5)
-  └─ Acquisition + disposal view polish (Phase 2 gap)
+  └─ Acquisition + disposal view polish (Phase 2 gap) ✅ DONE
   └─ Approval workflows: acquisition + disposal (Phase 6)
 
 MEDIUM + SHOULD HAVE (Month 2):
