@@ -1008,8 +1008,9 @@ karpathy-guidelines (simplicity first, surgical changes)
 ### 20.1 Changelog
 
 | Version | Date | Changes |
-|---|---|---|
-| 2.4 | 2026-05-28 | **Governance document overhaul.** Added §4.3 Environment Requirements, §11.5 Static Analysis & CI Gates, §18.1 Definition of Done. Fixed v2.0→2.4 header, English examples in §7.3 & §9.1→Vietnamese. Deduplicated §12.1 items 3+6. Added ADR-006, ADR-007 to decision table. CodeGraph Workflow refactored into single 5-step workflow + budget rules. Vietnamese Audit Phase 2 complete. |
+|---|---|---|---|
+| 2.6 | 2026-05-29 | **FA module full 13-section BA/Chief Accountant analysis complete.** `docs/analysis/fa-ccdc-chief-accountant-analysis.md` expanded from 10 sections (1363 lines) to 13 sections (1958 lines). Added §11 Reporting & Tax Compliance (TT 99 forms 01-06, BC 01/02/09 mapping, CIT impact, tax inspection prep), §12 Integration Contracts (6 integration points with GL/AP/Cash/Inventory/Period Close/FS), §13 Implementation Roadmap (7-phase plan with acceptance criteria + priority matrix). FA acquisition + disposal implemented with 25 lifecycle tests. Views need production polish. |
+| 2.5 | 2026-05-29 | **CashService VAT splitting (thuế GTGT).** 5 methods (recordReceipt, recordPayment, recordBankReceipt, recordBankPayment, recordBankCharge) now create 3-line journal entries (net + VAT 1331/33311) when vatAmount > 0. recordBankInterest unchanged (financial services exempt). Backward compatible via optional params defaulting to 0. 7 new tests — total 28 CashTest, 0 failures. |
 | 2.3 | 2026-05-27 | **Vietnamese Language Audit — toàn bộ thông báo người dùng sang tiếng Việt chuyên nghiệp.** ~200 messages từ controllers, services, models, views được dịch. |
 | 2.2 | 2026-05-27 | **Phase 5: Views & UX — AP/AR views.** Filter bar (status/supplier/search/date), CSV export, overdue highlighting, aging column, dự phòng phải thu. |
 | 2.1 | 2026-05-26 | **Phase 2.2+2.3: Aging + Provision + Credit Limit.** getProvisionRate(), getProvisionSummary() TT 48/2019. Credit limit check trong recordInvoice. |

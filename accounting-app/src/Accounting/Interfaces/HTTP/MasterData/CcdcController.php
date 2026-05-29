@@ -41,9 +41,15 @@ class CcdcController
     {
         return new Ccdc(
             $data['id'], $data['code'], $data['name'],
-            $data['unit'] ?? 'cai', (float)($data['quantity'] ?? 0),
-            $data['allocation_type'] ?? 'direct', (float)($data['total_cost'] ?? 0),
-            (float)($data['allocated'] ?? 0)
+            $data['unit'] ?? 'cai',
+            (float)($data['quantity'] ?? 0),
+            $data['allocation_type'] ?? 'period',
+            (int)($data['allocation_months'] ?? 0),
+            $data['expense_account'] ?? '642',
+            $data['allocation_start_date'] ?? null,
+            (float)($data['total_cost'] ?? 0),
+            (float)($data['allocated'] ?? 0),
+            (int)($data['remaining_months'] ?? 0)
         );
     }
 
@@ -54,8 +60,12 @@ class CcdcController
         if (isset($data['unit'])) $entity->setUnit($data['unit']);
         if (isset($data['quantity'])) $entity->setQuantity((float)$data['quantity']);
         if (isset($data['allocation_type'])) $entity->setAllocationType($data['allocation_type']);
+        if (isset($data['allocation_months'])) $entity->setAllocationMonths((int)$data['allocation_months']);
+        if (isset($data['expense_account'])) $entity->setExpenseAccount($data['expense_account']);
+        if (isset($data['allocation_start_date'])) $entity->setAllocationStartDate($data['allocation_start_date']);
         if (isset($data['total_cost'])) $entity->setTotalCost((float)$data['total_cost']);
         if (isset($data['allocated'])) $entity->setAllocated((float)$data['allocated']);
+        if (isset($data['remaining_months'])) $entity->setRemainingMonths((int)$data['remaining_months']);
         if (isset($data['status'])) $entity->setStatus((bool)$data['status']);
     }
 }
