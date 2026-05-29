@@ -146,6 +146,8 @@ assertTrue(!empty($decl2['id']), 'Re-prepared declaration OK');
 
 // === Test 8: Khóa tờ khai ===
 echo "\n--- Test 8: Finalise declaration ---\n";
+// Ensure test period is open
+$pdo->exec("UPDATE accounting_periods SET status = 'open' WHERE period_code = '{$period}'");
 $finalised = $fct->finalise($decl['id']);
 assertEq($finalised['status'], 'finalised', 'Declaration status = finalised');
 

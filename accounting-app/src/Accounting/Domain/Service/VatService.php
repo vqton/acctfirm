@@ -245,11 +245,19 @@ class VatService
 
     public function finalise(string $id): array
     {
+        // Load declaration first to get period info
+        $decl = $this->getDeclaration($id);
+        if (!$decl) throw new \RuntimeException('Không tìm thấy tờ khai VAT.');
+
+        // Kiểm tra kỳ kế toán đang mở
+        $period = $decl['period'] ?? '';
+        if ($period && !PeriodService::isPeriodOpen($period . '-15', $this->pdo)) {
+            throw new \RuntimeException("Kỳ kế toán {$period} đã đóng. Không thể khóa tờ khai.");
+        }
+
         $stmt = $this->pdo->prepare("UPDATE vat_declarations SET status = 'finalised' WHERE id = ? AND status = 'draft'");
         $stmt->execute([$id]);
         if ($stmt->rowCount() === 0) {
-            $decl = $this->getDeclaration($id);
-            if (!$decl) throw new \RuntimeException('Không tìm thấy tờ khai VAT.');
             throw new \RuntimeException('Không thể khóa tờ khai. Tờ khai đã được khóa trước đó.');
         }
         return $this->getDeclaration($id);

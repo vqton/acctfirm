@@ -105,6 +105,8 @@ $pdo->exec("DELETE FROM ap_invoices WHERE id = {$invId}");
 
 // === Test 5: finalise with proper rowCount check ===
 echo "\n--- Test 5: finalise — proper rowCount behavior ---\n";
+// Ensure test period exists and is open
+$pdo->exec("INSERT IGNORE INTO accounting_periods (period_type, period_code, name, start_date, end_date, status, opened_by, opened_at) VALUES ('month', '2026-01', 'Tháng 1/2026', '2026-01-01', '2026-01-31', 'open', 'tester', NOW())");
 $decl2 = $vat->prepareDeclaration('2026-01', 'tester');
 $f = $vat->finalise($decl2['id']);
 assertEq($f['status'], 'finalised', 'VAT declaration finalised');

@@ -310,6 +310,16 @@ class CitService
 
     public function finalise(string $id): array
     {
+        // Load calculation first to get period info
+        $calc = $this->getCalculation($id);
+        if (!$calc) throw new \RuntimeException('Không tìm thấy quyết toán TNDN.');
+
+        // Kiểm tra kỳ kế toán đang mở
+        $period = $calc['period'] ?? '';
+        if ($period && !PeriodService::isPeriodOpen($period . '-15', $this->pdo)) {
+            throw new \RuntimeException("Kỳ kế toán {$period} đã đóng. Không thể khóa tờ khai.");
+        }
+
         $stmt = $this->pdo->prepare(
             "UPDATE cit_calculations SET status = 'finalised' WHERE id = ? AND status = 'draft'"
         );

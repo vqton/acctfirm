@@ -115,6 +115,8 @@ if (isset($revTxn)) {
 
 // === Test 9: Finalise with proper rowCount ===
 echo "\n--- Test 9: finalise — proper rowCount ---\n";
+// Ensure test period exists and is open
+$pdo->exec("INSERT IGNORE INTO accounting_periods (period_type, period_code, name, start_date, end_date, status, opened_by, opened_at) VALUES ('month', '2026-07', 'Tháng 7/2026', '2026-07-01', '2026-07-31', 'open', 'tester', NOW())");
 $calc3 = $cit->prepareCalculation('2026-07', 'tester');
 $f = $cit->finalise($calc3['id']);
 assertEq($f['status'], 'finalised', 'CIT calculation finalised');
