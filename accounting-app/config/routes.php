@@ -134,6 +134,13 @@ function defineRoutes(Router $router): void
     $router->put('/api/ccdc/:id', function($id) use ($c) { $c['CcdcController']->update($id); });
     $router->delete('/api/ccdc/:id', function($id) use ($c) { $c['CcdcController']->delete($id); });
 
+    // === PHÂN BỔ CCDC (TK 242) ===
+    // Auto-allocation engine: phân bổ CCDC (công cụ dụng cụ) vào chi phí các kỳ
+    // Nợ 641/642/627 / Có 242 — theo phương pháp đường thẳng nhiều kỳ
+    $router->get('/ccdc/phan-bo', function() use ($c) { $c['CcdcAllocationController']->view(); });
+    $router->post('/api/inventory/ccdc-allocations/run', function() use ($c) { $c['CcdcAllocationController']->run(); });
+    $router->get('/api/inventory/ccdc-allocations/history', function() use ($c) { $c['CcdcAllocationController']->history(); });
+
     // === TỶ GIÁ NGOẠI TỆ ===
     // Exchange Rates — quản lý tỷ giá ngoại tệ, phục vụ hạch toán nghiệp vụ ngoại tệ
     // Áp dụng Thông tư 200: ghi nhận chênh lệch tỷ giá cuối kỳ (TK 413, 515, 635)
@@ -187,6 +194,18 @@ function defineRoutes(Router $router): void
         if (!$asset) { JsonResponse::error('Không tìm thấy tài sản cố định', 404); return; }
         JsonResponse::ok($c['fixedAssetService']->calculateSchedule($asset));
     });
+
+    // Fixed Asset Acquisition — ghi tăng TSCĐ
+    // Bút toán: Nợ 211 / Có 111/112/331/411/711 (tùy loại hình)
+    // Chứng từ: Biên bản giao nhận TSCĐ (mẫu 01-TSCĐ)
+    $router->get('/tai-san-co-dinh/ghi-tang', function() { require __DIR__ . '/../public/views/fixed_asset_acquisition.php'; });
+    $router->post('/api/fixed-assets/acquire', function() use ($c) { $c['FixedAssetLifecycleController']->acquire(); });
+
+    // Fixed Asset Disposal — thanh lý, nhượng bán TSCĐ
+    // Bút toán: Nợ 214 + Nợ 811/Có 211/Có 711
+    // Chứng từ: Biên bản thanh lý TSCĐ (mẫu 02-TSCĐ)
+    $router->get('/tai-san-co-dinh/thanh-ly', function() { require __DIR__ . '/../public/views/fixed_asset_disposal.php'; });
+    $router->post('/api/fixed-assets/dispose', function() use ($c) { $c['FixedAssetLifecycleController']->dispose(); });
 
     // === PHƯƠNG PHÁP TÍNH GIÁ ===
     // Valuation Methods — phương pháp tính giá xuất kho
@@ -377,6 +396,7 @@ function defineRoutes(Router $router): void
     $router->post('/api/bank-reconciliation/:id/manual-match', function($id) use ($c) { $c['BankReconciliationController']->manualMatch($id); });
     $router->post('/api/bank-reconciliation/:id/adjust', function($id) use ($c) { $c['BankReconciliationController']->addAdjustingEntry($id); });
     $router->post('/api/bank-reconciliation/:id/complete', function($id) use ($c) { $c['BankReconciliationController']->complete($id); });
+    $router->post('/api/bank-reconciliation/:id/import-csv', function($id) use ($c) { $c['BankReconciliationController']->importCsv($id); });
     $router->get('/api/bank-reconciliation/bank-accounts', function() use ($c) { $c['BankReconciliationController']->bankAccounts(); });
 
     // === NHẬP KHO ===
@@ -418,6 +438,15 @@ function defineRoutes(Router $router): void
     $router->post('/api/consignments', function() use ($c) { $c['ConsignmentController']->consign(); });
     $router->post('/api/consignments/sell', function() use ($c) { $c['ConsignmentController']->sell(); });
     $router->post('/api/consignments/return', function() use ($c) { $c['ConsignmentController']->returnConsignment(); });
+
+    // === SỐ DƯ ĐẦU KỲ ===
+    // Opening Balances — nhập và quản lý số dư đầu kỳ các tài khoản
+    // Quy trình: nhập → đối chiếu → chuyển thành bút toán mở sổ
+    $router->get('/he-thong/so-du-dau-ky', function() use ($c) { $c['OpeningBalanceController']->view(); });
+    $router->get('/api/opening-balances', function() use ($c) { $c['OpeningBalanceController']->list(); });
+    $router->post('/api/opening-balances/set', function() use ($c) { $c['OpeningBalanceController']->set(); });
+    $router->post('/api/opening-balances/:accountCode/:period/verify', function($accountCode, $period) use ($c) { $c['OpeningBalanceController']->verify($accountCode, $period); });
+    $router->post('/api/opening-balances/convert', function() use ($c) { $c['OpeningBalanceController']->convert(); });
 
     // User & Role management
     $router->get('/he-thong/nguoi-dung', function() { require __DIR__ . '/../public/views/users.php'; });
@@ -470,6 +499,18 @@ function defineRoutes(Router $router): void
     $router->get('/api/ar/customers', function() use ($c) { $c['ArController']->customers(); });
     $router->get('/api/ar/customers/:id/statement', function($id) use ($c) { $c['ArController']->statement($id); });
 
+    // === ĐIỀU CHỈNH BÚT TOÁN (Correction Engine — Article 27 Law on Accounting) ===
+    // Ba phương pháp điều chỉnh theo Luật Kế toán:
+    // 1. Bổ sung (supplementary): ghi bổ sung số chênh lệch khi ghi thiếu
+    // 2. Đảo ngược (negative/red ink): đảo bút toán sai, sau đó ghi lại đúng
+    // 3. Điều chỉnh (adjusting): ghi bù trừ giữa các tài khoản khi sai tài khoản
+    // Mỗi điều chỉnh đều tham chiếu đến bút toán gốc, ghi audit trail đầy đủ
+    $router->get('/dieu-chinh-but-toan', function() use ($c) { $c['CorrectionController']->view(); });
+    $router->post('/api/corrections/supplementary', function() use ($c) { $c['CorrectionController']->supplementary(); });
+    $router->post('/api/corrections/negative', function() use ($c) { $c['CorrectionController']->negative(); });
+    $router->post('/api/corrections/adjusting', function() use ($c) { $c['CorrectionController']->adjusting(); });
+    $router->get('/api/corrections/history/:transactionId', function($transactionId) use ($c) { $c['CorrectionController']->history($transactionId); });
+
     // === BÁO CÁO TÀI CHÍNH (BC01, BC02, BC03) ===
     // Financial Statements — báo cáo tài chính theo Thông tư 99
     // BC01: Bảng cân đối kế toán (Mẫu B01-DN)
@@ -483,6 +524,7 @@ function defineRoutes(Router $router): void
     $router->get('/api/fs/tt99', function() use ($c) { $c['FsController']->tt99(); });
     $router->get('/bao-cao/luu-chuyen-tien-te', function() use ($c) { $c['FsController']->viewBC03(); });
     $router->get('/api/fs/bc03', function() use ($c) { $c['FsController']->bc03(); });
+    $router->get('/bao-cao/thuyet-minh-bctc', function() use ($c) { $c['FsController']->viewTT99(); });
 
     // === QUẢN LÝ KỲ KẾ TOÁN ===
     // Period Management — quản lý kỳ kế toán (tháng/quý/năm)
@@ -495,11 +537,13 @@ function defineRoutes(Router $router): void
     $router->get('/api/periods/:id', function($id) use ($c) { $c['PeriodController']->get($id); });
     $router->post('/api/periods', function() use ($c) { $c['PeriodController']->create(); });
     $router->post('/api/periods/:id/close', function($id) use ($c) { $c['PeriodController']->close($id); });
+    $router->get('/he-thong/kiem-tra-truoc-khi-khoa-so', function() { require __DIR__ . '/../public/views/pre_close_checklist.php'; });
     $router->post('/api/periods/:id/reopen', function($id) use ($c) { $c['PeriodController']->reOpen($id); });
     $router->post('/api/periods/:id/close-with-checklist', function($id) use ($c) { $c['PeriodController']->closeWithChecklist($id); });
     $router->post('/api/periods/:id/deadline', function($id) use ($c) { $c['PeriodController']->setDeadline($id); });
     $router->post('/api/periods/:id/deadline/override', function($id) use ($c) { $c['PeriodController']->overrideDeadline($id); });
     $router->get('/api/periods/:id/can-close', function($id) use ($c) { $c['PeriodController']->canClose($id); });
+    $router->get('/api/periods/:id/checklist', function($id) use ($c) { $c['PeriodController']->checklist($id); });
     $router->post('/api/periods/:id/execute-closing', function($id) use ($c) { $c['PeriodController']->executeClosing($id); });
     $router->post('/api/periods/:id/archive', function($id) use ($c) { $c['PeriodController']->archive($id); });
 
@@ -508,7 +552,14 @@ function defineRoutes(Router $router): void
     // Mẫu S01-DN: Sổ Cái, S02-DN: Sổ Nhật ký - Sổ Cái
     // ledger: danh sách phát sinh theo tài khoản và kỳ
     $router->get('/bao-cao/so-cai', function() use ($c) { $c['GlController']->view(); });
+    // === XUẤT BÁO CÁO (CSV/HTML — không có thư viện PDF, dùng browser print) ===
+    $router->get('/api/export/csv/ledger', function() use ($c) { $c['ReportExportController']->exportCsvLedger(); });
+    $router->get('/api/export/html/ledger', function() use ($c) { $c['ReportExportController']->exportHtmlLedger(); });
+    $router->get('/api/export/csv/trial-balance', function() use ($c) { $c['ReportExportController']->exportCsvTrialBalance(); });
+
     $router->get('/api/gl/ledger', function() use ($c) { $c['GlController']->ledger(); });
+    $router->get('/api/gl/subsidiary', function() use ($c) { $c['GlController']->subsidiaryLedger(); });
+    $router->get('/bao-cao/so-chi-tiet', function() { require __DIR__ . '/../public/views/so_chi_tiet.php'; });
     $router->get('/api/gl/accounts', function() use ($c) { $c['GlController']->accounts(); });
 
     // === ĐỐI SOÁT ===
@@ -556,6 +607,43 @@ function defineRoutes(Router $router): void
     // Physical Count — kiểm kê thực tế, so sánh với tồn kho sổ sách
     // Adjust: điều chỉnh chênh lệch — ghi nhận thừa/thiếu qua JournalService
     // Bút toán: Nợ 152/153/155/156 / Có 632 (thừa) hoặc ngược lại (thiếu)
+    // === KÊ KHAI THUẾ GTGT ===
+    // VAT Declaration — chuẩn bị tờ khai thuế GTGT (mẫu 01/GTGT)
+    // Tổng hợp VAT đầu vào (1331) từ ap_invoices và VAT đầu ra (33311) từ ar_invoices
+    // Output: { period, total_vat_input, total_vat_output, vat_payable, details }
+    // Rủi ro: Số liệu từ AP/AR phải khớp với ledger_entries (đối chiếu GL vs sub-ledger)
+    $router->get('/thue/ke-khai-gtgt', function() use ($c) { $c['VatController']->view(); });
+    $router->get('/api/vat/declarations', function() use ($c) { $c['VatController']->list(); });
+    $router->get('/api/vat/declarations/:id', function($id) use ($c) { $c['VatController']->get($id); });
+    $router->post('/api/vat/declarations/prepare', function() use ($c) { $c['VatController']->prepare(); });
+    $router->post('/api/vat/declarations/:id/finalise', function($id) use ($c) { $c['VatController']->finalise($id); });
+
+    // === QUYẾT TOÁN THUẾ TNDN ===
+    // CIT Finalization — tính thu nhập chịu thuế và thuế TNDN phải nộp
+    // Chuẩn bị quyết toán: tổng hợp doanh thu, chi phí từ ledger_entries
+    // Finalise: khóa quyết toán, không cho sửa
+    $router->get('/thue/quyet-toan-tndn', function() use ($c) { $c['CitController']->view(); });
+    $router->get('/api/cit/calculations', function() use ($c) { $c['CitController']->list(); });
+    $router->get('/api/cit/calculations/:id', function($id) use ($c) { $c['CitController']->get($id); });
+    $router->post('/api/cit/calculations/prepare', function() use ($c) { $c['CitController']->prepare(); });
+    $router->post('/api/cit/calculations/:id/finalise', function($id) use ($c) { $c['CitController']->finalise($id); });
+
+    // === THUẾ NHÀ THẦU NƯỚC NGOÀI (FCT) ===
+    // Foreign Contractor Tax — khấu trừ thuế trước khi thanh toán cho nhà thầu nước ngoài
+    // Tuân thủ Thông tư 103/2014/TT-BTC
+    // Tỷ lệ khấu trừ phụ thuộc vào loại dịch vụ (services/services_with_goods/trading/leasing/other)
+    // Bút toán: Dr 642/635/241 / Cr 331 + Cr 33312 (VAT) + Cr 3338 (CIT)
+    $router->get('/thue/nha-thau-nuoc-ngoai', function() use ($c) { $c['FctController']->view(); });
+    $router->get('/api/fct/contracts', function() use ($c) { $c['FctController']->listContracts(); });
+    $router->get('/api/fct/contracts/:id', function($id) use ($c) { $c['FctController']->getContract($id); });
+    $router->post('/api/fct/calculate', function() use ($c) { $c['FctController']->calculate(); });
+    $router->post('/api/fct/contracts', function() use ($c) { $c['FctController']->record(); });
+    $router->post('/api/fct/contracts/:id/cancel', function($id) use ($c) { $c['FctController']->cancel($id); });
+    $router->get('/api/fct/declarations', function() use ($c) { $c['FctController']->listDeclarations(); });
+    $router->get('/api/fct/declarations/:id', function($id) use ($c) { $c['FctController']->getDeclaration($id); });
+    $router->post('/api/fct/declarations/prepare', function() use ($c) { $c['FctController']->prepareDeclaration(); });
+    $router->post('/api/fct/declarations/:id/finalise', function($id) use ($c) { $c['FctController']->finaliseDeclaration($id); });
+
     $router->get('/kho/kiem-ke', function() { require __DIR__ . '/../public/views/physical_count.php'; });
     $router->get('/api/physical-count/sessions', function() use ($c) { $c['PhysicalCountController']->sessions(); });
     $router->get('/api/physical-count/lines/:id', function($id) use ($c) { $c['PhysicalCountController']->lines($id); });
@@ -618,33 +706,51 @@ function defineRoutes(Router $router): void
     $router->get('/api/transfers/items', function() use ($c) { $c['TransferController']->items(); });
     $router->get('/api/transfers/warehouses', function() use ($c) { $c['TransferController']->warehouses(); });
 
-    // === TIỀN LƯƠNG ===
-    // Payroll API — bang luong, tinh luong, BHXH, thue TNCN
-    // Ky luong
+    // === TIỀN LƯƠNG (TK 334, 338) ===
+    // Payroll API — bảng lương, tính lương, BHXH, thuế TNCN
+    // Quản lý kỳ lương, bảng lương, tính toán thu nhập, BHXH, BHYT, BHTN
+    // Liên quan đến TK 334 (Phải trả người lao động), TK 338 (Phải trả khác)
+
+    // Kỳ lương — payroll periods (tháng tính lương)
     $router->get('/api/payroll/periods', function() use ($c) { $c['PayrollController']->listPeriods(); });
     $router->post('/api/payroll/periods', function() use ($c) { $c['PayrollController']->createPeriod(); });
     $router->get('/api/payroll/periods/open', function() use ($c) { $c['PayrollController']->listOpenPeriods(); });
     $router->get('/api/payroll/periods/:id', function($id) use ($c) { $c['PayrollController']->getPeriod($id); });
     $router->post('/api/payroll/periods/:id/close', function($id) use ($c) { $c['PayrollController']->closePeriod($id); });
-    // Bang luong
+
+    // Bảng lương — payroll entries (chi tiết lương từng nhân viên theo kỳ)
     $router->get('/api/payroll/entries', function() use ($c) { $c['PayrollController']->listEntries(); });
     $router->get('/api/payroll/entries/pending', function() use ($c) { $c['PayrollController']->listPendingEntries(); });
     $router->get('/api/payroll/entries/:id', function($id) use ($c) { $c['PayrollController']->getEntry($id); });
     $router->get('/api/payroll/entries/:id/details', function($id) use ($c) { $c['PayrollController']->getEntryDetails($id); });
-    // Tinh luong
+
+    // Tính lương — process payroll, tính BHXH, thuế TNCN, thu nhập từng nhân viên
     $router->post('/api/payroll/process', function() use ($c) { $c['PayrollController']->processPayroll(); });
     $router->get('/api/payroll/calculate/insurance', function() use ($c) { $c['PayrollController']->calculateInsurance(); });
     $router->get('/api/payroll/calculate/tax', function() use ($c) { $c['PayrollController']->calculateTax(); });
-    $router->get('/api/payroll/calculate/employee', function() use ($c) { $c['PayrollController']->calculateEmployeePay(); });
-    // Duyet/Post/Dieu chinh
+    $router->get('/api/payroll/calculate/employee-pay', function() use ($c) { $c['PayrollController']->calculateEmployeePay(); });
+
+    // Duyệt/Post/Điều chỉnh bảng lương
     $router->post('/api/payroll/entries/:id/approve', function($id) use ($c) { $c['PayrollController']->approveEntry($id); });
     $router->post('/api/payroll/entries/:id/post', function($id) use ($c) { $c['PayrollController']->postEntry($id); });
     $router->post('/api/payroll/entries/:id/adjust', function($id) use ($c) { $c['PayrollController']->adjustEntry($id); });
-    // Nhan vien
+
+    // Nhân viên tính lương — danh sách nhân viên kèm thông tin lương, BHXH
     $router->get('/api/payroll/employees', function() use ($c) { $c['PayrollController']->listPayrollEmployees(); });
 
-    // === GIAO DIEN TIEN LUONG ===
+    // Views API — trả về giao diện cho module tiền lương (dùng khi gọi từ AJAX)
+    $router->get('/api/payroll/views/employees', function() { require __DIR__ . '/../public/views/payroll_employees.php'; });
+    $router->get('/api/payroll/views/periods', function() { require __DIR__ . '/../public/views/payroll_periods.php'; });
+    $router->get('/api/payroll/views/entries', function() { require __DIR__ . '/../public/views/payroll_entries.php'; });
+    $router->get('/api/payroll/views/entries/:id', function($id) { require __DIR__ . '/../public/views/payroll_entry_detail.php'; });
+
+    // === GIAO DIỆN TIỀN LƯƠNG ===
+    // Frontend pages — các trang HTML cho module tiền lương
+    $router->get('/tien-luong', function() { require __DIR__ . '/../public/views/payroll.php'; });
+    $router->get('/tien-luong/nhan-vien', function() { require __DIR__ . '/../public/views/payroll_employees.php'; });
+    $router->get('/tien-luong/ky-luong', function() { require __DIR__ . '/../public/views/payroll_periods.php'; });
     $router->get('/tien-luong/bang-luong', function() { require __DIR__ . '/../public/views/payroll_entries.php'; });
+    $router->get('/tien-luong/bang-luong/:id', function($id) { require __DIR__ . '/../public/views/payroll_entry_detail.php'; });
     $router->get('/tien-luong/tinh-luong', function() { require __DIR__ . '/../public/views/payroll_calculate.php'; });
     $router->get('/tien-luong/bao-hiem', function() { require __DIR__ . '/../public/views/payroll_insurance.php'; });
     $router->get('/tien-luong/thue-tncn', function() { require __DIR__ . '/../public/views/payroll_tax.php'; });

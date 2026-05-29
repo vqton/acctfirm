@@ -40,6 +40,14 @@ use Accounting\Domain\Service\ArService;
 use Accounting\Domain\Service\GlService;
 use Accounting\Domain\Service\JournalBookService;
 use Accounting\Domain\Service\FixedAssetService;
+use Accounting\Domain\Service\CcdcAllocationService;
+use Accounting\Domain\Service\VatService;
+use Accounting\Domain\Service\FctService;
+use Accounting\Domain\Service\ReportExportService;
+use Accounting\Interfaces\HTTP\MasterData\CcdcAllocationController;
+use Accounting\Interfaces\HTTP\Financial\VatController;
+use Accounting\Interfaces\HTTP\Financial\FctController;
+use Accounting\Interfaces\HTTP\ReportExportController;
 use Accounting\Interfaces\HTTP\Cash\BankReconciliationController;
 use Accounting\Interfaces\HTTP\Cash\CashController;
 use Accounting\Interfaces\HTTP\Cash\CashReportController;
@@ -62,6 +70,7 @@ use Accounting\Interfaces\HTTP\Inventory\TransferController;
 use Accounting\Interfaces\HTTP\Financial\ApController;
 use Accounting\Interfaces\HTTP\Financial\ArController;
 use Accounting\Interfaces\HTTP\Financial\FsController;
+use Accounting\Interfaces\HTTP\Financial\CorrectionController;
 use Accounting\Interfaces\HTTP\Financial\GlController;
 use Accounting\Interfaces\HTTP\Financial\JournalBookController;
 use Accounting\Interfaces\HTTP\Financial\JournalController;
@@ -76,6 +85,7 @@ use Accounting\Interfaces\HTTP\MasterData\DepreciationPolicyController;
 use Accounting\Interfaces\HTTP\MasterData\EmployeeController;
 use Accounting\Interfaces\HTTP\MasterData\ExchangeRateController;
 use Accounting\Interfaces\HTTP\MasterData\FixedAssetController;
+use Accounting\Interfaces\HTTP\FixedAsset\LifecycleController as FixedAssetLifecycleController;
 use Accounting\Interfaces\HTTP\MasterData\ProjectController;
 use Accounting\Interfaces\HTTP\MasterData\SupplierController;
 use Accounting\Interfaces\HTTP\MasterData\TaxRateController;
@@ -166,6 +176,12 @@ function createContainer(): array
     $glService = new GlService($pdo, $accountRepository);
     $journalBookService = new JournalBookService($pdo);
     $fixedAssetService = new FixedAssetService($fixedAssetRepository, $accountRepository, $transactionRepository, $journalService, $pdo, $auditLogger);
+    $ccdcAllocationService = new CcdcAllocationService($ccdcRepository, $journalService, $pdo, $auditLogger);
+    $vatService = new VatService($pdo);
+    $citService = new CitService($pdo);
+    $fctService = new FctService($pdo);
+    $openingBalanceService = new OpeningBalanceService($pdo, $accountRepository);
+    $reportExportService = new ReportExportService();
     $payrollService = new PayrollService($payrollEntryRepository, $payrollPeriodRepository, $salaryComponentRepository, $employeeRepository, $journalService, $pdo, $auditLogger);
 
     // === LỚP CONTROLLER: Tiếp nhận request từ Router, gọi Service ===
@@ -183,6 +199,12 @@ function createContainer(): array
     $cashReportController = new CashReportController($cashReportService);
     $pettyCashController = new PettyCashController($pettyCashService);
     $ccdcController = new CcdcController($ccdcRepository);
+    $ccdcAllocationController = new CcdcAllocationController($ccdcAllocationService);
+    $vatController = new VatController($vatService);
+    $citController = new CitController($citService);
+    $fctController = new FctController($fctService);
+    $openingBalanceController = new OpeningBalanceController($openingBalanceService);
+    $reportExportController = new ReportExportController($reportExportService, $glService, $fsService);
     $consignmentController = new ConsignmentController($inventoryService, $itemRepository, $pdo);
     $contractController = new ContractController($contractRepository);
     $customerController = new CustomerController($customerRepository);
@@ -191,6 +213,7 @@ function createContainer(): array
     $employeeController = new EmployeeController($employeeRepository);
     $exchangeRateController = new ExchangeRateController($exchangeRateRepository);
     $fixedAssetController = new FixedAssetController($fixedAssetRepository);
+    $fixedAssetLifecycleController = new FixedAssetLifecycleController($fixedAssetService, $accountRepository, $pdo);
     $fsController = new FsController($fsService);
     $glController = new GlController($glService);
     $journalBookController = new JournalBookController($journalBookService);
@@ -200,6 +223,7 @@ function createContainer(): array
     $impairmentController = new ImpairmentController($inventoryService, $pdo);
     $inventoryTransitController = new InventoryTransitController($inventoryService, $itemRepository, $pdo);
     $itemController = new ItemController($itemRepository);
+    $correctionController = new CorrectionController($journalService);
     $journalController = new JournalController($journalService, $accountRepository, $transactionRepository);
     $periodController = new PeriodController($periodService);
     $periodicController = new PeriodicController($inventoryService, $itemRepository, $pdo);
@@ -253,6 +277,8 @@ function createContainer(): array
         'glService' => $glService,
         'journalBookService' => $journalBookService,
         'fixedAssetService' => $fixedAssetService,
+        'citService' => $citService,
+        'openingBalanceService' => $openingBalanceService,
 
         'AccountController' => $accountController,
         'ApprovalController' => $approvalController,
@@ -266,6 +292,12 @@ function createContainer(): array
         'CashReportController' => $cashReportController,
         'PettyCashController' => $pettyCashController,
         'CcdcController' => $ccdcController,
+        'CcdcAllocationController' => $ccdcAllocationController,
+        'CitController' => $citController,
+        'FctController' => $fctController,
+        'OpeningBalanceController' => $openingBalanceController,
+        'VatController' => $vatController,
+        'ReportExportController' => $reportExportController,
         'ConsignmentController' => $consignmentController,
         'ContractController' => $contractController,
         'CustomerController' => $customerController,
@@ -274,6 +306,7 @@ function createContainer(): array
         'EmployeeController' => $employeeController,
         'ExchangeRateController' => $exchangeRateController,
         'FixedAssetController' => $fixedAssetController,
+        'FixedAssetLifecycleController' => $fixedAssetLifecycleController,
         'FsController' => $fsController,
         'GlController' => $glController,
         'JournalBookController' => $journalBookController,
@@ -283,6 +316,7 @@ function createContainer(): array
         'ImpairmentController' => $impairmentController,
         'InventoryTransitController' => $inventoryTransitController,
         'ItemController' => $itemController,
+        'CorrectionController' => $correctionController,
         'JournalController' => $journalController,
         'PeriodController' => $periodController,
         'PeriodicController' => $periodicController,

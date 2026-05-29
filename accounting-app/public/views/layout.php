@@ -143,9 +143,10 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
         <div class="nav-section">Hàng tồn kho</div>
         <div class="nav-item">
             <a class="nav-link-s" data-bs-toggle="collapse" href="#menuInventory"><i class="bi bi-box"></i> Hàng tồn kho <i class="bi bi-chevron-right ms-auto" style="width:auto;font-size:10px;"></i></a>
-            <div class="collapse sub-menu<?= isActive(['items','ccdc','warehouses','uoms','valuation_methods','receipt','issue','customer_return','transfers','transit','consignment','physical_count','periodic','impairment'],$activeMenu)?' show':'' ?>" id="menuInventory">
+            <div class="collapse sub-menu<?= isActive(['items','ccdc','ccdc_allocations','warehouses','uoms','valuation_methods','receipt','issue','customer_return','transfers','transit','consignment','physical_count','periodic','impairment'],$activeMenu)?' show':'' ?>" id="menuInventory">
                 <a href="/danh-muc/vat-tu" class="nav-link-s<?= isActive('items',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Vật tư, hàng hóa</a>
                 <a href="/danh-muc/cong-cu-dung-cu" class="nav-link-s<?= isActive('ccdc',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> CCDC</a>
+                <a href="/ccdc/phan-bo" class="nav-link-s<?= isActive('ccdc_allocations',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Phân bổ CCDC</a>
                 <a href="/danh-muc/kho" class="nav-link-s<?= isActive('warehouses',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Kho</a>
                 <a href="/danh-muc/don-vi-tinh" class="nav-link-s<?= isActive('uoms',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Đơn vị tính</a>
                 <a href="/danh-muc/phuong-phap-tinh-gia" class="nav-link-s<?= isActive('valuation_methods',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> PP tính giá</a>
@@ -164,13 +165,13 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
         <div class="nav-section">TSCĐ & CCDC</div>
         <div class="nav-item">
             <a class="nav-link-s" data-bs-toggle="collapse" href="#menuFA"><i class="bi bi-building"></i> TSCĐ & CCDC <i class="bi bi-chevron-right ms-auto" style="width:auto;font-size:10px;"></i></a>
-            <div class="collapse sub-menu<?= isActive(['fixed_assets','depreciation_policies','depreciation'],$activeMenu)?' show':'' ?>" id="menuFA">
+            <div class="collapse sub-menu<?= isActive(['fixed_assets','depreciation_policies','depreciation','fa_acquisition','fa_disposal'],$activeMenu)?' show':'' ?>" id="menuFA">
                 <a href="/danh-muc/tai-san-co-dinh" class="nav-link-s<?= isActive('fixed_assets',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Tài sản cố định</a>
                 <a href="/danh-muc/chinh-sach-khau-hao" class="nav-link-s<?= isActive('depreciation_policies',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> CS khấu hao</a>
-                <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Ghi tăng TSCĐ</a>
+                <a href="/tai-san-co-dinh/ghi-tang" class="nav-link-s<?= isActive('fa_acquisition',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Ghi tăng TSCĐ</a>
                 <a href="/danh-muc/tai-san-co-dinh/tinh-khau-hao" class="nav-link-s<?= isActive('depreciation',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Tính khấu hao</a>
                 <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Điều chuyển TSCĐ</a>
-                <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Giảm / Thanh lý</a>
+                <a href="/tai-san-co-dinh/thanh-ly" class="nav-link-s<?= isActive('fa_disposal',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Giảm / Thanh lý</a>
             </div>
         </div>
 
@@ -192,14 +193,15 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
         <div class="nav-section">Thuế</div>
         <div class="nav-item">
             <a class="nav-link-s" data-bs-toggle="collapse" href="#menuTax"><i class="bi bi-file-text"></i> Thuế <i class="bi bi-chevron-right ms-auto" style="width:auto;font-size:10px;"></i></a>
-            <div class="collapse sub-menu<?= isActive(['tax_rates','exchange_rates'],$activeMenu)?' show':'' ?>" id="menuTax">
+            <div class="collapse sub-menu<?= isActive(['tax_rates','exchange_rates','vat_declaration','cit_calculation','fct'],$activeMenu)?' show':'' ?>" id="menuTax">
                 <a href="/danh-muc/bieu-thue" class="nav-link-s<?= isActive('tax_rates',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Biểu thuế</a>
                 <a href="/danh-muc/ty-gia" class="nav-link-s<?= isActive('exchange_rates',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Tỷ giá</a>
-                <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Kê khai GTGT</a>
+                <a href="/thue/ke-khai-gtgt" class="nav-link-s<?= isActive('vat_declaration',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Kê khai GTGT</a>
                 <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Bảng kê mua / bán</a>
                 <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Quyết toán GTGT</a>
-                <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Quyết toán TNDN</a>
+                <a href="/thue/quyet-toan-tndn" class="nav-link-s<?= isActive('cit_calculation',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Quyết toán TNDN</a>
                 <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Quyết toán TNCN</a>
+                <a href="/thue/nha-thau-nuoc-ngoai" class="nav-link-s<?= isActive('fct',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Nhà thầu nước ngoài</a>
                 <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Hóa đơn điện tử</a>
                 <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Gửi & Nộp thuế</a>
             </div>
@@ -208,8 +210,13 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
         <div class="nav-section">Tổng hợp</div>
         <div class="nav-item">
             <a class="nav-link-s" data-bs-toggle="collapse" href="#menuGL"><i class="bi bi-journal"></i> Tổng hợp <i class="bi bi-chevron-right ms-auto" style="width:auto;font-size:10px;"></i></a>
-            <div class="collapse sub-menu<?= isActive(['projects','so_cai','journal','trial_balance','period_close','fx_revaluation','intercompany'],$activeMenu)?' show':'' ?>" id="menuGL">
-
+            <div class="collapse sub-menu<?= isActive(['projects','so_cai','so_chi_tiet','journal','trial_balance','period_close','pre_close','corrections','fx_revaluation','intercompany'],$activeMenu)?' show':'' ?>" id="menuGL">
+            <a href="/tong-hop/chung-tu-ghi-so" class="nav-link-s<?= isActive('journal',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Chứng từ ghi sổ</a>
+            <a href="/tong-hop/phe-duyet" class="nav-link-s<?= isActive('approvals',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Phê duyệt</a>
+            <a href="/dieu-chinh-but-toan" class="nav-link-s<?= isActive('corrections',$activeMenu)?' active':'' ?>"><i class="bi bi-pencil"></i> Điều chỉnh bút toán</a>
+            <a href="/bao-cao/so-cai" class="nav-link-s<?= isActive('so_cai',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Sổ cái</a>
+            <a href="/bao-cao/so-chi-tiet" class="nav-link-s<?= isActive('so_chi_tiet',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Sổ chi tiết</a>
+            <a href="/he-thong/kiem-tra-truoc-khi-khoa-so" class="nav-link-s<?= isActive('pre_close',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Kiểm tra trước khóa sổ</a>
             <a href="/tong-hop/khoa-so-cuoi-ky" class="nav-link-s<?= isActive('period_close',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Khóa sổ cuối kỳ</a>
             <a href="/bao-cao/ty-gia" class="nav-link-s<?= isActive('fx_revaluation',$activeMenu)?' active':'' ?>"><i class="bi bi-currency-exchange"></i> Đánh giá lại ngoại tệ</a>
             <a href="/he-thong/noi-bo" class="nav-link-s<?= isActive('intercompany',$activeMenu)?' active':'' ?>"><i class="bi bi-diagram-3"></i> Giao dịch nội bộ</a>
@@ -222,11 +229,11 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
 
         <div class="nav-section">Báo cáo</div>
         <div class="nav-item"><a class="nav-link-s" data-bs-toggle="collapse" href="#menuReports"><i class="bi bi-bar-chart"></i> Báo cáo <i class="bi bi-chevron-right ms-auto" style="width:auto;font-size:10px;"></i></a>
-        <div class="collapse sub-menu<?= isActive(['fs_bc01','fs_bc02'],$activeMenu)?' show':'' ?>" id="menuReports">
+        <div class="collapse sub-menu<?= isActive(['fs_bc01','fs_bc02','fs_bc03','fs_bc09'],$activeMenu)?' show':'' ?>" id="menuReports">
             <a href="/bao-cao/tinh-hinh-tai-chinh" class="nav-link-s<?= isActive('fs_bc01',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> BC CĐKT (BC 01)</a>
             <a href="/bao-cao/ket-qua-kinh-doanh" class="nav-link-s<?= isActive('fs_bc02',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> KQKD (BC 02)</a>
             <a href="/bao-cao/luu-chuyen-tien-te" class="nav-link-s<?= isActive('fs_bc03',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> LCTT (BC 03)</a>
-            <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Thuyết minh BCTC</a>
+            <a href="/bao-cao/thuyet-minh-bctc" class="nav-link-s"><i class="bi bi-circle-fill"></i> Thuyết minh BCTC</a>
             <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Báo cáo thuế</a>
             <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Báo cáo quản trị</a>
             <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Tự thiết kế</a>
@@ -234,10 +241,11 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
 
         <div class="nav-section">Hệ thống</div>
         <div class="nav-item"><a class="nav-link-s" data-bs-toggle="collapse" href="#menuSys"><i class="bi bi-gear"></i> Hệ thống <i class="bi bi-chevron-right ms-auto" style="width:auto;font-size:10px;"></i></a>
-        <div class="collapse sub-menu<?= isActive(['users','roles','audit_log','periods'],$activeMenu)?' show':'' ?>" id="menuSys">
+        <div class="collapse sub-menu<?= isActive(['users','roles','audit_log','periods','opening_balances'],$activeMenu)?' show':'' ?>" id="menuSys">
             <a href="/he-thong/nguoi-dung" class="nav-link-s<?= isActive('users',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Người dùng</a>
             <a href="/he-thong/vai-tro" class="nav-link-s<?= isActive('roles',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Vai trò & Phân quyền</a>
             <a href="/he-thong/nhat-ky-hoat-dong" class="nav-link-s<?= isActive('audit_log',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Nhật ký hoạt động</a>
+            <a href="/he-thong/so-du-dau-ky" class="nav-link-s<?= isActive('opening_balances',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Số dư đầu kỳ</a>
             <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Cấu hình</a>
             <a href="/he-thong/quan-ly-ky" class="nav-link-s<?= isActive('periods',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Quản lý kỳ</a>
             <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Sao lưu & Phục hồi</a>
