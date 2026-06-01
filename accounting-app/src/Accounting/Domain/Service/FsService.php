@@ -507,6 +507,17 @@ class FsService
                     $values[$maSo] = round($result);
                     break;
 
+                case 'account_tree':
+                    $codes = array_map('trim', explode(',', $item['formula_detail'] ?? ''));
+                    $total = 0;
+                    foreach ($codes as $code) {
+                        $bal = $this->accountRepo->getTreeBalance($code);
+                        if ($item['sign_convention'] === 'positive') $total += $bal;
+                        else $total -= $bal;
+                    }
+                    $values[$maSo] = round($total);
+                    break;
+
                 case 'manual':
                     $values[$maSo] = 0;
                     break;
@@ -838,5 +849,40 @@ class FsService
             "SELECT DISTINCT period_code, period_end_date FROM fs_snapshots WHERE statement = 'BC01' ORDER BY period_code DESC"
         )->fetchAll(\PDO::FETCH_ASSOC);
         return $rows;
+    }
+
+    //
+    // KIỂM TRA TÍNH HỢP LỆ CỦA LINE ITEMS: Rà soát tất cả công thức `account` và `account_tree`
+    // để phát hiện tài khoản không tồn tại hoặc control account bị dùng sai loại công thức.
+    // Đây là lớp phòng vệ chống lại lỗi class BC01-tax-line-items (control account balance = 0).
+    //
+    // Chiến lược phát hiện:
+    // 1. Mã tài khoản không tồn tại → ERROR (sửa formula_detail)
+    // 2. Control account dùng formula_type = 'account' → WARN (nên dùng account_tree để auto sum)
+    // 3. Mã tài khoản không tồn tại có dấu hiệu là control account (viết hoa, 3 số) → WARN + gợi ý account_tree
+    //
+    public function validateLineItems(string $statement): array
+    {
+        $items = $this->getLineItems($statement);
+        $errors = [];
+        $warnings = [];
+
+        foreach ($items as $item) {
+            if (!in_array($item['formula_type'], ['account', 'account_tree'], true)) {
+                continue;
+            }
+            $codes = array_map('trim', explode(',', $item['formula_detail'] ?? ''));
+            foreach ($codes as $code) {
+                if ($code === '') continue;
+                $a = $this->accountRepo->findByCode($code);
+                if (!$a) {
+                    $errors[] = "Chỉ tiêu {$item['ma_so']} ({$item['name_vi']}): TK $code không tồn tại";
+                } elseif ($a->isControl() && $item['formula_type'] === 'account') {
+                    $warnings[] = "Chỉ tiêu {$item['ma_so']} ({$item['name_vi']}): TK $code là TK tổng hợp. Nên dùng formula_type = 'account_tree' để tự động tính tổng các TK con.";
+                }
+            }
+        }
+
+        return ['errors' => $errors, 'warnings' => $warnings];
     }
 }

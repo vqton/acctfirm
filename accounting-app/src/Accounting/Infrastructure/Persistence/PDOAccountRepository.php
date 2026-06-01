@@ -118,6 +118,25 @@ class PDOAccountRepository implements AccountRepositoryInterface
         ]);
     }
 
+    public function getTreeBalance(string $code): float
+    {
+        // MySQL 8 recursive CTE — tìm tất cả tài khoản con theo parent_id
+        $stmt = $this->pdo->prepare("
+            WITH RECURSIVE account_tree AS (
+                SELECT id, code, balance, parent_id, is_control
+                FROM accounts WHERE code = ?
+                UNION ALL
+                SELECT a.id, a.code, a.balance, a.parent_id, a.is_control
+                FROM accounts a
+                JOIN account_tree t ON a.parent_id = t.id
+            )
+            SELECT COALESCE(SUM(balance), 0) AS total_balance
+            FROM account_tree
+        ");
+        $stmt->execute([$code]);
+        return (float)$stmt->fetchColumn();
+    }
+
     public function delete(string $id): void
     {
         $this->pdo->prepare('DELETE FROM accounts WHERE id = ?')->execute([$id]);

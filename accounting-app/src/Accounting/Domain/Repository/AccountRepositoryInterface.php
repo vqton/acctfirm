@@ -28,4 +28,11 @@ interface AccountRepositoryInterface
     public function search(string $query): array;
 
     public function count(): int;
+
+    // TÍNH SỐ DƯ THEO CẤP: Trả về tổng số dư của tài khoản và tất cả tài khoản con
+    // Giải pháp cho vấn đề "control account balance = 0" mà không cần liệt kê từng TK con
+    // Composite pattern: parent delegat∑∑∑es to children recursively
+    // RỦI RO: Nếu cây tài khoản có chu trình (A→B→A), đệ quy sẽ không bao giờ dừng.
+    // Biện pháp: accounts.parent_id được kiểm soát chặt (không cho set parent_id tạo cycle).
+    public function getTreeBalance(string $code): float;
 }
