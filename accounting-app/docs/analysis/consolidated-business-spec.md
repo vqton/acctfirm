@@ -95,22 +95,22 @@ BC 03 (Cash Flow, indirect method): operating section from BC 02 profit + workin
 | AR (TK 131) | ✅ Complete | 19 | ArService — 10 UCs per spec |
 | FS — BC 01/02 | ✅ Complete | 18 | FsService |
 | FS — BC 03 | ✅ Complete | 20 | Bc03Test — indirect method, 3 activity sections, BC 01 cross-validation |
-| FS — BC 09 | ❌ Missing | 0 | Not implemented |
+| FS — BC 09 | ⚠️ Partial | — | `bc09.php` view + `FsController::viewTT99()`. 29-section disclosure not yet automated. |
 | Period Engine | ✅ Complete | 18 | PeriodService — open/close/lock |
 | GL (Sổ Cái) | ✅ Complete | 12 | GlService — ledger with running balance |
 | RBAC | ✅ Complete | — | AuthController, Auth helper, roles/permissions tables |
 | Audit Log | ✅ Complete | — | AuditLogger |
 | Bank Reconciliation | ✅ Complete | 24 | BankReconciliationService |
 | Petty Cash | ✅ Complete | 6 | PettyCashService |
-| Fixed Assets | ❌ Missing | 0 | Models exist, no lifecycle logic |
-| CCDC / TK 242 | ❌ Missing | 0 | Ccdc model exists, no amortization engine |
-| Payroll | ❌ Missing | 0 | Employee model exists, no payroll logic |
-| Tax — VAT | ❌ Missing | 0 | No declaration engine |
-| Tax — CIT/PIT | ❌ Missing | 0 | No calculation engine |
+| Fixed Assets | ✅ Complete | 25 | FixedAssetService + lifecycle controller (acquire/dispose) + views |
+| CCDC / TK 242 | ✅ Complete | — | CcdcAllocationService + migration 063 + controller + 28 lifecycle tests |
+| Payroll | ✅ Complete | 44 | PayrollService (669 lines), PayrollController (203 lines), 9 views, 35 routes, 12+ migrations |
+| Tax — VAT | ✅ Complete | — | VatService + migration 064 + VatController (scan non-deductible, reconcile, loss carryforward) |
+| Tax — CIT/PIT | ✅ Complete | — | CitService + migration 065 + CitController (scan non-deductible, reconcile, loss carryforward) |
 | E-Invoice | ❌ Missing | 0 | No integration |
 | Production / Costing | ❌ Missing | 0 | No BOM, WIP, unit cost |
 | Management Reports | ❌ Missing | 0 | No dashboard, no BI |
-| Multi-branch | ⚠️ Partial | — | Branch entity exists, no consolidation |
+| Multi-branch | ✅ Complete | 10 | IntercompanyService (280 lines) with matching + elimination + consolidated report. Migration 055. |
 
 ### 3.2 Inventory Coverage Detail
 

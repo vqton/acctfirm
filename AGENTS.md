@@ -744,7 +744,7 @@ steps:
 ```
 When in doubt:
 1. Check AGENTS.md (this document)
-2. Check docs/analysis/ for business specs
+2. Check accounting-app/docs/analysis/ for business specs
 3. Check existing code for patterns
 4. Check tests for expected behavior
 5. Ask the user — never infer accounting rules
