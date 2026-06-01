@@ -39,6 +39,8 @@ foreach (['SVC001','SVC002','SVC003','SVC004','SVC005','SVC006','SVC007',
     'MRG01','MRG02','MRG03','MRG04','SVC0051'] as $code) {
     try { $repo->delete($repo->findByCode($code)?->getId()); } catch (\Throwable $e) {}
 }
+// Cleanup branch COA accounts from previous runs
+$pdo->exec("DELETE FROM accounts WHERE name LIKE '% (CN999)' OR name LIKE '% (CN999)%'");
 
 echo "\n=== Test 1: AccountService::create ===\n";
 $a = $svc->create('SVC001', 'Service Test 1', 'asset', null, 'D', '1');
@@ -226,9 +228,11 @@ $unmappedCount = (int)$stmt->fetchColumn();
 assertTrue($unmappedCount >= 0, 'Period FS check query runs without error');
 
 // Cleanup test accounts
-foreach (['MRG01','MRG02','MRG03','MRG04'] as $code) {
-    try { $repo->delete($repo->findByCode($code)->getId()); } catch (\Throwable $e) {}
+foreach (['MRG01','MRG02','MRG03','MRG04','FSTST'] as $code) {
+    try { $repo->delete($repo->findByCode($code)?->getId()); } catch (\Throwable $e) {}
 }
+// Cleanup branch COA accounts created during this test run
+$pdo->exec("DELETE FROM accounts WHERE name LIKE '% (CN999)' OR name LIKE '% (CN999)%'");
 
 echo "\n=== Results: {$total} tests, {$failed} failed ===\n";
 exit($failed > 0 ? 1 : 0);

@@ -96,7 +96,14 @@ assertTrue($skipped, 'Second run same month skipped (no duplicate allocation)');
 
 echo "\n=== Test 7: Next month allocation ===\n";
 $nextMonth = date('Y-m', strtotime('+1 month'));
-$pdo->prepare("UPDATE accounting_periods SET status = 'open' WHERE period_code = ?")->execute([$nextMonth]);
+// Ensure next month period exists (migration 037 seeds only 3 months)
+$pdo->prepare("INSERT IGNORE INTO accounting_periods (period_code, period_type, name, status, start_date, end_date)
+    VALUES (?, 'month', ?, 'open', ?, ?)")->execute([
+    $nextMonth,
+    'Kỳ ' . $nextMonth,
+    $nextMonth . '-01',
+    date('Y-m-t', strtotime($nextMonth . '-01'))
+]);
 $results3 = $svc->runMonthlyAllocation($nextMonth, 'tester');
 $ourResult3 = null;
 foreach ($results3 as $r) {

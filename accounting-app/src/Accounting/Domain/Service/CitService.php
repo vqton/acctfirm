@@ -223,7 +223,11 @@ class CitService
             $taxableIncome, $nonDeductibleExpenses, max(0, $adjustedTaxableIncome),
             $lossUsed, $citRate, $citAmount, $createdBy]);
 
-        return $this->getCalculation($id);
+        // Use period-based lookup to handle ON DUPLICATE KEY UPDATE (existing record has different id)
+        $stmt = $this->pdo->prepare("SELECT id FROM cit_calculations WHERE period = ?");
+        $stmt->execute([$period]);
+        $existingId = $stmt->fetchColumn();
+        return $this->getCalculation($existingId ?: $id);
     }
 
     //

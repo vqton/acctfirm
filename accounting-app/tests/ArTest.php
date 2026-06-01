@@ -35,6 +35,11 @@ function assertTrue($c, $m) { global $total, $failed;
 }
 
 $pdo->exec('UPDATE accounts SET balance = 0');
+$pdo->exec('DELETE FROM debt_collection_promises');
+$pdo->exec('DELETE FROM debt_collection_approvals');
+$pdo->exec('DELETE FROM debt_collection_settlements');
+$pdo->exec('DELETE FROM debt_collection_activities');
+$pdo->exec('DELETE FROM debt_collection_queue');
 $pdo->exec('DELETE FROM ar_payments');
 $pdo->exec('DELETE FROM ar_invoices');
 $pdo->exec('DELETE FROM ledger_entries');

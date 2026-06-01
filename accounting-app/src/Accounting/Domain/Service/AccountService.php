@@ -352,10 +352,15 @@ class AccountService
             if ($isIC) { $skipped++; continue; }
 
             // Create branch copy
+            $suffix = ' (CN' . $entityId . ')';
+            $name = $src->getName();
+            if (mb_strlen($name . $suffix) > 100) {
+                $name = mb_substr($name, 0, 100 - mb_strlen($suffix));
+            }
             $branchAccount = new Account(
                 uniqid('coa_'),
                 $src->getCode(),
-                $src->getName() . ' (CN' . $entityId . ')',
+                $name . $suffix,
                 $src->getType(),
                 null, $src->getNormalBalance(), $src->getAccountClass(),
                 $src->getDescription(),

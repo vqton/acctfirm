@@ -171,8 +171,12 @@ class VatService
         $totalOutput = (float)$outputData['total_vat'];
         $payable = $totalOutput - $totalInput;
 
-        // Tạo hoặc cập nhật declaration
-        $id = uniqid('vat_');
+        // Resolve actual declaration ID before INSERT (handle ON DUPLICATE KEY UPDATE)
+        $stmt = $this->pdo->prepare("SELECT id FROM vat_declarations WHERE period = ?");
+        $stmt->execute([$period]);
+        $existingId = $stmt->fetchColumn();
+        $id = $existingId ?: uniqid('vat_');
+
         $this->pdo->prepare(
             "INSERT INTO vat_declarations (id, period, total_vat_input, total_vat_output, vat_payable, invoice_count_input, invoice_count_output, status, created_by)
              VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?)
@@ -182,7 +186,7 @@ class VatService
         )->execute([$id, $period, $totalInput, $totalOutput, $payable,
             (int)$inputData['invoice_count'], (int)$outputData['invoice_count'], $createdBy]);
 
-        // Lưu chi tiết
+        // Lưu chi tiết (xóa cũ rồi insert lại)
         $this->pdo->prepare("DELETE FROM vat_declaration_details WHERE declaration_id = ?")->execute([$id]);
         $detailStmt = $this->pdo->prepare(
             "INSERT INTO vat_declaration_details (id, declaration_id, line_type, invoice_ref, supplier_or_customer, invoice_date, gross_amount, vat_amount, vat_rate, source_table, source_id)

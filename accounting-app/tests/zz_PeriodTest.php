@@ -33,18 +33,34 @@ $pdo->exec('DELETE FROM ledger_entries');
 $pdo->exec('DELETE FROM transactions');
 $pdo->exec('DELETE FROM accounting_periods');
 
-echo "\n=== Test 1: Create monthly period ===\n";
-$p = $svc->createPeriod('month', '2026-05', 'Tháng 5/2026', '2026-05-01', '2026-05-31', 'admin');
-assertTrue($p['id'] > 0, 'Period ID returned');
-assertEq('open', $p['status'], 'Status = open');
-assertEq('month', $p['period_type'], 'Type = month');
-assertEq('2026-05', $p['period_code'], 'Code = 2026-05');
+echo "\n=== Test 1: Create 2026-06 (current month, no prior period check) ===\n";
+$pJun = $svc->createPeriod('month', '2026-06', 'Tháng 6/2026', '2026-06-01', '2026-06-30', 'admin');
+assertTrue($pJun['id'] > 0, 'Period ID returned');
+assertEq('open', $pJun['status'], 'Status = open');
 
-echo "\n=== Test 2: List periods ===\n";
+echo "\n=== Test 2: Create 2026-05 (prior period not sequential, allowed) ===\n";
+$pMay = $svc->createPeriod('month', '2026-05', 'Tháng 5/2026', '2026-05-01', '2026-05-31', 'admin');
+assertTrue($pMay['id'] > 0, 'Period 2026-05 created');
+assertEq('open', $pMay['status'], 'Status = open');
+
+// Chồng lấn: period 2026-05-15 → 2026-06-15 overlaps 2026-05 (May 1-31) AND 2026-06 (Jun 1-30)
+echo "\n=== Test 3: Overlap validation rejects overlapping period ===\n";
+try {
+    $svc->createPeriod('month', '2026-05-dup', 'Trùng', '2026-05-15', '2026-06-15', 'admin');
+    echo "FAIL: Overlap not rejected\n"; $failed++;
+} catch (\InvalidArgumentException $e) {
+    assertTrue(true, 'Overlap rejected');
+}
+
+echo "\n=== Test 4: Adjacent period (2026-04) no gap/overlap ===\n";
+$pApr = $svc->createPeriod('month', '2026-04', 'Tháng 4/2026', '2026-04-01', '2026-04-30', 'admin');
+assertTrue($pApr['id'] > 0, 'Adjacent period created');
+
+echo "\n=== Test 5: List periods ===\n";
 $list = $svc->getPeriods();
-assertTrue(count($list) >= 1, 'At least 1 period');
+assertTrue(count($list) >= 3, 'At least 3 periods');
 
-echo "\n=== Test 3: Close period blocks if status != open ===\n";
+echo "\n=== Test 6: Close period blocks if invalid id ===\n";
 try {
     $svc->closePeriod(99999, 'admin');
     echo "FAIL: Invalid period not rejected\n"; $failed++;
@@ -52,10 +68,7 @@ try {
     assertTrue(true, 'Invalid period rejected');
 }
 
-// Nghiệp vụ kết chuyển cuối kỳ: zero doanh thu (511), chi phí (642) → TK 911 → TK 421
-// Nếu fail → lợi nhuận giữ lại không được cập nhật → BC01 sai
-echo "\n=== Test 4: Execute closing entries ===\n";
-// Create some revenue and expense transactions first
+echo "\n=== Test 7: Execute closing entries in 2026-06 ===\n";
 $journal->postEntry('Service revenue', 'REV-001', [
     ['account_code' => '112', 'amount' => 10000000, 'is_debit' => true],
     ['account_code' => '511', 'amount' => 10000000, 'is_debit' => false],
@@ -75,35 +88,29 @@ $reBal = $accountRepo->findByCode('421')->getBalance();
 
 assertTrue(abs($revBal) < 1, 'Revenue (511) zeroed after close');
 assertTrue(abs($expBal) < 1, 'Expense (642) zeroed after close');
-assertTrue(abs($plBal) < 1, 'P&L (911) cleared to zero after profit transfer');
+assertTrue(abs($plBal) < 1, 'P&L (911) cleared after profit transfer');
 assertTrue(abs($reBal) > 0, 'Retained earnings (421) updated');
 
-echo "\n=== Test 5: Close period ===\n";
-$pdo->prepare('UPDATE accounting_periods SET status = ?, closed_by = ?, closed_at = NOW() WHERE id = ?')
-    ->execute(['closed', 'admin', $p['id']]);
-$p2 = $svc->createPeriod('month', '2026-06', 'Tháng 6/2026', '2026-06-01', '2026-06-30', 'admin');
-$closed = $svc->closePeriod($p2['id'], 'admin');
+echo "\n=== Test 8: Close 2026-05 and 2026-06 ===\n";
+$svc->closePeriod($pMay['id'], 'admin');
+$closed = $svc->closePeriod($pJun['id'], 'admin');
 assertEq('closed', $closed['status'], 'Period status = closed');
 assertTrue($closed['closed_at'] !== null, 'closed_at set');
 
-// Nghiệp vụ: Mở lại kỳ kế toán đã đóng (cần quyền auditor đặc biệt)
-// Theo dõi số lần mở lại (re_open_count) để kiểm soát
-// Nếu fail → không thể điều chỉnh hồi tố khi cần thiết
-echo "\n=== Test 6: Re-open period ===\n";
-$reopened = $svc->reOpenPeriod($p2['id'], 'auditor');
+echo "\n=== Test 9: Re-open period ===\n";
+$reopened = $svc->reOpenPeriod($pJun['id'], 'auditor');
 assertEq('open', $reopened['status'], 'Re-opened status = open');
 assertEq(1, $reopened['re_open_count'], 're_open_count = 1');
 
-echo "\n=== Test 7: isPeriodOpen static check ===\n";
+echo "\n=== Test 10: isPeriodOpen static check ===\n";
 $GLOBALS['container']['pdo'] = $pdo;
 assertTrue(!PeriodService::isPeriodOpen('2026-05-15'), 'May 2026 is closed');
 assertTrue(PeriodService::isPeriodOpen('2026-06-15'), 'June 2026 is open');
 
-// Close June again and check
-$svc->closePeriod($p2['id'], 'admin');
+$svc->closePeriod($pJun['id'], 'admin');
 assertTrue(!PeriodService::isPeriodOpen('2026-06-15'), 'June is now closed');
 
-echo "\n=== Test 8: Trial balance after closing entries ===\n";
+echo "\n=== Test 11: Trial balance after closing entries ===\n";
 $all = $accountRepo->findAll();
 $totalDr = 0; $totalCr = 0;
 foreach ($all as $a) {
@@ -113,6 +120,16 @@ foreach ($all as $a) {
     else { $totalCr += $bal; }
 }
 assertEq(round($totalDr, 0), round($totalCr, 0), 'Trial balance: Dr = Cr');
+
+echo "\n=== Cleanup: re-open all periods so sequential tests can post ===\n";
+$stmt = $pdo->prepare("UPDATE accounting_periods SET status = 'open' WHERE status = 'closed'");
+$stmt->execute();
+$affected = $stmt->rowCount();
+$pdo->exec("INSERT IGNORE INTO accounting_periods (period_code, period_type, name, status, start_date, end_date) VALUES
+    ('2026-06', 'month', 'Tháng 6/2026', 'open', '2026-06-01', '2026-06-30'),
+    ('2026-05', 'month', 'Tháng 5/2026', 'open', '2026-05-01', '2026-05-31'),
+    ('2026-04', 'month', 'Tháng 4/2026', 'open', '2026-04-01', '2026-04-30')");
+echo "Re-opened {$affected} periods for subsequent tests\n";
 
 echo "\n=== Results: {$total} tests, {$failed} failed ===\n";
 exit($failed > 0 ? 1 : 0);
