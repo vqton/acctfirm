@@ -100,6 +100,66 @@ class PeriodService
         ];
     }
 
+    // CẤU HÌNH KỲ KẾ TOÁN: Đọc giá trị từ bảng period_config
+    // Cho phép kế toán trưởng cấu hình tỷ lệ thuế, trích quỹ mà không cần sửa code
+    public function getPeriodConfig(string $key): float
+    {
+        $stmt = $this->pdo->prepare('SELECT `value` FROM period_config WHERE `key` = ?');
+        $stmt->execute([$key]);
+        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+        return $row ? (float)$row['value'] : 0.0;
+    }
+
+    public function setPeriodConfig(string $key, float $value, string $updatedBy): void
+    {
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO period_config (`key`, `value`, `updated_by`) VALUES (?, ?, ?)
+             ON DUPLICATE KEY UPDATE `value` = VALUES(`value`), `updated_by` = VALUES(`updated_by`)'
+        );
+        $stmt->execute([$key, $value, $updatedBy]);
+    }
+
+    public function getAllPeriodConfigs(): array
+    {
+        $rows = $this->pdo->query('SELECT * FROM period_config ORDER BY `key`')->fetchAll(\PDO::FETCH_ASSOC);
+        return array_map(fn($r) => [
+            'key' => $r['key'],
+            'value' => (float)$r['value'],
+            'description' => $r['description'],
+            'updated_at' => $r['updated_at'],
+            'updated_by' => $r['updated_by'],
+        ], $rows);
+    }
+
+    // KỲ KẾ TOÁN: Tự động tạo 12 kỳ tháng cho một năm tài chính
+    // Cho phép kế toán trưởng tạo toàn bộ năm chỉ với một thao tác
+    // Thứ tự tạo từ tháng 1 → 12 để đảm bảo điều kiện kỳ trước phải mở
+    public function generatePeriods(int $fiscalYear, string $openedBy): array
+    {
+        $created = [];
+        for ($m = 1; $m <= 12; $m++) {
+            $start = sprintf('%04d-%02d-01', $fiscalYear, $m);
+            $end = date('Y-m-t', strtotime($start));
+            $code = sprintf('%04d-%02d', $fiscalYear, $m);
+            $name = sprintf('Tháng %d/%04d', $m, $fiscalYear);
+            $type = 'month';
+            $isFirst = $m === 1;
+            $isLast = $m === 12;
+
+            $period = $this->createPeriod($type, $code, $name, $start, $end, $openedBy);
+            $period['is_first'] = $isFirst;
+            $period['is_last'] = $isLast;
+
+            // Đánh dấu is_first/is_last
+            $this->pdo->prepare(
+                'UPDATE accounting_periods SET is_first = ?, is_last = ? WHERE id = ?'
+            )->execute([$isFirst ? 1 : 0, $isLast ? 1 : 0, $period['id']]);
+
+            $created[] = $period;
+        }
+        return $created;
+    }
+
     // KỲ KẾ TOÁN: Tạo kỳ kế toán mới — tháng/quý/năm
     //
     // Nghiệp vụ: Kỳ kế toán được tạo tuần tự, không được bỏ sót kỳ. Kỳ trước
@@ -109,6 +169,19 @@ class PeriodService
     // → sai BC01/BC02. Nếu bỏ sót kỳ, audit trail bị gián đoạn.
     public function createPeriod(string $type, string $code, string $name, string $start, string $end, string $openedBy): array
     {
+        // Kiểm tra chồng lấn ngày tháng: Không có kỳ nào có start_date < end và end_date > start
+        // RỦI RO: Gaps/overlaps → sai số dư dồn tích → BC01/BC02 sai
+        $overlap = $this->pdo->prepare(
+            "SELECT COUNT(*) FROM accounting_periods WHERE start_date < ? AND end_date > ?"
+        );
+        $overlap->execute([$end, $start]);
+        if ((int)$overlap->fetchColumn() > 0) {
+            throw new \InvalidArgumentException(
+                "Khoảng thời gian {$start} → {$end} chồng lấn với kỳ kế toán hiện có. " .
+                "Vui lòng kiểm tra lại ngày bắt đầu và kết thúc."
+            );
+        }
+
         // Bắt buộc: Kỳ trước phải đóng trước khi mở kỳ mới — đảm bảo tuần tự thời gian
         $prev = $this->pdo->prepare("SELECT id, status FROM accounting_periods WHERE end_date < ? ORDER BY end_date DESC LIMIT 1");
         $prev->execute([$start]);
@@ -281,6 +354,57 @@ class PeriodService
                 'system');
         }
         $checks[] = ['check' => 'Payroll posted', 'passed' => $payrollPass, 'note' => $payrollNote];
+
+        // 9. Kiểm tra VAT: tờ khai GTGT đã khóa cho kỳ này chưa
+        // NGHIỆP VỤ: Trước khi khóa sổ, kế toán phải hoàn tất tờ khai GTGT.
+        // Nếu chưa khai báo GTGT → số thuế GTGT phải nộp (33311) có thể sai
+        // → bị phạt chậm nộp tờ khai (tối thiểu 5tr/tháng theo Nghị định 125/2020).
+        // BLOCKING: VAT là bắt buộc hàng tháng/quý — chặn khóa sổ nếu chưa khai báo.
+        $vatCheck = $this->pdo->prepare(
+            "SELECT COUNT(*) FROM vat_declarations WHERE period = ? AND status = 'finalised'"
+        );
+        $vatCheck->execute([$period['period_code']]);
+        $vatFinalised = (int)$vatCheck->fetchColumn();
+        $vatPass = $vatFinalised > 0;
+        if (!$vatPass) { $allPass = false; }
+        $checks[] = ['check' => 'VAT declaration finalised', 'passed' => $vatPass, 'note' => $vatPass ? 'OK' : 'Chưa khóa tờ khai GTGT cho kỳ này'];
+
+        // 10. Kiểm tra CIT: quyết toán TNDN đã khóa chưa
+        // BLOCKING ở cuối năm (tháng 12), WARNING các tháng khác
+        $citCheck = $this->pdo->prepare(
+            "SELECT COUNT(*) FROM cit_calculations WHERE period = ? AND status = 'finalised'"
+        );
+        $citCheck->execute([$period['period_code']]);
+        $citFinalised = (int)$citCheck->fetchColumn();
+        $isYearEnd = substr($period['period_code'], -2) === '12';
+        $citPass = $citFinalised > 0;
+        if ($isYearEnd && !$citPass) {
+            $allPass = false;
+            $citNote = 'Chưa khóa quyết toán TNDN cuối năm — bắt buộc trước khi khóa sổ';
+        } else {
+            $citNote = $citPass ? 'OK' : 'Chưa khóa quyết toán TNDN (cảnh báo — không chặn)';
+        }
+        $checks[] = ['check' => 'CIT finalised', 'passed' => $citPass, 'note' => $citNote];
+
+        // 11. Kiểm tra FCT: tờ khai nhà thầu nước ngoài đã khóa chưa
+        // WARNING — không chặn (không phải DN nào cũng có giao dịch FCT)
+        $fctCheck = $this->pdo->prepare(
+            "SELECT COUNT(*) FROM fct_declarations WHERE period = ? AND status = 'finalised'"
+        );
+        $fctCheck->execute([$period['period_code']]);
+        $fctFinalised = (int)$fctCheck->fetchColumn();
+        $fctNote = 'OK';
+        if ($fctFinalised === 0) {
+            $hasFctContracts = $this->pdo->prepare(
+                "SELECT COUNT(*) FROM fct_contracts WHERE created_at BETWEEN ? AND ?"
+            );
+            $fctStart = $period['start_date'];
+            $fctEnd = $period['end_date'] . ' 23:59:59';
+            $hasFctContracts->execute([$fctStart, $fctEnd]);
+            $hasFct = (int)$hasFctContracts->fetchColumn();
+            $fctNote = $hasFct > 0 ? 'Có hợp đồng nhà thầu nhưng chưa khóa tờ khai FCT' : 'Không có giao dịch FCT';
+        }
+        $checks[] = ['check' => 'FCT declaration finalised', 'passed' => true, 'note' => $fctNote];
 
         return [
             'can_close' => $allPass,
@@ -572,7 +696,7 @@ class PeriodService
 
         // TÍCH HỢP: Bút toán điều chỉnh thuế TNDN
         // Contract: Chỉ tạo nếu lợi nhuận > 0 và chưa có bút toán thuế nào trong kỳ
-        $taxRate = 0.20; // 20% thuế suất TNDN (TT 78/2021)
+        $taxRate = $this->getPeriodConfig('cit_rate') ?: 0.20;
         $estimatedTax = $profitBeforeTax > 0 ? round($profitBeforeTax * $taxRate) : 0;
 
         if ($estimatedTax > 0) {
@@ -638,22 +762,18 @@ class PeriodService
 
         if (abs($retainedEarnings) < 1) return;
 
-        // Nếu lợi nhuận > 0: trích quỹ khen thưởng (10%) và quỹ đầu tư (20%)
-        // Đây là tỷ lệ mặc định, doanh nghiệp có thể thay đổi theo Điều lệ
-        // TỶ LỆ PHÂN PHỐI LỢI NHUẬN (HARDCODED):
-        // - Quỹ khen thưởng (353): 10% — theo Nghị định 91/2025, tối đa 10% LNST
-        // - Quỹ đầu tư phát triển (414): 20% — theo Điều lệ công ty (có thể thay đổi)
-        // - Còn lại giữ tại TK 421: Lợi nhuận chưa phân phối
-        //
-        // HẠN CHẾ: Tỷ lệ này hardcode trong code — nếu Điều lệ công ty thay đổi,
-        // phải sửa code. Đề xuất: Đưa tỷ lệ vào bảng company_config để kế toán trưởng
-        // tự cấu hình mà không cần deploy.
+        // Nếu lợi nhuận > 0: trích quỹ khen thưởng và quỹ đầu tư
+        // Tỷ lệ lấy từ bảng period_config (bonus_rate, investment_rate)
+        // Mặc định: 10% quỹ khen thưởng (353), 20% quỹ đầu tư (414)
+        // Còn lại giữ tại TK 421: Lợi nhuận chưa phân phối
         //
         // RỦI RO: Nếu lợi nhuận sau thuế (LNST) không đủ để trích quỹ, BC01 chỉ tiêu
         // 421 có thể âm (nếu trích vượt quá LNST) → sai BC01, audit fail.
         if ($retainedEarnings > 0) {
-            $bonusFund = round($retainedEarnings * 0.10);
-            $investmentFund = round($retainedEarnings * 0.20);
+            $bonusRate = $this->getPeriodConfig('bonus_rate') ?: 0.10;
+            $investmentRate = $this->getPeriodConfig('investment_rate') ?: 0.20;
+            $bonusFund = round($retainedEarnings * $bonusRate);
+            $investmentFund = round($retainedEarnings * $investmentRate);
             $remainingProfit = $retainedEarnings - $bonusFund - $investmentFund;
             $lines = [];
 

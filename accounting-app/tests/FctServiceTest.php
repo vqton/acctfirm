@@ -10,6 +10,9 @@ spl_autoload_register(function ($class) {
 });
 
 use Accounting\Domain\Service\FctService;
+use Accounting\Domain\Service\JournalService;
+use Accounting\Infrastructure\Persistence\PDOAccountRepository;
+use Accounting\Infrastructure\Persistence\PDOTransactionRepository;
 
 $pdo = new PDO("mysql:host=127.0.0.1;dbname=accounting_db;charset=utf8mb4", "dev", "123456", [
     PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
@@ -17,7 +20,14 @@ $pdo = new PDO("mysql:host=127.0.0.1;dbname=accounting_db;charset=utf8mb4", "dev
     PDO::ATTR_EMULATE_PREPARES => false,
 ]);
 
+// FctService without JournalService (backward compat — journals not posted)
 $fct = new FctService($pdo);
+
+// FctService with JournalService (full integration — journals posted to GL)
+$accountRepo = new PDOAccountRepository($pdo);
+$txnRepo = new PDOTransactionRepository($pdo);
+$journal = new JournalService($accountRepo, $txnRepo, $pdo);
+$fctJournal = new FctService($pdo, $journal);
 
 $failed = 0; $total = 0;
 function assertEq($a, $b, $msg) { global $total, $failed; $total++; if ($a === $b) { echo "PASS: {$msg}\n"; } else { echo "FAIL: {$msg} — expected " . var_export($b, true) . ", got " . var_export($a, true) . "\n"; $failed++; } }
@@ -80,7 +90,7 @@ $testNo = 'FCT-TEST-' . date('YmdHis');
 $pdo->exec("DELETE FROM fct_contracts WHERE contract_no LIKE 'FCT-TEST-%'");
 
 $contract = $fct->recordWithholding(
-    $testNo, 'Test Contractor Ltd', 'Singapore', 'services', 110000000, 'USD', 25400, 'Test ghi nhan FCt', 'tester'
+    $testNo, 'Test Contractor Ltd', 'Singapore', 'services', 110000000, 'USD', 25400, '642', 'Test ghi nhan FCt', 'tester'
 );
 
 assertTrue(!empty($contract['id']), 'Contract has ID');
@@ -97,7 +107,7 @@ echo "\n--- Test 4: Record contract (trading type) ---\n";
 
 $testNo2 = 'FCT-TEST2-' . date('YmdHis');
 $c2 = $fct->recordWithholding(
-    $testNo2, 'Trading Corp', 'Japan', 'trading', 50000000, 'JPY', 170, 'Test trading contract', 'tester'
+    $testNo2, 'Trading Corp', 'Japan', 'trading', 50000000, 'JPY', 170, '642', 'Test trading contract', 'tester'
 );
 
 assertFloatEq($c2['vat_withholding'], 495050, 'Trading VAT withholding');
@@ -175,5 +185,60 @@ foreach ($types as $k => $v) {
     $r = $fct->calculateWithholding($k, 1000000);
     assertTrue(strlen($r['service_type_label']) > 0, "Label exists for {$k}");
 }
+
+// === Test 11: Record with journal posting (full integration) ===
+echo "\n--- Test 11: Record FCT with journal posting ---\n";
+// Ensure period is open
+$pdo->exec("UPDATE accounting_periods SET status = 'open' WHERE period_code = '" . date('Y-m') . "'");
+
+$testNo3 = 'FCT-JRNL-TEST-' . date('YmdHis');
+$contract3 = $fctJournal->recordWithholding(
+    $testNo3, 'Journal Test GmbH', 'Germany', 'services', 55000000,
+    'EUR', 26000, '642', 'Test journal posting', 'tester'
+);
+assertEq($contract3['status'], 'posted', 'Contract status = posted with journal');
+assertTrue(!empty($contract3['journal_id']), 'Contract has journal_id');
+assertEq($contract3['expense_account_code'], '642', 'Expense account = 642');
+
+// Verify journal entry exists
+$stmtJrnl = $pdo->prepare("SELECT * FROM transactions WHERE id = ?");
+$stmtJrnl->execute([$contract3['journal_id']]);
+$jrnl = $stmtJrnl->fetch(PDO::FETCH_ASSOC);
+assertTrue(!empty($jrnl), 'Journal transaction exists');
+assertEq($jrnl['status'], 'posted', 'Journal status = posted');
+
+// Verify balance impact: 642 (admin expense) should have balance change
+$stmtBal642 = $pdo->prepare("SELECT balance FROM accounts WHERE code = '642'");
+$stmtBal642->execute();
+$bal642 = (float)$stmtBal642->fetchColumn();
+
+$stmtBal331 = $pdo->prepare("SELECT balance FROM accounts WHERE code = '331'");
+$stmtBal331->execute();
+$bal331 = (float)$stmtBal331->fetchColumn();
+
+// 642 is expense — debit increases, so balance > 0 after posting
+// 331 is liability — credit increases, so balance > 0 after posting
+assertTrue($bal642 > 0, '642 (admin expense) has balance after FCT posting');
+assertTrue($bal331 > 0, '331 (AP) has balance after FCT posting');
+
+// Verify FCT journal has correct Dr/Cr lines
+$stmtLines = $pdo->prepare(
+    "SELECT a.code, le.amount, le.is_debit
+     FROM ledger_entries le
+     JOIN accounts a ON a.id = le.account_id
+     WHERE le.transaction_id = ?"
+);
+$stmtLines->execute([$contract3['journal_id']]);
+$lines = $stmtLines->fetchAll(PDO::FETCH_ASSOC);
+assertEq(count($lines), 2, 'Journal has 2 ledger lines (Dr + Cr)');
+
+$foundDr = false;
+$foundCr = false;
+foreach ($lines as $l) {
+    if ($l['is_debit'] && $l['code'] === '642') $foundDr = true;
+    if (!$l['is_debit'] && $l['code'] === '331') $foundCr = true;
+}
+assertTrue($foundDr, 'Debit line: 642 (admin expense)');
+assertTrue($foundCr, 'Credit line: 331 (AP)');
 
 results();

@@ -52,6 +52,7 @@ class FctController
                 (float)($data['contract_value'] ?? 0),
                 $data['currency'] ?? 'VND',
                 (float)($data['exchange_rate'] ?? 1),
+                $data['expense_account_code'] ?? '642',
                 $data['notes'] ?? '',
                 $_SESSION['user_id'] ?? 'system'
             );
@@ -115,7 +116,6 @@ class FctController
         Auth::requirePermission('tax', 'read');
         $decl = $this->fct->getDeclaration($id);
         if (!$decl) { JsonResponse::error('Không tìm thấy tờ khai FCT', 404); return; }
-        // Build CSV from declaration data
         $headers = ['Kỳ', 'Số HĐ', 'Nhà thầu', 'Quốc gia', 'Loại dịch vụ',
             'Giá trị HĐ', 'VAT khấu trừ', 'TNDN khấu trừ', 'Thanh toán ròng', 'Trạng thái'];
         $contracts = $this->fct->getContracts();
@@ -135,7 +135,6 @@ class FctController
         header('Content-Type: ' . $result['mime']);
         header('Content-Disposition: attachment; filename="' . $result['filename'] . '"');
         echo $result['content'];
-        exit;
     }
 
     public function view(): void

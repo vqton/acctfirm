@@ -15,10 +15,12 @@ namespace Accounting\Domain\Service;
 class CitService
 {
     private \PDO $pdo;
+    private ?\Accounting\Domain\Contract\AuditLoggerInterface $auditLogger;
 
-    public function __construct(\PDO $pdo)
+    public function __construct(\PDO $pdo, ?\Accounting\Domain\Contract\AuditLoggerInterface $auditLogger = null)
     {
         $this->pdo = $pdo;
+        $this->auditLogger = $auditLogger;
     }
 
     //
@@ -227,7 +229,10 @@ class CitService
         $stmt = $this->pdo->prepare("SELECT id FROM cit_calculations WHERE period = ?");
         $stmt->execute([$period]);
         $existingId = $stmt->fetchColumn();
-        return $this->getCalculation($existingId ?: $id);
+        $result = $this->getCalculation($existingId ?: $id);
+        $this->auditLogger?->log('cit.prepare', 'cit_calculation', $result['id'],
+            null, ['period' => $period, 'cit_amount' => $citAmount, 'taxable_income' => $taxableIncome], $createdBy);
+        return $result;
     }
 
     //
@@ -331,6 +336,8 @@ class CitService
         if ($stmt->rowCount() === 0) {
             throw new \RuntimeException('Không thể khóa quyết toán. Bản ghi không tồn tại hoặc đã được khóa.');
         }
+        $this->auditLogger?->log('cit.finalise', 'cit_calculation', $id,
+            $calc, ['status' => 'finalised'], 'system');
         return $this->getCalculation($id);
     }
 }

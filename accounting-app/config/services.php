@@ -200,9 +200,9 @@ function createContainer(): array
     $journalBookService = new JournalBookService($pdo);
     $fixedAssetService = new FixedAssetService($fixedAssetRepository, $accountRepository, $transactionRepository, $journalService, $pdo, $auditLogger);
     $ccdcAllocationService = new CcdcAllocationService($ccdcRepository, $journalService, $pdo, $auditLogger);
-    $vatService = new VatService($pdo);
-    $citService = new CitService($pdo);
-    $fctService = new FctService($pdo);
+    $vatService = new VatService($pdo, $auditLogger);
+    $citService = new CitService($pdo, $auditLogger);
+    $fctService = new FctService($pdo, $journalService, $auditLogger);
     $openingBalanceService = new OpeningBalanceService($pdo, $accountRepository);
     $reportExportService = new ReportExportService();
     $payrollService = new PayrollService($payrollEntryRepository, $payrollPeriodRepository, $salaryComponentRepository, $employeeRepository, $journalService, $pdo, $auditLogger);

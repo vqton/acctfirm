@@ -22,10 +22,12 @@ namespace Accounting\Domain\Service;
 class VatService
 {
     private \PDO $pdo;
+    private ?\Accounting\Domain\Contract\AuditLoggerInterface $auditLogger;
 
-    public function __construct(\PDO $pdo)
+    public function __construct(\PDO $pdo, ?\Accounting\Domain\Contract\AuditLoggerInterface $auditLogger = null)
     {
         $this->pdo = $pdo;
+        $this->auditLogger = $auditLogger;
     }
 
     //
@@ -186,6 +188,9 @@ class VatService
         )->execute([$id, $period, $totalInput, $totalOutput, $payable,
             (int)$inputData['invoice_count'], (int)$outputData['invoice_count'], $createdBy]);
 
+        $this->auditLogger?->log('vat.prepare', 'vat_declaration', $id,
+            null, ['period' => $period, 'vat_payable' => $payable], $createdBy);
+
         // Lưu chi tiết (xóa cũ rồi insert lại)
         $this->pdo->prepare("DELETE FROM vat_declaration_details WHERE declaration_id = ?")->execute([$id]);
         $detailStmt = $this->pdo->prepare(
@@ -264,6 +269,8 @@ class VatService
         if ($stmt->rowCount() === 0) {
             throw new \RuntimeException('Không thể khóa tờ khai. Tờ khai đã được khóa trước đó.');
         }
+        $this->auditLogger?->log('vat.finalise', 'vat_declaration', $id,
+            $decl, ['status' => 'finalised'], 'system');
         return $this->getDeclaration($id);
     }
 }

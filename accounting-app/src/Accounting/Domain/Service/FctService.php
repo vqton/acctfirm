@@ -1,6 +1,9 @@
 <?php
 namespace Accounting\Domain\Service;
 
+use Accounting\Domain\Contract\AuditLoggerInterface;
+use Accounting\Domain\Repository\AccountRepositoryInterface;
+
 //
 // DỊCH VỤ THUẾ NHÀ THẦU NƯỚC NGOÀI (FCT): Tính toán và khấu trừ thuế
 // Tuân thủ Thông tư 103/2014/TT-BTC về thuế nhà thầu nước ngoài
@@ -15,7 +18,9 @@ namespace Accounting\Domain\Service;
 //   leasing:                    VAT 5% + CIT 5%
 //   other:                      VAT 2% + CIT 2%
 //
-// Bút toán: Dr 642/635/241 (giá trị trước thuế) / Cr 331 (sau thuế) + Cr 33312 (VAT) + Cr 3338 (CIT)
+// Bút toán khi ghi nhận:
+//   Nợ 642/641/635/627... (giá trị hợp đồng)
+//   Có 331 (phải trả nhà thầu nước ngoài)
 //
 // RỦI RO: Sai tỷ lệ khấu trừ → bị truy thu thuế + phạt. Cần kiểm tra Điều ước quốc tế (DTA)
 // để xác định có được giảm thuế suất hay không.
@@ -24,10 +29,14 @@ namespace Accounting\Domain\Service;
 class FctService
 {
     private \PDO $pdo;
+    private ?JournalService $journal;
+    private ?AuditLoggerInterface $auditLogger;
 
-    public function __construct(\PDO $pdo)
+    public function __construct(\PDO $pdo, ?JournalService $journal = null, ?AuditLoggerInterface $auditLogger = null)
     {
         $this->pdo = $pdo;
+        $this->journal = $journal;
+        $this->auditLogger = $auditLogger;
     }
 
     // Bảng tỷ lệ khấu trừ theo loại dịch vụ (TT 103/2014)
@@ -81,26 +90,81 @@ class FctService
         ];
     }
 
-    // Ghi nhận khấu trừ thuế nhà thầu
+    // Ghi nhận khấu trừ thuế nhà thầu — đồng thời post bút toán vào sổ cái
+    //
+    // NGHIỆP VỤ: Khi ghi nhận hợp đồng nhà thầu nước ngoài, hệ thống tự động:
+    // 1. Tính toán số thuế khấu trừ (VAT + CIT)
+    // 2. Ghi nhận hợp đồng vào bảng fct_contracts
+    // 3. Post bút toán: Nợ {expense_account_code} / Có 331 (phải trả nhà thầu)
+    //
+    // RỦI RO: Nếu postEntry thất bại (kỳ đã đóng, tài khoản không hợp lệ),
+    // hợp đồng vẫn được ghi nhận với status='draft' để kế toán xử lý thủ công.
+    //
+    // TÍCH HỢP: Sau khi ghi nhận, người dùng thanh toán qua CashService/BankService
+    // và hạch toán tay phần khấu trừ thuế (Nợ 331 / Có 112 + Có 33312 + Có 3338).
+    //
     public function recordWithholding(string $contractNo, string $contractorName, string $contractorCountry,
         string $serviceType, float $contractValue, string $currency = 'VND', float $exchangeRate = 1,
-        string $notes = '', string $createdBy = 'system'): array
+        string $expenseAccountCode = '642', string $notes = '', string $createdBy = 'system'): array
     {
         $calc = $this->calculateWithholding($serviceType, $contractValue);
-
         $id = uniqid('fct_');
+        $journalId = null;
 
+        // Post journal entry first (Dr expense / Cr 331)
+        if ($this->journal) {
+            try {
+                $txn = $this->journal->postEntry(
+                    description: "FCT: {$contractNo} — {$contractorName}",
+                    reference: $contractNo,
+                    lines: [
+                        ['account_code' => $expenseAccountCode, 'amount' => $calc['contract_value'], 'is_debit' => true],
+                        ['account_code' => '331', 'amount' => $calc['contract_value'], 'is_debit' => false],
+                    ],
+                    createdBy: $createdBy,
+                    module: 'fct',
+                    voucherType: 'PC'
+                );
+                $journalId = $txn->getId();
+            } catch (\Throwable $e) {
+                // Journal failed — record contract as draft for manual processing
+                $this->pdo->prepare(
+                    "INSERT INTO fct_contracts (id, contract_no, contractor_name, contractor_country, service_type,
+                     expense_account_code, contract_value, vat_rate, cit_rate, vat_withholding, cit_withholding, net_payment,
+                     currency, exchange_rate, status, notes, created_by)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)"
+                )->execute([
+                    $id, $contractNo, $contractorName, $contractorCountry, $serviceType,
+                    $expenseAccountCode,
+                    $calc['contract_value'], $calc['vat_rate'], $calc['cit_rate'],
+                    $calc['vat_withholding'], $calc['cit_withholding'], $calc['net_payment'],
+                    $currency, $exchangeRate, $notes, $createdBy
+                ]);
+                throw $e; // Re-throw — caller sees the error
+            }
+        }
+
+        // Insert contract with journal_id
+        // Nếu có journal → status = 'posted' (đã ghi sổ). Nếu không → 'draft' (backward compat test)
+        $status = $this->journal ? 'posted' : 'draft';
         $this->pdo->prepare(
             "INSERT INTO fct_contracts (id, contract_no, contractor_name, contractor_country, service_type,
-             contract_value, vat_rate, cit_rate, vat_withholding, cit_withholding, net_payment,
-             currency, exchange_rate, status, notes, created_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)"
+             expense_account_code, contract_value, vat_rate, cit_rate, vat_withholding, cit_withholding, net_payment,
+             currency, exchange_rate, journal_id, status, notes, created_by)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         )->execute([
             $id, $contractNo, $contractorName, $contractorCountry, $serviceType,
+            $expenseAccountCode,
             $calc['contract_value'], $calc['vat_rate'], $calc['cit_rate'],
             $calc['vat_withholding'], $calc['cit_withholding'], $calc['net_payment'],
-            $currency, $exchangeRate, $notes, $createdBy
+            $currency, $exchangeRate, $journalId, $status, $notes, $createdBy
         ]);
+
+        $this->auditLogger?->log('fct.record', 'fct_contract', $id,
+            null, [
+                'contract_no' => $contractNo, 'contractor' => $contractorName,
+                'value' => $calc['contract_value'], 'journal_id' => $journalId,
+            ], $createdBy);
 
         return $this->getContract($id);
     }
@@ -128,8 +192,8 @@ class FctService
     {
         $rows = $this->pdo->query(
             "SELECT id, contract_no, contractor_name, contractor_country, service_type,
-             contract_value, vat_withholding, cit_withholding, net_payment, status,
-             currency, created_by, created_at
+             expense_account_code, contract_value, vat_withholding, cit_withholding, net_payment, status,
+             journal_id, currency, created_by, created_at
              FROM fct_contracts ORDER BY created_at DESC LIMIT 100"
         )->fetchAll(\PDO::FETCH_ASSOC);
 
@@ -139,11 +203,13 @@ class FctService
             'contractor_name' => $r['contractor_name'],
             'contractor_country' => $r['contractor_country'],
             'service_type' => $r['service_type'],
+            'expense_account_code' => $r['expense_account_code'],
             'contract_value' => (float)$r['contract_value'],
             'vat_withholding' => (float)$r['vat_withholding'],
             'cit_withholding' => (float)$r['cit_withholding'],
             'net_payment' => (float)$r['net_payment'],
             'status' => $r['status'],
+            'journal_id' => $r['journal_id'],
             'currency' => $r['currency'],
             'created_by' => $r['created_by'],
             'created_at' => $r['created_at'],
@@ -201,6 +267,9 @@ class FctService
             ]);
         }
 
+        $this->auditLogger?->log('fct.prepare_declaration', 'fct_declaration', $id,
+            null, ['period' => $period, 'contract_count' => (int)$data['cnt']], $createdBy);
+
         return $this->getDeclaration($id);
     }
 
@@ -235,11 +304,9 @@ class FctService
 
     public function finalise(string $id): array
     {
-        // Load declaration first to get period info
         $decl = $this->getDeclaration($id);
         if (!$decl) throw new \RuntimeException('Không tìm thấy tờ khai FCT.');
 
-        // Kiểm tra kỳ kế toán đang mở
         $period = $decl['period'] ?? '';
         if ($period && !PeriodService::isPeriodOpen($period . '-15', $this->pdo)) {
             throw new \RuntimeException("Kỳ kế toán {$period} đã đóng. Không thể khóa tờ khai.");
@@ -252,21 +319,34 @@ class FctService
         if ($stmt->rowCount() === 0) {
             throw new \RuntimeException('Không thể khóa tờ khai. Tờ khai đã được khóa trước đó.');
         }
+
+        $this->auditLogger?->log('fct.finalise', 'fct_declaration', $id,
+            $decl, ['status' => 'finalised', 'period' => $period], 'system');
+
         return $this->getDeclaration($id);
     }
 
     // Hủy hợp đồng
     public function cancelContract(string $id): array
     {
-        $stmt = $this->pdo->prepare("UPDATE fct_contracts SET status = 'cancelled' WHERE id = ? AND status = 'draft'");
+        $stmt = $this->pdo->prepare("UPDATE fct_contracts SET status = 'cancelled' WHERE id = ? AND status = 'posted'");
         $stmt->execute([$id]);
         if ($stmt->rowCount() === 0) {
             $contract = $this->getContract($id);
             if (!$contract) {
                 throw new \RuntimeException('Không tìm thấy hợp đồng nhà thầu.');
             }
-            throw new \RuntimeException('Không thể hủy hợp đồng. Hợp đồng không còn ở trạng thái nháp.');
+            // Allow cancelling draft contracts too
+            $stmt2 = $this->pdo->prepare("UPDATE fct_contracts SET status = 'cancelled' WHERE id = ? AND status = 'draft'");
+            $stmt2->execute([$id]);
+            if ($stmt2->rowCount() === 0) {
+                throw new \RuntimeException('Không thể hủy hợp đồng. Hợp đồng không còn ở trạng thái nháp hoặc đã ghi sổ.');
+            }
         }
+
+        $this->auditLogger?->log('fct.cancel', 'fct_contract', $id,
+            null, ['status' => 'cancelled'], 'system');
+
         return $this->getContract($id);
     }
 }
