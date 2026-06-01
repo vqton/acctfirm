@@ -20,6 +20,20 @@ $pdo->exec('DELETE FROM ledger_entries');
 $pdo->exec('DELETE FROM transactions');
 $pdo->exec('DELETE FROM fs_snapshots');
 
+// Mở kỳ 2026-06 để JournalService có thể post
+$pdo->exec("INSERT IGNORE INTO accounting_periods (period_code, start_date, end_date, status) VALUES ('2026-06', '2026-06-01', '2026-06-30', 'open')");
+$pdo->exec("UPDATE accounting_periods SET status = 'open' WHERE period_code = '2026-06'");
+
+// Seed prior-period snapshot cho BC03 2025
+$priorData = json_encode([
+    '01' => 10000000, '20' => 5000000, '30' => -2000000, '40' => 3000000,
+    '50' => 6000000, '60' => 2000000, '70' => 8000000,
+]);
+$pdo->prepare("INSERT IGNORE INTO fs_snapshots (statement, period_code,period_end_date,data,created_by) VALUES ('BC03','2025','2025-12-31',?,'system')")->execute([$priorData]);
+
+// Không seed BC01 prior snapshot — cash_begin trong test = 0
+// (accounts.balance được reset, nên BC01 MS110 chỉ phản ánh thay đổi trong kỳ)
+
 function assertFloatEq($expected, $actual, $msg, $tol = 1) {
     global $total, $failed;
     $total++;
@@ -146,5 +160,91 @@ assertFloatEq($ms50 + $ms60 + $ms61, $ms70, '70 = 50+60+61');
 echo "\n=== Test 8: BC 03 snapshot saved ===\n";
 $snapshots = $pdo->query("SELECT COUNT(*) FROM fs_snapshots WHERE statement = 'BC03'")->fetchColumn();
 assertTrue($snapshots >= 1, 'BC03 snapshot saved');
+
+echo "\n=== Test 9: Prior-period values returned ===\n";
+$prior = $fs->getPriorPeriodValues('BC03', '2026');
+assertTrue($prior !== null, 'Prior-period snapshot exists');
+assertTrue(isset($prior['20']), 'Prior-period MS 20 exists');
+assertTrue(abs($prior['20'] - 5000000) < 1, 'Prior-period MS 20 = 5M');
+
+echo "\n=== Test 10: Prior-period period code parsing ===\n";
+// Seed monthly snapshot, then look up prior
+$monthData = json_encode(['01' => 5000000, '20' => 3000000]);
+$pdo->prepare("INSERT IGNORE INTO fs_snapshots (statement, period_code,period_end_date,data,created_by) VALUES ('BC03','2026-05','2026-05-31',?,'system')")->execute([$monthData]);
+$priorMonth = $fs->getPriorPeriodValues('BC03', '2026-06');
+assertTrue($priorMonth !== null, 'Prior-period month format resolves');
+assertTrue(abs(($priorMonth['20'] ?? 0) - 3000000) < 1, 'Prior-period month MS 20 = 3M');
+
+// Quarter format
+$qData = json_encode(['20' => 4000000]);
+$pdo->prepare("INSERT IGNORE INTO fs_snapshots (statement, period_code,period_end_date,data,created_by) VALUES ('BC03','2026-Q1','2026-03-31',?,'system')")->execute([$qData]);
+$priorQ = $fs->getPriorPeriodValues('BC03', '2026-Q2');
+assertTrue($priorQ !== null, 'Prior-period quarter format resolves');
+assertTrue(abs(($priorQ['20'] ?? 0) - 4000000) < 1, 'Prior-period Q MS 20 = 4M');
+
+// Year boundary: 2026-01 -> prior = 2025-12
+$decData = json_encode(['20' => 2000000]);
+$pdo->prepare("INSERT IGNORE INTO fs_snapshots (statement, period_code,period_end_date,data,created_by) VALUES ('BC03','2025-12','2025-12-31',?,'system')")->execute([$decData]);
+$priorJan = $fs->getPriorPeriodValues('BC03', '2026-01');
+assertTrue($priorJan !== null, 'Prior-period year boundary (Jan) resolves');
+assertTrue(abs(($priorJan['20'] ?? 0) - 2000000) < 1, 'Prior-period Jan MS 20 = 2M (Dec prior)');
+
+// ════════════════════════════════════════════════════════
+// BC03 — PHƯƠNG PHÁP TRỰC TIẾP (Direct Method)
+// ════════════════════════════════════════════════════════
+
+echo "\n=== Test 11: BC03 direct — line items loaded ===\n";
+$directItems = $fs->getLineItems('BC03D');
+assertTrue(count($directItems) >= 20, 'BC03D has 20+ line items');
+
+echo "\n=== Test 12: BC03 direct — zero balances ===\n";
+$bc03d0 = $fs->generateBC03Direct('2026');
+assertTrue(count($bc03d0) >= 20, 'BC03_DIRECT result has 20+ rows');
+
+echo "\n=== Test 13: BC03 direct — classify transactions ===\n";
+// The journal entries from tests 3-5 should produce:
+// Dr 112 50M / Cr 511 50M → thu tiền từ KH (MS 01)
+// Dr 642 20M / Cr 112 20M → chi khác HĐKD (MS 07, since 642 unclassified)
+// Dr 211 100M / Cr 112 100M → chi mua TSCĐ (MS 21)
+// Dr 112 200M / Cr 3411 200M → thu từ đi vay (MS 33)
+$ms01 = 0; $ms07 = 0; $ms10 = 0;
+$ms21 = 0; $ms30 = 0;
+$ms33 = 0; $ms40 = 0;
+$ms50 = 0; $ms60 = 0; $ms70 = 0;
+foreach ($bc03d0 as $r) {
+    $ms = $r['ma_so'];
+    if ($ms === '01') $ms01 = $r['value'];
+    if ($ms === '07') $ms07 = $r['value'];
+    if ($ms === '10') $ms10 = $r['value'];
+    if ($ms === '21') $ms21 = $r['value'];
+    if ($ms === '30') $ms30 = $r['value'];
+    if ($ms === '33') $ms33 = $r['value'];
+    if ($ms === '40') $ms40 = $r['value'];
+    if ($ms === '50') $ms50 = $r['value'];
+    if ($ms === '60') $ms60 = $r['value'];
+    if ($ms === '70') $ms70 = $r['value'];
+}
+assertFloatEq(50000000, $ms01, 'Direct MS 01 (thu KH) = 50M');
+assertFloatEq(-20000000, $ms07, 'Direct MS 07 (chi khác) = -20M');
+assertFloatEq(-100000000, $ms21, 'Direct MS 21 (mua TSCĐ) = -100M');
+assertFloatEq(200000000, $ms33, 'Direct MS 33 (thu vay) = 200M');
+assertTrue($ms10 > 0, 'Direct MS 10 (HĐKD thuần) > 0');
+assertTrue($ms30 < 0, 'Direct MS 30 (HĐĐT thuần) < 0');
+assertTrue($ms40 > 0, 'Direct MS 40 (HĐTC thuần) > 0');
+
+echo "\n=== Test 14: BC03 direct — closing cash = indirect closing cash ===\n";
+// Direct MS 70 should equal indirect MS 70 (both should be 130M + cash_begin)
+$indirectMs70 = 0;
+foreach ($bc03d as $r) {
+    if ($r['ma_so'] === '70') $indirectMs70 = $r['value'];
+}
+assertFloatEq($indirectMs70, $ms70, 'Direct MS 70 = Indirect MS 70');
+
+echo "\n=== Test 15: BC03 direct — MS 70 = MS 50 + MS 60 ===\n";
+assertFloatEq($ms50 + $ms60, $ms70, 'Direct 70 = 50+60');
+
+echo "\n=== Test 16: BC03 direct — snapshot saved ===\n";
+$snapDir = $pdo->query("SELECT COUNT(*) FROM fs_snapshots WHERE statement = 'BC03D'")->fetchColumn();
+assertTrue($snapDir >= 1, 'BC03_DIRECT snapshot saved');
 
 results();

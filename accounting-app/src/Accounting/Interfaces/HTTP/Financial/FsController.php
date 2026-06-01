@@ -154,6 +154,36 @@ class FsController
         ]);
     }
 
+    // NGHIỆP VỤ: BC 03 — Phương pháp Trực tiếp (Direct Method)
+    // Input: GET ?period=2025
+    // Output: { items, net_cash_flow (50), closing_cash (70), errors }
+    // Service: FsService.generateBC03Direct()
+    // Kiểm tra chéo: Số dư tiền cuối kỳ (70) phải = Tiền trên BC01 (chỉ tiêu 110)
+    // Phân loại: Cash receipt/payment từ đối ứng TK tiền (111/112) với opponent account
+    public function bc03Direct(): void
+    {
+        Auth::requirePermission('report', 'read');
+        $period = $_GET['period'] ?? date('Y');
+        $data = $this->fs->generateBC03Direct($period);
+        $bc01 = $this->fs->generateBC01($period);
+        $bc01Cash = $this->findValue($bc01, '110');
+
+        $errors = $this->fs->validateBC03Direct($data);
+        $ms70 = $this->findValue($data, '70');
+        if (abs($ms70 - $bc01Cash) > 1) {
+            $errors[] = "Tiền cuối kỳ trên BC 03 (trực tiếp) ({$ms70}) không khớp với Tiền trên BC 01 ({$bc01Cash})";
+        }
+
+        JsonResponse::ok([
+            'items' => $data,
+            'period' => $period,
+            'errors' => $errors,
+            'net_cash_flow' => $this->findValue($data, '50'),
+            'closing_cash' => $ms70,
+            'bc01_closing_cash' => $bc01Cash,
+        ]);
+    }
+
     public function viewBC03(): void
     {
         require __DIR__ . '/../../../../../public/views/fs_bc03.php';

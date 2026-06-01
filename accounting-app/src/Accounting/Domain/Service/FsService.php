@@ -267,6 +267,202 @@ class FsService
         }
         // BC 01 cross-check: MS70 should equal BC01 MS110 (cash + equivalents)
         // This validation happens in controller level since we need BC01 data
+
+        return $errors;
+    }
+
+    //
+    // BC03 — PHƯƠNG PHÁP TRỰC TIẾP (Direct Method)
+    // Phân loại dòng tiền thu/chi từ tài khoản 111, 112 theo tài khoản đối ứng
+    // Định lượng: mỗi khoản thu/chi được xác định bằng đối ứng của bút toán tiền
+    //
+    // Ràng buộc: Kết quả MS 70 (Tiền cuối kỳ) phải khớp với BC01 MS 110
+    // và khớp với BC03 phương pháp gián tiếp MS 70
+    //
+    public function generateBC03Direct(?string $periodCode = null): array
+    {
+        $periodCode = $periodCode ?? date('Y');
+        $year = (int)$periodCode;
+        $fromDate = "{$year}-01-01";
+        $toDate = "{$year}-12-31";
+
+        $items = $this->getLineItems('BC03D');
+        if (empty($items)) {
+            throw new \RuntimeException('Chưa có chỉ tiêu BC03 phương pháp trực tiếp. Vui lòng chạy migration 080.');
+        }
+
+        // Lấy prior period đầu kỳ cho MS 60
+        $prior = $this->getPriorPeriodValues('BC01', $periodCode);
+        $cashBegin = $prior ? (float)($prior['110'] ?? 0) : 0;
+
+        // Xây index cho line items theo loại
+        $byType = []; // type => [ma_so => [accounts]]
+        $sumItems = [];
+        // Phân biệt receipt/payment maps vì 1 account code có thể vừa là thu vừa là chi
+        $receiptClassified = []; // account_code => ma_so (khi netCash > 0)
+        $paymentClassified = []; // account_code => ma_so (khi netCash < 0)
+        $otherReceipt = null;
+        $otherPayment = null;
+
+        foreach ($items as $item) {
+            $t = $item['formula_type'];
+            if ($t === 'direct_receipt') {
+                $codes = array_map('trim', explode(',', $item['formula_detail'] ?? ''));
+                foreach ($codes as $c) {
+                    if ($c !== '') $receiptClassified[$c] = $item['ma_so'];
+                }
+            } elseif ($t === 'direct_payment') {
+                $codes = array_map('trim', explode(',', $item['formula_detail'] ?? ''));
+                foreach ($codes as $c) {
+                    if ($c !== '') $paymentClassified[$c] = $item['ma_so'];
+                }
+            } elseif ($t === 'direct_receipt_other') {
+                $otherReceipt = $item['ma_so'];
+            } elseif ($t === 'direct_payment_other') {
+                $otherPayment = $item['ma_so'];
+            } elseif ($t === 'sum') {
+                $sumItems[$item['ma_so']] = array_map('trim', explode(',', $item['formula_detail'] ?? ''));
+            }
+        }
+
+        // Query tất cả bút toán tiền (111/112) trong kỳ
+        // Mỗi transaction có ít nhất 1 entry cash + 1 entry opponent
+        $stmt = $this->pdo->prepare(
+            "SELECT t.id, le.account_id, a.code as acct_code, a.name as acct_name,
+                    le.is_debit, le.amount, t.description
+             FROM ledger_entries le
+             JOIN transactions t ON t.id = le.transaction_id
+             JOIN accounts a ON a.id = le.account_id
+             WHERE t.status = 'posted'
+               AND DATE(t.date) BETWEEN ? AND ?
+               AND EXISTS (
+                   SELECT 1 FROM ledger_entries le2
+                   JOIN accounts a2 ON a2.id = le2.account_id
+                   WHERE le2.transaction_id = t.id AND a2.code IN ('111','112')
+               )
+             ORDER BY t.id"
+        );
+        $stmt->execute([$fromDate, $toDate]);
+        $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+        // Nhóm theo transaction: tìm cash entry và opponent entry
+        $byTxn = [];
+        foreach ($rows as $r) {
+            $byTxn[$r['id']][] = $r;
+        }
+
+        $amounts = []; // ma_so => total
+        $unclassifiedReceipt = 0;
+        $unclassifiedPayment = 0;
+
+        foreach ($byTxn as $txnId => $entries) {
+            $cashIn = 0;   // 111/112 debit → receipt
+            $cashOut = 0;  // 111/112 credit → payment
+            $opponents = []; // [acct_code => amount]
+            $isCash = false;
+
+            foreach ($entries as $e) {
+                $isCashAcc = in_array($e['acct_code'], ['111','112','1111','1112','1113','1121','1122']);
+                if ($isCashAcc) {
+                    if ($e['is_debit']) $cashIn += $e['amount'];
+                    else $cashOut += $e['amount'];
+                    $isCash = true;
+                } else {
+                    $opponents[$e['acct_code']] = ($opponents[$e['acct_code']] ?? 0) + $e['amount'];
+                }
+            }
+
+            if (!$isCash) continue;
+
+            $netCash = $cashIn - $cashOut;
+            if (abs($netCash) < 1) continue;
+
+            // Xác định opponent chính (tài khoản có số tiền lớn nhất)
+            $mainOpponent = null;
+            $mainOppAmount = 0;
+            foreach ($opponents as $code => $amt) {
+                if ($amt > $mainOppAmount) {
+                    $mainOppAmount = $amt;
+                    $mainOpponent = $code;
+                }
+            }
+
+            if ($mainOpponent === null) continue;
+
+            if ($netCash > 0) {
+                // Thu tiền: tìm trong receipt map
+                $maSo = $receiptClassified[$mainOpponent] ?? null;
+                if ($maSo) {
+                    $amounts[$maSo] = ($amounts[$maSo] ?? 0) + $netCash;
+                } else {
+                    $unclassifiedReceipt += $netCash;
+                }
+            } else {
+                // Chi tiền: tìm trong payment map
+                $absCash = abs($netCash);
+                $maSo = $paymentClassified[$mainOpponent] ?? null;
+                if ($maSo) {
+                    $amounts[$maSo] = ($amounts[$maSo] ?? 0) - $absCash;
+                } else {
+                    $unclassifiedPayment += $absCash;
+                }
+            }
+        }
+
+        if ($otherReceipt) $amounts[$otherReceipt] = $unclassifiedReceipt;
+        if ($otherPayment) $amounts[$otherPayment] = -$unclassifiedPayment;
+
+        // Tính items sum và cash_begin
+        $values = $amounts;
+        $values['60'] = $cashBegin;
+
+        foreach ($sumItems as $maSo => $children) {
+            $total = 0;
+            foreach ($children as $c) {
+                $total += $values[$c] ?? 0;
+            }
+            $values[$maSo] = round($total);
+        }
+
+        // Build result rows
+        $result = [];
+        foreach ($items as $item) {
+            $maSo = $item['ma_so'];
+            $result[] = [
+                'ma_so' => $maSo,
+                'parent_ma_so' => $item['parent_ma_so'],
+                'name_vi' => $item['name_vi'],
+                'value' => round($values[$maSo] ?? 0),
+                'is_control' => (bool)$item['is_control'],
+                'is_total' => (bool)$item['is_total'],
+                'display_order' => (int)$item['display_order'],
+            ];
+        }
+
+        // Save snapshot
+        $data = json_encode($values);
+        $this->pdo->prepare(
+            'INSERT INTO fs_snapshots (statement, period_code, period_end_date, data, created_by)
+             VALUES (?, ?, CURDATE(), ?, ?)
+             ON DUPLICATE KEY UPDATE data = VALUES(data), created_at = NOW()'
+        )->execute(['BC03D', $periodCode, $data, $_SESSION['user']['username'] ?? 'system']);
+
+        $this->auditLogger?->log('fs.generate', 'fs_statement', "BC03_DIRECT_{$periodCode}",
+            null, ['statement' => 'BC03D', 'period' => $periodCode, 'items' => count($result)],
+            $_SESSION['user']['username'] ?? 'system');
+
+        return $result;
+    }
+
+    public function validateBC03Direct(array $bc03Data): array
+    {
+        $values = [];
+        foreach ($bc03Data as $r) $values[$r['ma_so']] = $r['value'];
+        $errors = [];
+        $calc70 = ($values[50] ?? 0) + ($values[60] ?? 0);
+        if (abs(($values[70] ?? 0) - $calc70) > 1) {
+            $errors[] = "Tiền cuối kỳ (70) phải là {$calc70}, hiện tại là {$values[70]}";
+        }
         return $errors;
     }
 
@@ -356,21 +552,45 @@ class FsService
 
     public function getPriorPeriodValues(string $statement, string $currentPeriodCode): ?array
     {
-        // Determine prior period
-        $year = (int)$currentPeriodCode;
-        $priorYear = $year - 1;
+        $priorCode = $this->_computePriorPeriodCode($currentPeriodCode);
+        if (!$priorCode) return null;
 
-        // HẠN CHẾ: Chỉ hỗ trợ kỳ năm (periodCode = year number). Với kỳ tháng/quý,
-        // prior period không đơn giản là year-1.
-        // RỦI RO: Nếu gọi với periodCode không phải năm (VD: '2026-Q1'), (int) cast
-        // cho kết quả không xác định → sai số liệu đầu kỳ BC03.
-        // TODO: Hỗ trợ quý/tháng: priorPeriod = getPreviousPeriod(currentPeriodCode).
         $stmt = $this->pdo->prepare('SELECT data FROM fs_snapshots WHERE statement = ? AND period_code = ?');
-        $stmt->execute([$statement, (string)$priorYear]);
+        $stmt->execute([$statement, $priorCode]);
         $row = $stmt->fetch(\PDO::FETCH_ASSOC);
-        if (!$row) return null;
-
+        if (!$row) {
+            $this->auditLogger?->log('fs.prior_period.missing', 'fs_snapshot',
+                "{$statement}_{$priorCode}",
+                null, ['statement' => $statement, 'period' => $currentPeriodCode, 'prior' => $priorCode],
+                'system');
+            return null;
+        }
         return json_decode($row['data'], true);
+    }
+
+    // Xác định mã kỳ trước dựa trên định dạng period code:
+    //   '2026'     → '2025'  (năm)
+    //   '2026-05'  → '2026-04'  (tháng, lùi 1 tháng)
+    //   '2026-Q1'  → '2025-Q4'  (quý, lùi 1 quý)
+    private function _computePriorPeriodCode(string $code): ?string
+    {
+        if (preg_match('/^(\d{4})-(\d{2})$/', $code, $m)) {
+            $y = (int)$m[1]; $mo = (int)$m[2];
+            if ($mo <= 1) { $y--; $mo = 12; }
+            else { $mo--; }
+            return sprintf('%04d-%02d', $y, $mo);
+        }
+        if (preg_match('/^(\d{4})-Q(\d)$/', $code, $m)) {
+            $y = (int)$m[1]; $q = (int)$m[2];
+            if ($q <= 1) { $y--; $q = 4; }
+            else { $q--; }
+            return "{$y}-Q{$q}";
+        }
+        // Mặc định: coi như năm
+        if (preg_match('/^\d{4}$/', $code)) {
+            return (string)((int)$code - 1);
+        }
+        return null;
     }
 
     //

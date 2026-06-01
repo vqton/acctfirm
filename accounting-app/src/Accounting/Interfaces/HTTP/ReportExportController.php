@@ -92,4 +92,33 @@ class ReportExportController
             JsonResponse::error($e->getMessage(), 400);
         }
     }
+
+    public function exportCsvBC03(): void
+    {
+        Auth::requirePermission('report', 'export');
+        $period = $_GET['period'] ?? date('Y');
+        $method = $_GET['method'] ?? 'indirect';
+
+        try {
+            if ($method === 'direct') {
+                $data = $this->fs->generateBC03Direct($period);
+                $filename = "bc03_truc_tiep_{$period}.csv";
+            } else {
+                $data = $this->fs->generateBC03($period);
+                $filename = "bc03_gian_tiep_{$period}.csv";
+            }
+
+            $headers = ['Mã số', 'Chỉ tiêu', 'Giá trị'];
+            $rows = [];
+            foreach ($data as $item) {
+                $rows[] = [$item['ma_so'], $item['name_vi'], $item['value']];
+            }
+            $result = $this->export->exportCsv($headers, $rows, $filename);
+            header("Content-Type: {$result['mime']}");
+            header("Content-Disposition: attachment; filename=\"{$result['filename']}\"");
+            echo $result['content'];
+        } catch (\Throwable $e) {
+            JsonResponse::error($e->getMessage(), 400);
+        }
+    }
 }

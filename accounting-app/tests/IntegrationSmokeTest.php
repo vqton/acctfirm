@@ -159,8 +159,6 @@ echo "\n--- A8: BC01 after close ---\n";
 $bc01 = $fs->generateBC01('2026');
 assertTrue(count($bc01) >= 80, 'BC01 has 80+ rows');
 $errors = $fs->validateBC01($bc01);
-// NOTE: BC01 has known formula gap — 1331 (VAT input, 2.5M) not in any line item
-// Assets=127.5M, L+E=125M, diff=2.5M (1331). This is a legitimate FS formula bug found by integration test.
 $totalAssets = 0; $totalEq = 0;
 foreach ($bc01 as $r) {
     if ($r['ma_so'] === '280') $totalAssets = $r['value'];
@@ -169,7 +167,7 @@ foreach ($bc01 as $r) {
 assertTrue($totalAssets > 0, 'Total assets > 0');
 assertTrue($totalEq > 0, 'Total equity > 0');
 $gap = abs($totalAssets - $totalEq);
-assertTrue($gap > 0, '1331 VAT input not in BC01 formula (known gap: ' . $gap . ')');
+assertTrue($gap <= 1, 'BC01 balanced after 1331/333 fix (gap=' . $gap . ')');
 echo "\n--- CYCLE A COMPLETE ---\n";
 
 // ════════════════════════════════════════════════════════════
