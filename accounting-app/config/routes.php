@@ -85,6 +85,39 @@ function defineRoutes(Router $router): void
     $router->put('/api/suppliers/:id', function($id) use ($c) { $c['SupplierController']->update($id); });
     $router->delete('/api/suppliers/:id', function($id) use ($c) { $c['SupplierController']->delete($id); });
 
+    // === MUA HÀNG — PROCUREMENT ENGINE (PR → PO → GR → 3-Way Match) ===
+    // Purchase Requisitions (Đề nghị mua hàng)
+    $router->get('/api/purchase/requisitions', function() use ($c) { $c['ProcurementController']->listPRs(); });
+    $router->get('/api/purchase/requisitions/:id', function($id) use ($c) { $c['ProcurementController']->getPR($id); });
+    $router->post('/api/purchase/requisitions', function() use ($c) { $c['ProcurementController']->createPR(); });
+    $router->post('/api/purchase/requisitions/:id/approve', function($id) use ($c) { $c['ProcurementController']->approvePR($id); });
+
+    // Purchase Orders (Đơn đặt hàng)
+    $router->get('/api/purchase/orders', function() use ($c) { $c['ProcurementController']->listPOs(); });
+    $router->get('/api/purchase/orders/:id', function($id) use ($c) { $c['ProcurementController']->getPO($id); });
+    $router->post('/api/purchase/orders', function() use ($c) { $c['ProcurementController']->createPO(); });
+
+    // Goods Receipts (Phiếu nhập kho theo PO)
+    $router->get('/api/purchase/receipts', function() use ($c) { $c['ProcurementController']->listGRs(); });
+    $router->get('/api/purchase/receipts/:id', function($id) use ($c) { $c['ProcurementController']->getGR($id); });
+    $router->post('/api/purchase/receipts', function() use ($c) { $c['ProcurementController']->createGR(); });
+
+    // Invoice Matching (Đối chiếu 3 chiều)
+    $router->get('/api/purchase/matches', function() use ($c) { $c['ProcurementController']->listMatches(); });
+    $router->post('/api/purchase/matches', function() use ($c) { $c['ProcurementController']->createMatch(); });
+
+    // Budget Control (Kiểm soát ngân sách)
+    $router->get('/api/purchase/budgets', function() use ($c) { $c['ProcurementController']->listBudgets(); });
+    $router->post('/api/purchase/budgets', function() use ($c) { $c['ProcurementController']->setBudget(); });
+    $router->get('/api/purchase/budgets/check', function() use ($c) { $c['ProcurementController']->checkBudget(); });
+
+    // Purchase Views (Giao diện người dùng)
+    $router->get('/mua/de-nghi-mua-hang', function() { require __DIR__ . '/../public/views/purchase_requisitions.php'; });
+    $router->get('/mua/don-dat-hang', function() { require __DIR__ . '/../public/views/purchase_orders.php'; });
+    $router->get('/mua/nhap-kho-theo-po', function() { require __DIR__ . '/../public/views/purchase_receipts.php'; });
+    $router->get('/mua/doi-chieu-hoa-don', function() { require __DIR__ . '/../public/views/purchase_matching.php'; });
+    $router->get('/mua/ngan-sach', function() { require __DIR__ . '/../public/views/purchase_budgets.php'; });
+
     // === DANH MỤC KHÁC: KHO, PHÒNG BAN, NHÂN VIÊN ===
     // Frontend pages
     $router->get('/danh-muc/kho', function() { require __DIR__ . '/../public/views/warehouses.php'; });
@@ -511,6 +544,38 @@ function defineRoutes(Router $router): void
     $router->get('/api/ar/customers', function() use ($c) { $c['ArController']->customers(); });
     $router->get('/api/ar/customers/:id/statement', function($id) use ($c) { $c['ArController']->statement($id); });
 
+    // === THU HỒI CÔNG NỢ (Debt Collection Module — docs/analysis/debt-collection-engine-brain-logic.md) ===
+    // Queue: quản lý hàng đợi đòi nợ tự động
+    $router->get('/api/debt-collection/queue', function() use ($c) { $c['DebtCollectionController']->queueList(); });
+    $router->get('/api/debt-collection/queue/:id', function($id) use ($c) { $c['DebtCollectionController']->queueDetail($id); });
+    $router->post('/api/debt-collection/queue/generate', function() use ($c) { $c['DebtCollectionController']->queueGenerate(); });
+    $router->put('/api/debt-collection/queue/:id/assign', function($id) use ($c) { $c['DebtCollectionController']->queueAssign($id); });
+    $router->put('/api/debt-collection/queue/:id/hold', function($id) use ($c) { $c['DebtCollectionController']->queueHold($id); });
+    $router->put('/api/debt-collection/queue/:id/release', function($id) use ($c) { $c['DebtCollectionController']->queueRelease($id); });
+    $router->put('/api/debt-collection/queue/:id/priority', function($id) use ($c) { $c['DebtCollectionController']->queuePriority($id); });
+    // Activities: ghi nhận hoạt động đòi nợ
+    $router->get('/api/debt-collection/queue/:id/activities', function($id) use ($c) { $c['DebtCollectionController']->activityList($id); });
+    $router->post('/api/debt-collection/queue/:id/activities', function($id) use ($c) { $c['DebtCollectionController']->activityCreate($id); });
+    // Promises: cam kết thanh toán
+    $router->get('/api/debt-collection/queue/:id/promises', function($id) use ($c) { $c['DebtCollectionController']->promiseList($id); });
+    $router->post('/api/debt-collection/queue/:id/promises', function($id) use ($c) { $c['DebtCollectionController']->promiseCreate($id); });
+    $router->post('/api/debt-collection/promises/:id/keep', function($id) use ($c) { $c['DebtCollectionController']->promiseKeep($id); });
+    $router->post('/api/debt-collection/promises/:id/break', function($id) use ($c) { $c['DebtCollectionController']->promiseBreak($id); });
+    // Write-off: đề xuất + phê duyệt xóa nợ
+    $router->post('/api/debt-collection/queue/:id/propose-writeoff', function($id) use ($c) { $c['DebtCollectionController']->proposeWriteOff($id); });
+    $router->get('/api/debt-collection/approvals', function() use ($c) { $c['DebtCollectionController']->approvalList(); });
+    $router->put('/api/debt-collection/approvals/:id/approve', function($id) use ($c) { $c['DebtCollectionController']->approvalApprove($id); });
+    $router->put('/api/debt-collection/approvals/:id/reject', function($id) use ($c) { $c['DebtCollectionController']->approvalReject($id); });
+    // Settlements: thỏa thuận thanh toán
+    $router->post('/api/debt-collection/settlements', function() use ($c) { $c['DebtCollectionController']->settlementCreate(); });
+    $router->post('/api/debt-collection/settlements/:id/pay', function($id) use ($c) { $c['DebtCollectionController']->settlementPay($id); });
+    // Stats + Views
+    $router->get('/api/debt-collection/stats', function() use ($c) { $c['DebtCollectionController']->stats(); });
+    $router->get('/api/debt-collection/stats/collector/:id', function($id) use ($c) { $c['DebtCollectionController']->collectorStats($id); });
+    $router->get('/thu-hoi-cong-no', function() use ($c) { $c['DebtCollectionController']->viewDashboard(); });
+    $router->get('/thu-hoi-cong-no/hang-doi', function() use ($c) { $c['DebtCollectionController']->viewQueue(); });
+    $router->get('/thu-hoi-cong-no/phe-duyet', function() use ($c) { $c['DebtCollectionController']->viewApprovals(); });
+
     // === ĐIỀU CHỈNH BÚT TOÁN (Correction Engine — Article 27 Law on Accounting) ===
     // Ba phương pháp điều chỉnh theo Luật Kế toán:
     // 1. Bổ sung (supplementary): ghi bổ sung số chênh lệch khi ghi thiếu
@@ -536,6 +601,7 @@ function defineRoutes(Router $router): void
     $router->get('/api/fs/tt99', function() use ($c) { $c['FsController']->tt99(); });
     $router->get('/bao-cao/luu-chuyen-tien-te', function() use ($c) { $c['FsController']->viewBC03(); });
     $router->get('/api/fs/bc03', function() use ($c) { $c['FsController']->bc03(); });
+    $router->get('/api/fs/bc03-direct', function() use ($c) { $c['FsController']->bc03Direct(); });
     $router->get('/bao-cao/thuyet-minh-bctc', function() use ($c) { $c['FsController']->viewTT99(); });
 
     // === QUẢN LÝ KỲ KẾ TOÁN ===
@@ -548,6 +614,9 @@ function defineRoutes(Router $router): void
     $router->get('/api/periods', function() use ($c) { $c['PeriodController']->list(); });
     $router->get('/api/periods/:id', function($id) use ($c) { $c['PeriodController']->get($id); });
     $router->post('/api/periods', function() use ($c) { $c['PeriodController']->create(); });
+    $router->post('/api/periods/generate', function() use ($c) { $c['PeriodController']->generate(); });
+    $router->get('/api/periods/config', function() use ($c) { $c['PeriodController']->listConfigs(); });
+    $router->post('/api/periods/config', function() use ($c) { $c['PeriodController']->setConfig(); });
     $router->post('/api/periods/:id/close', function($id) use ($c) { $c['PeriodController']->close($id); });
     $router->get('/he-thong/kiem-tra-truoc-khi-khoa-so', function() { require __DIR__ . '/../public/views/pre_close_checklist.php'; });
     $router->post('/api/periods/:id/reopen', function($id) use ($c) { $c['PeriodController']->reOpen($id); });
@@ -568,6 +637,7 @@ function defineRoutes(Router $router): void
     $router->get('/api/export/csv/ledger', function() use ($c) { $c['ReportExportController']->exportCsvLedger(); });
     $router->get('/api/export/html/ledger', function() use ($c) { $c['ReportExportController']->exportHtmlLedger(); });
     $router->get('/api/export/csv/trial-balance', function() use ($c) { $c['ReportExportController']->exportCsvTrialBalance(); });
+    $router->get('/api/export/csv/bc03', function() use ($c) { $c['ReportExportController']->exportCsvBC03(); });
 
     $router->get('/api/gl/ledger', function() use ($c) { $c['GlController']->ledger(); });
     $router->get('/api/gl/subsidiary', function() use ($c) { $c['GlController']->subsidiaryLedger(); });

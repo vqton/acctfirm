@@ -38,6 +38,10 @@ use Accounting\Domain\Service\FsService;
 use Accounting\Domain\Service\ApService;
 use Accounting\Domain\Service\ArService;
 use Accounting\Domain\Service\GlService;
+use Accounting\Domain\Service\DebtCollectionService;
+use Accounting\Domain\Repository\DebtCollectionRepositoryInterface;
+use Accounting\Infrastructure\Repository\PDODebtCollectionRepository;
+use Accounting\Interfaces\HTTP\Financial\DebtCollectionController;
 use Accounting\Domain\Service\JournalBookService;
 use Accounting\Domain\Service\FixedAssetService;
 use Accounting\Domain\Service\AccountService;
@@ -106,6 +110,17 @@ use Accounting\Infrastructure\Persistence\PDOPayrollEntryRepository;
 use Accounting\Infrastructure\Persistence\PDOPayrollPeriodRepository;
 use Accounting\Infrastructure\Persistence\PDOSalaryComponentRepository;
 use Accounting\Infrastructure\Persistence\PDOSalaryFormulaRepository;
+use Accounting\Domain\Service\ProcurementService;
+use Accounting\Domain\Service\ThreeWayMatchService;
+use Accounting\Domain\Service\BudgetControlService;
+use Accounting\Infrastructure\Persistence\PDOPurchaseRequisitionRepository;
+use Accounting\Infrastructure\Persistence\PDOPurchaseOrderRepository;
+use Accounting\Infrastructure\Persistence\PDOGoodsReceiptRepository;
+use Accounting\Infrastructure\Persistence\PDOPurchaseInvoiceMatchRepository;
+use Accounting\Infrastructure\Persistence\PDOPurchaseApprovalRepository;
+use Accounting\Infrastructure\Persistence\PDOSupplierPerformanceRepository;
+use Accounting\Infrastructure\Persistence\PDOPurchaseBudgetRepository;
+use Accounting\Interfaces\HTTP\Purchase\ProcurementController;
 
 // Tạo DI container — khởi tạo tất cả service, repository, controller
 // Dependency graph:
@@ -148,6 +163,13 @@ function createContainer(): array
     $payrollPeriodRepository = new PDOPayrollPeriodRepository($pdo);
     $salaryComponentRepository = new PDOSalaryComponentRepository($pdo);
     $salaryFormulaRepository = new PDOSalaryFormulaRepository($pdo);
+    $purchaseRequisitionRepo = new PDOPurchaseRequisitionRepository($pdo);
+    $purchaseOrderRepo = new PDOPurchaseOrderRepository($pdo);
+    $goodsReceiptRepo = new PDOGoodsReceiptRepository($pdo);
+    $purchaseInvoiceMatchRepo = new PDOPurchaseInvoiceMatchRepository($pdo);
+    $purchaseApprovalRepo = new PDOPurchaseApprovalRepository($pdo);
+    $supplierPerformanceRepo = new PDOSupplierPerformanceRepository($pdo);
+    $purchaseBudgetRepo = new PDOPurchaseBudgetRepository($pdo);
 
     // === LỚP INFRASTRUCTURE SERVICE: Audit, Posting Rule, Voucher ===
     // Các service không chứa nghiệp vụ kế toán cụ thể — hỗ trợ kỹ thuật
@@ -184,9 +206,17 @@ function createContainer(): array
     $openingBalanceService = new OpeningBalanceService($pdo, $accountRepository);
     $reportExportService = new ReportExportService();
     $payrollService = new PayrollService($payrollEntryRepository, $payrollPeriodRepository, $salaryComponentRepository, $employeeRepository, $journalService, $pdo, $auditLogger);
+    $procurementService = new ProcurementService($purchaseRequisitionRepo, $purchaseOrderRepo, $goodsReceiptRepo, $itemRepository, $supplierRepository, $journalService, $inventoryService, $auditLogger, $approvalRoutingService, $pdo);
+    $threeWayMatchService = new ThreeWayMatchService($pdo, $auditLogger);
+    $budgetControlService = new BudgetControlService($pdo, $auditLogger);
 
     // === COA SERVICE: Business logic cho Hệ thống Tài khoản ===
     $accountService = new AccountService($accountRepository, $auditLogger, $journalService);
+
+    // === DEBT COLLECTION: Repository + Service ===
+    $debtCollectionRepo = new PDODebtCollectionRepository($pdo);
+    $debtCollectionService = new DebtCollectionService($pdo, $debtCollectionRepo, $arService, $auditLogger);
+    $debtCollectionController = new DebtCollectionController($debtCollectionService);
 
     // === LỚP CONTROLLER: Tiếp nhận request từ Router, gọi Service ===
     // Controller KHÔNG chứa business logic — chỉ validate input + format response
@@ -249,6 +279,7 @@ function createContainer(): array
     $valuationMethodController = new ValuationMethodController($valuationMethodRepository);
     $warehouseController = new WarehouseController($warehouseRepository);
     $payrollController = new PayrollController($payrollService, $employeeRepository, $payrollPeriodRepository, $payrollEntryRepository);
+    $procurementController = new ProcurementController($procurementService, $threeWayMatchService, $budgetControlService);
 
     // === CONTAINER: Map tên → instance ===
     // Container là array $GLOBALS['container'], controller/service lấy nhau qua key
@@ -343,10 +374,24 @@ function createContainer(): array
         'WarehouseController' => $warehouseController,
         'PayrollController' => $payrollController,
         'payrollService' => $payrollService,
+        'procurementService' => $procurementService,
+        'threeWayMatchService' => $threeWayMatchService,
+        'budgetControlService' => $budgetControlService,
+        'debtCollectionService' => $debtCollectionService,
+        'debtCollectionRepo' => $debtCollectionRepo,
+        'DebtCollectionController' => $debtCollectionController,
         'payrollEntryRepository' => $payrollEntryRepository,
         'payrollPeriodRepository' => $payrollPeriodRepository,
         'salaryComponentRepository' => $salaryComponentRepository,
         'salaryFormulaRepository' => $salaryFormulaRepository,
+        'purchaseRequisitionRepo' => $purchaseRequisitionRepo,
+        'purchaseOrderRepo' => $purchaseOrderRepo,
+        'goodsReceiptRepo' => $goodsReceiptRepo,
+        'purchaseInvoiceMatchRepo' => $purchaseInvoiceMatchRepo,
+        'purchaseApprovalRepo' => $purchaseApprovalRepo,
+        'supplierPerformanceRepo' => $supplierPerformanceRepo,
+        'purchaseBudgetRepo' => $purchaseBudgetRepo,
+        'ProcurementController' => $procurementController,
     ];
 }
 

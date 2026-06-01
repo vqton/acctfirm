@@ -119,11 +119,14 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
             <div class="collapse sub-menu<?= isActive(['suppliers','contracts','ap_invoices','ap_aging','ap_statement'],$activeMenu)?' show':'' ?>" id="menuPurchase">
                 <a href="/danh-muc/nha-cung-cap" class="nav-link-s<?= isActive('suppliers',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Nhà cung cấp</a>
                 <a href="/danh-muc/hop-dong" class="nav-link-s<?= isActive('contracts',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Hợp đồng</a>
-                <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Đơn đặt hàng</a>
+                <a href="/mua/de-nghi-mua-hang" class="nav-link-s<?= isActive('purchase_pr',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Đề nghị mua hàng</a>
+                <a href="/mua/don-dat-hang" class="nav-link-s<?= isActive('purchase_po',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Đơn đặt hàng</a>
+                <a href="/mua/nhap-kho-theo-po" class="nav-link-s<?= isActive('purchase_gr',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Nhập kho theo PO</a>
+                <a href="/mua/doi-chieu-hoa-don" class="nav-link-s<?= isActive('purchase_match',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Đối chiếu hóa đơn</a>
+                <a href="/mua/ngan-sach" class="nav-link-s<?= isActive('purchase_budget',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Ngân sách mua hàng</a>
                 <a href="/mua/cong-no-phai-tra" class="nav-link-s<?= isActive('ap_invoices',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Công nợ phải trả</a>
                 <a href="/mua/phan-tich-tuoi-no" class="nav-link-s<?= isActive('ap_aging',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Phân tích tuổi nợ</a>
                 <a href="/mua/so-chi-tiet-cong-no" class="nav-link-s<?= isActive('ap_statement',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Sổ chi tiết công nợ</a>
-                <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Bù trừ công nợ</a>
             </div>
         </div>
 
