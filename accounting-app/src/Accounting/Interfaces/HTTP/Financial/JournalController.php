@@ -1,7 +1,7 @@
 <?php
 namespace Accounting\Interfaces\HTTP\Financial;
 
-use Accounting\Domain\Service\JournalService;
+use Accounting\Domain\Contract\JournalServiceInterface;
 use Accounting\Domain\Repository\AccountRepositoryInterface;
 use Accounting\Domain\Repository\TransactionRepositoryInterface;
 use Accounting\Infrastructure\Auth;
@@ -42,11 +42,11 @@ use Accounting\Infrastructure\JsonResponse;
  */
 class JournalController
 {
-    private JournalService $journal;
+    private JournalServiceInterface $journal;
     private AccountRepositoryInterface $accountRepo;
     private TransactionRepositoryInterface $txnRepo;
 
-    public function __construct(JournalService $journal, AccountRepositoryInterface $accountRepo, TransactionRepositoryInterface $txnRepo)
+    public function __construct(JournalServiceInterface $journal, AccountRepositoryInterface $accountRepo, TransactionRepositoryInterface $txnRepo)
     {
         $this->journal = $journal;
         $this->accountRepo = $accountRepo;

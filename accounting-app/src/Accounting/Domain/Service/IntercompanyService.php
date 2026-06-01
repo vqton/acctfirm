@@ -1,6 +1,8 @@
 <?php
 namespace Accounting\Domain\Service;
 
+use Accounting\Domain\Contract\JournalServiceInterface;
+
 // Dịch vụ đối chiếu và loại trừ giao dịch nội bộ (Intercompany Matching & Elimination)
 //
 // Nghiệp vụ: Theo Thông tư 99 và Chuẩn mực VAS 11 (Hợp nhất Kinh doanh),
@@ -24,13 +26,13 @@ namespace Accounting\Domain\Service;
 class IntercompanyService
 {
     private \PDO $pdo;
-    private JournalService $journal;
+    private JournalServiceInterface $journal;
 
     // Tài khoản công nợ nội bộ
     private const IC_RECEIVABLE = '136';
     private const IC_PAYABLE = '336';
 
-    public function __construct(\PDO $pdo, JournalService $journal)
+    public function __construct(\PDO $pdo, JournalServiceInterface $journal)
     {
         $this->pdo = $pdo;
         $this->journal = $journal;

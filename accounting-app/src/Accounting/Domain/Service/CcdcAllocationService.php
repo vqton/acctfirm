@@ -2,18 +2,19 @@
 namespace Accounting\Domain\Service;
 
 use Accounting\Domain\Contract\AuditLoggerInterface;
+use Accounting\Domain\Contract\JournalServiceInterface;
 use Accounting\Domain\Repository\CcdcRepositoryInterface;
 
 class CcdcAllocationService
 {
     private CcdcRepositoryInterface $ccdcRepo;
-    private JournalService $journal;
+    private JournalServiceInterface $journal;
     private ?\PDO $pdo;
     private ?AuditLoggerInterface $auditLogger;
 
     public function __construct(
         CcdcRepositoryInterface $ccdcRepo,
-        JournalService $journal,
+        JournalServiceInterface $journal,
         ?\PDO $pdo = null,
         ?AuditLoggerInterface $auditLogger = null
     ) {

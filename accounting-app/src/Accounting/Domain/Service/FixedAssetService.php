@@ -6,6 +6,7 @@ use Accounting\Domain\Repository\FixedAssetRepositoryInterface;
 use Accounting\Domain\Repository\AccountRepositoryInterface;
 use Accounting\Domain\Repository\TransactionRepositoryInterface;
 use Accounting\Domain\Contract\AuditLoggerInterface;
+use Accounting\Domain\Contract\JournalServiceInterface;
 
 // Dịch vụ quản lý Tài sản cố định (TSCĐ)
 //
@@ -29,7 +30,7 @@ class FixedAssetService
     private FixedAssetRepositoryInterface $faRepo;
     private AccountRepositoryInterface $accountRepo;
     private TransactionRepositoryInterface $txnRepo;
-    private JournalService $journalService;
+    private JournalServiceInterface $journalService;
     private ?\PDO $pdo;
     private ?AuditLoggerInterface $auditLogger;
 
@@ -37,7 +38,7 @@ class FixedAssetService
         FixedAssetRepositoryInterface $faRepo,
         AccountRepositoryInterface $accountRepo,
         TransactionRepositoryInterface $txnRepo,
-        JournalService $journalService,
+        JournalServiceInterface $journalService,
         ?\PDO $pdo = null,
         ?AuditLoggerInterface $auditLogger = null
     ) {

@@ -1,7 +1,7 @@
 <?php
 namespace Accounting\Interfaces\HTTP\Inventory;
 
-use Accounting\Domain\Service\InventoryService;
+use Accounting\Domain\Contract\InventoryServiceInterface;
 use Accounting\Infrastructure\JsonResponse;
 use Accounting\Infrastructure\Auth;
 
@@ -31,9 +31,9 @@ use Accounting\Infrastructure\Auth;
  */
 class InventoryReportController
 {
-    private InventoryService $inventory;
+    private InventoryServiceInterface $inventory;
 
-    public function __construct(InventoryService $inventory)
+    public function __construct(InventoryServiceInterface $inventory)
     {
         $this->inventory = $inventory;
     }

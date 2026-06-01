@@ -2,7 +2,7 @@
 namespace Accounting\Interfaces\HTTP;
 
 use Accounting\Domain\Service\ApprovalRoutingService;
-use Accounting\Domain\Service\JournalService;
+use Accounting\Domain\Contract\JournalServiceInterface;
 use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
 
@@ -32,11 +32,11 @@ use Accounting\Infrastructure\JsonResponse;
  */
 class ApprovalController
 {
-    private JournalService $journalService;
+    private JournalServiceInterface $journalService;
     private \PDO $pdo;
     private ApprovalRoutingService $routingService;
 
-    public function __construct(JournalService $journalService, \PDO $pdo, ApprovalRoutingService $routingService)
+    public function __construct(JournalServiceInterface $journalService, \PDO $pdo, ApprovalRoutingService $routingService)
     {
         $this->journalService = $journalService;
         $this->pdo = $pdo;

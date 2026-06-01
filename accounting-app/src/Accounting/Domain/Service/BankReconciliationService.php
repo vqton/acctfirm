@@ -2,6 +2,7 @@
 namespace Accounting\Domain\Service;
 
 use Accounting\Domain\Contract\AuditLoggerInterface;
+use Accounting\Domain\Contract\JournalServiceInterface;
 use Accounting\Domain\Repository\AccountRepositoryInterface;
 use Accounting\Domain\Repository\TransactionRepositoryInterface;
 
@@ -26,13 +27,13 @@ class BankReconciliationService
     private AccountRepositoryInterface $accountRepo;
     private TransactionRepositoryInterface $txnRepo;
     private ?\PDO $pdo;
-    private JournalService $journal;
+    private JournalServiceInterface $journal;
     private ?AuditLoggerInterface $auditLogger;
 
     public function __construct(
         AccountRepositoryInterface $accountRepo,
         TransactionRepositoryInterface $txnRepo,
-        JournalService $journal,
+        JournalServiceInterface $journal,
         ?\PDO $pdo = null,
         ?AuditLoggerInterface $auditLogger = null
     ) {

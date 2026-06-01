@@ -14,6 +14,8 @@ use Accounting\Domain\Repository\GoodsReceiptRepositoryInterface;
 use Accounting\Domain\Repository\ItemRepositoryInterface;
 use Accounting\Domain\Repository\SupplierRepositoryInterface;
 use Accounting\Domain\Contract\AuditLoggerInterface;
+use Accounting\Domain\Contract\JournalServiceInterface;
+use Accounting\Domain\Contract\InventoryServiceInterface;
 
 // Dịch vụ nghiệp vụ Mua hàng (Procurement Engine)
 //
@@ -37,8 +39,8 @@ class ProcurementService
     private GoodsReceiptRepositoryInterface $grRepo;
     private ItemRepositoryInterface $itemRepo;
     private SupplierRepositoryInterface $supplierRepo;
-    private JournalService $journal;
-    private InventoryService $inventory;
+    private JournalServiceInterface $journal;
+    private InventoryServiceInterface $inventory;
     private AuditLoggerInterface $auditLogger;
     private ApprovalRoutingService $approval;
     private \PDO $pdo;
@@ -49,8 +51,8 @@ class ProcurementService
         GoodsReceiptRepositoryInterface $grRepo,
         ItemRepositoryInterface $itemRepo,
         SupplierRepositoryInterface $supplierRepo,
-        JournalService $journal,
-        InventoryService $inventory,
+        JournalServiceInterface $journal,
+        InventoryServiceInterface $inventory,
         AuditLoggerInterface $auditLogger,
         ApprovalRoutingService $approval,
         \PDO $pdo

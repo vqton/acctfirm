@@ -1,12 +1,14 @@
 <?php
 namespace Accounting\Domain\Service;
 
+use Accounting\Domain\Contract\InventoryServiceInterface;
+use Accounting\Domain\Contract\JournalServiceInterface;
 use Accounting\Domain\Repository\AccountRepositoryInterface;
 use Accounting\Domain\Repository\ItemRepositoryInterface;
 use Accounting\Domain\Repository\TransactionRepositoryInterface;
 use Accounting\Domain\Repository\WarehouseRepositoryInterface;
 
-class InventoryService
+class InventoryService implements InventoryServiceInterface
 {
     // NGHIỆP VỤ KHO: Service xử lý toàn bộ nghiệp vụ nhập/xuất/tồn kho theo Thông tư 99/2025/TT-BTC.
     //
@@ -23,7 +25,7 @@ class InventoryService
     private ItemRepositoryInterface $itemRepo;
     private WarehouseRepositoryInterface $warehouseRepo;
     private \PDO $pdo;
-    private JournalService $journal;
+    private JournalServiceInterface $journal;
 
     // BẢNG ÁNH XẠ: Loại hàng → Tài khoản tồn kho tương ứng
     // - material (152): Nguyên liệu vật liệu
@@ -44,7 +46,7 @@ class InventoryService
         TransactionRepositoryInterface $txnRepo,
         ItemRepositoryInterface $itemRepo,
         WarehouseRepositoryInterface $warehouseRepo,
-        JournalService $journal,
+        JournalServiceInterface $journal,
         \PDO $pdo
     ) {
         $this->accountRepo = $accountRepo;

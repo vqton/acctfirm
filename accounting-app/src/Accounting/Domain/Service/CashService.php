@@ -1,20 +1,22 @@
 <?php
 namespace Accounting\Domain\Service;
 
+use Accounting\Domain\Contract\CashServiceInterface;
+use Accounting\Domain\Contract\JournalServiceInterface;
 use Accounting\Domain\Repository\AccountRepositoryInterface;
 use Accounting\Domain\Repository\TransactionRepositoryInterface;
 
-class CashService
+class CashService implements CashServiceInterface
 {
     private AccountRepositoryInterface $accountRepo;
     private TransactionRepositoryInterface $txnRepo;
     private ?\PDO $pdo;
-    private JournalService $journal;
+    private JournalServiceInterface $journal;
 
     public function __construct(
         AccountRepositoryInterface $accountRepo,
         TransactionRepositoryInterface $txnRepo,
-        JournalService $journal,
+        JournalServiceInterface $journal,
         ?\PDO $pdo = null
     ) {
         $this->accountRepo = $accountRepo;

@@ -10,6 +10,7 @@ use Accounting\Domain\Repository\PayrollPeriodRepositoryInterface;
 use Accounting\Domain\Repository\SalaryComponentRepositoryInterface;
 use Accounting\Domain\Repository\EmployeeRepositoryInterface;
 use Accounting\Domain\Contract\AuditLoggerInterface;
+use Accounting\Domain\Contract\JournalServiceInterface;
 
 // NGHIEP VU: Dich vu tinh luong — core engine cua module Tien luong.
 //
@@ -42,7 +43,7 @@ class PayrollService
     private PayrollPeriodRepositoryInterface $payrollPeriodRepo;
     private SalaryComponentRepositoryInterface $salaryComponentRepo;
     private EmployeeRepositoryInterface $employeeRepo;
-    private ?JournalService $journalService;
+    private ?JournalServiceInterface $journalService;
     private ?\PDO $pdo;
     private ?AuditLoggerInterface $auditLogger;
 
@@ -82,7 +83,7 @@ class PayrollService
         PayrollPeriodRepositoryInterface $payrollPeriodRepo,
         SalaryComponentRepositoryInterface $salaryComponentRepo,
         EmployeeRepositoryInterface $employeeRepo,
-        ?JournalService $journalService = null,
+        ?JournalServiceInterface $journalService = null,
         ?\PDO $pdo = null,
         ?AuditLoggerInterface $auditLogger = null
     ) {

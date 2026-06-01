@@ -2,6 +2,8 @@
 namespace Accounting\Domain\Service;
 
 use Accounting\Domain\Contract\AuditLoggerInterface;
+use Accounting\Domain\Contract\JournalServiceInterface;
+use Accounting\Domain\Contract\InventoryServiceInterface;
 use Accounting\Domain\Repository\AccountRepositoryInterface;
 use Accounting\Domain\Repository\TransactionRepositoryInterface;
 
@@ -10,12 +12,12 @@ class PeriodService
     private ?\PDO $pdo;
     private AccountRepositoryInterface $accountRepo;
     private TransactionRepositoryInterface $txnRepo;
-    private JournalService $journal;
+    private JournalServiceInterface $journal;
     private ?AuditLoggerInterface $auditLogger;
-    private ?InventoryService $inventoryService;
+    private ?InventoryServiceInterface $inventoryService;
     private ?ReconciliationService $reconciliationService;
 
-    public function __construct(\PDO $pdo, AccountRepositoryInterface $accountRepo, TransactionRepositoryInterface $txnRepo, JournalService $journal, ?AuditLoggerInterface $auditLogger = null, ?InventoryService $inventoryService = null, ?ReconciliationService $reconciliationService = null)
+    public function __construct(\PDO $pdo, AccountRepositoryInterface $accountRepo, TransactionRepositoryInterface $txnRepo, JournalServiceInterface $journal, ?AuditLoggerInterface $auditLogger = null, ?InventoryServiceInterface $inventoryService = null, ?ReconciliationService $reconciliationService = null)
     {
         $this->pdo = $pdo;
         $this->accountRepo = $accountRepo;

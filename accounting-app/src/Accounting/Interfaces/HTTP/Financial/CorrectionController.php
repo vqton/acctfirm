@@ -1,15 +1,15 @@
 <?php
 namespace Accounting\Interfaces\HTTP\Financial;
 
-use Accounting\Domain\Service\JournalService;
+use Accounting\Domain\Contract\JournalServiceInterface;
 use Accounting\Infrastructure\JsonResponse;
 use Accounting\Infrastructure\Auth;
 
 class CorrectionController
 {
-    private JournalService $journalService;
+    private JournalServiceInterface $journalService;
 
-    public function __construct(JournalService $journalService)
+    public function __construct(JournalServiceInterface $journalService)
     {
         $this->journalService = $journalService;
     }

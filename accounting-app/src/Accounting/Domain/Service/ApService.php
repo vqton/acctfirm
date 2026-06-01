@@ -2,6 +2,7 @@
 namespace Accounting\Domain\Service;
 
 use Accounting\Domain\Contract\AuditLoggerInterface;
+use Accounting\Domain\Contract\JournalServiceInterface;
 use Accounting\Domain\Repository\AccountRepositoryInterface;
 use Accounting\Domain\Repository\SupplierRepositoryInterface;
 
@@ -28,10 +29,10 @@ class ApService
     private \PDO $pdo;
     private SupplierRepositoryInterface $supplierRepo;
     private AccountRepositoryInterface $accountRepo;
-    private JournalService $journal;
+    private JournalServiceInterface $journal;
     private ?AuditLoggerInterface $auditLogger;
 
-    public function __construct(\PDO $pdo, SupplierRepositoryInterface $supplierRepo, AccountRepositoryInterface $accountRepo, JournalService $journal, ?AuditLoggerInterface $auditLogger = null)
+    public function __construct(\PDO $pdo, SupplierRepositoryInterface $supplierRepo, AccountRepositoryInterface $accountRepo, JournalServiceInterface $journal, ?AuditLoggerInterface $auditLogger = null)
     {
         $this->pdo = $pdo;
         $this->supplierRepo = $supplierRepo;

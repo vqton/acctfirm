@@ -168,7 +168,7 @@ class OpeningBalanceService
 
         // Gọi JournalService để tạo bút toán
         $container = $GLOBALS['container'];
-        /** @var JournalService $journalService */
+        /** @var JournalServiceInterface $journalService */
         $journalService = $container['journalService'];
 
         $journalService->postEntry(

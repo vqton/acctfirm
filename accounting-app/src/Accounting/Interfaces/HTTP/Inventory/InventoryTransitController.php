@@ -1,7 +1,7 @@
 <?php
 namespace Accounting\Interfaces\HTTP\Inventory;
 
-use Accounting\Domain\Service\InventoryService;
+use Accounting\Domain\Contract\InventoryServiceInterface;
 use Accounting\Domain\Repository\ItemRepositoryInterface;
 use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
@@ -32,11 +32,11 @@ use Accounting\Infrastructure\JsonResponse;
  */
 class InventoryTransitController
 {
-    private InventoryService $inventory;
+    private InventoryServiceInterface $inventory;
     private ItemRepositoryInterface $itemRepo;
     private \PDO $pdo;
 
-    public function __construct(InventoryService $inventory, ItemRepositoryInterface $itemRepo, \PDO $pdo)
+    public function __construct(InventoryServiceInterface $inventory, ItemRepositoryInterface $itemRepo, \PDO $pdo)
     {
         $this->inventory = $inventory;
         $this->itemRepo = $itemRepo;

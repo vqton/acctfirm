@@ -1,7 +1,7 @@
 <?php
 namespace Accounting\Interfaces\HTTP\Inventory;
 
-use Accounting\Domain\Service\InventoryService;
+use Accounting\Domain\Contract\InventoryServiceInterface;
 use Accounting\Infrastructure\JsonResponse;
 use Accounting\Infrastructure\Auth;
 
@@ -31,10 +31,10 @@ use Accounting\Infrastructure\Auth;
  */
 class WriteOffController
 {
-    private InventoryService $inventory;
+    private InventoryServiceInterface $inventory;
     private \PDO $pdo;
 
-    public function __construct(InventoryService $inventory, \PDO $pdo)
+    public function __construct(InventoryServiceInterface $inventory, \PDO $pdo)
     {
         $this->inventory = $inventory;
         $this->pdo = $pdo;

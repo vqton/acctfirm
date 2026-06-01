@@ -1,7 +1,7 @@
 <?php
 namespace Accounting\Interfaces\HTTP\Cash;
 
-use Accounting\Domain\Service\CashService;
+use Accounting\Domain\Contract\CashServiceInterface;
 use Accounting\Domain\Repository\AccountRepositoryInterface;
 use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\Helpers;
@@ -38,11 +38,9 @@ use Accounting\Infrastructure\JsonResponse;
  */
 class CashController
 {
-    private CashService $cash;
-    private AccountRepositoryInterface $accountRepo;
-    private \PDO $pdo;
+    private CashServiceInterface $cash;
 
-    public function __construct(CashService $cash, AccountRepositoryInterface $accountRepo, \PDO $pdo)
+    public function __construct(CashServiceInterface $cash, AccountRepositoryInterface $accountRepo, \PDO $pdo)
     {
         $this->cash = $cash;
         $this->accountRepo = $accountRepo;

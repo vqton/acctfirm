@@ -2,6 +2,7 @@
 namespace Accounting\Domain\Service;
 
 use Accounting\Domain\Contract\AuditLoggerInterface;
+use Accounting\Domain\Contract\JournalServiceInterface;
 use Accounting\Domain\Model\Account;
 use Accounting\Domain\Repository\AccountRepositoryInterface;
 
@@ -9,12 +10,12 @@ class AccountService
 {
     private AccountRepositoryInterface $repo;
     private ?AuditLoggerInterface $auditLogger;
-    private ?JournalService $journalService;
+    private ?JournalServiceInterface $journalService;
 
     public function __construct(
         AccountRepositoryInterface $repo,
         ?AuditLoggerInterface $auditLogger = null,
-        ?JournalService $journalService = null
+        ?JournalServiceInterface $journalService = null
     ) {
         $this->repo = $repo;
         $this->auditLogger = $auditLogger;

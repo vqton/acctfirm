@@ -2,6 +2,7 @@
 namespace Accounting\Domain\Service;
 
 use Accounting\Domain\Contract\AuditLoggerInterface;
+use Accounting\Domain\Contract\JournalServiceInterface;
 use Accounting\Domain\Repository\AccountRepositoryInterface;
 
 //
@@ -29,10 +30,10 @@ use Accounting\Domain\Repository\AccountRepositoryInterface;
 class FctService
 {
     private \PDO $pdo;
-    private ?JournalService $journal;
+    private ?JournalServiceInterface $journal;
     private ?AuditLoggerInterface $auditLogger;
 
-    public function __construct(\PDO $pdo, ?JournalService $journal = null, ?AuditLoggerInterface $auditLogger = null)
+    public function __construct(\PDO $pdo, ?JournalServiceInterface $journal = null, ?AuditLoggerInterface $auditLogger = null)
     {
         $this->pdo = $pdo;
         $this->journal = $journal;

@@ -1,6 +1,7 @@
 <?php
 namespace Accounting\Domain\Service;
 
+use Accounting\Domain\Contract\JournalServiceInterface;
 use Accounting\Domain\Repository\AccountRepositoryInterface;
 
 // Dịch vụ đánh giá lại số dư ngoại tệ cuối kỳ (Foreign Currency Revaluation)
@@ -35,7 +36,7 @@ class FxRevaluationService
 {
     private \PDO $pdo;
     private AccountRepositoryInterface $accountRepo;
-    private JournalService $journal;
+    private JournalServiceInterface $journal;
 
     // Danh sách tài khoản tiền tệ cần đánh giá lại
     private const MONETARY_ACCOUNTS = ['1112', '1122', '131', '331', '341', '311', '315', '338'];
@@ -43,7 +44,7 @@ class FxRevaluationService
     public function __construct(
         \PDO $pdo,
         AccountRepositoryInterface $accountRepo,
-        JournalService $journal
+        JournalServiceInterface $journal
     ) {
         $this->pdo = $pdo;
         $this->accountRepo = $accountRepo;

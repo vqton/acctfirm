@@ -1,9 +1,10 @@
 <?php
 namespace Accounting\Domain\Service;
 
+use Accounting\Domain\Contract\AuditLoggerInterface;
+use Accounting\Domain\Contract\JournalServiceInterface;
 use Accounting\Domain\Model\LedgerEntry;
 use Accounting\Domain\Model\Transaction;
-use Accounting\Domain\Contract\AuditLoggerInterface;
 use Accounting\Domain\Repository\AccountRepositoryInterface;
 use Accounting\Domain\Repository\TransactionRepositoryInterface;
 
@@ -19,7 +20,7 @@ use Accounting\Domain\Repository\TransactionRepositoryInterface;
 //
 // TÍCH HỢP: Được gọi từ CashService, ApService, ArService, InventoryService,
 // FixedAssetService, PeriodService (kết chuyển cuối kỳ).
-class JournalService
+class JournalService implements JournalServiceInterface
 {
     private AccountRepositoryInterface $accountRepo;
     private TransactionRepositoryInterface $txnRepo;

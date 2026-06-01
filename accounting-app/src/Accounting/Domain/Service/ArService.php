@@ -2,6 +2,7 @@
 namespace Accounting\Domain\Service;
 
 use Accounting\Domain\Contract\AuditLoggerInterface;
+use Accounting\Domain\Contract\JournalServiceInterface;
 use Accounting\Domain\Repository\AccountRepositoryInterface;
 use Accounting\Domain\Repository\CustomerRepositoryInterface;
 
@@ -27,11 +28,11 @@ class ArService
 {
     private \PDO $pdo;
     private AccountRepositoryInterface $accountRepo;
-    private JournalService $journal;
+    private JournalServiceInterface $journal;
     private ?AuditLoggerInterface $auditLogger;
     private ?CustomerRepositoryInterface $customerRepo;
 
-    public function __construct(\PDO $pdo, AccountRepositoryInterface $accountRepo, JournalService $journal, ?AuditLoggerInterface $auditLogger = null, ?CustomerRepositoryInterface $customerRepo = null)
+    public function __construct(\PDO $pdo, AccountRepositoryInterface $accountRepo, JournalServiceInterface $journal, ?AuditLoggerInterface $auditLogger = null, ?CustomerRepositoryInterface $customerRepo = null)
     {
         $this->pdo = $pdo;
         $this->accountRepo = $accountRepo;
