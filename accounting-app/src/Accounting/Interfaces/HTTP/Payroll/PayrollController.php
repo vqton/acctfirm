@@ -57,6 +57,7 @@ class PayrollController
 
     public function createPeriod(): void
     {
+        Auth::checkCsrf();
         Auth::requirePermission('payroll', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
         $yearMonth = $data['period_code'] ?? $data['year_month'] ?? date('Ym');
@@ -108,6 +109,7 @@ class PayrollController
 
     public function processPayroll(): void
     {
+        Auth::checkCsrf();
         Auth::requirePermission('payroll', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
         $periodId = $data['period_id'] ?? '';
@@ -121,6 +123,7 @@ class PayrollController
 
     public function approveEntry(string $id): void
     {
+        Auth::checkCsrf();
         Auth::requirePermission('payroll', 'post');
         $entry = $this->payrollService->approvePayroll($id, $_SESSION['user_id'] ?? 'system');
         JsonResponse::ok($entry->toArray());
@@ -128,6 +131,7 @@ class PayrollController
 
     public function postEntry(string $id): void
     {
+        Auth::checkCsrf();
         Auth::requirePermission('payroll', 'post');
         $data = json_decode(file_get_contents('php://input'), true) ?? [];
         $result = $this->payrollService->postPayroll($id, $_SESSION['user_id'] ?? 'system', $data['account_overrides'] ?? []);
@@ -138,6 +142,7 @@ class PayrollController
 
     public function adjustEntry(string $id): void
     {
+        Auth::checkCsrf();
         Auth::requirePermission('payroll', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!isset($data['adjustments']) || !is_array($data['adjustments'])) {

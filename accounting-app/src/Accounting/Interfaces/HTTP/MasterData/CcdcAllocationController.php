@@ -16,6 +16,7 @@ class CcdcAllocationController
 
     public function run(): void
     {
+        Auth::checkCsrf();
         Auth::requirePermission('inventory', 'post');
         $data = json_decode(file_get_contents('php://input'), true);
         $period = $data['period'] ?? date('Y-m');

@@ -58,6 +58,7 @@ class UserController
     // Ràng buộc: User mới mặc định status = 'active'. Gán role_ids nếu có
     public function create(): void
     {
+        Auth::checkCsrf();
         Auth::requirePermission('system', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['username'], $data['password'], $data['full_name'])) {
@@ -85,6 +86,7 @@ class UserController
     // Ràng buộc: Không cho đổi username (unique constraint). Status 'inactive' = vô hiệu hóa
     public function update(string $id): void
     {
+        Auth::checkCsrf();
         Auth::requirePermission('system', 'edit');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data) { JsonResponse::error('Không có dữ liệu đầu vào'); return; }
@@ -118,6 +120,7 @@ class UserController
     // Session cũ của user bị vô hiệu hóa vẫn tồn tại — index.php kiểm tra status mỗi request
     public function delete(string $id): void
     {
+        Auth::checkCsrf();
         Auth::requirePermission('system', 'delete');
         if ($id === 'admin') { JsonResponse::error('Không thể xóa tài khoản quản trị viên mặc định'); return; }
         $this->pdo->prepare('UPDATE users SET status = ? WHERE id = ?')->execute(['inactive', $id]);

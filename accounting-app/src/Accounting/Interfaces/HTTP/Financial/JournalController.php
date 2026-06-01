@@ -117,6 +117,8 @@ class JournalController
     // Trạng thái: draft → submitted (gửi duyệt) → posted (đã ghi sổ)
     public function createDraft(): void
     {
+        Auth::checkCsrf();
+        Auth::requirePermission('journal', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['lines']) || count($data['lines']) < 2) {
             JsonResponse::error('Bút toán phải có ít nhất 2 dòng với mã tài khoản, số tiền và loại Nợ/Có', 400);
@@ -175,6 +177,8 @@ class JournalController
     // Ràng buộc: Sau post, không sửa/xóa được. Chỉ reverse (journal reversal)
     public function postEntry(): void
     {
+        Auth::checkCsrf();
+        Auth::requirePermission('journal', 'post');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['lines']) || count($data['lines']) < 2) {
             JsonResponse::error('Bút toán phải có ít nhất 2 dòng với mã tài khoản, số tiền và loại Nợ/Có', 400);

@@ -53,6 +53,7 @@ class RoleController
     // Ràng buộc: Role id phải do client cung cấp (string, không tự sinh)
     public function create(): void
     {
+        Auth::checkCsrf();
         Auth::requirePermission('system', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['id'], $data['name'])) { JsonResponse::error('Vui lòng nhập mã và tên vai trò'); return; }
@@ -68,6 +69,7 @@ class RoleController
 
     public function update(string $id): void
     {
+        Auth::checkCsrf();
         Auth::requirePermission('system', 'edit');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data) { JsonResponse::error('Không có dữ liệu đầu vào'); return; }
@@ -78,6 +80,7 @@ class RoleController
 
     public function delete(string $id): void
     {
+        Auth::checkCsrf();
         Auth::requirePermission('system', 'delete');
         $chk = $this->pdo->prepare('SELECT is_system FROM roles WHERE id = ?');
         $chk->execute([$id]);
@@ -116,6 +119,7 @@ class RoleController
     // Ràng buộc: Các module không được gửi lên sẽ bị xóa quyền (không merge, chỉ ghi đè)
     public function updatePermissions(string $id): void
     {
+        Auth::checkCsrf();
         Auth::requirePermission('system', 'edit');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data) { JsonResponse::error('Không có dữ liệu đầu vào'); return; }

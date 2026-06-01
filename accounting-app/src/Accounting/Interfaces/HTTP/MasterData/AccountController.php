@@ -2,6 +2,7 @@
 namespace Accounting\Interfaces\HTTP\MasterData;
 
 use Accounting\Domain\Service\AccountService;
+use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
 
 class AccountController
@@ -15,11 +16,13 @@ class AccountController
 
     public function list(): void
     {
+        Auth::requirePermission('master_data', 'read');
         JsonResponse::ok($this->accountService->getTree());
     }
 
     public function flatList(): void
     {
+        Auth::requirePermission('master_data', 'read');
         JsonResponse::ok(array_map(
             fn($a) => $a->toArray(),
             $this->accountService->search('')
@@ -28,6 +31,7 @@ class AccountController
 
     public function get(string $id): void
     {
+        Auth::requirePermission('master_data', 'read');
         try {
             $all = $this->accountService->search($id);
             $found = null;
@@ -43,6 +47,8 @@ class AccountController
 
     public function create(): void
     {
+        Auth::checkCsrf();
+        Auth::requirePermission('master_data', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['code'], $data['name'], $data['type'])) {
             JsonResponse::error('Vui lòng nhập mã tài khoản, tên tài khoản và loại tài khoản', 400); return;
@@ -64,6 +70,8 @@ class AccountController
 
     public function update(string $id): void
     {
+        Auth::checkCsrf();
+        Auth::requirePermission('master_data', 'edit');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data) { JsonResponse::error('Dữ liệu không hợp lệ. Vui lòng kiểm tra lại.', 400); return; }
         try {
@@ -76,6 +84,8 @@ class AccountController
 
     public function delete(string $id): void
     {
+        Auth::checkCsrf();
+        Auth::requirePermission('master_data', 'delete');
         try {
             $this->accountService->delete($id);
             JsonResponse::ok(['message' => 'Đã xóa tài khoản thành công']);
@@ -87,6 +97,8 @@ class AccountController
 
     public function activate(string $id): void
     {
+        Auth::checkCsrf();
+        Auth::requirePermission('master_data', 'edit');
         try {
             $a = $this->accountService->activate($id);
             JsonResponse::ok($a->toArray());
@@ -97,6 +109,8 @@ class AccountController
 
     public function deactivate(string $id): void
     {
+        Auth::checkCsrf();
+        Auth::requirePermission('master_data', 'edit');
         try {
             $a = $this->accountService->deactivate($id);
             JsonResponse::ok($a->toArray());
@@ -107,6 +121,8 @@ class AccountController
 
     public function lockAccount(string $id): void
     {
+        Auth::checkCsrf();
+        Auth::requirePermission('master_data', 'edit');
         $data = json_decode(file_get_contents('php://input'), true);
         try {
             $a = $this->accountService->lock(
@@ -123,6 +139,8 @@ class AccountController
 
     public function unlockAccount(string $id): void
     {
+        Auth::checkCsrf();
+        Auth::requirePermission('master_data', 'edit');
         try {
             $a = $this->accountService->unlock($id);
             JsonResponse::ok($a->toArray());
@@ -133,6 +151,7 @@ class AccountController
 
     public function search(): void
     {
+        Auth::requirePermission('master_data', 'read');
         $q = $_GET['q'] ?? '';
         $results = $this->accountService->search($q);
         JsonResponse::ok(array_map(fn($a) => $a->toArray(), $results));
@@ -140,12 +159,15 @@ class AccountController
 
     public function byType(string $type): void
     {
+        Auth::requirePermission('master_data', 'read');
         $results = $this->accountService->getByType($type);
         JsonResponse::ok(array_map(fn($a) => $a->toArray(), $results));
     }
 
     public function seed(): void
     {
+        Auth::checkCsrf();
+        Auth::requirePermission('master_data', 'edit');
         $path = __DIR__ . '/../../../../data/coa_circular_99.json';
         $coa = json_decode(file_get_contents($path), true);
         if (!$coa) { JsonResponse::error('Không tìm thấy file dữ liệu hệ thống tài khoản', 500); return; }
@@ -156,6 +178,8 @@ class AccountController
     // ── MERGE ──
     public function merge(): void
     {
+        Auth::checkCsrf();
+        Auth::requirePermission('master_data', 'edit');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['source_codes'], $data['target_code'])) {
             JsonResponse::error('Vui lòng nhập tài khoản nguồn và tài khoản đích', 400); return;
@@ -177,6 +201,8 @@ class AccountController
     // ── SPLIT ──
     public function split(): void
     {
+        Auth::checkCsrf();
+        Auth::requirePermission('master_data', 'edit');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['source_code'], $data['targets'])) {
             JsonResponse::error('Vui lòng nhập tài khoản nguồn và danh sách tài khoản đích', 400); return;
@@ -197,12 +223,15 @@ class AccountController
     // ── FS REPORT ──
     public function fsReport(): void
     {
+        Auth::requirePermission('master_data', 'read');
         JsonResponse::ok($this->accountService->getFsMappingReport());
     }
 
     // ── BRANCH COA ──
     public function branchCoa(): void
     {
+        Auth::checkCsrf();
+        Auth::requirePermission('master_data', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['entity_id'])) {
             JsonResponse::error('Vui lòng nhập ID đơn vị kế toán', 400); return;

@@ -2,6 +2,7 @@
 namespace Accounting\Interfaces\HTTP\Financial;
 
 use Accounting\Domain\Service\ApService;
+use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
 
 /**
@@ -41,10 +42,10 @@ class ApController
 
     public function __construct(ApService $ap) { $this->ap = $ap; }
 
-    public function invoices(): void { JsonResponse::ok($this->ap->getInvoices($_GET['status'] ?? null, $_GET['supplier_id'] ?? null)); }
-    public function get(int $id): void { JsonResponse::ok($this->ap->getInvoice($id)); }
-    public function payments(int $id): void { JsonResponse::ok($this->ap->getPayments($id)); }
-    public function suppliers(): void { JsonResponse::ok($this->ap->getSuppliers()); }
+    public function invoices(): void { Auth::requirePermission('ap', 'read'); JsonResponse::ok($this->ap->getInvoices($_GET['status'] ?? null, $_GET['supplier_id'] ?? null)); }
+    public function get(int $id): void { Auth::requirePermission('ap', 'read'); JsonResponse::ok($this->ap->getInvoice($id)); }
+    public function payments(int $id): void { Auth::requirePermission('ap', 'read'); JsonResponse::ok($this->ap->getPayments($id)); }
+    public function suppliers(): void { Auth::requirePermission('ap', 'read'); JsonResponse::ok($this->ap->getSuppliers()); }
 
     // NGHIỆP VỤ: Ghi nhận hóa đơn mua hàng từ nhà cung cấp
     // Input: { supplier_id, invoice_number, invoice_date?, due_date?, net_amount, vat_amount?, vat_rate?, description?, inventory_account?, created_by? }
@@ -57,6 +58,8 @@ class ApController
     // Ảnh hưởng: Tăng 331 (BC01) và tăng hàng tồn kho (BC01)
     public function create(): void
     {
+        Auth::checkCsrf();
+        Auth::requirePermission('ap', 'create');
         $d = json_decode(file_get_contents('php://input'), true);
         if (!$d || !isset($d['supplier_id'], $d['invoice_number'], $d['net_amount']))
             { JsonResponse::error('Vui lòng nhập mã nhà cung cấp, số hóa đơn và tiền hàng'); return; }
@@ -78,6 +81,8 @@ class ApController
     // Tích hợp: CashController ghi nhận phiếu chi đồng thời
     public function pay(int $id): void
     {
+        Auth::checkCsrf();
+        Auth::requirePermission('ap', 'update');
         $d = json_decode(file_get_contents('php://input'), true);
         try { JsonResponse::ok($this->ap->recordPayment($id, (float)($d['amount'] ?? 0), $d['created_by'] ?? 'system')); }
         catch (\Throwable $e) { JsonResponse::error($e->getMessage()); }
@@ -92,6 +97,8 @@ class ApController
     // Ảnh hưởng: Tạm ứng NCC làm giảm tiền nhưng chưa ghi nhận hàng
     public function prepay(): void
     {
+        Auth::checkCsrf();
+        Auth::requirePermission('ap', 'update');
         $d = json_decode(file_get_contents('php://input'), true);
         if (!$d || !isset($d['supplier_id'], $d['amount']))
             { JsonResponse::error('Vui lòng nhập mã nhà cung cấp và số tiền tạm ứng'); return; }
@@ -108,6 +115,8 @@ class ApController
     // Tích hợp: ReturnToSupplierController xử lý nhập kho hàng trả lại
     public function returnGoods(int $id): void
     {
+        Auth::checkCsrf();
+        Auth::requirePermission('ap', 'update');
         $d = json_decode(file_get_contents('php://input'), true);
         try { JsonResponse::ok($this->ap->recordReturn($id, (float)($d['amount'] ?? 0), $d['inventory_account'] ?? '152', $d['created_by'] ?? 'system')); }
         catch (\Throwable $e) { JsonResponse::error($e->getMessage()); }
@@ -122,6 +131,8 @@ class ApController
     // Ảnh hưởng BC02: Tăng chỉ tiêu doanh thu HĐTC (515)
     public function discount(int $id): void
     {
+        Auth::checkCsrf();
+        Auth::requirePermission('ap', 'update');
         $d = json_decode(file_get_contents('php://input'), true);
         try { JsonResponse::ok($this->ap->recordDiscount($id, (float)($d['amount'] ?? 0), $d['created_by'] ?? 'system')); }
         catch (\Throwable $e) { JsonResponse::error($e->getMessage()); }
@@ -136,13 +147,15 @@ class ApController
     // Ảnh hưởng BC02: Tăng thu nhập khác (711) → tăng lợi nhuận trước thuế
     public function writeOff(int $id): void
     {
+        Auth::checkCsrf();
+        Auth::requirePermission('ap', 'delete');
         $d = json_decode(file_get_contents('php://input'), true);
         try { JsonResponse::ok($this->ap->writeOff($id, $d['created_by'] ?? 'system')); }
         catch (\Throwable $e) { JsonResponse::error($e->getMessage()); }
     }
 
-    public function aging(): void { JsonResponse::ok($this->ap->getAgingReport()); }
-    public function statement(string $supplierId): void { JsonResponse::ok($this->ap->getSupplierStatement($supplierId)); }
+    public function aging(): void { Auth::requirePermission('ap', 'read'); JsonResponse::ok($this->ap->getAgingReport()); }
+    public function statement(string $supplierId): void { Auth::requirePermission('ap', 'read'); JsonResponse::ok($this->ap->getSupplierStatement($supplierId)); }
 
     public function viewInvoices(): void { require __DIR__ . '/../../../../../public/views/ap_invoices.php'; }
     public function viewAging(): void { require __DIR__ . '/../../../../../public/views/ap_aging.php'; }

@@ -16,6 +16,7 @@ class CorrectionController
 
     public function supplementary(): void
     {
+        Auth::checkCsrf();
         Auth::requirePermission('journal', 'post');
         $data = json_decode(file_get_contents('php://input'), true);
         $originalId = $data['original_transaction_id'] ?? '';
@@ -41,6 +42,7 @@ class CorrectionController
 
     public function negative(): void
     {
+        Auth::checkCsrf();
         Auth::requirePermission('journal', 'post');
         $data = json_decode(file_get_contents('php://input'), true);
         $originalId = $data['original_transaction_id'] ?? '';
@@ -65,6 +67,7 @@ class CorrectionController
 
     public function adjusting(): void
     {
+        Auth::checkCsrf();
         Auth::requirePermission('journal', 'post');
         $data = json_decode(file_get_contents('php://input'), true);
         $originalId = $data['original_transaction_id'] ?? '';

@@ -2,6 +2,7 @@
 namespace Accounting\Interfaces\HTTP\Financial;
 
 use Accounting\Domain\Service\ArService;
+use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
 
 /**
@@ -40,10 +41,10 @@ class ArController
     private ArService $ar;
     public function __construct(ArService $ar) { $this->ar = $ar; }
 
-    public function invoices(): void { JsonResponse::ok($this->ar->getInvoices($_GET['status'] ?? null, $_GET['customer_id'] ?? null)); }
-    public function get(int $id): void { JsonResponse::ok($this->ar->getInvoice($id)); }
-    public function payments(int $id): void { JsonResponse::ok($this->ar->getPayments($id)); }
-    public function customers(): void { JsonResponse::ok($this->ar->getCustomers()); }
+    public function invoices(): void { Auth::requirePermission('ar', 'read'); JsonResponse::ok($this->ar->getInvoices($_GET['status'] ?? null, $_GET['customer_id'] ?? null)); }
+    public function get(int $id): void { Auth::requirePermission('ar', 'read'); JsonResponse::ok($this->ar->getInvoice($id)); }
+    public function payments(int $id): void { Auth::requirePermission('ar', 'read'); JsonResponse::ok($this->ar->getPayments($id)); }
+    public function customers(): void { Auth::requirePermission('ar', 'read'); JsonResponse::ok($this->ar->getCustomers()); }
 
     // NGHIỆP VỤ: Ghi nhận hóa đơn bán hàng cho khách hàng
     // Input: { customer_id, invoice_number, invoice_date?, due_date?, net_amount, vat_amount?, vat_rate?, description?, created_by? }
@@ -55,6 +56,8 @@ class ArController
     // Ảnh hưởng BC01: Tăng 131, BC02: Tăng 511
     public function create(): void
     {
+        Auth::checkCsrf();
+        Auth::requirePermission('ar', 'create');
         $d = json_decode(file_get_contents('php://input'), true);
         if (!$d || !isset($d['customer_id'], $d['invoice_number'], $d['net_amount']))
             { JsonResponse::error('Vui lòng nhập mã khách hàng, số hóa đơn và tiền hàng'); return; }
@@ -76,6 +79,8 @@ class ArController
     // Tích hợp: CashController ghi nhận phiếu thu đồng thời
     public function pay(int $id): void
     {
+        Auth::checkCsrf();
+        Auth::requirePermission('ar', 'update');
         $d = json_decode(file_get_contents('php://input'), true);
         try { JsonResponse::ok($this->ar->recordPayment($id, (float)($d['amount'] ?? 0), $d['created_by'] ?? 'system')); }
         catch (\Throwable $e) { JsonResponse::error($e->getMessage()); }
@@ -90,6 +95,8 @@ class ArController
     // Ảnh hưởng BC01: 131 dư Có sẽ được phân loại là 331 (phải trả KH)
     public function prepay(): void
     {
+        Auth::checkCsrf();
+        Auth::requirePermission('ar', 'update');
         $d = json_decode(file_get_contents('php://input'), true);
         if (!$d || !isset($d['customer_id'], $d['amount'])) { JsonResponse::error('Vui lòng nhập mã khách hàng và số tiền tạm ứng'); return; }
         try { JsonResponse::ok($this->ar->recordPrepayment($d['customer_id'], (float)$d['amount'], $d['description'] ?? '', $d['created_by'] ?? 'system')); }
@@ -105,6 +112,8 @@ class ArController
     // Ảnh hưởng BC02: Giảm doanh thu (511). Tích hợp: CustomerReturnController nhập kho
     public function returnGoods(int $id): void
     {
+        Auth::checkCsrf();
+        Auth::requirePermission('ar', 'update');
         $d = json_decode(file_get_contents('php://input'), true);
         try { JsonResponse::ok($this->ar->recordReturn($id, (float)($d['amount'] ?? 0), $d['created_by'] ?? 'system')); }
         catch (\Throwable $e) { JsonResponse::error($e->getMessage()); }
@@ -119,6 +128,8 @@ class ArController
     // Ảnh hưởng BC02: Giảm doanh thu thuần (511 - 521)
     public function discount(int $id): void
     {
+        Auth::checkCsrf();
+        Auth::requirePermission('ar', 'update');
         $d = json_decode(file_get_contents('php://input'), true);
         try { JsonResponse::ok($this->ar->recordSettlementDiscount($id, (float)($d['amount'] ?? 0), $d['created_by'] ?? 'system')); }
         catch (\Throwable $e) { JsonResponse::error($e->getMessage()); }
@@ -134,13 +145,15 @@ class ArController
     // Audit trail: Cần lưu lý do xóa và chứng từ gốc đầy đủ
     public function writeOff(int $id): void
     {
+        Auth::checkCsrf();
+        Auth::requirePermission('ar', 'delete');
         $d = json_decode(file_get_contents('php://input'), true);
         try { JsonResponse::ok($this->ar->writeOff($id, $d['created_by'] ?? 'system')); }
         catch (\Throwable $e) { JsonResponse::error($e->getMessage()); }
     }
 
-    public function aging(): void { JsonResponse::ok($this->ar->getAgingReport()); }
-    public function statement(string $customerId): void { JsonResponse::ok($this->ar->getCustomerStatement($customerId)); }
+    public function aging(): void { Auth::requirePermission('ar', 'read'); JsonResponse::ok($this->ar->getAgingReport()); }
+    public function statement(string $customerId): void { Auth::requirePermission('ar', 'read'); JsonResponse::ok($this->ar->getCustomerStatement($customerId)); }
 
     public function viewInvoices(): void { require __DIR__ . '/../../../../../public/views/ar_invoices.php'; }
     public function viewAging(): void { require __DIR__ . '/../../../../../public/views/ar_aging.php'; }

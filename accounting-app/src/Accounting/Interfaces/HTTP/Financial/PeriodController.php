@@ -59,6 +59,7 @@ class PeriodController
     // Ràng buộc: Mỗi kỳ phải có start_date < end_date. Kỳ mới mặc định status = 'open'
     public function create(): void
     {
+        Auth::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['period_type'], $data['period_code'], $data['name'], $data['start_date'], $data['end_date'])) {
             JsonResponse::error('Vui lòng nhập loại kỳ, mã kỳ, tên, ngày bắt đầu và ngày kết thúc');
@@ -84,6 +85,7 @@ class PeriodController
     // Audit trail: Lưu user đóng + lý do + thời gian
     public function close(int $id): void
     {
+        Auth::checkCsrf();
         Auth::requirePermission('system', 'edit');
         try {
             $result = $this->period->closePeriod($id, $_SESSION['user']['username'] ?? 'system');
@@ -101,6 +103,7 @@ class PeriodController
     // Quy trình: ReOpen → điều chỉnh → close → phát hành BCTC điều chỉnh
     public function reOpen(int $id): void
     {
+        Auth::checkCsrf();
         Auth::requirePermission('system', 'edit');
         try {
             $result = $this->period->reOpenPeriod($id, $_SESSION['user']['username'] ?? 'system');
@@ -129,6 +132,7 @@ class PeriodController
     // Ràng buộc: Phải chạy trước khi closePeriod. Không chạy lại nếu đã close
     public function executeClosing(int $id): void
     {
+        Auth::checkCsrf();
         Auth::requirePermission('system', 'edit');
         try {
             $this->period->executeClosingEntries($_SESSION['user']['username'] ?? 'system');
@@ -145,6 +149,7 @@ class PeriodController
     // Mục đích: Giữ dữ liệu BCTC cố định cho mục đích kiểm toán và lưu trữ pháp lý
     public function archive(int $id): void
     {
+        Auth::checkCsrf();
         Auth::requirePermission('system', 'edit');
         try {
             $result = $this->period->archivePeriod($id, $_SESSION['user']['username'] ?? 'system');
@@ -164,6 +169,7 @@ class PeriodController
     // 2. Thực hiện đóng kỳ (closePeriod) — chỉ chạy nếu tất cả checks pass
     public function closeWithChecklist(int $id): void
     {
+        Auth::checkCsrf();
         Auth::requirePermission('system', 'edit');
         try {
             $checklist = $this->period->canClose($id);
@@ -188,8 +194,54 @@ class PeriodController
     // Rủi ro: Deadline quá sớm → chưa kịp ghi nhận hết nghiệp vụ. Quá muộn → chậm BCTC
     // Mục đích: Quản lý tiến độ khóa sổ, cảnh báo khi đến gần deadline
     // HARD DEADLINE: Kế toán trưởng thiết lập deadline cho kỳ
+    // NGHIỆP VỤ: Tự động tạo 12 kỳ tháng cho một năm tài chính
+    // Input: { fiscal_year: 2026 }
+    // Output: [period, period, ...] — 12 kỳ đã tạo, status = 'open'
+    // Service: PeriodService.generatePeriods()
+    // Permission: system, edit (Kế toán trưởng)
+    public function generate(): void
+    {
+        Auth::checkCsrf();
+        Auth::requirePermission('system', 'edit');
+        $data = json_decode(file_get_contents('php://input'), true);
+        if (!$data || !isset($data['fiscal_year'])) {
+            JsonResponse::error('Vui lòng nhập năm tài chính (fiscal_year)');
+            return;
+        }
+        try {
+            $result = $this->period->generatePeriods(
+                (int)$data['fiscal_year'],
+                $_SESSION['user']['username'] ?? 'system'
+            );
+            JsonResponse::ok($result, 201);
+        } catch (\InvalidArgumentException $e) { JsonResponse::error($e->getMessage()); }
+    }
+
+    // CẤU HÌNH KỲ KẾ TOÁN: Lấy tất cả cấu hình
+    public function listConfigs(): void
+    {
+        JsonResponse::ok($this->period->getAllPeriodConfigs());
+    }
+
+    // CẤU HÌNH KỲ KẾ TOÁN: Cập nhật giá trị cấu hình
+    // Input: { key: 'cit_rate', value: 0.20 }
+    // Output: { key, value, updated_by }
+    public function setConfig(): void
+    {
+        Auth::checkCsrf();
+        Auth::requirePermission('system', 'edit');
+        $data = json_decode(file_get_contents('php://input'), true);
+        if (!$data || !isset($data['key'], $data['value'])) {
+            JsonResponse::error('Vui lòng nhập key và value');
+            return;
+        }
+        $this->period->setPeriodConfig($data['key'], (float)$data['value'], $_SESSION['user']['username'] ?? 'system');
+        JsonResponse::ok(['key' => $data['key'], 'value' => (float)$data['value']]);
+    }
+
     public function setDeadline(int $id): void
     {
+        Auth::checkCsrf();
         Auth::requirePermission('system', 'edit');
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['deadline'])) {
@@ -211,6 +263,7 @@ class PeriodController
     // HARD DEADLINE: Kế toán trưởng override deadline để cho phép ghi nhận bổ sung
     public function overrideDeadline(int $id): void
     {
+        Auth::checkCsrf();
         Auth::requirePermission('system', 'edit');
         $data = json_decode(file_get_contents('php://input'), true);
         $reason = $data['reason'] ?? 'Ghi đè bởi Kế toán trưởng';

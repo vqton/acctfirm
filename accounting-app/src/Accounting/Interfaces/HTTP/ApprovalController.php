@@ -79,6 +79,7 @@ class ApprovalController
     // Ràng buộc: Chỉ approve bút toán status=submitted. Kiểm tra period open trước khi post.
     public function approve(string $txnId): void
     {
+        Auth::checkCsrf();
         Auth::requirePermission('journal', 'approve');
         $userId = $_SESSION['user']['username'] ?? '';
         $input = json_decode(file_get_contents('php://input'), true) ?? [];
@@ -96,6 +97,7 @@ class ApprovalController
     // Rủi ro: Sau reject, kế toán viên cần sửa và gửi lại (resubmit)
     public function reject(string $txnId): void
     {
+        Auth::checkCsrf();
         Auth::requirePermission('journal', 'approve');
         $userId = $_SESSION['user']['username'] ?? '';
         $input = json_decode(file_get_contents('php://input'), true) ?? [];

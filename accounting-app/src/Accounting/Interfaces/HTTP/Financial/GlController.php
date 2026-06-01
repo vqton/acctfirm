@@ -2,6 +2,7 @@
 namespace Accounting\Interfaces\HTTP\Financial;
 
 use Accounting\Domain\Service\GlService;
+use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
 
 /**
@@ -43,6 +44,7 @@ class GlController
     // Mục đích: Đối chiếu sổ chi tiết với sổ tổng hợp trước khi khóa sổ
     public function ledger(): void
     {
+        Auth::requirePermission('gl', 'read');
         $account = $_GET['account'] ?? '111';
         $from = $_GET['from'] ?? null;
         $to = $_GET['to'] ?? null;
@@ -65,6 +67,7 @@ class GlController
     // Mục đích: Kiểm tra chi tiết công nợ theo từng đối tượng (phục vụ đối chiếu GL vs sub-ledger)
     public function subsidiaryLedger(): void
     {
+        Auth::requirePermission('gl', 'read');
         $account = $_GET['account'] ?? '131';
         $from = $_GET['from'] ?? null;
         $to = $_GET['to'] ?? null;
@@ -78,6 +81,7 @@ class GlController
 
     public function accounts(): void
     {
+        Auth::requirePermission('gl', 'read');
         JsonResponse::ok($this->gl->getAccounts());
     }
 
