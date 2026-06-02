@@ -19,6 +19,13 @@ $reconciliationService = new ReconciliationService($pdo);
 use Accounting\Domain\Service\SubLedgerService;
 $subLedgerService = new SubLedgerService($pdo, $accountRepository, $glService, $periodService, $reportExportService);
 
+use Accounting\Domain\Repository\SalesOrderRepositoryInterface;
+use Accounting\Infrastructure\Repository\PDOSalesOrderRepository;
+use Accounting\Domain\Service\SalesOrderService;
+
+$salesOrderRepository = new PDOSalesOrderRepository($pdo);
+$salesOrderService = new SalesOrderService($salesOrderRepository, $journalService, $voucherService, $inventoryService, $pdo, $reportExportService);
+
 // === EXPORT DRIVERS (Gap 10 — PDF/Excel/CSV) ===
 // Strategy pattern — mỗi driver xử lý một định dạng xuất
 // CsvDriver: UTF-8 BOM + fputcsv

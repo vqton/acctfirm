@@ -133,7 +133,8 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
         <div class="nav-section">Bán hàng</div>
         <div class="nav-item">
             <a class="nav-link-s" data-bs-toggle="collapse" href="#menuSales"><i class="bi bi-bag"></i> Bán hàng <i class="bi bi-chevron-right ms-auto" style="width:auto;font-size:10px;"></i></a>
-            <div class="collapse sub-menu<?= isActive(['customers','ar_invoices','ar_aging','ar_statement'],$activeMenu)?' show':'' ?>" id="menuSales">
+            <div class="collapse sub-menu<?= isActive(['sales_orders','customers','ar_invoices','ar_aging','ar_statement'],$activeMenu)?' show':'' ?>" id="menuSales">
+                <a href="/ban/don-dat-hang" class="nav-link-s<?= isActive('sales_orders',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Đơn đặt hàng</a>
                 <a href="/danh-muc/khach-hang" class="nav-link-s<?= isActive('customers',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Khách hàng</a>
                 <a href="/ban/cong-no-phai-thu" class="nav-link-s<?= isActive('ar_invoices',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Công nợ phải thu</a>
                 <a href="/ban/phan-tich-tuoi-no" class="nav-link-s<?= isActive('ar_aging',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Phân tích tuổi nợ</a>

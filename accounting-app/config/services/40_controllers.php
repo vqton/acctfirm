@@ -124,6 +124,9 @@ $warehouseController = new WarehouseController($warehouseRepository);
 $payrollController = new PayrollController($payrollService, $employeeRepository, $payrollPeriodRepository, $payrollEntryRepository);
 $procurementController = new ProcurementController($procurementService, $threeWayMatchService, $budgetControlService);
 
+use Accounting\Interfaces\HTTP\Sales\SalesOrderController;
+$salesOrderController = new SalesOrderController($salesOrderService, $salesOrderRepository);
+
 // === SUB-LEDGER CONTROLLER ===
 use Accounting\Interfaces\HTTP\SubLedgerController;
 $subLedgerController = new SubLedgerController($subLedgerService, $reportExportService);
