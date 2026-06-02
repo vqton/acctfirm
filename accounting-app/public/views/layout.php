@@ -240,8 +240,9 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
             <a href="/bao-cao/ket-qua-kinh-doanh" class="nav-link-s<?= isActive('fs_bc02',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> KQKD (BC 02)</a>
             <a href="/bao-cao/luu-chuyen-tien-te" class="nav-link-s<?= isActive('fs_bc03',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> LCTT (BC 03)</a>
             <a href="/bao-cao-tai-chinh/thuyet-minh-bc09" class="nav-link-s<?= isActive('fs_bc09',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Thuyết minh BCTC (BC09)</a>
-            <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Báo cáo thuế</a>
-            <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Báo cáo quản trị</a>
+                <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Báo cáo thuế</a>
+                <a href="/ngan-sach" class="nav-link-s<?= isActive('budget',$activeMenu)?' active':'' ?>"><i class="bi bi-pie-chart"></i> Ngân sách & Dự toán</a>
+                <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Báo cáo quản trị</a>
             <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Tự thiết kế</a>
         </div></div>
 

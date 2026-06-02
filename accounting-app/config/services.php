@@ -138,7 +138,8 @@ use Accounting\Infrastructure\Export\PurePhpPdfDriver;
 use Accounting\Interfaces\HTTP\ExportController;
 use Accounting\Domain\Service\ContractService;
 use Accounting\Domain\Service\ProjectAccountingService;
-use Accounting\Domain\Service\ManufacturingService;
+use Accounting\Domain\Service\BudgetService;
+use Accounting\Interfaces\HTTP\BudgetController;
 use Accounting\Interfaces\HTTP\ContractManagementController;
 use Accounting\Interfaces\HTTP\ProjectAccountingController;
 use Accounting\Interfaces\HTTP\ManufacturingController;
@@ -187,6 +188,9 @@ function createContainer(): array
     $productionOrderRepository = new PDOProductionOrderRepository($pdo);
     $manufacturingService = new ManufacturingService($bomRepository, $productionOrderRepository, $pdo, $reportExportService, $journalService);
     $manufacturingController = new ManufacturingController($manufacturingService, $bomRepository, $productionOrderRepository);
+
+    $budgetService = new BudgetService($pdo, $reportExportService);
+    $budgetController = new BudgetController($budgetService);
 
     require __DIR__ . '/services/40_controllers.php';
 
@@ -252,6 +256,8 @@ function createContainer(): array
         'manufacturingService' => $manufacturingService,
         'bomRepository' => $bomRepository,
         'productionOrderRepository' => $productionOrderRepository,
+        'BudgetController' => $budgetController,
+        'budgetService' => $budgetService,
         'CustomerController' => $customerController,
         'DepartmentController' => $departmentController,
         'DepreciationPolicyController' => $depreciationPolicyController,
