@@ -164,6 +164,7 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
                 <a href="/kho/kiem-ke-dinh-ky" class="nav-link-s<?= isActive('periodic',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Tính giá xuất kho (Định kỳ)</a>
                 <a href="/kho/hang-dang-di-duong" class="nav-link-s<?= isActive('transit',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Hàng mua đang đi đường</a>
                 <a href="/kho/hang-gui-ban" class="nav-link-s<?= isActive('consignment',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Hàng gửi đi bán</a>
+                <a href="/san-xuat" class="nav-link-s<?= isActive('manufacturing',$activeMenu)?' active':'' ?>"><i class="bi bi-gear"></i> Sản xuất & Giá thành</a>
             </div>
         </div>
 

@@ -138,8 +138,14 @@ use Accounting\Infrastructure\Export\PurePhpPdfDriver;
 use Accounting\Interfaces\HTTP\ExportController;
 use Accounting\Domain\Service\ContractService;
 use Accounting\Domain\Service\ProjectAccountingService;
+use Accounting\Domain\Service\ManufacturingService;
 use Accounting\Interfaces\HTTP\ContractManagementController;
 use Accounting\Interfaces\HTTP\ProjectAccountingController;
+use Accounting\Interfaces\HTTP\ManufacturingController;
+use Accounting\Domain\Repository\BomRepositoryInterface;
+use Accounting\Infrastructure\Persistence\PDOBomRepository;
+use Accounting\Domain\Repository\ProductionOrderRepositoryInterface;
+use Accounting\Infrastructure\Persistence\PDOProductionOrderRepository;
 
 // Tạo DI container — khởi tạo tất cả service, repository, controller
 // Dependency graph:
@@ -176,6 +182,11 @@ function createContainer(): array
     $contractManagementController = new ContractManagementController($contractService, $contractRepository);
     $projectAccountingService = new ProjectAccountingService($projectRepository, $pdo, $reportExportService);
     $projectAccountingController = new ProjectAccountingController($projectAccountingService, $projectRepository);
+
+    $bomRepository = new PDOBomRepository($pdo);
+    $productionOrderRepository = new PDOProductionOrderRepository($pdo);
+    $manufacturingService = new ManufacturingService($bomRepository, $productionOrderRepository, $pdo, $reportExportService, $journalService);
+    $manufacturingController = new ManufacturingController($manufacturingService, $bomRepository, $productionOrderRepository);
 
     require __DIR__ . '/services/40_controllers.php';
 
@@ -237,6 +248,10 @@ function createContainer(): array
         'contractService' => $contractService,
         'ProjectAccountingController' => $projectAccountingController,
         'projectAccountingService' => $projectAccountingService,
+        'ManufacturingController' => $manufacturingController,
+        'manufacturingService' => $manufacturingService,
+        'bomRepository' => $bomRepository,
+        'productionOrderRepository' => $productionOrderRepository,
         'CustomerController' => $customerController,
         'DepartmentController' => $departmentController,
         'DepreciationPolicyController' => $depreciationPolicyController,
