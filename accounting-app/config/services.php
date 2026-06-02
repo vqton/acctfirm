@@ -136,6 +136,10 @@ use Accounting\Infrastructure\Export\CsvDriver;
 use Accounting\Infrastructure\Export\HtmlExcelDriver;
 use Accounting\Infrastructure\Export\PurePhpPdfDriver;
 use Accounting\Interfaces\HTTP\ExportController;
+use Accounting\Domain\Service\ContractService;
+use Accounting\Domain\Service\ProjectAccountingService;
+use Accounting\Interfaces\HTTP\ContractManagementController;
+use Accounting\Interfaces\HTTP\ProjectAccountingController;
 
 // Tạo DI container — khởi tạo tất cả service, repository, controller
 // Dependency graph:
@@ -167,6 +171,11 @@ function createContainer(): array
     $exportService->registerDriver('xls', $exportXlsDriver);
     $exportService->registerDriver('pdf', $exportPdfDriver);
     $exportController = new ExportController($exportService);
+
+    $contractService = new ContractService($contractRepository, $pdo, $reportExportService);
+    $contractManagementController = new ContractManagementController($contractService, $contractRepository);
+    $projectAccountingService = new ProjectAccountingService($projectRepository, $pdo, $reportExportService);
+    $projectAccountingController = new ProjectAccountingController($projectAccountingService, $projectRepository);
 
     require __DIR__ . '/services/40_controllers.php';
 
@@ -224,6 +233,10 @@ function createContainer(): array
         'ReportExportController' => $reportExportController,
         'ConsignmentController' => $consignmentController,
         'ContractController' => $contractController,
+        'ContractManagementController' => $contractManagementController,
+        'contractService' => $contractService,
+        'ProjectAccountingController' => $projectAccountingController,
+        'projectAccountingService' => $projectAccountingService,
         'CustomerController' => $customerController,
         'DepartmentController' => $departmentController,
         'DepreciationPolicyController' => $depreciationPolicyController,

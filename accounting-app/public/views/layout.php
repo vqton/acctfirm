@@ -118,7 +118,7 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
             <a class="nav-link-s" data-bs-toggle="collapse" href="#menuPurchase"><i class="bi bi-cart"></i> Mua hàng <i class="bi bi-chevron-right ms-auto" style="width:auto;font-size:10px;"></i></a>
             <div class="collapse sub-menu<?= isActive(['suppliers','contracts','ap_invoices','ap_aging','ap_statement'],$activeMenu)?' show':'' ?>" id="menuPurchase">
                 <a href="/danh-muc/nha-cung-cap" class="nav-link-s<?= isActive('suppliers',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Nhà cung cấp</a>
-                <a href="/danh-muc/hop-dong" class="nav-link-s<?= isActive('contracts',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Hợp đồng</a>
+                <a href="/contracts" class="nav-link-s<?= isActive('contracts',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Hợp đồng</a>
                 <a href="/mua/de-nghi-mua-hang" class="nav-link-s<?= isActive('purchase_pr',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Đề nghị mua hàng</a>
                 <a href="/mua/don-dat-hang" class="nav-link-s<?= isActive('purchase_po',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Đơn đặt hàng</a>
                 <a href="/mua/nhap-kho-theo-po" class="nav-link-s<?= isActive('purchase_gr',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Nhập kho theo PO</a>
@@ -130,12 +130,13 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
             </div>
         </div>
 
-        <div class="nav-section">Bán hàng</div>
+        <div class="nav-section">Bán hàng & Dự án</div>
         <div class="nav-item">
             <a class="nav-link-s" data-bs-toggle="collapse" href="#menuSales"><i class="bi bi-bag"></i> Bán hàng <i class="bi bi-chevron-right ms-auto" style="width:auto;font-size:10px;"></i></a>
-            <div class="collapse sub-menu<?= isActive(['sales_orders','customers','ar_invoices','ar_aging','ar_statement'],$activeMenu)?' show':'' ?>" id="menuSales">
+            <div class="collapse sub-menu<?= isActive(['sales_orders','customers','ar_invoices','ar_aging','ar_statement','projects'],$activeMenu)?' show':'' ?>" id="menuSales">
                 <a href="/ban/don-dat-hang" class="nav-link-s<?= isActive('sales_orders',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Đơn đặt hàng</a>
-                <a href="/danh-muc/khach-hang" class="nav-link-s<?= isActive('customers',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Khách hàng</a>
+                <a href="/du-an" class="nav-link-s<?= isActive('projects',$activeMenu)?' active':'' ?>"><i class="bi bi-diagram-3"></i> Quản lý Dự án</a>
+                <a href="/danh-muc/du-an" class="nav-link-s<?= isActive('project_master',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Danh mục dự án</a>
                 <a href="/ban/cong-no-phai-thu" class="nav-link-s<?= isActive('ar_invoices',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Công nợ phải thu</a>
                 <a href="/ban/phan-tich-tuoi-no" class="nav-link-s<?= isActive('ar_aging',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Phân tích tuổi nợ</a>
                 <a href="/ban/so-chi-tiet-cong-no" class="nav-link-s<?= isActive('ar_statement',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Sổ chi tiết công nợ</a>

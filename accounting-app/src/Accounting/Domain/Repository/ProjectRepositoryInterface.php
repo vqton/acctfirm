@@ -10,4 +10,8 @@ interface ProjectRepositoryInterface
     public function findAll(): array;
     public function save(Project $project): void;
     public function delete(string $id): void;
+    public function getCostSummary(string $projectId): array;
+    public function getProjectTransactions(string $projectId, ?string $fromDate = null, ?string $toDate = null): array;
+    public function getProgressBillings(string $projectId): array;
+    public function getProjectBudgets(string $projectId): array;
 }

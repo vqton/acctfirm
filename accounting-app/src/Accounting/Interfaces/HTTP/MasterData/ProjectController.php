@@ -43,7 +43,7 @@ class ProjectController
         return new Project(
             $data['id'], $data['code'], $data['name'], $data['customer_id'],
             $data['start_date'], $data['end_date'] ?? null, (float)($data['budget'] ?? 0),
-            $data['notes'] ?? null
+            $data['notes'] ?? null, $data['manager_id'] ?? null
         );
     }
 
@@ -55,7 +55,9 @@ class ProjectController
         if (isset($data['start_date'])) $entity->setStartDate($data['start_date']);
         if (isset($data['end_date'])) $entity->setEndDate($data['end_date']);
         if (isset($data['budget'])) $entity->setBudget((float)$data['budget']);
-        if (isset($data['status'])) $entity->setStatus((bool)$data['status']);
+        if (isset($data['status'])) $entity->setStatus($data['status']);
+        if (isset($data['manager_id'])) $entity->setManagerId($data['manager_id']);
+        if (isset($data['estimated_completion_pct'])) $entity->setEstimatedCompletionPct((float)$data['estimated_completion_pct']);
         if (isset($data['notes'])) $entity->setNotes($data['notes']);
     }
 }

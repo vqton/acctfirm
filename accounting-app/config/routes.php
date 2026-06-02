@@ -24,6 +24,8 @@ function defineRoutes(Router $router): void
     require __DIR__ . '/routes/tax_fct.php';
     require __DIR__ . '/routes/einvoice.php';
     require __DIR__ . '/routes/api_sales.php';
+    require __DIR__ . '/routes/api_contract.php';
+    require __DIR__ . '/routes/api_project_accounting.php';
     require __DIR__ . '/routes/misc.php';
     require __DIR__ . '/routes/views.php';
 }
