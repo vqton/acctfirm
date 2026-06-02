@@ -127,7 +127,15 @@ use Accounting\Infrastructure\EInvoice\VnptEInvoiceGateway;
 use Accounting\Domain\Contract\EInvoiceGatewayInterface;
 use Accounting\Domain\Service\InvoiceService;
 use Accounting\Domain\Service\VatDeclarationEngine;
+use Accounting\Domain\Service\CitDeclarationEngine;
+use Accounting\Domain\Service\PitDeclarationService;
 use Accounting\Interfaces\HTTP\EInvoiceController;
+use Accounting\Domain\Service\ExportService;
+use Accounting\Domain\Contract\ExportDriverInterface;
+use Accounting\Infrastructure\Export\CsvDriver;
+use Accounting\Infrastructure\Export\HtmlExcelDriver;
+use Accounting\Infrastructure\Export\PurePhpPdfDriver;
+use Accounting\Interfaces\HTTP\ExportController;
 
 // Tạo DI container — khởi tạo tất cả service, repository, controller
 // Dependency graph:
@@ -148,6 +156,18 @@ function createContainer(): array
     require __DIR__ . '/services/36_payroll.php';
     require __DIR__ . '/services/37_procurement.php';
     require __DIR__ . '/services/25_einvoice.php';
+    // === EXPORT SERVICE (Gap 10 — PDF/Excel/CSV) ===
+    // Sử dụng strategy pattern với các driver — hỗ trợ csv, xls, pdf
+    // ExportService nhận ReportExportService để giữ backward compatibility
+    $exportCsvDriver = new CsvDriver();
+    $exportXlsDriver = new HtmlExcelDriver();
+    $exportPdfDriver = new PurePhpPdfDriver();
+    $exportService = new ExportService($reportExportService);
+    $exportService->registerDriver('csv', $exportCsvDriver);
+    $exportService->registerDriver('xls', $exportXlsDriver);
+    $exportService->registerDriver('pdf', $exportPdfDriver);
+    $exportController = new ExportController($exportService);
+
     require __DIR__ . '/services/40_controllers.php';
 
     // === CONTAINER: Map tên → instance ===
@@ -266,7 +286,11 @@ function createContainer(): array
         'einvoiceGateway' => $einvoiceGateway,
         'invoiceService' => $invoiceService,
         'vatDeclarationEngine' => $vatDeclarationEngine,
+        'citDeclarationEngine' => $citDeclarationEngine,
+        'pitDeclarationService' => $pitDeclarationService,
         'EInvoiceController' => $einvoiceController,
+        'subLedgerService' => $subLedgerService,
+        'SubLedgerController' => $subLedgerController,
     ];
 }
 

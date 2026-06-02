@@ -24,6 +24,16 @@ $journalBookService = new JournalBookService($pdo);
 $fixedAssetService = new FixedAssetService($fixedAssetRepository, $accountRepository, $transactionRepository, $journalService, $pdo, $auditLogger);
 $vatService = new VatService($pdo, $auditLogger);
 $citService = new CitService($pdo, $auditLogger);
+$citDeclarationEngine = new \Accounting\Domain\Service\CitDeclarationEngine($pdo);
+$pitDeclarationService = new \Accounting\Domain\Service\PitDeclarationService($pdo, $auditLogger);
 $fctService = new FctService($pdo, $journalService, $auditLogger);
 $openingBalanceService = new OpeningBalanceService($pdo, $accountRepository);
 $reportExportService = new ReportExportService();
+
+// === BC09: Thuyết minh BCTC ===
+use Accounting\Domain\Repository\Bc09RepositoryInterface;
+use Accounting\Infrastructure\Repository\PDOBc09Repository;
+use Accounting\Domain\Service\FsNotesService;
+
+$bc09Repository = new PDOBc09Repository($pdo);
+$fsNotesService = new FsNotesService($bc09Repository, $accountRepository, $periodService, $pdo);

@@ -218,7 +218,7 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
             <a href="/tong-hop/phe-duyet" class="nav-link-s<?= isActive('approvals',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Phê duyệt</a>
             <a href="/dieu-chinh-but-toan" class="nav-link-s<?= isActive('corrections',$activeMenu)?' active':'' ?>"><i class="bi bi-pencil"></i> Điều chỉnh bút toán</a>
             <a href="/bao-cao/so-cai" class="nav-link-s<?= isActive('so_cai',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Sổ cái</a>
-            <a href="/bao-cao/so-chi-tiet" class="nav-link-s<?= isActive('so_chi_tiet',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Sổ chi tiết</a>
+            <a href="/so-chi-tiet" class="nav-link-s<?= isActive('so_chi_tiet',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Sổ chi tiết tổng hợp</a>
             <a href="/he-thong/kiem-tra-truoc-khi-khoa-so" class="nav-link-s<?= isActive('pre_close',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Kiểm tra trước khóa sổ</a>
             <a href="/tong-hop/khoa-so-cuoi-ky" class="nav-link-s<?= isActive('period_close',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Khóa sổ cuối kỳ</a>
             <a href="/bao-cao/ty-gia" class="nav-link-s<?= isActive('fx_revaluation',$activeMenu)?' active':'' ?>"><i class="bi bi-currency-exchange"></i> Đánh giá lại ngoại tệ</a>
@@ -236,7 +236,7 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
             <a href="/bao-cao/tinh-hinh-tai-chinh" class="nav-link-s<?= isActive('fs_bc01',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> BC CĐKT (BC 01)</a>
             <a href="/bao-cao/ket-qua-kinh-doanh" class="nav-link-s<?= isActive('fs_bc02',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> KQKD (BC 02)</a>
             <a href="/bao-cao/luu-chuyen-tien-te" class="nav-link-s<?= isActive('fs_bc03',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> LCTT (BC 03)</a>
-            <a href="/bao-cao/thuyet-minh-bctc" class="nav-link-s"><i class="bi bi-circle-fill"></i> Thuyết minh BCTC</a>
+            <a href="/bao-cao-tai-chinh/thuyet-minh-bc09" class="nav-link-s<?= isActive('fs_bc09',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Thuyết minh BCTC (BC09)</a>
             <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Báo cáo thuế</a>
             <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Báo cáo quản trị</a>
             <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Tự thiết kế</a>

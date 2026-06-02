@@ -24,17 +24,20 @@ class DebtCollectionService
     private ArService $arService;
     private ?AuditLoggerInterface $auditLogger;
     private \PDO $pdo;
+    private ?ConfigService $config;
 
     public function __construct(
         \PDO $pdo,
         DebtCollectionRepositoryInterface $repo,
         ArService $arService,
-        ?AuditLoggerInterface $auditLogger = null
+        ?AuditLoggerInterface $auditLogger = null,
+        ?ConfigService $config = null
     ) {
         $this->pdo = $pdo;
         $this->repo = $repo;
         $this->arService = $arService;
         $this->auditLogger = $auditLogger;
+        $this->config = $config;
     }
 
     // ════════════════════════════════════════════════
@@ -64,7 +67,7 @@ class DebtCollectionService
             }
 
             $daysOverdue = (int)date_diff(date_create($r['due_date']), date_create('today'))->format('%a');
-            $priority = min((int)($daysOverdue / 7), 10);
+            $priority = min((int)($daysOverdue / 7), $this->cfgInt('debt.priority_max', 10));
             $escalationLevel = $this->calculateEscalationLevel($daysOverdue);
 
             $entry = new \Accounting\Domain\Model\QueueEntry(
@@ -118,7 +121,7 @@ class DebtCollectionService
         $entry = $this->repo->findQueueById($queueId);
         if (!$entry) throw new \InvalidArgumentException('Không tìm thấy queue entry.');
         if ($entry->getStatus() === 'closed') throw new \InvalidArgumentException('Queue entry đã đóng.');
-        if ($entry->getHoldCount() >= 3) throw new \InvalidArgumentException('Queue entry đã được tạm dừng 3 lần. Vui lòng liên hệ quản lý để xử lý tiếp.');
+        if ($entry->getHoldCount() >= $this->cfgInt('debt.max_holds', 3)) throw new \InvalidArgumentException('Queue entry đã được tạm dừng ' . $this->cfgInt('debt.max_holds', 3) . ' lần. Vui lòng liên hệ quản lý để xử lý tiếp.');
 
         $holdCount = $entry->getHoldCount() + 1;
         $this->repo->updateQueueHold($queueId, $reason, $holdUntil, $holdCount);
@@ -247,13 +250,13 @@ class DebtCollectionService
         $pDate = new \DateTime($promiseDate);
         if ($pDate <= $today) throw new \InvalidArgumentException('Ngày hứa hẹn phải sau ngày hiện tại.');
         $diffDays = (int)$today->diff($pDate)->format('%a');
-        if ($diffDays > 60) throw new \InvalidArgumentException('Ngày hứa hẹn không được quá 60 ngày từ hôm nay.');
+        if ($diffDays > $this->cfgInt('debt.promise_max_days', 60)) throw new \InvalidArgumentException('Ngày hứa hẹn không được quá ' . $this->cfgInt('debt.promise_max_days', 60) . ' ngày từ hôm nay.');
 
         // Kiểm tra 10% balance
         $stmt = $this->pdo->prepare('SELECT balance FROM ar_invoices WHERE id = ?');
         $stmt->execute([$entry->getInvoiceId()]);
         $inv = $stmt->fetch(\PDO::FETCH_ASSOC);
-        if ($inv && $promiseAmount < $inv['balance'] * 0.1) {
+        if ($inv && $promiseAmount < $inv['balance'] * ($this->cfg('debt.promise_min_pct', 10) / 100)) {
             throw new \InvalidArgumentException('Số tiền cam kết phải >= 10% số dư hóa đơn.');
         }
 
@@ -263,8 +266,8 @@ class DebtCollectionService
         foreach ($existingPromises as $p) {
             if ($p['status'] === 'active') $activeCount++;
         }
-        if ($activeCount >= 3) {
-            throw new \InvalidArgumentException('Queue entry này đã có 3 cam kết thanh toán đang hoạt động.');
+        if ($activeCount >= $this->cfgInt('debt.promise_max_active', 3)) {
+            throw new \InvalidArgumentException('Queue entry này đã có ' . $this->cfgInt('debt.promise_max_active', 3) . ' cam kết thanh toán đang hoạt động.');
         }
 
         $promise = new \Accounting\Domain\Model\Promise(
@@ -313,7 +316,7 @@ class DebtCollectionService
         foreach ($brokenPromises as $p) {
             if ($p['status'] === 'broken') $totalBroken++;
         }
-        if ($totalBroken >= 3) {
+        if ($totalBroken >= $this->cfgInt('debt.escalation_promise_breaks', 3)) {
             $this->escalateQueue($promise->getQueueId(), 2, $brokenBy);
         }
 
@@ -342,18 +345,18 @@ class DebtCollectionService
         if (!$inv || $inv['balance'] <= 0) throw new \InvalidArgumentException('Hóa đơn không còn số dư để xóa sổ.');
 
         $daysOverdue = (int)date_diff(date_create($inv['due_date']), date_create('today'))->format('%a');
-        if ($daysOverdue < 365) {
-            throw new \InvalidArgumentException("Nợ mới quá hạn {$daysOverdue} ngày. Cần tối thiểu 365 ngày mới được đề xuất xóa nợ.");
+        if ($daysOverdue < $this->cfgInt('debt.write_off_days', 365)) {
+            throw new \InvalidArgumentException("Nợ mới quá hạn {$daysOverdue} ngày. Cần tối thiểu " . $this->cfgInt('debt.write_off_days', 365) . " ngày mới được đề xuất xóa nợ.");
         }
 
         // Kiểm tra tối thiểu 3 hoạt động trong 180 ngày
         $actStmt = $this->pdo->prepare(
-            "SELECT COUNT(*) FROM debt_collection_activities WHERE queue_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 180 DAY)"
+            "SELECT COUNT(*) FROM debt_collection_activities WHERE queue_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL {$this->cfgInt('debt.write_off_activity_days', 180)} DAY)"
         );
         $actStmt->execute([$queueId]);
         $activityCount = (int)$actStmt->fetchColumn();
-        if ($activityCount < 3) {
-            throw new \InvalidArgumentException("Cần tối thiểu 3 hoạt động đòi nợ trong 180 ngày qua. Hiện tại: {$activityCount}.");
+        if ($activityCount < $this->cfgInt('debt.min_activities_180d', 3)) {
+            throw new \InvalidArgumentException("Cần tối thiểu " . $this->cfgInt('debt.min_activities_180d', 3) . " hoạt động đòi nợ trong " . $this->cfgInt('debt.write_off_activity_days', 180) . " ngày qua. Hiện tại: {$activityCount}.");
         }
 
         // Xác định approval chain
@@ -474,16 +477,16 @@ class DebtCollectionService
         $discountAmount = $originalBalance - $settlementAmount;
         $discountPercent = $originalBalance > 0 ? round($discountAmount / $originalBalance * 100, 2) : 0;
 
-        if ($discountPercent > 70) {
-            throw new \InvalidArgumentException("Tỷ lệ giảm {$discountPercent}% vượt quá 70%. Vui lòng điều chỉnh số tiền thỏa thuận.");
+        if ($discountPercent > $this->cfgInt('debt.settlement_discount_max', 70)) {
+            throw new \InvalidArgumentException("Tỷ lệ giảm {$discountPercent}% vượt quá " . $this->cfgInt('debt.settlement_discount_max', 70) . "%. Vui lòng điều chỉnh số tiền thỏa thuận.");
         }
 
         // due_by_date <= 14 days from today
         $dueDate = new \DateTime($dueByDate);
         $today = new \DateTime('today');
         $diffDays = (int)$today->diff($dueDate)->format('%a');
-        if ($diffDays > 14) {
-            throw new \InvalidArgumentException('Thời hạn thanh toán không được quá 14 ngày từ hôm nay.');
+        if ($diffDays > $this->cfgInt('debt.settlement_due_days', 14)) {
+            throw new \InvalidArgumentException('Thời hạn thanh toán không được quá ' . $this->cfgInt('debt.settlement_due_days', 14) . ' ngày từ hôm nay.');
         }
 
         $settlement = new \Accounting\Domain\Model\Settlement(
@@ -680,5 +683,15 @@ class DebtCollectionService
         if ($daysOverdue <= 180) return 3;
         if ($daysOverdue <= 365) return 4;
         return 5;
+    }
+
+    private function cfg(string $key, mixed $default): mixed
+    {
+        return $this->config?->get($key, $default) ?? $default;
+    }
+
+    private function cfgInt(string $key, int $default): int
+    {
+        return $this->config?->getInt($key, $default) ?? $default;
     }
 }

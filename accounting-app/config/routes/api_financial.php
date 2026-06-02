@@ -102,3 +102,11 @@ $router->post('/api/corrections/supplementary', function() use ($c) { $c['Correc
 $router->post('/api/corrections/negative', function() use ($c) { $c['CorrectionController']->negative(); });
 $router->post('/api/corrections/adjusting', function() use ($c) { $c['CorrectionController']->adjusting(); });
 $router->get('/api/corrections/history/:transactionId', function($transactionId) use ($c) { $c['CorrectionController']->history($transactionId); });
+
+// === BC09 - Notes to Financial Statements ===
+$router->get('/api/fs/bc09/:periodId', function($periodId) use ($c) { $c['FsNotesController']->getReport($periodId); });
+$router->post('/api/fs/bc09/:periodId/generate', function($periodId) use ($c) { $c['FsNotesController']->generate($periodId); });
+$router->put('/api/fs/bc09/:periodId/indicator/:code', function($periodId, $code) use ($c) { $c['FsNotesController']->updateIndicator($periodId, $code); });
+$router->post('/api/fs/bc09/:periodId/validate', function($periodId) use ($c) { $c['FsNotesController']->validate($periodId); });
+$router->get('/api/fs/bc09/policies', function() use ($c) { $c['FsNotesController']->getPolicies(); });
+$router->get('/bao-cao-tai-chinh/thuyet-minh-bc09', function() use ($c) { $c['FsNotesController']->viewIndex(); });

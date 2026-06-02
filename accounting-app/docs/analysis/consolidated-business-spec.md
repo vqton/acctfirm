@@ -241,35 +241,46 @@ K3-K10 (GDT API, e-invoice, digital signature, auto tax declaration, auto FS, re
 | Period guard | Transactions cannot post to closed periods. |
 | Voucher numbering | Configurable format via `nextVoucherNo()` helper. |
 | CSRF | Every POST/PUT/DELETE requires X-CSRF-Token header from `Auth::csrfToken()`. |
+| **Data-driven business rules** | All rates/thresholds/brackets in `business_config` table, read via `ConfigService`. Change = `UPDATE`, not deploy. |
+| **E-invoice via gateway port** | `EInvoiceGatewayInterface` port, VNPT SOAP adapter, PKCS#7 digital signature, TT32 v2.0.0 XML with QR. |
+| **VAT rate data-driven** | `vat_groups` table + `VatRateService` with NQ 204/2025 8% reduction expiry. |
+| **Config-driven non-deductible CIT** | `CitService` reads ad cap (10%), interest cap (30%), loss carryforward years from `business_config`. |
 
 ### Deviations from Standard Patterns
 
 | Expected Pattern | Current Implementation | Risk |
 |---|---|---|
-| Separate sub-ledgers (AR, AP) reconciled to GL | AR/AP balances computed from separate tables, but no formal reconciliation enforcement | Low — consistent in practice |
-| Approval workflow for payments | No workflow layer. Every POST is immediate. | Medium — no payment authorization |
-| Bank statement import (CSV/MT940) | Manual entry only | Medium — high manual overhead |
-| Consolidated FS (multi-entity) | Not started | Low — out of scope for SME |
+| Separate sub-ledgers (AR, AP) reconciled to GL | ✅ **Resolved.** `ReconciliationService` covers all 6 sub-ledgers, blocks period close if differences exceed threshold. | **RESOLVED** |
+| Approval workflow for payments | ✅ **Resolved.** `ApprovalRoutingService` + `ApprovalController` + state machine (migration 052). | **RESOLVED** |
+| Bank statement import (CSV/MT940) | ✅ **Resolved.** `BankReconciliationController::importCsv()` parses CSV with auto-match. | **RESOLVED** |
+| Consolidated FS (multi-entity) | ✅ **Resolved.** `IntercompanyService` (280 lines): matching + elimination + consolidated report. | **RESOLVED** |
+| PDF/Excel export | ❌ Not started. HTML-only reports. | Medium |
+| Global search | ❌ Not started. No cross-module search. | Medium |
 
 ---
 
 ## 8. Configuration & Routing
 
-### DI Container Structure (`config/services.php`)
+### DI Container Structure
 
-- 30+ services constructed with explicit dependency injection
-- All repositories are singletons sharing one LoggingPDO instance
-- Key services: JournalService (central posting), InventoryService (16 methods), CashService (receipt/payment/bank), ApService (10 UCs), ArService (10 UCs), FsService (BC 01/02), GlService
+- 50+ services constructed with explicit dependency injection across 13 module files (`config/services/*.php`)
+- `ConfigService` — reads `business_config` table (39 keys), type casting, in-memory cache, nullable for backward compat
+- Key services added: `VatRateService` (data-driven VAT), `VatDeclarationEngine` (43 indicators), `CitDeclarationEngine` (25 indicators), `PitDeclarationService` (05/KK + 05/QTT), `InvoiceService` (e-invoice lifecycle), `EInvoiceGatewayInterface` (VNPT SOAP), `DigitalSignatureService` (PKCS#7), `XmlInvoiceBuilder` (TT32 v2.0.0)
 
-### API Route Inventory (`config/routes.php`)
+### API Route Inventory
 
-~400 lines covering:
+~600 lines across 11 route files (`config/routes/*.php`):
 - 16 master data CRUD endpoints
-- 8 cash/bank route groups (receipt, payment, bank deposit/withdrawal, transfer, reconciliation, petty cash, cash reports, FX revaluation)
-- 4 inventory route groups (receipt, issue, consignment, transfers, transit, physical count, periodic, impairment, promotional, customer return)
-- 3 AP/AR route groups (invoices, payments, returns, aging)
+- 8 cash/bank route groups
+- 4 inventory route groups
+- 3 AP/AR route groups
 - 3 FS routes (BC 01, BC 02, trial balance)
 - Auth routes (login/logout/csrf/users/roles)
 - Period routes (open/close/list)
 - GL routes (ledger, journal book)
 - View routes (52 sidebar pages)
+- **13 tax routes** — VAT (declare, reconcile, approve, reject, adjust, HTKK export, input checklist, non-deductible scan)
+- **4 CIT routes** — prepare, finalise, export XML, scan non-deductible
+- **4 PIT routes** — monthly, annual, get, export
+- **8 FCT routes** — contracts, declarations, CRUD
+- **10 e-invoice routes** — list, get, create, adjust, replace, cancel, retry, download XML, export VAT, calculate indicators

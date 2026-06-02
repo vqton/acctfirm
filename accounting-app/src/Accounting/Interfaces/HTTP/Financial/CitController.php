@@ -79,6 +79,23 @@ class CitController
         JsonResponse::ok($this->cit->getLossCarryforward($period));
     }
 
+    public function exportXml(string $id): void
+    {
+        Auth::requirePermission('tax', 'read');
+        try {
+            $calc = $this->cit->getCalculation($id);
+            if (!$calc) { JsonResponse::error('Không tìm thấy quyết toán', 404); return; }
+            $pdo = $GLOBALS['container']['pdo'] ?? null;
+            if (!$pdo) { JsonResponse::error('DB not available', 500); return; }
+            $engine = new \Accounting\Domain\Service\CitDeclarationEngine($pdo);
+            header('Content-Type: application/xml; charset=UTF-8');
+            header('Content-Disposition: attachment; filename="03-TNDN-' . $id . '.xml"');
+            echo $engine->exportToXml($id);
+        } catch (\Throwable $e) {
+            JsonResponse::error($e->getMessage(), 400);
+        }
+    }
+
     public function view(): void
     {
         require __DIR__ . '/../../../../../public/views/cit_calculations.php';

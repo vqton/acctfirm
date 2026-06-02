@@ -123,3 +123,16 @@ $valuationMethodController = new ValuationMethodController($valuationMethodRepos
 $warehouseController = new WarehouseController($warehouseRepository);
 $payrollController = new PayrollController($payrollService, $employeeRepository, $payrollPeriodRepository, $payrollEntryRepository);
 $procurementController = new ProcurementController($procurementService, $threeWayMatchService, $budgetControlService);
+
+// === SUB-LEDGER CONTROLLER ===
+use Accounting\Interfaces\HTTP\SubLedgerController;
+$subLedgerController = new SubLedgerController($subLedgerService, $reportExportService);
+
+// === BC09 CONTROLLER ===
+use Accounting\Interfaces\HTTP\FsNotesController;
+$fsNotesController = new FsNotesController($fsNotesService);
+
+// === EXPORT CONTROLLER (Gap 10) ===
+// Endpoint duy nhất POST /api/export — nhận format, title, headers, rows, options
+// Xuất file với Content-Type và Content-Disposition phù hợp
+$exportController = new ExportController($exportService);

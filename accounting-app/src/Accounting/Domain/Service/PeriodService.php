@@ -16,8 +16,9 @@ class PeriodService
     private ?AuditLoggerInterface $auditLogger;
     private ?InventoryServiceInterface $inventoryService;
     private ?ReconciliationService $reconciliationService;
+    private ?ConfigService $config;
 
-    public function __construct(\PDO $pdo, AccountRepositoryInterface $accountRepo, TransactionRepositoryInterface $txnRepo, JournalServiceInterface $journal, ?AuditLoggerInterface $auditLogger = null, ?InventoryServiceInterface $inventoryService = null, ?ReconciliationService $reconciliationService = null)
+    public function __construct(\PDO $pdo, AccountRepositoryInterface $accountRepo, TransactionRepositoryInterface $txnRepo, JournalServiceInterface $journal, ?AuditLoggerInterface $auditLogger = null, ?InventoryServiceInterface $inventoryService = null, ?ReconciliationService $reconciliationService = null, ?ConfigService $config = null)
     {
         $this->pdo = $pdo;
         $this->accountRepo = $accountRepo;
@@ -26,6 +27,7 @@ class PeriodService
         $this->auditLogger = $auditLogger;
         $this->inventoryService = $inventoryService;
         $this->reconciliationService = $reconciliationService;
+        $this->config = $config;
     }
 
     // KỲ KẾ TOÁN: Kiểm tra kỳ kế toán đang mở trước khi cho phép ghi nhận bút toán
@@ -545,13 +547,18 @@ class PeriodService
     // RỦI RO NGHIÊM TRỌNG: Mở lại kỳ đã đóng làm thay đổi số liệu BC01/BC02.
     // - Phải thông báo cho Kiểm toán nội bộ
     // - Audit trail ghi nhận mỗi lần re-open (re_open_count)
-    // - Nếu re-open > 1 lần → kiểm toán đặt câu hỏi về kiểm soát nội bộ
-    // - Nếu đã hard_close (deadline quá hạn) → không được phép re-open
     public function reOpenPeriod(int $id, string $reOpenedBy): array
     {
         $period = $this->getPeriod($id);
         if ($period['status'] !== 'closed') {
             throw new \InvalidArgumentException("Kỳ kế toán mã {$id} chưa được khóa sổ.");
+        }
+
+        $maxReopen = $this->config?->getInt('period.max_reopen', 3) ?? 3;
+        if ($period['re_open_count'] >= $maxReopen) {
+            throw new \InvalidArgumentException(
+                "Kỳ kế toán mã {$id} đã được mở lại {$period['re_open_count']} lần (tối đa {$maxReopen} lần)."
+            );
         }
 
         // CẢNH BÁO RỦI RO NGHIÊM TRỌNG — MỞ LẠI KỲ ĐÃ ĐÓNG:

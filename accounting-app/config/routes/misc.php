@@ -46,3 +46,17 @@ $router->get('/api/debt-collection/stats/collector/:id', function($id) use ($c) 
 $router->get('/thu-hoi-cong-no', function() use ($c) { $c['DebtCollectionController']->viewDashboard(); });
 $router->get('/thu-hoi-cong-no/hang-doi', function() use ($c) { $c['DebtCollectionController']->viewQueue(); });
 $router->get('/thu-hoi-cong-no/phe-duyet', function() use ($c) { $c['DebtCollectionController']->viewApprovals(); });
+
+// === SUB-LEDGER REPORTS ===
+$router->get('/api/reports/sub-ledger', function() use ($c) { $c['SubLedgerController']->getReport(); });
+$router->post('/api/reports/sub-ledger/export', function() use ($c) { $c['SubLedgerController']->exportReport(); });
+$router->get('/api/reports/sub-ledger/parameters', function() use ($c) { $c['SubLedgerController']->getParameters(); });
+$router->get('/api/reports/sub-ledger/supported', function() use ($c) { $c['SubLedgerController']->getSupportedReports(); });
+$router->get('/so-chi-tiet', function() use ($c) { $c['SubLedgerController']->viewIndex(); });
+
+// === EXPORT (PDF/Excel/CSV) Gap 10 ===
+// Endpoint xuất file thống nhất cho mọi báo cáo — client gửi JSON body
+// Body: { format: "csv"|"xls"|"pdf", title, headers, rows, options }
+// Response: file download với Content-Disposition: attachment
+// Yêu cầu quyền report.export (Auth::requirePermission)
+$router->post('/api/export', function() use ($c) { $c['ExportController']->export(); });

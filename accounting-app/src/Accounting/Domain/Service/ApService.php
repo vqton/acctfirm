@@ -47,7 +47,7 @@ class ApService
     // NGHIỆP VỤ MUA HÀNG: Ghi nhận hóa đơn mua hàng từ nhà cung cấp
     // Hạch toán: Nợ TK Hàng tồn kho (152/156) — Nợ TK 1331 (VAT đầu vào) — Có TK 331 (tổng giá thanh toán)
     // Rủi ro: Nhập sai thuế 1331 → ảnh hưởng tờ khai thuế GTGT đầu vào
-    // Chỉ được khấu trừ VAT nếu có hóa đơn đỏ hợp lệ theo TT 78/2021/TT-BTC
+    // Chỉ được khấu trừ VAT nếu có hóa đơn đỏ hợp lệ theo TT 32/2025/TT-BTC
     // Ảnh hưởng BC02: MS 24 (Giá vốn hàng bán) thay đổi khi hàng được bán ra
     //
     public function recordInvoice(string $supplierId, string $invoiceNumber, string $invoiceDate, string $dueDate, float $netAmount, float $vatAmount, float $vatRate, string $description, string $inventoryAccount, string $createdBy, float $vatRatePct = null): array
@@ -182,7 +182,7 @@ class ApService
     // NGHIỆP VỤ TRẢ LẠI HÀNG MUA: Trả lại hàng cho nhà cung cấp (hàng kém chất lượng, sai quy cách)
     // Hạch toán: Nợ 331 — Có TK Hàng tồn kho — Có 1331 (thuế GTGT đầu vào hoàn lại)
     // Tác động 3 mặt: (1) Giảm công nợ 331, (2) Giảm giá trị hàng tồn kho, (3) Giảm VAT được khấu trừ
-    // Yêu cầu: Phải có biên bản trả hàng và hóa đơn điều chỉnh giảm theo TT 78/2021/TT-BTC
+    // Yêu cầu: Phải có biên bản trả hàng và hóa đơn điều chỉnh giảm theo TT 32/2025/TT-BTC
     //
     public function recordReturn(int $invoiceId, float $returnAmount, string $inventoryAccount, string $createdBy): array
     {

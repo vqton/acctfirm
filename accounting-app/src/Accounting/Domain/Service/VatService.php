@@ -264,7 +264,7 @@ class VatService
             throw new \RuntimeException("Kỳ kế toán {$period} đã đóng. Không thể khóa tờ khai.");
         }
 
-        $stmt = $this->pdo->prepare("UPDATE vat_declarations SET status = 'finalised' WHERE id = ? AND status = 'draft'");
+        $stmt = $this->pdo->prepare("UPDATE vat_declarations SET status = 'finalised' WHERE id = ? AND status IN ('draft','approved')");
         $stmt->execute([$id]);
         if ($stmt->rowCount() === 0) {
             throw new \RuntimeException('Không thể khóa tờ khai. Tờ khai đã được khóa trước đó.');
@@ -272,5 +272,231 @@ class VatService
         $this->auditLogger?->log('vat.finalise', 'vat_declaration', $id,
             $decl, ['status' => 'finalised'], 'system');
         return $this->getDeclaration($id);
+    }
+
+    //
+    // 4-EYES APPROVAL: Tax Accountant prepare → Chief Accountant approve
+    //
+    public function approveDeclaration(string $id, string $approvedBy): array
+    {
+        $decl = $this->getDeclaration($id);
+        if (!$decl) throw new \RuntimeException('Không tìm thấy tờ khai VAT.');
+        if ($decl['status'] !== 'draft') {
+            throw new \RuntimeException("Tờ khai ở trạng thái '{$decl['status']}', không thể phê duyệt.");
+        }
+
+        $this->pdo->prepare(
+            "UPDATE vat_declarations SET status = 'approved', approved_by = ?, approved_at = NOW() WHERE id = ? AND status = 'draft'"
+        )->execute([$approvedBy, $id]);
+
+        $this->auditLogger?->log('vat.approve', 'vat_declaration', $id,
+            $decl, ['status' => 'approved', 'approved_by' => $approvedBy], $approvedBy);
+
+        return $this->getDeclaration($id);
+    }
+
+    public function rejectDeclaration(string $id, string $reason, string $rejectedBy): array
+    {
+        $decl = $this->getDeclaration($id);
+        if (!$decl) throw new \RuntimeException('Không tìm thấy tờ khai VAT.');
+        if ($decl['status'] !== 'draft') {
+            throw new \RuntimeException("Tờ khai ở trạng thái '{$decl['status']}', không thể từ chối.");
+        }
+
+        $this->pdo->prepare(
+            "UPDATE vat_declarations SET status = 'draft', rejection_reason = ? WHERE id = ? AND status = 'draft'"
+        )->execute([$reason, $id]);
+
+        $this->auditLogger?->log('vat.reject', 'vat_declaration', $id,
+            $decl, ['reason' => $reason, 'rejected_by' => $rejectedBy], $rejectedBy);
+
+        return $this->getDeclaration($id);
+    }
+
+    //
+    // 03/KHBS — KHAI BỔ SUNG
+    //
+    public function createAdjustment(string $originalPeriod, array $adjustedData, string $createdBy): array
+    {
+        // Validate original declaration
+        $origStmt = $this->pdo->prepare(
+            "SELECT * FROM vat_declarations WHERE period = ? ORDER BY created_at DESC LIMIT 1"
+        );
+        $origStmt->execute([$originalPeriod]);
+        $original = $origStmt->fetch(\PDO::FETCH_ASSOC);
+        if (!$original) throw new \RuntimeException("Không tìm thấy tờ khai gốc cho kỳ {$originalPeriod}.");
+
+        $id = uniqid('khbs_');
+
+        $this->pdo->prepare(
+            "INSERT INTO vat_declarations
+             (id, period, total_vat_input, total_vat_output, vat_payable,
+              invoice_count_input, invoice_count_output, status, created_by,
+              original_declaration_id, adjustment_type, rejection_reason)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 'draft_adjustment', ?, ?, '03/KHBS', ?)"
+        )->execute([
+            $id, $originalPeriod,
+            $adjustedData['total_vat_input'] ?? $original['total_vat_input'],
+            $adjustedData['total_vat_output'] ?? $original['total_vat_output'],
+            $adjustedData['vat_payable'] ?? ($original['total_vat_output'] - $original['total_vat_input']),
+            $adjustedData['invoice_count_input'] ?? $original['invoice_count_input'],
+            $adjustedData['invoice_count_output'] ?? $original['invoice_count_output'],
+            $createdBy,
+            $original['id'],
+            $adjustedData['reason'] ?? 'Điều chỉnh bổ sung',
+        ]);
+
+        $this->auditLogger?->log('vat.adjustment', 'vat_declaration', $id,
+            $original, ['period' => $originalPeriod, 'type' => '03/KHBS'], $createdBy);
+
+        return $this->getDeclaration($id);
+    }
+
+    //
+    // HTKK XML EXPORT — Xuất XML tờ khai 01/GTGT theo chuẩn cổng TĐT
+    //
+    public function exportHtkkXml(string $id): string
+    {
+        $engine = new VatDeclarationEngine($this->pdo);
+        return $engine->exportToXml($id);
+    }
+
+    //
+    // E-INVOICE VS DECLARATION RECONCILIATION REPORT
+    //
+    public function reconcileWithEInvoice(string $period): array
+    {
+        $periodStart = $period . '-01';
+        $nextPeriod = date('Y-m', strtotime('+1 month', strtotime($periodStart)));
+        $periodEnd = date('Y-m-d', strtotime('-1 day', strtotime($nextPeriod . '-01')));
+
+        // Tổng VAT đầu ra từ e_invoices
+        $einvOut = $this->pdo->prepare(
+            "SELECT COALESCE(SUM(grand_total), 0) as total, COALESCE(SUM(total_vat), 0) as vat,
+                    COUNT(*) as count FROM e_invoices
+             WHERE status = 'published' AND issue_date BETWEEN ? AND ?"
+        );
+        $einvOut->execute([$periodStart, $periodEnd]);
+        $einvData = $einvOut->fetch(\PDO::FETCH_ASSOC);
+
+        // Tổng VAT đầu ra từ declaration
+        $declStmt = $this->pdo->prepare(
+            "SELECT total_vat_output, vat_payable, status
+             FROM vat_declarations WHERE period = ? ORDER BY created_at DESC LIMIT 1"
+        );
+        $declStmt->execute([$period]);
+        $declData = $declStmt->fetch(\PDO::FETCH_ASSOC);
+
+        $diffOutput = ($declData ? (float)$declData['total_vat_output'] : 0) - (float)$einvData['vat'];
+
+        return [
+            'period' => $period,
+            'e_invoice' => [
+                'count' => (int)$einvData['count'],
+                'total' => (float)$einvData['total'],
+                'vat_output' => (float)$einvData['vat'],
+            ],
+            'declaration' => [
+                'vat_output' => $declData ? (float)$declData['total_vat_output'] : 0,
+                'status' => $declData['status'] ?? 'none',
+            ],
+            'difference' => $diffOutput,
+            'has_mismatch' => abs($diffOutput) > 500,
+            'note' => abs($diffOutput) > 500
+                ? 'Chênh lệch > 500 — cần kiểm tra hóa đơn đã phát hành nhưng chưa hạch toán'
+                : 'Khớp',
+        ];
+    }
+
+    //
+    // NON-DEDUCTIBLE VAT FLAGGED INVOICE LIST (có UI review)
+    //
+    public function getNonDeductibleInvoices(string $period): array
+    {
+        $rows = $this->scanNonDeductibleVat($period);
+        return array_map(fn($r) => [
+            'id' => $r['id'],
+            'invoice_number' => $r['invoice_number'],
+            'invoice_date' => $r['invoice_date'],
+            'supplier' => $r['cash_account_name'],
+            'net_amount' => (float)$r['net_amount'],
+            'vat_amount' => (float)$r['vat_amount'],
+            'total_amount' => (float)$r['total_amount'],
+            'transaction_reference' => $r['reference'],
+            'reason' => 'Thanh toán ≥ 5M không qua ngân hàng (TT 69/2025)',
+            'status' => 'flagged',
+        ], $rows);
+    }
+
+    //
+    // INPUT VAT DEDUCTION CHECKLIST — 4 conditions per invoice
+    //
+    public function getInputVatChecklist(string $period): array
+    {
+        $invoices = [];
+        $stmt = $this->pdo->prepare(
+            "SELECT ai.id, ai.invoice_number, ai.invoice_date, ai.net_amount, ai.vat_amount,
+                    ai.vat_rate, s.name as supplier_name, s.tax_code as supplier_tax_code
+             FROM ap_invoices ai
+             LEFT JOIN suppliers s ON s.id = ai.supplier_id
+             WHERE ai.invoice_date BETWEEN ? AND ?
+               AND (SELECT DATE_FORMAT(?, '%Y-%m-01')) <= ai.invoice_date
+               AND (SELECT LAST_DAY(?) ) >= ai.invoice_date
+               AND ai.vat_amount > 0
+             LIMIT 200"
+        );
+        $periodStart = $period . '-01';
+        $nextPeriod = date('Y-m', strtotime('+1 month', strtotime($periodStart)));
+        $periodEnd = date('Y-m-d', strtotime('-1 day', strtotime($nextPeriod . '-01')));
+        $stmt->execute([$periodStart, $periodEnd, $periodStart, $periodStart]);
+        $rows = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+
+        foreach ($rows as $row) {
+            $id = $row['id'];
+            // Condition 1: Valid invoice (has tax code)
+            $cond1 = !empty($row['supplier_tax_code']);
+            // Condition 2: >=5M has non-cash payment
+            $total = (float)$row['net_amount'] + (float)$row['vat_amount'];
+            $cond2 = $total < 5000000 || $this->hasNonCashPayment($id);
+            // Condition 3: Used for taxable activity (default true — no contra evidence in ERP)
+            $cond3 = true;
+            // Condition 4: Valid tax code format (10 or 13 digits)
+            $cond4 = preg_match('/^\d{10}(-\d{3})?$/', $row['supplier_tax_code'] ?? '');
+
+            $deductible = $cond1 && $cond2 && $cond3 && $cond4;
+            $invoices[] = [
+                'id' => $id,
+                'invoice_number' => $row['invoice_number'],
+                'invoice_date' => $row['invoice_date'],
+                'supplier' => $row['supplier_name'],
+                'supplier_tax_code' => $row['supplier_tax_code'],
+                'net_amount' => (float)$row['net_amount'],
+                'vat_amount' => (float)$row['vat_amount'],
+                'conditions' => [
+                    'valid_invoice' => $cond1,
+                    'non_cash_payment' => $cond2,
+                    'taxable_activity' => $cond3,
+                    'valid_tax_code' => $cond4,
+                ],
+                'deductible' => $deductible,
+                'status' => $deductible ? 'OK' : 'FLAGGED',
+            ];
+        }
+        return $invoices;
+    }
+
+    private function hasNonCashPayment(int $invoiceId): bool
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT COUNT(*) FROM payment_allocations pa
+             JOIN transactions t ON t.id = pa.transaction_id
+             JOIN ledger_entries le ON le.transaction_id = t.id
+             JOIN accounts a ON a.id = le.account_id
+             WHERE pa.invoice_id = ? AND pa.payment_type = 'ap'
+             AND a.code NOT LIKE '111%'
+             AND le.is_debit = 1"
+        );
+        $stmt->execute([$invoiceId]);
+        return (int)$stmt->fetchColumn() > 0;
     }
 }

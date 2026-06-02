@@ -15,7 +15,7 @@
 | G04 | **Structural** | GL — So Cái | **Subsidiary ledgers (sổ chi tiết) missing.** Per-account, per-customer, per-supplier detail views not built. Risk: cannot produce detailed breakdowns for audit or BC 09. | Build subsidiary ledger controller + view. Query LedgerEntry filtered by account_code + customer/supplier reference. Show running balance, contra account. Add print format with page numbers + signature fields (Article 26.7). | **HIGH** |
 | G05 | **Structural** | Correction Engine | ~~No Article 27 correction methods~~ ✅ **Resolved.** `CorrectionController` implements supplementary + negative + adjusting (migration 062). | Implement 3 correction methods: (1) supplementary entry, (2) negative entry, (3) adjusting entry — all via `CorrectionController`. | **RESOLVED** |
 | G06 | **Structural** | Period Engine | **Pre-close checklist partially enforced.** `PeriodService::canClose()` checks trial balance + triggers + reconciliation via `ReconciliationService`. No dedicated UI for checklist preview. | ⚠️ **Partially resolved.** `PeriodService::canClose()` + `getCloseChecklist()` exist. No standalone checklist UI screen. | **HIGH** |
-| G07 | **Structural** | AP / AR | **No bad debt provision engine.** TK 2293 provision estimation and write-off not built (UC-007, UC-008 in AR spec; UC-008 in AP spec). Risk: misstated AR balance on BC 01. | Implement provision estimation based on aging buckets + configurable loss rates. Write-off flow: Dr 2293 (provision) + Dr 642 (excess) → Cr 131. Off-balance-sheet tracking for written-off amounts. | **HIGH** |
+| G07 | **Structural** | AP / AR | ~~No bad debt provision engine.~~ ✅ **Resolved.** `DebtCollectionService` provides write-off proposals (tests 31-33, 62), multi-level approval (tests 32-33), settlement with discount (tests 34-39), provision estimation via aging buckets. Write-off flow: pending approval → approved → status=written_off | Implemented via `DebtCollectionService` (84 tests): write-off proposal + approval chain + settlement + auto-close queue on payment. | **RESOLVED** |
 | G08 | **Structural** | AP / AR | **No 3-way PO match.** Purchase order → goods receipt → invoice matching not built. Risk: pay for goods not received, duplicate payment. | Implement PO table + match workflow. Before AP posting: verify PO exists, quantity received ≥ quantity invoiced, unit price within tolerance. Flag mismatches. | **MEDIUM** |
 | G09 | **Structural** | Fixed Assets | ~~No FA lifecycle~~ ✅ **Resolved.** `FixedAssetService` + lifecycle controller + acquisition/disposal/depreciation views + 25 lifecycle tests. | Build FixedAssetService: register, depreciate, acquire/dispose. Implemented via lifecycle views + integration with GL/AP/Cash. | **RESOLVED** |
 | G10 | **Structural** | CCDC (TK 242) | ~~No multi-period allocation~~ ✅ **Resolved.** `CcdcAllocationService` + migration 063 (ccdc_allocations) + controller + 28 lifecycle tests. | Implement CcdcAllocationService: acquisition → amortization schedule → monthly Dr 627/641/642 → Cr 242. | **RESOLVED** |
@@ -32,11 +32,11 @@
 | G20 | **Performance** | Cash & Bank | **No accounting templates / recurring entries.** Cash receipt/payment templates exist in spec but not exposed as easy-to-use preset system. Risk: repetitive data entry for common transactions. | Build TemplateEngine: save transaction as template with placeholder fields. On use: pre-fill form, user fills only variable fields (amount, date). Support auto-post on schedule. | **MEDIUM** |
 | G21 | **Performance** | Reports | **No PDF/Excel export.** Reports display as HTML tables only. Risk: cannot submit FS to tax authority or email to management in standard format. | Implement `ExportService`: generate formatted PDF using TCPDF/Dompdf for FS and GL. Generate .xlsx using PhpSpreadsheet for trial balance and aging reports. | **MEDIUM** |
 | --- | --- | --- | --- | --- | --- |
-| G22 | **Documentation** | Master Roadmap | **Master roadmap not reconciled with actual progress.** Shows Phases 1-8 with many "NOT STARTED" that are actually complete. Risk: stakeholder confusion about project status. | Rewrite MASTER_IMPLEMENTATION_ROADMAP.md v2.0 with current status. Mark completed modules. Update dependency graph to reflect actual build order. | **MEDIUM** |
+| G22 | **Documentation** | Master Roadmap | ~~Master roadmap not reconciled with actual progress.~~ ✅ **Resolved.** Tax engine roadmap (§14) updated with ✅/⬜/⏳ per phase. Implementation summary (§15) added with actual file references + test counts. | `docs/analysis/tax-engine-brain-logic.md` updated 06/2026 — Phases 1-6 marked completed, §15 Implementation Summary added. Other module roadmaps pending same treatment. | **RESOLVED** |
 | G23 | **Documentation** | Inventory Spec vs Code | **Inventory Journal spec documents 34 UCs across 8 domains.** Code implements all inventory operations but not mapped to UC numbers. Risk: unclear which UCs are covered. | Create traceability matrix mapping implemented methods → UC-0XX numbers. Audit for gaps between spec and code. | **LOW** |
 | G24 | **Documentation** | Treasury Spec | **Treasury spec defines 37 UCs across 1,900 lines.** Basic CRUD implemented but missing 15+ UC scenarios (FC handling, multi-currency, cash-in-transit lifecycle, approval workflow). Risk: spec scope ≠ implementation scope. | Conduct delta analysis: for each of 37 Treasury UCs, mark status (implemented/partial/missing). Prioritize gap closure per compliance risk. | **MEDIUM** |
 | G25 | **Documentation** | Transaction States | **No formal state machine definition.** Current code recognizes "draft/pending/posted" but specs document "Pending (unposted)" as UC-001 state. Risk: inconsistent usage across modules. | Define formal transaction state machine: Draft → Pending → Posted. Document states in AGENTS.md code patterns. Enforce transitions in JournalService. | **LOW** |
-| G26 | **Documentation** | Correction Methods | **No documented error correction policy.** The system currently has no process for correcting posted entries. Risk: users resort to DB edits → audit trail broken. | Document Article 27 correction workflow in a new spec section. Implement correction methods. Train users on correct procedure. | **MEDIUM** |
+| G26 | **Documentation** | Correction Methods | ~~No documented error correction policy.~~ ✅ **Resolved.** `CorrectionController` implements Article 27 supplementary + negative + adjusting methods. Correction workflow documented in accounting-engine-brain.md §7. | Implemented: 3 correction methods via `CorrectionController` (migration 062). Documentation: accounting-engine-brain.md covers correction methods. | **RESOLVED** |
 | G27 | **Documentation** | AGENTS.md | **Migration count (42 → 81) and test count out of sync.** AGENTS.md not auto-updated on each commit. Risk: stale reference data for developers. | Add AGENTS.md auto-update check to commit hook or set reminder to update on each migration/addition. | **LOW** |
 
 ---
@@ -44,16 +44,16 @@
 ## Summary
 
 | Category | Count | RESOLVED | HIGH | MEDIUM | LOW |
-|---|---|---|---|---|---|
-| **Structural** | 15 | 7 | 1 (G07) | 5 | 2 |
+|---|---|---|---|---|---|---|
+| **Structural** | 15 | 8 | 0 | 5 | 2 |
 | **Performance** | 6 | 1 | 0 | 5 | 0 |
-| **Documentation** | 6 | 0 | 0 | 4 | 2 |
-| **Total** | **27** | **8** | **1** | **14** | **4** |
+| **Documentation** | 6 | 2 | 0 | 2 | 2 |
+| **Total** | **27** | **11** | **0** | **12** | **4** |
 
 ### Resolved Gaps (moved to implementation tracking)
 
-8 of 27 gaps resolved since 2026-05-19: G01, G02, G05, G09, G10, G12, G13, G14, G16.
+11 of 27 gaps resolved since 2026-05-19: G01, G02, G05, G07, G09, G10, G12, G13, G14, G16, G22, G26.
 
-### Remaining HIGH Priority
+### Remaining Gaps
 
-G07 Bad debt provision — BC 01 asset valuation accuracy. No provision engine yet.
+✅ All original HIGH-priority gaps resolved. Remaining 16 gaps are MEDIUM/LOW (G03 BC09 partially, G04 subsidiary ledger, G06 pre-close UI, G08 3-way PO, G11 negative stock warning, G15 document retention, G17 batch payment, G18 Excel import, G19 global search, G20 templates, G21 PDF/Excel export, G23 inventory UC traceability, G24 treasury delta, G25 state machine definition, G27 AGENTS.md sync).

@@ -3,7 +3,7 @@ namespace Accounting\Domain\Service;
 
 //
 // DỊCH VỤ QUYẾT TOÁN THUẾ TNDN: Tính toán thu nhập chịu thuế và thuế TNDN phải nộp
-// Tuân thủ Thông tư 78/2014/TT-BTC, Thông tư 96/2015/TT-BTC về thuế TNDN
+// Tuân thủ Thông tư 20/2026/TT-BTC về thuế TNDN
 //
 // Nghiệp vụ: Cuối kỳ, kế toán tổng hợp doanh thu, chi phí để xác định thu nhập chịu thuế
 // và tính thuế TNDN phải nộp theo thuế suất hiện hành (mặc định 20%).
@@ -16,11 +16,18 @@ class CitService
 {
     private \PDO $pdo;
     private ?\Accounting\Domain\Contract\AuditLoggerInterface $auditLogger;
+    private ?ConfigService $config;
 
-    public function __construct(\PDO $pdo, ?\Accounting\Domain\Contract\AuditLoggerInterface $auditLogger = null)
+    public function __construct(\PDO $pdo, ?\Accounting\Domain\Contract\AuditLoggerInterface $auditLogger = null, ?ConfigService $config = null)
     {
         $this->pdo = $pdo;
         $this->auditLogger = $auditLogger;
+        $this->config = $config;
+    }
+
+    private function cfg(string $key, mixed $default): mixed
+    {
+        return $this->config?->get($key, $default) ?? $default;
     }
 
     //
@@ -66,13 +73,13 @@ class CitService
             $interestExpense = (float)$intStmt->fetchColumn();
         }
 
-        // Quảng cáo > 10% doanh thu (TT 78/2014)
-        $advLimit = $revenue * 0.10;
+        $advCap = $this->cfg('cit.advertising_cap', 10) / 100;
+        $advLimit = $revenue * $advCap;
         $advExcess = max(0, $advertisingExpense - $advLimit);
 
-        // Lãi vay > 30% EBITDA (TT 132/2020)
-        $ebitda = $revenue; // Proxy: dùng doanh thu làm EBITDA nếu không có chi phí chi tiết
-        $intLimit = $ebitda * 0.30;
+        $intCap = $this->cfg('cit.interest_ebitda_cap', 30) / 100;
+        $ebitda = $revenue;
+        $intLimit = $ebitda * $intCap;
         $intExcess = max(0, $interestExpense - $intLimit);
 
         return [
@@ -124,11 +131,12 @@ class CitService
     {
         if ($lossAmount <= 0) return;
         $id = uniqid('tlc_');
-        $expiryDate = date('Y-m-d', strtotime('+5 years', strtotime($period . '-01')));
+        $carryforwardYears = $this->cfg('cit.loss_carryforward_years', 5);
+        $expiryDate = date('Y-m-d', strtotime("+{$carryforwardYears} years", strtotime($period . '-01')));
         $this->pdo->prepare(
             "INSERT INTO tax_loss_carryforwards (id, period, loss_amount, remaining_amount, carryforward_years, expiry_date, status, created_by)
-             VALUES (?, ?, ?, ?, 5, ?, 'active', ?)"
-        )->execute([$id, $period, $lossAmount, $lossAmount, $expiryDate, $createdBy]);
+             VALUES (?, ?, ?, ?, ?, ?, 'active', ?)"
+        )->execute([$id, $period, $lossAmount, $lossAmount, $carryforwardYears, $expiryDate, $createdBy]);
     }
 
     //
@@ -197,7 +205,7 @@ class CitService
             $this->recordLossCarryforward($period, abs($adjustedTaxableIncome), $createdBy);
         }
 
-        $citRate = 20;
+        $citRate = $this->cfg('cit.default_rate', 20);
         $citAmount = max(0, $adjustedTaxableIncome * $citRate / 100);
 
         // Lưu hoặc cập nhật bản ghi quyết toán TNDN

@@ -12,30 +12,8 @@ use Accounting\Domain\Repository\EmployeeRepositoryInterface;
 use Accounting\Domain\Contract\AuditLoggerInterface;
 use Accounting\Domain\Contract\JournalServiceInterface;
 
-// NGHIEP VU: Dich vu tinh luong — core engine cua module Tien luong.
-//
-// Chuc nang:
-//   1. Tinh BHXH/BHYT/BHTN — dua tren luong tham gia BH, tran BH theo vung
-//   2. Tinh thue TNCN — luy tien tung phan (5 bac) theo Luat 109/2025/QH15
-//   3. Tinh luong Gross -> Net cho tung nhan vien
-//   4. Tao bang luong (payroll_entries + payroll_details)
-//   5. Post but toan luong qua JournalService
-//   6. Duyet / dong ky luong
-//
-// THAM SO TINH THUE 2026:
-//   - Giam tru ban than: 15.500.000 VND/thang
-//   - Giam tru nguoi phu thuoc: 6.200.000 VND/thang/NPT
-//   - Bac 1: 0-20tr (5%), Bac 2: 20-40tr (10%), Bac 3: 40-70tr (15%),
-//   - Bac 4: 70-100tr (20%), Bac 5: >100tr (25%)
-//
-// THAM SO BAO HIEM:
-//   - BHXH NLĐ: 8% (Toi da 46.800.000 = 20 * luong toi thieu vung)
-//   - BHYT NLĐ: 1.5% (Toi da 32.760.000 = 14 * luong toi thieu vung)
-//   - BHTN NLĐ: 1% (Theo luong toi thieu vung)
-//   - BHXH DN: 17.5%
-//   - BHYT DN: 3%
-//   - BHTN DN: 1%
-//   - Luong toi thieu vung 2026: Vung I=4.960.000, II=4.410.000, III=3.860.000, IV=3.450.000
+// DICH VU TINH LUONG — core engine cua module Tien luong.
+// THAM SO: lay tu business_config (migration 091). Xem business_config chi tiet.
 
 class PayrollService
 {
@@ -46,37 +24,7 @@ class PayrollService
     private ?JournalServiceInterface $journalService;
     private ?\PDO $pdo;
     private ?AuditLoggerInterface $auditLogger;
-
-    // Tran BHXH: 20 lan luong toi thieu vung
-    private const BHXH_RATE_EE = 0.08;
-    private const BHYT_RATE_EE = 0.015;
-    private const BHTN_RATE_EE = 0.01;
-    private const BHXH_RATE_ER = 0.175;
-    private const BHYT_RATE_ER = 0.03;
-    private const BHTN_RATE_ER = 0.01;
-    private const BHXH_CEILING_MULTIPLIER = 20;
-    private const BHYT_CEILING_MULTIPLIER = 14;
-
-    // Luong toi thieu vung 2026 (Nghi dinh 293/2025/ND-CP)
-    private const REGION_MIN_WAGE = [
-        'I' => 4960000,
-        'II' => 4410000,
-        'III' => 3860000,
-        'IV' => 3450000,
-    ];
-
-    // Giam tru thue TNCN 2026 (Luat 109/2025/QH15)
-    private const TAX_PERSONAL_DEDUCTION = 15500000;
-    private const TAX_DEPENDENT_DEDUCTION = 6200000;
-
-    // Bac thue TNCN luy tien tung phan 2026
-    private const TAX_BRACKETS = [
-        ['min' => 0, 'max' => 20000000, 'rate' => 0.05, 'cumulative' => 0],
-        ['min' => 20000000, 'max' => 40000000, 'rate' => 0.10, 'cumulative' => 1000000],
-        ['min' => 40000000, 'max' => 70000000, 'rate' => 0.15, 'cumulative' => 3000000],
-        ['min' => 70000000, 'max' => 100000000, 'rate' => 0.20, 'cumulative' => 7500000],
-        ['min' => 100000000, 'max' => INF, 'rate' => 0.25, 'cumulative' => 13500000],
-    ];
+    private ?ConfigService $config;
 
     public function __construct(
         PayrollEntryRepositoryInterface $payrollEntryRepo,
@@ -85,7 +33,8 @@ class PayrollService
         EmployeeRepositoryInterface $employeeRepo,
         ?JournalServiceInterface $journalService = null,
         ?\PDO $pdo = null,
-        ?AuditLoggerInterface $auditLogger = null
+        ?AuditLoggerInterface $auditLogger = null,
+        ?ConfigService $config = null
     ) {
         $this->payrollEntryRepo = $payrollEntryRepo;
         $this->payrollPeriodRepo = $payrollPeriodRepo;
@@ -94,6 +43,34 @@ class PayrollService
         $this->journalService = $journalService;
         $this->pdo = $pdo;
         $this->auditLogger = $auditLogger;
+        $this->config = $config;
+    }
+
+    private function cfg(string $key, mixed $default): mixed
+    {
+        return $this->config?->get($key, $default) ?? $default;
+    }
+
+    private function cfgPercent(string $key, float $default): float
+    {
+        return $this->config?->getPercent($key, $default) ?? $default;
+    }
+
+    private function cfgInt(string $key, int $default): int
+    {
+        return $this->config?->getInt($key, $default) ?? $default;
+    }
+
+    private function cfgJson(string $key, array $default): array
+    {
+        return $this->config?->getJson($key, $default) ?? $default;
+    }
+
+    private function getRegionMinWage(?string $region): int
+    {
+        $defaultWages = ['I' => 4960000, 'II' => 4410000, 'III' => 3860000, 'IV' => 3450000];
+        $regionWages = $this->cfgJson('insurance.region_min_wage', $defaultWages);
+        return $regionWages[$region ?? 'IV'] ?? $regionWages['IV'] ?? 3450000;
     }
 
     // --- 1. TINH BAO HIEM ---
@@ -114,27 +91,32 @@ class PayrollService
             ];
         }
 
-        // Xac dinh luong toi thieu vung
-        $minWage = self::REGION_MIN_WAGE[$region] ?? self::REGION_MIN_WAGE['IV'];
+        $minWage = $this->getRegionMinWage($region);
 
-        // Tran BHXH = 20 * luong toi thieu vung
-        $bhxhCeiling = $minWage * self::BHXH_CEILING_MULTIPLIER;
-        // Tran BHYT = 14 * luong toi thieu vung
-        $bhytCeiling = $minWage * self::BHYT_CEILING_MULTIPLIER;
-        // BHTN: tran = luong toi thieu vung * 20 (nhu BHXH)
+        $bhxhMultiplier = $this->cfgInt('insurance.bhxh_ceiling_multiplier', 20);
+        $bhytMultiplier = $this->cfgInt('insurance.bhyt_ceiling_multiplier', 14);
+        $bhxhCeiling = $minWage * $bhxhMultiplier;
+        $bhytCeiling = $minWage * $bhytMultiplier;
         $bhtnCeiling = $bhxhCeiling;
 
         $bhxhBase = min($base, $bhxhCeiling);
         $bhytBase = min($base, $bhytCeiling);
         $bhtnBase = min($base, $bhtnCeiling);
 
-        $bhxhEe = round($bhxhBase * self::BHXH_RATE_EE);
-        $bhytEe = round($bhytBase * self::BHYT_RATE_EE);
-        $bhtnEe = round($bhtnBase * self::BHTN_RATE_EE);
+        $bhxhRateEe = $this->cfgPercent('insurance.bhxh_ee', 0.08);
+        $bhytRateEe = $this->cfgPercent('insurance.bhyt_ee', 0.015);
+        $bhtnRateEe = $this->cfgPercent('insurance.bhtn_ee', 0.01);
+        $bhxhRateEr = $this->cfgPercent('insurance.bhxh_er', 0.175);
+        $bhytRateEr = $this->cfgPercent('insurance.bhyt_er', 0.03);
+        $bhtnRateEr = $this->cfgPercent('insurance.bhtn_er', 0.01);
 
-        $bhxhEr = round($bhxhBase * self::BHXH_RATE_ER);
-        $bhytEr = round($bhytBase * self::BHYT_RATE_ER);
-        $bhtnEr = round($bhtnBase * self::BHTN_RATE_ER);
+        $bhxhEe = round($bhxhBase * $bhxhRateEe);
+        $bhytEe = round($bhytBase * $bhytRateEe);
+        $bhtnEe = round($bhtnBase * $bhtnRateEe);
+
+        $bhxhEr = round($bhxhBase * $bhxhRateEr);
+        $bhytEr = round($bhytBase * $bhytRateEr);
+        $bhtnEr = round($bhtnBase * $bhtnRateEr);
 
         return [
             'bhxh_ee' => $bhxhEe, 'bhyt_ee' => $bhytEe, 'bhtn_ee' => $bhtnEe,
@@ -156,16 +138,30 @@ class PayrollService
     // RUI RO: Sai so nguoi phu thuoc -> sai thue TNCN -> bi phat thue.
     public function calculateTax(float $gross, float $insuranceEe, int $dependentCount = 0): float
     {
-        $taxableIncome = $gross - $insuranceEe - self::TAX_PERSONAL_DEDUCTION - ($dependentCount * self::TAX_DEPENDENT_DEDUCTION);
+        $personalDeduction = $this->cfgInt('pit.resident_deduction_monthly', 15500000);
+        $dependentDeduction = $this->cfgInt('pit.dependent_deduction_monthly', 6200000);
+        $taxableIncome = $gross - $insuranceEe - $personalDeduction - ($dependentCount * $dependentDeduction);
         if ($taxableIncome <= 0) return 0;
+
+        $brackets = $this->cfgJson('pit.resident_brackets', [
+            ['bound' => 20000000, 'rate' => 0.05, 'baseTax' => 0],
+            ['bound' => 40000000, 'rate' => 0.10, 'baseTax' => 250000],
+            ['bound' => 70000000, 'rate' => 0.15, 'baseTax' => 750000],
+            ['bound' => 100000000, 'rate' => 0.20, 'baseTax' => 1950000],
+            ['bound' => 9999999999, 'rate' => 0.25, 'baseTax' => 4750000],
+        ]);
 
         $tax = 0;
         $remaining = $taxableIncome;
-        foreach (self::TAX_BRACKETS as $bracket) {
+        $prevBound = 0;
+        foreach ($brackets as $bracket) {
             if ($remaining <= 0) break;
-            $bracketAmount = min($remaining, $bracket['max'] - $bracket['min']);
-            $tax += round($bracketAmount * $bracket['rate']);
+            $bound = $bracket['bound'];
+            $rate = $bracket['rate'];
+            $bracketAmount = min($remaining, $bound - $prevBound);
+            $tax += round($bracketAmount * $rate);
             $remaining -= $bracketAmount;
+            $prevBound = $bound;
         }
 
         return $tax;
@@ -180,14 +176,14 @@ class PayrollService
     // Chi phi DN = Gross + BHXH_dn + BHYT_dn + BHTN_dn
     public function calculateEmployeePay(Employee $emp, array $override = []): array
     {
-        $gross = $override['gross_salary'] ?? 10000000;
+        $gross = $override['gross_salary'] ?? $this->cfgInt('payroll.default_gross', 10000000);
 
         // Lay thong tin BH tu employee (hoac override)
         $insuranceSalary = $override['insurance_salary'] ?? $emp->getInsuranceSalary() ?? $gross;
         $region = $override['region'] ?? $emp->getRegion();
         $dependentCount = $override['dependent_count'] ?? $emp->getDependentCount() ?? 0;
         $contractType = $override['contract_type'] ?? $emp->getContractType() ?? 'indefinite';
-        $workingDays = $override['working_days'] ?? 26;
+        $workingDays = $override['working_days'] ?? $this->cfgInt('payroll.default_working_days', 26);
         $allowances = $override['allowances'] ?? 0;
         $deductions = $override['deductions'] ?? 0;
         $overtime = $override['overtime'] ?? 0;
@@ -362,13 +358,12 @@ class PayrollService
         $details = $this->payrollEntryRepo->findDetailsByEntry($entryId);
         if (count($details) === 0) throw new \RuntimeException('Không có chi tiết lương để hạch toán');
 
-        // Lay tai khoan chi phi mac dinh (co the override)
-        $costAccount = $accountOverrides['cost_account'] ?? '642';
-        $payableAccount = $accountOverrides['payable_account'] ?? '334';
-        $bhxhPayable = $accountOverrides['bhxh_payable'] ?? '3383';
-        $bhytPayable = $accountOverrides['bhyt_payable'] ?? '3384';
-        $bhtnPayable = $accountOverrides['bhtn_payable'] ?? '3386';
-        $taxPayable = $accountOverrides['tax_payable'] ?? '3335';
+        $costAccount = $accountOverrides['cost_account'] ?? $this->cfg('account.default_expense', '642');
+        $payableAccount = $accountOverrides['payable_account'] ?? $this->cfg('account.default_payable', '334');
+        $bhxhPayable = $accountOverrides['bhxh_payable'] ?? $this->cfg('account.payroll_bhxh_payable', '3383');
+        $bhytPayable = $accountOverrides['bhyt_payable'] ?? $this->cfg('account.payroll_bhyt_payable', '3384');
+        $bhtnPayable = $accountOverrides['bhtn_payable'] ?? $this->cfg('account.payroll_bhtn_payable', '3386');
+        $taxPayable = $accountOverrides['tax_payable'] ?? $this->cfg('account.payroll_tax_payable', '3335');
 
         $totalGross = 0; $totalInsuranceEr = 0; $totalTax = 0;
         $totalBhxhEe = 0; $totalBhytEe = 0; $totalBhtnEe = 0;
@@ -527,10 +522,13 @@ class PayrollService
         $bhxhEe = 0; $bhytEe = 0; $bhtnEe = 0;
         $bhxhEr = 0; $bhytEr = 0; $bhtnEr = 0;
 
-        // Ty le: BHXH=8, BHYT=1.5, BHTN=1 => tong 10.5
-        $ratioBhxh = 8 / 10.5;
-        $ratioBhyt = 1.5 / 10.5;
-        $ratioBhtn = 1 / 10.5;
+        $bhxhRateEe = $this->cfgPercent('insurance.bhxh_ee', 0.08);
+        $bhytRateEe = $this->cfgPercent('insurance.bhyt_ee', 0.015);
+        $bhtnRateEe = $this->cfgPercent('insurance.bhtn_ee', 0.01);
+        $totalRate = $bhxhRateEe + $bhytRateEe + $bhtnRateEe;
+        $ratioBhxh = $totalRate > 0 ? $bhxhRateEe / $totalRate : 8 / 10.5;
+        $ratioBhyt = $totalRate > 0 ? $bhytRateEe / $totalRate : 1.5 / 10.5;
+        $ratioBhtn = $totalRate > 0 ? $bhtnRateEe / $totalRate : 1 / 10.5;
 
         $bhxhEe = round($totalEe * $ratioBhxh);
         $bhytEe = round($totalEe * $ratioBhyt);

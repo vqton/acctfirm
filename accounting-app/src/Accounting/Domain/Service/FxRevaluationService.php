@@ -24,7 +24,7 @@ use Accounting\Domain\Repository\AccountRepositoryInterface;
 //   - TK 635 tăng → LN kế toán giảm → Thuế TNDN giảm
 //   - TK 515 tăng → LN kế toán tăng → Thuế TNDN tăng
 //   - CHƯA THỰC HIỆN (unrealized): chỉ điều chỉnh BCTC, không tính vào TN chịu thuế
-//     cho đến khi thực tế phát sinh (TT 78/2021/TT-BTC, Điều 5, Khoản 2.18)
+    //     cho đến khi thực tế phát sinh (TT 20/2026/TT-BTC, Điều 6)
 //   - ĐÃ THỰC HIỆN (realized): ghi nhận vào TN chịu thuế ngay
 //
 // RỦI RO:

@@ -14,3 +14,21 @@ $postingRuleService = new PostingRuleService($pdo);
 $voucherService = new VoucherService($pdo);
 $approvalRoutingService = new ApprovalRoutingService($pdo);
 $reconciliationService = new ReconciliationService($pdo);
+
+// === SUB-LEDGER SERVICE ===
+use Accounting\Domain\Service\SubLedgerService;
+$subLedgerService = new SubLedgerService($pdo, $accountRepository, $glService, $periodService, $reportExportService);
+
+// === EXPORT DRIVERS (Gap 10 — PDF/Excel/CSV) ===
+// Strategy pattern — mỗi driver xử lý một định dạng xuất
+// CsvDriver: UTF-8 BOM + fputcsv
+// HtmlExcelDriver: HTML table với MSO namespace cho Excel
+// PurePhpPdfDriver: PDF 1.4 thuần PHP (không thư viện)
+// ExportService: unified interface — registerDriver + export() dispatch
+$exportCsvDriver = new CsvDriver();
+$exportXlsDriver = new HtmlExcelDriver();
+$exportPdfDriver = new PurePhpPdfDriver();
+$exportService = new ExportService($reportExportService);
+$exportService->registerDriver('csv', $exportCsvDriver);
+$exportService->registerDriver('xls', $exportXlsDriver);
+$exportService->registerDriver('pdf', $exportPdfDriver);
