@@ -121,6 +121,13 @@ use Accounting\Infrastructure\Persistence\PDOPurchaseApprovalRepository;
 use Accounting\Infrastructure\Persistence\PDOSupplierPerformanceRepository;
 use Accounting\Infrastructure\Persistence\PDOPurchaseBudgetRepository;
 use Accounting\Interfaces\HTTP\Purchase\ProcurementController;
+use Accounting\Infrastructure\EInvoice\XmlInvoiceBuilder;
+use Accounting\Infrastructure\EInvoice\DigitalSignatureService;
+use Accounting\Infrastructure\EInvoice\VnptEInvoiceGateway;
+use Accounting\Domain\Contract\EInvoiceGatewayInterface;
+use Accounting\Domain\Service\InvoiceService;
+use Accounting\Domain\Service\VatDeclarationEngine;
+use Accounting\Interfaces\HTTP\EInvoiceController;
 
 // Tạo DI container — khởi tạo tất cả service, repository, controller
 // Dependency graph:
@@ -140,6 +147,7 @@ function createContainer(): array
     require __DIR__ . '/services/35_debt_collection.php';
     require __DIR__ . '/services/36_payroll.php';
     require __DIR__ . '/services/37_procurement.php';
+    require __DIR__ . '/services/25_einvoice.php';
     require __DIR__ . '/services/40_controllers.php';
 
     // === CONTAINER: Map tên → instance ===
@@ -253,6 +261,12 @@ function createContainer(): array
         'supplierPerformanceRepo' => $supplierPerformanceRepo,
         'purchaseBudgetRepo' => $purchaseBudgetRepo,
         'ProcurementController' => $procurementController,
+        'xmlBuilder' => $xmlBuilder,
+        'digitalSignatureService' => $digitalSignatureService,
+        'einvoiceGateway' => $einvoiceGateway,
+        'invoiceService' => $invoiceService,
+        'vatDeclarationEngine' => $vatDeclarationEngine,
+        'EInvoiceController' => $einvoiceController,
     ];
 }
 
