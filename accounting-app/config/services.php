@@ -129,157 +129,18 @@ use Accounting\Interfaces\HTTP\Purchase\ProcurementController;
 // Controller chỉ gọi Service — không chứa business logic
 function createContainer(): array
 {
-    // === LỚP INFRASTRUCTURE: PDO + Logging ===
-    // PDO thật (innerPdo) được bọc trong LoggingPDO để log SQL tự động
-    $dbConfig = require __DIR__ . '/database.php';
-    $innerPdo = new PDO(
-        "mysql:host={$dbConfig['host']};dbname={$dbConfig['dbname']};charset={$dbConfig['charset']}",
-        $dbConfig['username'], $dbConfig['password'], $dbConfig['options']
-    );
-    $pdo = new LoggingPDO($innerPdo);
-
-    // === LỚP REPOSITORY: Truy cập dữ liệu qua PDO ===
-    // Mỗi entity có Repository Interface + PDO Implementation
-    // Repository pattern: controller/service không biết DB implementation
-    $accountRepository = new PDOAccountRepository($pdo);
-    $transactionRepository = new PDOTransactionRepository($pdo);
-    $itemRepository = new PDOItemRepository($pdo);
-    $customerRepository = new PDOCustomerRepository($pdo);
-    $supplierRepository = new PDOSupplierRepository($pdo);
-    $warehouseRepository = new PDOWarehouseRepository($pdo);
-    $departmentRepository = new PDODepartmentRepository($pdo);
-    $employeeRepository = new PDOEmployeeRepository($pdo);
-    $uomRepository = new PDOUomRepository($pdo);
-    $ccdcRepository = new PDOCcdcRepository($pdo);
-    $bankAccountRepository = new PDOBankAccountRepository($pdo);
-    $exchangeRateRepository = new PDOExchangeRateRepository($pdo);
-    $taxRateRepository = new PDOTaxRateRepository($pdo);
-    $fixedAssetRepository = new PDOFixedAssetRepository($pdo);
-    $valuationMethodRepository = new PDOValuationMethodRepository($pdo);
-    $contractRepository = new PDOContractRepository($pdo);
-    $projectRepository = new PDOProjectRepository($pdo);
-    $depreciationPolicyRepository = new PDODepreciationPolicyRepository($pdo);
-    $payrollEntryRepository = new PDOPayrollEntryRepository($pdo);
-    $payrollPeriodRepository = new PDOPayrollPeriodRepository($pdo);
-    $salaryComponentRepository = new PDOSalaryComponentRepository($pdo);
-    $salaryFormulaRepository = new PDOSalaryFormulaRepository($pdo);
-    $purchaseRequisitionRepo = new PDOPurchaseRequisitionRepository($pdo);
-    $purchaseOrderRepo = new PDOPurchaseOrderRepository($pdo);
-    $goodsReceiptRepo = new PDOGoodsReceiptRepository($pdo);
-    $purchaseInvoiceMatchRepo = new PDOPurchaseInvoiceMatchRepository($pdo);
-    $purchaseApprovalRepo = new PDOPurchaseApprovalRepository($pdo);
-    $supplierPerformanceRepo = new PDOSupplierPerformanceRepository($pdo);
-    $purchaseBudgetRepo = new PDOPurchaseBudgetRepository($pdo);
-
-    // === LỚP INFRASTRUCTURE SERVICE: Audit, Posting Rule, Voucher ===
-    // Các service không chứa nghiệp vụ kế toán cụ thể — hỗ trợ kỹ thuật
-    $auditLogger = new AuditLogger($pdo);
-    $postingRuleService = new PostingRuleService($pdo);
-    $voucherService = new VoucherService($pdo);
-    $approvalRoutingService = new ApprovalRoutingService($pdo);
-    $reconciliationService = new ReconciliationService($pdo);
-
-    // === LỚP DOMAIN SERVICE: Xử lý nghiệp vụ kế toán ===
-    // JournalService — CORE: mọi bút toán đều qua service này
-    // Đảm bảo Dr = Cr, kiểm tra posting rules, sinh số chứng từ, ghi audit trail
-    // Tất cả module khác đều phụ thuộc vào JournalService để ghi sổ
-    $journalService = new JournalService($accountRepository, $transactionRepository, $pdo, $auditLogger, $postingRuleService, $voucherService, $approvalRoutingService);
-    $fxRevaluationService = new FxRevaluationService($pdo, $accountRepository, $journalService);
-    $intercompanyService = new IntercompanyService($pdo, $journalService);
-    $inventoryService = new InventoryService($accountRepository, $transactionRepository, $itemRepository, $warehouseRepository, $journalService, $pdo);
-    $cashService = new CashService($accountRepository, $transactionRepository, $journalService, $pdo);
-    $pettyCashService = new PettyCashService($accountRepository, $transactionRepository, $journalService, $pdo);
-    $bankReconciliationService = new BankReconciliationService($accountRepository, $transactionRepository, $journalService, $pdo, $auditLogger);
-    $cashReportService = new CashReportService($pdo, $accountRepository);
-    // PeriodService phụ thuộc InventoryService để kiểm tra tồn kho trước khi đóng kỳ
-    $periodService = new PeriodService($pdo, $accountRepository, $transactionRepository, $journalService, $auditLogger, $inventoryService, $reconciliationService);
-    $fsService = new FsService($pdo, $accountRepository, $auditLogger);
-    $apService = new ApService($pdo, $supplierRepository, $accountRepository, $journalService, $auditLogger);
-    $arService = new ArService($pdo, $accountRepository, $journalService, $auditLogger, $customerRepository);
-    $glService = new GlService($pdo, $accountRepository);
-    $journalBookService = new JournalBookService($pdo);
-    $fixedAssetService = new FixedAssetService($fixedAssetRepository, $accountRepository, $transactionRepository, $journalService, $pdo, $auditLogger);
-    $ccdcAllocationService = new CcdcAllocationService($ccdcRepository, $journalService, $pdo, $auditLogger);
-    $vatService = new VatService($pdo, $auditLogger);
-    $citService = new CitService($pdo, $auditLogger);
-    $fctService = new FctService($pdo, $journalService, $auditLogger);
-    $openingBalanceService = new OpeningBalanceService($pdo, $accountRepository);
-    $reportExportService = new ReportExportService();
-    $payrollService = new PayrollService($payrollEntryRepository, $payrollPeriodRepository, $salaryComponentRepository, $employeeRepository, $journalService, $pdo, $auditLogger);
-    $procurementService = new ProcurementService($purchaseRequisitionRepo, $purchaseOrderRepo, $goodsReceiptRepo, $itemRepository, $supplierRepository, $journalService, $inventoryService, $auditLogger, $approvalRoutingService, $pdo);
-    $threeWayMatchService = new ThreeWayMatchService($pdo, $auditLogger);
-    $budgetControlService = new BudgetControlService($pdo, $auditLogger);
-
-    // === COA SERVICE: Business logic cho Hệ thống Tài khoản ===
-    $accountService = new AccountService($accountRepository, $auditLogger, $journalService);
-
-    // === DEBT COLLECTION: Repository + Service ===
-    $debtCollectionRepo = new PDODebtCollectionRepository($pdo);
-    $debtCollectionService = new DebtCollectionService($pdo, $debtCollectionRepo, $arService, $auditLogger);
-    $debtCollectionController = new DebtCollectionController($debtCollectionService);
-
-    // === LỚP CONTROLLER: Tiếp nhận request từ Router, gọi Service ===
-    // Controller KHÔNG chứa business logic — chỉ validate input + format response
-    // Mỗi controller nhận dependency từ constructor — không dùng static/global trong controller
-    $accountController = new AccountController($accountService);
-    $approvalController = new ApprovalController($journalService, $pdo, $approvalRoutingService);
-    $apController = new ApController($apService);
-    $arController = new ArController($arService);
-    $auditLogController = new AuditLogController($pdo);
-    $authController = new AuthController($pdo);
-    $bankAccountController = new BankAccountController($bankAccountRepository);
-    $bankReconciliationController = new BankReconciliationController($bankReconciliationService, $accountRepository);
-    $cashController = new CashController($cashService, $accountRepository, $pdo);
-    $cashReportController = new CashReportController($cashReportService);
-    $pettyCashController = new PettyCashController($pettyCashService);
-    $ccdcController = new CcdcController($ccdcRepository);
-    $ccdcAllocationController = new CcdcAllocationController($ccdcAllocationService);
-    $vatController = new VatController($vatService);
-    $citController = new CitController($citService);
-    $fctController = new FctController($fctService);
-    $openingBalanceController = new OpeningBalanceController($openingBalanceService);
-    $reportExportController = new ReportExportController($reportExportService, $glService, $fsService);
-    $consignmentController = new ConsignmentController($inventoryService, $itemRepository, $pdo);
-    $contractController = new ContractController($contractRepository);
-    $customerController = new CustomerController($customerRepository);
-    $departmentController = new DepartmentController($departmentRepository);
-    $depreciationPolicyController = new DepreciationPolicyController($depreciationPolicyRepository);
-    $employeeController = new EmployeeController($employeeRepository);
-    $exchangeRateController = new ExchangeRateController($exchangeRateRepository);
-    $fixedAssetController = new FixedAssetController($fixedAssetRepository);
-    $fixedAssetLifecycleController = new FixedAssetLifecycleController($fixedAssetService, $accountRepository, $pdo);
-    $fsController = new FsController($fsService);
-    $glController = new GlController($glService);
-    $journalBookController = new JournalBookController($journalBookService);
-    $reconciliationController = new ReconciliationController($reconciliationService);
-    $fxController = new FxController($fxRevaluationService);
-    $intercompanyController = new IntercompanyController($intercompanyService);
-    $impairmentController = new ImpairmentController($inventoryService, $pdo);
-    $inventoryTransitController = new InventoryTransitController($inventoryService, $itemRepository, $pdo);
-    $itemController = new ItemController($itemRepository);
-    $correctionController = new CorrectionController($journalService);
-    $journalController = new JournalController($journalService, $accountRepository, $transactionRepository);
-    $periodController = new PeriodController($periodService);
-    $periodicController = new PeriodicController($inventoryService, $itemRepository, $pdo);
-    $physicalCountController = new PhysicalCountController($inventoryService, $itemRepository, $pdo);
-    $projectController = new ProjectController($projectRepository);
-    $inventoryReportController = new InventoryReportController($inventoryService);
-    $promotionalController = new PromotionalController($inventoryService, $itemRepository);
-    $returnToSupplierController = new ReturnToSupplierController($inventoryService, $itemRepository, $pdo);
-    $writeOffController = new WriteOffController($inventoryService, $pdo);
-    $roleController = new RoleController($pdo);
-    $supplierController = new SupplierController($supplierRepository);
-    $taxRateController = new TaxRateController($taxRateRepository);
-    $receiptController = new ReceiptController($inventoryService, $itemRepository, $pdo);
-    $issueController = new IssueController($inventoryService, $itemRepository, $pdo);
-    $customerReturnController = new CustomerReturnController($inventoryService, $itemRepository, $pdo);
-    $transferController = new TransferController($inventoryService, $itemRepository, $warehouseRepository, $pdo);
-    $uomController = new UomController($uomRepository);
-    $userController = new UserController($pdo);
-    $valuationMethodController = new ValuationMethodController($valuationMethodRepository);
-    $warehouseController = new WarehouseController($warehouseRepository);
-    $payrollController = new PayrollController($payrollService, $employeeRepository, $payrollPeriodRepository, $payrollEntryRepository);
-    $procurementController = new ProcurementController($procurementService, $threeWayMatchService, $budgetControlService);
+    require __DIR__ . '/services/00_core.php';
+    require __DIR__ . '/services/10_repositories.php';
+    require __DIR__ . '/services/20_infrastructure.php';
+    require __DIR__ . '/services/30_journal.php';
+    require __DIR__ . '/services/31_cash.php';
+    require __DIR__ . '/services/32_inventory.php';
+    require __DIR__ . '/services/33_financial.php';
+    require __DIR__ . '/services/34_account.php';
+    require __DIR__ . '/services/35_debt_collection.php';
+    require __DIR__ . '/services/36_payroll.php';
+    require __DIR__ . '/services/37_procurement.php';
+    require __DIR__ . '/services/40_controllers.php';
 
     // === CONTAINER: Map tên → instance ===
     // Container là array $GLOBALS['container'], controller/service lấy nhau qua key
