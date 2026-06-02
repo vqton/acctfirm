@@ -71,6 +71,9 @@ $router->get('/tong-hop/phe-duyet', function() { require __DIR__ . '/../public/v
 $router->get('/tong-hop/bang-can-doi-so-phat-sinh', function() { require __DIR__ . '/../public/views/trial_balance.php'; });
 $router->get('/tong-hop/khoa-so-cuoi-ky', function() { require __DIR__ . '/../public/views/period_close.php'; });
 
+// === BÁO CÁO TỰ THIẾT KẾ ===
+$router->get('/bao-cao/tu-thiet-ke', function() use ($c) { $c['ReportBuilderController']->viewIndex(); });
+
 // === BÁO CÁO TÀI CHÍNH ===
 $router->get('/bao-cao/tinh-hinh-tai-chinh', function() use ($c) { $c['FsController']->viewBC01(); });
 $router->get('/bao-cao/ket-qua-kinh-doanh', function() use ($c) { $c['FsController']->viewBC02(); });

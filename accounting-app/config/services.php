@@ -139,7 +139,9 @@ use Accounting\Interfaces\HTTP\ExportController;
 use Accounting\Domain\Service\ContractService;
 use Accounting\Domain\Service\ProjectAccountingService;
 use Accounting\Domain\Service\BudgetService;
+use Accounting\Domain\Service\ReportBuilderService;
 use Accounting\Interfaces\HTTP\BudgetController;
+use Accounting\Interfaces\HTTP\ReportBuilderController;
 use Accounting\Interfaces\HTTP\ContractManagementController;
 use Accounting\Interfaces\HTTP\ProjectAccountingController;
 use Accounting\Interfaces\HTTP\ManufacturingController;
@@ -191,6 +193,9 @@ function createContainer(): array
 
     $budgetService = new BudgetService($pdo, $reportExportService);
     $budgetController = new BudgetController($budgetService);
+
+    $reportBuilderService = new ReportBuilderService($pdo, $reportExportService);
+    $reportBuilderController = new ReportBuilderController($reportBuilderService);
 
     require __DIR__ . '/services/40_controllers.php';
 
@@ -328,6 +333,8 @@ function createContainer(): array
         'EInvoiceController' => $einvoiceController,
         'subLedgerService' => $subLedgerService,
         'SubLedgerController' => $subLedgerController,
+        'ReportBuilderController' => $reportBuilderController,
+        'reportBuilderService' => $reportBuilderService,
     ];
 }
 

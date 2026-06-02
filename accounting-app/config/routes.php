@@ -28,6 +28,7 @@ function defineRoutes(Router $router): void
     require __DIR__ . '/routes/api_project_accounting.php';
     require __DIR__ . '/routes/api_manufacturing.php';
     require __DIR__ . '/routes/api_budget.php';
+    require __DIR__ . '/routes/api_report_builder.php';
     require __DIR__ . '/routes/misc.php';
     require __DIR__ . '/routes/views.php';
 }

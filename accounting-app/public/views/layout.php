@@ -243,7 +243,7 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
                 <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Báo cáo thuế</a>
                 <a href="/ngan-sach" class="nav-link-s<?= isActive('budget',$activeMenu)?' active':'' ?>"><i class="bi bi-pie-chart"></i> Ngân sách & Dự toán</a>
                 <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Báo cáo quản trị</a>
-            <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Tự thiết kế</a>
+            <a href="/bao-cao/tu-thiet-ke" class="nav-link-s<?= isActive('report_builder',$activeMenu)?' active':'' ?>"><i class="bi bi-gear"></i> Tự thiết kế</a>
         </div></div>
 
         <div class="nav-section">Hệ thống</div>
