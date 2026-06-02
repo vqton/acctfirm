@@ -35,6 +35,30 @@ function assertTrue(bool $cond, string $msg = ''): void
     }
 }
 
+function assertFalse(bool $cond, string $msg = ''): void
+{
+    global $total, $failed;
+    $total++;
+    if (!$cond) {
+        echo "PASS: {$msg}\n";
+    } else {
+        echo "FAIL: {$msg} — expected false, got true\n";
+        $failed++;
+    }
+}
+
+function assertNear(float $a, float $b, string $msg = ''): void
+{
+    global $total, $failed;
+    $total++;
+    if (abs($a - $b) < 0.01) {
+        echo "PASS: {$msg}\n";
+    } else {
+        echo "FAIL: {$msg} — expected {$b}, got {$a}\n";
+        $failed++;
+    }
+}
+
 function results(): void
 {
     global $total, $failed;
