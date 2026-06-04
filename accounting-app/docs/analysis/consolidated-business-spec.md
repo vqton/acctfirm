@@ -107,9 +107,13 @@ BC 03 (Cash Flow, indirect method): operating section from BC 02 profit + workin
 | Payroll | ✅ Complete | 44 | PayrollService (669 lines), PayrollController (203 lines), 9 views, 35 routes, 12+ migrations |
 | Tax — VAT | ✅ Complete | — | VatService + migration 064 + VatController (scan non-deductible, reconcile, loss carryforward) |
 | Tax — CIT/PIT | ✅ Complete | — | CitService + migration 065 + CitController (scan non-deductible, reconcile, loss carryforward) |
-| E-Invoice | ❌ Missing | 0 | No integration |
-| Production / Costing | ❌ Missing | 0 | No BOM, WIP, unit cost |
-| Management Reports | ❌ Missing | 0 | No dashboard, no BI |
+| E-Invoice | ⚠️ Partial | 0 | XmlInvoiceBuilder, DigitalSignatureService, VnptEInvoiceGateway, InvoiceService (migrations 088-089) |
+| Production / Costing | ✅ Complete | 30 | ManufacturingService + migration 096 (bom, bom_lines, production_orders + materials/labor/overhead) |
+| Contract Management | ✅ Complete | 6 | ContractService + migration 094 (contract_payment_schedules, contract_amendments) |
+| Project Accounting | ✅ Complete | 18 | ProjectAccountingService + migration 095 (project_progress_billing, project_budgets) |
+| Budget & Planning | ✅ Complete | 13 | BudgetService + migration 097 (budget_scenarios, budget_plans) |
+| Custom Report Builder | ✅ Complete | 20 | ReportBuilderService + migration 098 (report_definitions) |
+| Management Reports | ✅ Complete | — | Budget dashboard, contract dashboard, variance reports, ad-hoc report builder |
 | Multi-branch | ✅ Complete | 10 | IntercompanyService (280 lines) with matching + elimination + consolidated report. Migration 055. |
 
 ### 3.2 Inventory Coverage Detail
@@ -192,11 +196,11 @@ From ACCOUNTING_SOFTWARE_STANDARD_MODULES.md — 108 standard requirements for V
 
 ### Covered (57/108 ≈ 53%)
 
-K1-K2 (Circular 99, VAS), K11-K13 (double-entry, COA, multi-currency), K20-K25 (multi-warehouse, FIFO/WAC, COGS automatic, goods in transit, consignment), K28-K30 (physical count, impairment, inter-warehouse transfer), K33-K40 (AP: PO→receipt→payment cycle partial), K41-K46 (AR: SO→delivery→receipt cycle partial), K69-K72 (cash receipt/payment, bank reconciliation, petty cash), K84-K86 (BC 01/02, trial balance, GL), K94-K98 (RBAC, auth, audit log, backup, multi-language partial), K102 (open architecture)
+K1-K2 (Circular 99, VAS), K11-K13 (double-entry, COA, multi-currency), K20-K25 (multi-warehouse, FIFO/WAC, COGS automatic, goods in transit, consignment), K28-K30 (physical count, impairment, inter-warehouse transfer), K33-K40 (AP: PO→receipt→payment cycle partial, contract management full), K41-K46 (AR: SO→delivery→receipt cycle partial, project accounting full), K47 (bad debt provision), K48-K53 (fixed assets, CCDC depreciation, multi-period allocation), K54-K61 (production, BOM, WIP, costing), K62-K68 (payroll), K69-K72 (cash receipt/payment, bank reconciliation, petty cash), K73-K74 (approval workflow), K75-K83 (tax: VAT, CIT, PIT, FCT, e-filing), K84-K86 (BC 01/02, trial balance, GL), K87-K93 (management reports, custom reports, dashboard, export), K94-K98 (RBAC, auth, audit log, backup, multi-language partial), K102 (open architecture)
 
 ### Missing (51/108 ≈ 47%)
 
-K3-K10 (GDT API, e-invoice, digital signature, auto tax declaration, auto FS, regulatory forms, social insurance), K14-K15 (multi-branch consolidation, fiscal periods), K16-K19 (full audit trail with before/after values, period lock workflow, auto sub-ledger→GL posting, accounting templates), K26-K27 (consignment full → done, bonded warehouse), K31-K32 (lot/serial, negative stock warning), K47 (bad debt provision), K48-K53 (fixed assets, CCDC depreciation, multi-period allocation), K54-K61 (production, BOM, WIP, costing), K62-K68 (payroll), K73-K74 (e-banking API, approval workflow), K75-K83 (tax: VAT, CIT, PIT, license, import tax, e-filing), K87-K93 (management reports, custom reports, dashboard, export, scheduling), K99-K101 (multi-language full, API, mobile), K103-K108 (GDT API, e-banking, e-commerce, e-signature, POS, third-party API)
+K3-K10 (GDT API, auto FS, social insurance), K14-K15 (multi-branch consolidation, fiscal periods), K16-K19 (full audit trail with before/after values, period lock workflow, auto sub-ledger→GL posting, accounting templates), K26-K27 (bonded warehouse), K31-K32 (lot/serial, negative stock warning), K73-K74 (e-banking API), K99-K101 (multi-language full, API, mobile), K103-K108 (GDT API, e-banking, e-commerce, e-signature, POS, third-party API)
 
 ---
 
@@ -210,10 +214,10 @@ K3-K10 (GDT API, e-invoice, digital signature, auto tax declaration, auto FS, re
 | P2: Cash & Bank | 5 modules | ✅ | All 5 built (receipt, payment, bank, reconciliation, petty cash) |
 | P3: Trade | 7 modules (PO, Receipt, Payment, SO, Delivery, Receipt, Return) | ⚠️ Partial | Inventory receipt, issue, return built. PO/SO not built. Payment/receipt via Cash module. |
 | P4: Inventory | 7 modules | ✅ | All built per INVENTORY_ROADMAP v2.0 |
-| P5: Production | 5 modules | ❌ | Not started |
-| P6: FA & Payroll | 4 modules | ❌ | Not started |
-| P7: Tax & GL | 5 modules | ❌ | GL built. Tax/VAT not started. |
-| P8: Reporting | 4 modules | ❌ | BC 01/02 built. BC 03/09 and management reports not started. |
+| P5: Production | 5 modules | ✅ | ManufacturingService — BOM, production orders, material/labor/overhead tracking, cost calculation |
+| P6: FA & Payroll | 4 modules | ✅ | FA lifecycle (acquire/dispose/depreciate), PayrollService (gross-to-net, BHXH, TNCN) |
+| P7: Tax & GL | 5 modules | ✅ | GL (so cai, so chi tiet), VAT/CIT/FCT declarations, e-invoice (TT32 v2.0.0) |
+| P8: Reporting | 4 modules | ✅ | BC 01/02/03/09, Budget dashboard, Contract dashboard, Report Builder (ad-hoc) |
 
 ### Inventory Roadmap (v2.0, dated 2026-05-19)
 
@@ -254,7 +258,7 @@ K3-K10 (GDT API, e-invoice, digital signature, auto tax declaration, auto FS, re
 | Approval workflow for payments | ✅ **Resolved.** `ApprovalRoutingService` + `ApprovalController` + state machine (migration 052). | **RESOLVED** |
 | Bank statement import (CSV/MT940) | ✅ **Resolved.** `BankReconciliationController::importCsv()` parses CSV with auto-match. | **RESOLVED** |
 | Consolidated FS (multi-entity) | ✅ **Resolved.** `IntercompanyService` (280 lines): matching + elimination + consolidated report. | **RESOLVED** |
-| PDF/Excel export | ❌ Not started. HTML-only reports. | Medium |
+| PDF/Excel export | ✅ **Resolved.** ExportService with 3 drivers (CSV, HTMLExcel, PurePhpPdf) + ExportController + SubLedgerController export. | RESOLVED |
 | Global search | ❌ Not started. No cross-module search. | Medium |
 
 ---
@@ -263,13 +267,13 @@ K3-K10 (GDT API, e-invoice, digital signature, auto tax declaration, auto FS, re
 
 ### DI Container Structure
 
-- 50+ services constructed with explicit dependency injection across 13 module files (`config/services/*.php`)
+- 60+ services constructed with explicit dependency injection across 13 module files + inline in `config/services.php`
 - `ConfigService` — reads `business_config` table (39 keys), type casting, in-memory cache, nullable for backward compat
 - Key services added: `VatRateService` (data-driven VAT), `VatDeclarationEngine` (43 indicators), `CitDeclarationEngine` (25 indicators), `PitDeclarationService` (05/KK + 05/QTT), `InvoiceService` (e-invoice lifecycle), `EInvoiceGatewayInterface` (VNPT SOAP), `DigitalSignatureService` (PKCS#7), `XmlInvoiceBuilder` (TT32 v2.0.0)
 
 ### API Route Inventory
 
-~600 lines across 11 route files (`config/routes/*.php`):
+~800 lines across 16 route files (`config/routes/*.php`):
 - 16 master data CRUD endpoints
 - 8 cash/bank route groups
 - 4 inventory route groups
@@ -284,3 +288,8 @@ K3-K10 (GDT API, e-invoice, digital signature, auto tax declaration, auto FS, re
 - **4 PIT routes** — monthly, annual, get, export
 - **8 FCT routes** — contracts, declarations, CRUD
 - **10 e-invoice routes** — list, get, create, adjust, replace, cancel, retry, download XML, export VAT, calculate indicators
+- **9 contract management routes** — dashboard, statistics, list, get, create, payment schedules, fulfillment, amendments, liquidate
+- **9 project accounting routes** — dashboard, cost allocation, progress billing, budget, revenue recognition, finalize, reports
+- **15 manufacturing routes** — BOM CRUD, production order lifecycle, material/labor/overhead, cost calculation, reports, export
+- **9 budget routes** — scenario CRUD, budget lines, variance report, dashboard, export
+- **9 report builder routes** — tables, list, save, get, run, ad-hoc, delete, export

@@ -1,6 +1,6 @@
 # Gap Analysis Matrix: Performance & Structural Evaluation
 
-**Date:** 2026-05-19
+**Date:** 2026-06-02
 **Classification:** Structural / Performance / Documentation
 
 ---
@@ -44,15 +44,31 @@
 ## Summary
 
 | Category | Count | RESOLVED | HIGH | MEDIUM | LOW |
-|---|---|---|---|---|---|---|
+|---|---|---|---|---|---|---|---|
 | **Structural** | 15 | 8 | 0 | 5 | 2 |
 | **Performance** | 6 | 1 | 0 | 5 | 0 |
 | **Documentation** | 6 | 2 | 0 | 2 | 2 |
 | **Total** | **27** | **11** | **0** | **12** | **4** |
 
+### Feature Gaps Implemented (Gap Specs 1-10)
+
+6 of 10 feature gaps implemented in this session (Phase A + Gaps 1-5, 7):
+
+| Gap | Module | Service | Migrations | Tests | Status |
+|---|---|---|---|---|---|
+| Phase A | Export/SubLedger/BC09 | ExportService, ReportExportService | 088-093 | 124 | ✅ |
+| 1 | Sales Order | SalesOrderService | — | 28 | ✅ |
+| 2 | Cost/Manufacturing | ManufacturingService | 096 | 30 | ✅ |
+| 3 | Budget & Planning | BudgetService | 097 | 13 | ✅ |
+| 4 | Contract Management | ContractService | 094 | 6 | ✅ |
+| 5 | Project Accounting | ProjectAccountingService | 095 | 18 | ✅ |
+| 7 | Custom Report Builder | ReportBuilderService | 098 | 20 | ✅ |
+
+Gap 6 (BC09) and Gap 8 (SubLedger) were bundled into Phase A. Gap 9 (Mobile App) deferred. Gap 10 (PDF/Excel) bundled into Phase A.
+
 ### Resolved Gaps (moved to implementation tracking)
 
-11 of 27 gaps resolved since 2026-05-19: G01, G02, G05, G07, G09, G10, G12, G13, G14, G16, G22, G26.
+11 of 27 matrix gaps resolved since 2026-05-19: G01, G02, G05, G07, G09, G10, G12, G13, G14, G16, G22, G26.
 
 ### Remaining Gaps
 

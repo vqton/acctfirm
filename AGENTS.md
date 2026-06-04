@@ -160,20 +160,30 @@ FsService → AccountRepository (đọc số dư → BC01/02/03)
 PeriodService → JournalService + InventoryService (kết chuyển cuối kỳ)
 GlService → AccountRepository + TransactionRepository (sổ cái)
 BankReconciliationService → JournalService (điều chỉnh ngân hàng)
+ContractService → JournalService (giải ngân, tạm ứng hợp đồng)
+ProjectAccountingService → JournalService (phân bổ chi phí dự án)
+ManufacturingService → JournalService (xuất kho NVL, nhập kho thành phẩm)
+BudgetService → AccountRepository + TransactionRepository (so sánh dự toán vs thực tế)
 ```
 
 ### 3.3 Module Boundaries
 
 | Module | Service | Account Codes | Key Tables |
-|---|---|---|---|
+|---|---|---|---|---|
 | Cash & Bank | CashService | 111, 112 | transactions, ledger_entries |
 | Accounts Payable | ApService | 331 | ap_transactions, ap_aging |
 | Accounts Receivable | ArService | 131 | ar_transactions, ar_aging |
 | Inventory | InventoryService | 152, 153, 155, 156, 157, 632 | items, inventory_layers, warehouse_stock |
+| Sales Orders | SalesOrderService | 511, 131 | sales_orders, sales_order_items |
 | Fixed Assets | FixedAssetService | 211, 213, 214, 241, 242 | fixed_assets, depreciation_schedules |
-| Payroll | (future) | 334, 3383, 3384 | employees |
-| Tax | (via journals) | 133, 3331, 33311 | tax_rates |
+| Payroll | PayrollService | 334, 3383, 3384 | payroll_entries, payroll_periods |
+| Tax | (via journals) | 133, 3331, 33311 | tax_rates, vat_groups |
 | Financial Statements | FsService | All | accounting_period_snapshots |
+| Contract Management | ContractService | 331, 131 | contracts, contract_payment_schedules, contract_amendments |
+| Project Accounting | ProjectAccountingService | 154, 632, 511 | projects, project_progress_billing, project_budgets |
+| Manufacturing | ManufacturingService | 154, 155, 621, 622, 627, 632 | bom, bom_lines, production_orders, production_materials, production_labor, production_overhead |
+| Budget & Planning | BudgetService | All | budget_scenarios, budget_plans |
+| Custom Reports | ReportBuilderService | N/A | report_definitions |
 
 **Critical rule:** Modules chỉ giao tiếp qua JournalService. Không module nào ghi trực tiếp vào transaction/account balance.
 
@@ -1011,8 +1021,8 @@ karpathy-guidelines (simplicity first, surgical changes)
 ### 20.1 Changelog
 
 | Version | Date | Changes |
-|---|---|---|---|
-| 2.9 | 2026-06-02 | **Docs overhaul + law ref fixes.** Replaced outdated doc content, created 5 missing proper docs, updated AGENTS.md/README.md. **Code law fixes:** Updated 4 outdated law refs in code comments (TT 78/2021→TT 32/2025, TT 78/2014/TT 96/2015→TT 20/2026). **New docs created:** `config-service-design.md` (ConfigService + business_config pattern), `pit-engine-spec.md` (05/KK-TNCN + 05/QTT-TNCN), `cit-engine-spec.md` (03/TNDN 25-indicator), `e-invoice-implementation.md` (TT32 v2.0.0, PKCS#7, VNPT), `adr-011-business-config-data-driven.md`. **Updated docs:** `tax-engine-brain-logic.md` (Phases 1-6 ✅, §15 Implementation Summary), `gap-analysis-matrix.md` (G07/G22/G26 RESOLVED, 11/27 gaps closed), `consolidated-business-spec.md` (ConfigService, e-invoice, tax routes), `docs/README.md` (all new files + ADR-009/010/011 indexed). All 1,194 tests pass, 0 failures across 59 test files. |
+|---|---|---|---|---|
+| 3.0 | 2026-06-02 | **6 feature gaps implemented in 7 commits.** Phase A (Export + SubLedger + BC09), Gap 1 (Sales Order), Gap 2 (Cost/Manufacturing), Gap 3 (Budget & Planning), Gap 4 (Contract Management), Gap 5 (Project Accounting), Gap 7 (Custom Report Builder). **New migrations:** 088-098 (11 files: e_invoices, vat_declarations, vat_groups, business_config, bc09_config, sales_orders, contract_enhancements, project_accounting, cost_manufacturing, budget_planning, report_definitions). **New services:** ContractService, ProjectAccountingService, ManufacturingService, BudgetService, ReportBuilderService. **New controllers:** ContractManagementController, ProjectAccountingController, ManufacturingController, BudgetController, ReportBuilderController. **New views:** contracts.php, project-accounting.php, manufacturing.php, budget.php, report-builder.php. **Test growth:** 1,194→1,385 tests, 59→66 test files, 0 failures. All 6 gaps complete — module maturity ~8.9/10 vs MISA/FAST/BRAVO. |
 | 2.8 | 2026-05-29 | **GL Posting Engine BA analysis complete.** 14-section spec covering full journal lifecycle, 75 posting rules, data flows, internal controls, 7 user journeys, 4 extension items. **4 production-polish items implemented & committed:** (1) Period lock enforcement on Vat/Cit/Fct finalise; (2) VAT/CIT UI — scan non-deductible, reconcile, loss carryforward; (3) FCT CSV export — endpoint + view buttons; (4) FA views — fixed account codes (1111→111, 1121→112, 41111→411, 2141→214, 2112→211), category-dynamic FA account in preview. All 49 test files pass, 0 failures. | `docs/analysis/payroll-engine-brain-logic.md` expanded from 9 sections (1465 lines) to 14 sections (1928 lines). Added §1 Executive BA Analysis (business case, ROI model, risk assessment), §2 Scope Definition (in/out scope, integration boundaries, assumptions), §3 Payroll Functional Spec (8 feature areas with detailed requirements), §4 Full Payroll Lifecycle (employee lifecycle, monthly cycle, event triggers, period state machine), §10 Validation & Internal Control (rules engine, fraud detection, segregation of duties, period locking), §11 Reporting & Reconciliation (11 standard journal entries, trial balance, monthly reconciliation checklist, 5 statutory reports with forms), §13 Functional Rules Matrix (93 rules across 10 categories with legal references), §14 Final Deliverables (14 new DB tables, 10 services, 25 API endpoints, 20 UI screens, 185-test plan, 7-phase roadmap). All 49 test files pass, 0 failures. |
 | 2.6 | 2026-05-29 | **FA module full 13-section BA/Chief Accountant analysis complete.** `docs/analysis/fa-ccdc-chief-accountant-analysis.md` expanded from 10 sections (1363 lines) to 13 sections (1958 lines). Added §11 Reporting & Tax Compliance (TT 99 forms 01-06, BC 01/02/09 mapping, CIT impact, tax inspection prep), §12 Integration Contracts (6 integration points with GL/AP/Cash/Inventory/Period Close/FS), §13 Implementation Roadmap (7-phase plan with acceptance criteria + priority matrix). FA acquisition + disposal implemented with 25 lifecycle tests. Views need production polish. |
 | 2.5 | 2026-05-29 | **CashService VAT splitting (thuế GTGT).** 5 methods (recordReceipt, recordPayment, recordBankReceipt, recordBankPayment, recordBankCharge) now create 3-line journal entries (net + VAT 1331/33311) when vatAmount > 0. recordBankInterest unchanged (financial services exempt). Backward compatible via optional params defaulting to 0. 7 new tests — total 28 CashTest, 0 failures. |

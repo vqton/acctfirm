@@ -169,17 +169,7 @@ function createContainer(): array
     require __DIR__ . '/services/36_payroll.php';
     require __DIR__ . '/services/37_procurement.php';
     require __DIR__ . '/services/25_einvoice.php';
-    // === EXPORT SERVICE (Gap 10 — PDF/Excel/CSV) ===
-    // Sử dụng strategy pattern với các driver — hỗ trợ csv, xls, pdf
-    // ExportService nhận ReportExportService để giữ backward compatibility
-    $exportCsvDriver = new CsvDriver();
-    $exportXlsDriver = new HtmlExcelDriver();
-    $exportPdfDriver = new PurePhpPdfDriver();
-    $exportService = new ExportService($reportExportService);
-    $exportService->registerDriver('csv', $exportCsvDriver);
-    $exportService->registerDriver('xls', $exportXlsDriver);
-    $exportService->registerDriver('pdf', $exportPdfDriver);
-    $exportController = new ExportController($exportService);
+    // === EXPORT CONTROLLER ===
 
     $contractService = new ContractService($contractRepository, $pdo, $reportExportService);
     $contractManagementController = new ContractManagementController($contractService, $contractRepository);
@@ -188,8 +178,8 @@ function createContainer(): array
 
     $bomRepository = new PDOBomRepository($pdo);
     $productionOrderRepository = new PDOProductionOrderRepository($pdo);
-    $manufacturingService = new ManufacturingService($bomRepository, $productionOrderRepository, $pdo, $reportExportService, $journalService);
-    $manufacturingController = new ManufacturingController($manufacturingService, $bomRepository, $productionOrderRepository);
+    $manufacturingService = new \Accounting\Domain\Service\ManufacturingService($bomRepository, $productionOrderRepository, $pdo, $reportExportService, $journalService);
+    $manufacturingController = new \Accounting\Interfaces\HTTP\ManufacturingController($manufacturingService, $bomRepository, $productionOrderRepository);
 
     $budgetService = new BudgetService($pdo, $reportExportService);
     $budgetController = new BudgetController($budgetService);

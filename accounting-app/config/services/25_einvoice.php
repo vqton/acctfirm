@@ -23,7 +23,13 @@ $signatureConfig = [
     'token_pin' => getenv('EINVOICE_TOKEN_PIN') ?: '',
     'cert_serial' => getenv('EINVOICE_CERT_SERIAL') ?: '',
 ];
-$digitalSignatureService = new DigitalSignatureService($signatureConfig);
+$digitalSignatureService = new DigitalSignatureService(
+    $signatureMode,
+    $signatureConfig['pkcs11_module'],
+    $signatureConfig['token_pin'],
+    $signatureConfig['cert_path'],
+    $signatureConfig['key_path'],
+);
 
 // T-VAN provider config (mặc định VNPT)
 $tvanConfig = [

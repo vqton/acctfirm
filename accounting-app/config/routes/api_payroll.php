@@ -29,7 +29,7 @@ $router->post('/api/payroll/entries/:id/adjust', function($id) use ($c) { $c['Pa
 $router->get('/api/payroll/employees', function() use ($c) { $c['PayrollController']->listPayrollEmployees(); });
 
 // Views API
-$router->get('/api/payroll/views/employees', function() { require __DIR__ . '/../public/views/payroll_employees.php'; });
-$router->get('/api/payroll/views/periods', function() { require __DIR__ . '/../public/views/payroll_periods.php'; });
-$router->get('/api/payroll/views/entries', function() { require __DIR__ . '/../public/views/payroll_entries.php'; });
-$router->get('/api/payroll/views/entries/:id', function($id) { require __DIR__ . '/../public/views/payroll_entry_detail.php'; });
+$router->get('/api/payroll/views/employees', function() { require __DIR__ . '/../../public/views/payroll_employees.php'; });
+$router->get('/api/payroll/views/periods', function() { require __DIR__ . '/../../public/views/payroll_periods.php'; });
+$router->get('/api/payroll/views/entries', function() { require __DIR__ . '/../../public/views/payroll_entries.php'; });
+$router->get('/api/payroll/views/entries/:id', function($id) { require __DIR__ . '/../../public/views/payroll_entry_detail.php'; });

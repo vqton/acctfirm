@@ -5,7 +5,7 @@ use Accounting\Infrastructure\JsonResponse;
 use Accounting\Domain\ValueObject\VnWords;
 
 // === XÁC THỰC & ĐĂNG NHẬP ===
-$router->get('/dang-nhap', function() { require __DIR__ . '/../public/views/login.php'; });
+$router->get('/dang-nhap', function() { require __DIR__ . '/../../public/views/login.php'; });
 $router->post('/api/auth/login', function() use ($c) { $c['AuthController']->login(); });
 $router->post('/api/auth/logout', function() use ($c) { $c['AuthController']->logout(); });
 $router->get('/api/auth/me', function() use ($c) { $c['AuthController']->me(); });
@@ -31,5 +31,5 @@ $router->put('/api/roles/:id/permissions', function($id) use ($c) { $c['RoleCont
 $router->get('/api/user-management/users', function() use ($c) { $c['UserController']->listWithRoles(); });
 
 // User & Role management views
-$router->get('/he-thong/nguoi-dung', function() { require __DIR__ . '/../public/views/users.php'; });
-$router->get('/he-thong/vai-tro', function() { require __DIR__ . '/../public/views/roles.php'; });
+$router->get('/he-thong/nguoi-dung', function() { require __DIR__ . '/../../public/views/users.php'; });
+$router->get('/he-thong/vai-tro', function() { require __DIR__ . '/../../public/views/roles.php'; });

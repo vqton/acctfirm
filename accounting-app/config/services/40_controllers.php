@@ -19,6 +19,7 @@ use Accounting\Interfaces\HTTP\Financial\CitController;
 use Accounting\Interfaces\HTTP\Financial\FctController;
 use Accounting\Interfaces\HTTP\Financial\OpeningBalanceController;
 use Accounting\Interfaces\HTTP\ReportExportController;
+use Accounting\Interfaces\HTTP\ExportController;
 use Accounting\Interfaces\HTTP\Inventory\ConsignmentController;
 use Accounting\Interfaces\HTTP\MasterData\ContractController;
 use Accounting\Interfaces\HTTP\MasterData\CustomerController;

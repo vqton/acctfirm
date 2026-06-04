@@ -30,6 +30,17 @@ $fctService = new FctService($pdo, $journalService, $auditLogger);
 $openingBalanceService = new OpeningBalanceService($pdo, $accountRepository);
 $reportExportService = new ReportExportService();
 
+// === EXPORT DRIVERS (Gap 10 — PDF/Excel/CSV) ===
+// Strategy pattern — mỗi driver xử lý một định dạng xuất
+// Phụ thuộc reportExportService đã khởi tạo ở trên
+$exportCsvDriver = new \Accounting\Infrastructure\Export\CsvDriver();
+$exportXlsDriver = new \Accounting\Infrastructure\Export\HtmlExcelDriver();
+$exportPdfDriver = new \Accounting\Infrastructure\Export\PurePhpPdfDriver();
+$exportService = new \Accounting\Domain\Service\ExportService($reportExportService);
+$exportService->registerDriver('csv', $exportCsvDriver);
+$exportService->registerDriver('xls', $exportXlsDriver);
+$exportService->registerDriver('pdf', $exportPdfDriver);
+
 // === BC09: Thuyết minh BCTC ===
 use Accounting\Domain\Repository\Bc09RepositoryInterface;
 use Accounting\Infrastructure\Repository\PDOBc09Repository;
@@ -37,3 +48,11 @@ use Accounting\Domain\Service\FsNotesService;
 
 $bc09Repository = new PDOBc09Repository($pdo);
 $fsNotesService = new FsNotesService($bc09Repository, $accountRepository, $periodService, $pdo);
+
+// === SUB-LEDGER SERVICE — phụ thuộc GlService đã khởi tạo ở trên ===
+use Accounting\Domain\Service\SubLedgerService;
+$subLedgerService = new SubLedgerService($pdo, $accountRepository, $glService, $periodService, $reportExportService);
+
+// === SALES ORDER SERVICE — phụ thuộc journalService, inventoryService, reportExportService đã khởi tạo ===
+$salesOrderRepository = new \Accounting\Infrastructure\Repository\PDOSalesOrderRepository($pdo);
+$salesOrderService = new \Accounting\Domain\Service\SalesOrderService($salesOrderRepository, $journalService, $voucherService, $inventoryService, $pdo, $reportExportService);

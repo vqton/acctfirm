@@ -7,7 +7,7 @@
 Phân tích nghiệp vụ chuyên sâu từ góc nhìn BA Lead + Chief Accountant. Mỗi tài liệu phân tích module kế toán theo các section: tổng quan, life cycle, integration, internal control, reporting, roadmap.
 
 | File | Module | Lines | Nội dung chính |
-|---|---|---|---|
+|---|---|---|---|---|
 | [`accounting-engine-brain.md`](analysis/accounting-engine-brain.md) | Core Engine | 2,808 | Foundation: monthly close, BC09, trial balance, period engine, correction methods |
 | [`ap-ar-engine-brain-logic.md`](analysis/ap-ar-engine-brain-logic.md) | AP/AR | 1,236 | Creditor/debtor lifecycle, 3-way matching, aging, bad debt provision |
 | [`cash-flow-engine-brain-logic.md`](analysis/cash-flow-engine-brain-logic.md) | Cash Flow | 233 | BC03 direct method, CSV export, prior-period comparative |
@@ -27,6 +27,23 @@ Phân tích nghiệp vụ chuyên sâu từ góc nhìn BA Lead + Chief Accountan
 | [`pit-engine-spec.md`](analysis/pit-engine-spec.md) | PIT | — | 05/KK-TNCN monthly + 05/QTT-TNCN annual, progressive brackets, deductions |
 | [`procurement-engine-spec.md`](analysis/procurement-engine-spec.md) | Procurement | — | Purchase requisition → PO → goods receipt → 3-way match |
 | [`tax-engine-brain-logic.md`](analysis/tax-engine-brain-logic.md) | Tax | ~1,600 | VAT/CIT/PIT/FCT, e-invoice, 93 functional rules, 8-phase roadmap (6/8 ✅) |
+
+## `gap-specs/` — Feature Gap Specifications (Gaps 1-10)
+
+Spec-driven gap specifications — each ~500-3,000 lines mapping a feature gap to concrete implementation plan.
+
+| File | Gap | Lines | Status | Tests |
+|---|---|---|---|---|
+| [`gap-01-sales-order.md`](analysis/gap-specs/gap-01-sales-order.md) | 1 — Sales Order (O2C) | ~1,200 | ✅ Implemented | 28 |
+| [`gap-02-cost-manufacturing.md`](analysis/gap-specs/gap-02-cost-manufacturing.md) | 2 — Cost/Manufacturing | ~1,500 | ✅ Implemented | 30 |
+| [`gap-03-budget-planning.md`](analysis/gap-specs/gap-03-budget-planning.md) | 3 — Budget & Planning | ~800 | ✅ Implemented | 13 |
+| [`gap-04-contract-management.md`](analysis/gap-specs/gap-04-contract-management.md) | 4 — Contract Management | ~1,200 | ✅ Implemented | 6 |
+| [`gap-05-project-accounting.md`](analysis/gap-specs/gap-05-project-accounting.md) | 5 — Project Accounting | ~1,000 | ✅ Implemented | 18 |
+| [`gap-06-bc09-notes-to-fs.md`](analysis/gap-specs/gap-06-bc09-notes-to-fs.md) | 6 — BC09 Notes to FS | ~500 | ✅ Implemented | — |
+| [`gap-07-custom-report-builder.md`](analysis/gap-specs/gap-07-custom-report-builder.md) | 7 — Custom Report Builder | ~800 | ✅ Implemented | 20 |
+| [`gap-08-subsidiary-ledgers-print.md`](analysis/gap-specs/gap-08-subsidiary-ledgers-print.md) | 8 — SubLedger Print/Export | ~500 | ✅ Implemented | — |
+| [`gap-09-mobile-app-pwa.md`](analysis/gap-specs/gap-09-mobile-app-pwa.md) | 9 — Mobile App PWA | ~600 | ❌ Deferred | — |
+| [`gap-10-pdf-excel-export.md`](analysis/gap-specs/gap-10-pdf-excel-export.md) | 10 — PDF/Excel Export | ~500 | ✅ Implemented | — |
 
 ## `decisions/` — Architecture Decision Records
 
