@@ -19,7 +19,8 @@ class PDOTransactionRepository implements TransactionRepositoryInterface
     {
         $stmt = $this->pdo->prepare(
             'SELECT id, date, description, reference, status, created_by, voucher_type, source_module,
-                    currency, exchange_rate, is_correction, correction_type, original_transaction_id, correction_reason
+                    currency, exchange_rate, is_correction, correction_type, original_transaction_id, correction_reason,
+                    reversed_by, reversed_at
              FROM transactions WHERE id = ?'
         );
         $stmt->execute([$id]);
@@ -46,6 +47,8 @@ class PDOTransactionRepository implements TransactionRepositoryInterface
 
         $transaction->setStatus($row['status']);
         $transaction->setCreatedBy($row['created_by']);
+        $transaction->setReversedBy($row['reversed_by'] ?? null);
+        $transaction->setReversedAt(!empty($row['reversed_at']) ? new \DateTimeImmutable($row['reversed_at']) : null);
 
         $stmt = $this->pdo->prepare(
             'SELECT id, account_id, amount, is_debit, note, currency, exchange_rate, fc_amount, line_order
@@ -130,12 +133,13 @@ class PDOTransactionRepository implements TransactionRepositoryInterface
     public function save(Transaction $transaction): void
     {
         $stmt = $this->pdo->prepare(
-            'INSERT INTO transactions (id, date, description, reference, status, created_by, voucher_type, source_module, currency, exchange_rate, is_correction, correction_type, original_transaction_id, correction_reason)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            'INSERT INTO transactions (id, date, description, reference, status, created_by, voucher_type, source_module, currency, exchange_rate, is_correction, correction_type, original_transaction_id, correction_reason, reversed_by, reversed_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON DUPLICATE KEY UPDATE
                date = ?, description = ?, reference = ?, status = ?, created_by = ?,
                voucher_type = ?, source_module = ?, currency = ?, exchange_rate = ?,
-               is_correction = ?, correction_type = ?, original_transaction_id = ?, correction_reason = ?'
+               is_correction = ?, correction_type = ?, original_transaction_id = ?, correction_reason = ?,
+               reversed_by = ?, reversed_at = ?'
         );
         $stmt->execute([
             $transaction->getId(),
@@ -152,6 +156,8 @@ class PDOTransactionRepository implements TransactionRepositoryInterface
             $transaction->getCorrectionType(),
             $transaction->getOriginalTransactionId(),
             $transaction->getCorrectionReason(),
+            $transaction->getReversedBy(),
+            $transaction->getReversedAt()?->format('Y-m-d H:i:s'),
             $transaction->getDate()->format('Y-m-d H:i:s'),
             $transaction->getDescription(),
             $transaction->getReference(),
@@ -164,7 +170,9 @@ class PDOTransactionRepository implements TransactionRepositoryInterface
             $transaction->isCorrection() ? 1 : 0,
             $transaction->getCorrectionType(),
             $transaction->getOriginalTransactionId(),
-            $transaction->getCorrectionReason()
+            $transaction->getCorrectionReason(),
+            $transaction->getReversedBy(),
+            $transaction->getReversedAt()?->format('Y-m-d H:i:s')
         ]);
 
         $stmt = $this->pdo->prepare('DELETE FROM ledger_entries WHERE transaction_id = ?');

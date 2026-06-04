@@ -18,6 +18,8 @@ class Transaction
     private ?string $correctionType;
     private ?string $originalTransactionId;
     private ?string $correctionReason;
+    private ?string $reversedBy = null;
+    private ?\DateTimeImmutable $reversedAt = null;
 
     public function __construct(
         string $id,
@@ -107,6 +109,10 @@ class Transaction
     public function getExchangeRate(): float { return $this->exchangeRate; }
     public function isCorrection(): bool { return $this->isCorrection; }
     public function getCorrectionType(): ?string { return $this->correctionType; }
+    public function getReversedBy(): ?string { return $this->reversedBy; }
+    public function getReversedAt(): ?\DateTimeImmutable { return $this->reversedAt; }
+    public function setReversedBy(?string $v): void { $this->reversedBy = $v; }
+    public function setReversedAt(?\DateTimeImmutable $v): void { $this->reversedAt = $v; }
     public function getOriginalTransactionId(): ?string { return $this->originalTransactionId; }
     public function getCorrectionReason(): ?string { return $this->correctionReason; }
 
@@ -153,5 +159,7 @@ class Transaction
             throw new \InvalidArgumentException('Chỉ có thể hoàn nhập bút toán đã ghi sổ.');
         }
         $this->status = 'reversed';
+        $this->reversedBy = $reversedBy;
+        $this->reversedAt = new \DateTimeImmutable();
     }
 }

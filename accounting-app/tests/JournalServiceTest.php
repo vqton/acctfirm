@@ -162,5 +162,94 @@ assertTrue($saved !== null, 'Transaction persisted');
 assertEq('posted', $saved->getStatus(), 'Status persisted as "posted"');
 assertEq('REF-001', $saved->getReference(), 'Reference persisted');
 
+// ====================================================================
+// R-1: REVERSE ENTRY (Bút toán ngược) — TT99/2025/TT-BTC tuân thủ
+// ====================================================================
+//
+// Nghiệp vụ: Khi phát hiện sai sót, kế toán tạo bút toán NGƯỢC để hủy hiệu lực
+//   bút toán gốc đã ghi sổ. KHÔNG sửa/xóa bút toán gốc (audit trail).
+//   - Bút toán gốc: status → 'reversed', lưu reversed_by + reversed_at
+//   - Bút toán mới: type='negative' correction, is_correction=true,
+//                   original_transaction_id = id gốc
+//   - Tổng Dr = Cr vẫn đảm bảo (đảo dấu từng dòng)
+//
+// Rủi ro nếu sai:
+//   - Thiếu audit trail: không biết ai reverse, khi nào → vi phạm TT99
+//   - Reverse bút toán chưa posted: sai logic, có thể tạo trạng thái "ma"
+//   - Sửa balance account: vi phạm control account protection
+//
+
+echo "\n=== Test 8: Reverse entry happy path — original posted → reverses cleanly ===\n";
+$origTxn = $svc->postEntry('Original entry', 'REF-REV-1', [
+    ['account_code' => '111', 'amount' => 2000000, 'is_debit' => true],
+    ['account_code' => '511', 'amount' => 2000000, 'is_debit' => false],
+], 'test_user');
+
+$origId = $origTxn->getId();
+$reverseTxn = $svc->createNegativeEntry($origId, 'Sai hóa đơn, khách trả lại', 'test_user');
+
+assertTrue($reverseTxn !== null, 'Reverse transaction created');
+assertTrue($reverseTxn->isCorrection(), 'Reverse is marked as correction');
+assertEq('negative', $reverseTxn->getCorrectionType(), 'Correction type is "negative"');
+assertEq($origId, $reverseTxn->getOriginalTransactionId(), 'Original ID linked');
+assertEq('posted', $reverseTxn->getStatus(), 'Reverse entry auto-posted');
+
+// Verify original is now marked reversed
+$origAfter = $txnRepo->findById($origId);
+assertEq('reversed', $origAfter->getStatus(), 'Original status flipped to "reversed"');
+assertEq('test_user', $origAfter->getReversedBy(), 'Reversed-by persisted');
+assertTrue($origAfter->getReversedAt() !== null, 'Reversed-at timestamp set');
+
+// Verify reverse entry balances: Dr 511 / Cr 111 (đảo dấu so với gốc)
+$reverseEntries = $reverseTxn->getLedgerEntries();
+assertTrue(count($reverseEntries) === 2, 'Reverse entry has 2 ledger lines');
+$firstEntry = $reverseEntries[0];
+assertTrue(!$firstEntry->isDebit(), 'Reverse line Dr→Cr (opposite of original)');
+assertEq(2000000, $firstEntry->getAmount(), 'Amount preserved on reverse');
+
+echo "\n=== Test 9: Reverse entry failure — cannot reverse non-posted entry ===\n";
+$draftTxn = $svc->createDraft('Draft', 'REF-DRAFT', [
+    ['account_code' => '111', 'amount' => 100000, 'is_debit' => true],
+    ['account_code' => '511', 'amount' => 100000, 'is_debit' => false],
+], 'test_user');
+
+try {
+    $svc->createNegativeEntry($draftTxn->getId(), 'Thử reverse draft', 'test_user');
+    echo "FAIL: Reverse of draft was not rejected\n";
+    $failed++;
+} catch (\InvalidArgumentException $e) {
+    assertTrue(true, 'Reverse of non-posted entry rejected (must be posted first)');
+}
+
+echo "\n=== Test 10: Reverse entry failure — non-existent transaction ===\n";
+try {
+    $svc->createNegativeEntry('TXN-DOES-NOT-EXIST', 'Test', 'test_user');
+    echo "FAIL: Reverse of non-existent txn was not rejected\n";
+    $failed++;
+} catch (\InvalidArgumentException $e) {
+    assertTrue(true, 'Reverse of non-existent txn rejected');
+}
+
+echo "\n=== Test 11: Reverse entry restores account balance to original ===\n";
+$cashBeforeOrig = $accountRepo->findByCode('111')->getBalance();
+$revBeforeOrig = $accountRepo->findByCode('511')->getBalance();
+
+$newOrig = $svc->postEntry('Test for balance restore', 'REF-REV-2', [
+    ['account_code' => '111', 'amount' => 500000, 'is_debit' => true],
+    ['account_code' => '511', 'amount' => 500000, 'is_debit' => false],
+], 'test_user');
+
+$cashAfterOrig = $accountRepo->findByCode('111')->getBalance();
+$revAfterOrig = $accountRepo->findByCode('511')->getBalance();
+assertEq($cashBeforeOrig + 500000, $cashAfterOrig, 'Cash +500k after original');
+assertEq($revBeforeOrig + 500000, $revAfterOrig, 'Revenue +500k after original');
+
+$svc->createNegativeEntry($newOrig->getId(), 'Hủy bút toán test', 'test_user');
+
+$cashFinal = $accountRepo->findByCode('111')->getBalance();
+$revFinal = $accountRepo->findByCode('511')->getBalance();
+assertEq($cashBeforeOrig, $cashFinal, 'Cash restored to pre-original level');
+assertEq($revBeforeOrig, $revFinal, 'Revenue restored to pre-original level');
+
 echo "\n=== Results: {$total} tests, {$failed} failed ===\n";
 exit($failed > 0 ? 1 : 0);
