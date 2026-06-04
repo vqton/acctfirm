@@ -12,6 +12,7 @@ $title = 'Báo cáo lưu chuyển tiền tệ'; $activeMenu = 'fs_bc03'; ob_star
         <select class="form-select form-select-sm d-inline-block w-auto" id="periodSelect" onchange="loadData()"></select>
         <button class="btn btn-outline-success btn-sm ms-1" onclick="exportCsv()"><i class="bi bi-file-earmark-excel"></i> CSV</button>
         <button class="btn btn-outline-primary btn-sm ms-1" onclick="loadData()"><i class="bi bi-arrow-clockwise"></i> Làm mới</button>
+        <a class="btn btn-outline-success btn-sm ms-1" id="xbrlLink" href="#" target="_blank"><i class="bi bi-download"></i> Xuất XBRL (GDT)</a>
     </div>
 </div>
 
@@ -32,6 +33,7 @@ function getEndpoint() {
 
 function loadData() {
     var period = $('#periodSelect').val() || '<?=date('Y')?>';
+    $('#xbrlLink').attr('href', '/api/fs/xbrl/bc03?period='+period);
     var endpoint = getEndpoint();
     $.get(endpoint+'?period='+period, function(res) {
         var tbody=$('#dataBody'); tbody.empty();

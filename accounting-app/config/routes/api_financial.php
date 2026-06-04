@@ -52,6 +52,11 @@ $router->get('/api/fs/tt99', function() use ($c) { $c['FsController']->tt99(); }
 $router->get('/api/fs/bc03', function() use ($c) { $c['FsController']->bc03(); });
 $router->get('/api/fs/bc03-direct', function() use ($c) { $c['FsController']->bc03Direct(); });
 
+// === XBRL EXPORT (GDT submission format) ===
+$router->get('/api/fs/xbrl/bc01', function() use ($c) { $c['FsController']->exportXbrlBC01(); });
+$router->get('/api/fs/xbrl/bc02', function() use ($c) { $c['FsController']->exportXbrlBC02(); });
+$router->get('/api/fs/xbrl/bc03', function() use ($c) { $c['FsController']->exportXbrlBC03(); });
+
 // === PERIODS ===
 $router->get('/api/periods', function() use ($c) { $c['PeriodController']->list(); });
 $router->get('/api/periods/:id', function($id) use ($c) { $c['PeriodController']->get($id); });

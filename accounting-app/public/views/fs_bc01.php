@@ -5,6 +5,7 @@ $title = 'Báo cáo tình hình tài chính'; $activeMenu = 'fs_bc01'; ob_start(
     <div>
         <select class="form-select form-select-sm d-inline-block w-auto" id="periodSelect" onchange="loadData()"></select>
         <button class="btn btn-outline-primary btn-sm ms-2" onclick="loadData()"><i class="bi bi-arrow-clockwise"></i> Làm mới</button>
+        <a class="btn btn-outline-success btn-sm ms-2" id="xbrlLink" href="#" target="_blank"><i class="bi bi-download"></i> Xuất XBRL (GDT)</a>
     </div>
 </div>
 
@@ -17,6 +18,7 @@ $title = 'Báo cáo tình hình tài chính'; $activeMenu = 'fs_bc01'; ob_start(
 <script>
 function loadData() {
     var period = $('#periodSelect').val() || '<?=date('Y')?>';
+    $('#xbrlLink').attr('href', '/api/fs/xbrl/bc01?period='+period);
     $.get('/api/fs/bc01?period='+period, function(res) {
         var tbody=$('#dataBody'); tbody.empty();
         if(res.errors && res.errors.length){

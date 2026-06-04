@@ -5,6 +5,7 @@ $title = 'Báo cáo KQ HĐKD'; $activeMenu = 'fs_bc02'; ob_start(); ?>
     <div>
         <select class="form-select form-select-sm d-inline-block w-auto" id="periodSelect" onchange="loadData()"></select>
         <button class="btn btn-outline-primary btn-sm ms-2" onclick="loadData()"><i class="bi bi-arrow-clockwise"></i> Làm mới</button>
+        <a class="btn btn-outline-success btn-sm ms-2" id="xbrlLink" href="#" target="_blank"><i class="bi bi-download"></i> Xuất XBRL (GDT)</a>
     </div>
 </div>
 <div id="validationAlert" class="alert d-none"></div>
@@ -15,6 +16,7 @@ $title = 'Báo cáo KQ HĐKD'; $activeMenu = 'fs_bc02'; ob_start(); ?>
 <script>
 function loadData() {
     var period = $('#periodSelect').val() || '<?=date('Y')?>';
+    $('#xbrlLink').attr('href', '/api/fs/xbrl/bc02?period='+period);
     $.get('/api/fs/bc02?period='+period, function(res) {
         var tbody=$('#dataBody'); tbody.empty();
         if(res.errors && res.errors.length){

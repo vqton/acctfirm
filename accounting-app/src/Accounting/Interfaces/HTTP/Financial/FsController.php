@@ -2,6 +2,7 @@
 namespace Accounting\Interfaces\HTTP\Financial;
 
 use Accounting\Domain\Service\FsService;
+use Accounting\Domain\Service\XbrlGenerator;
 use Accounting\Infrastructure\JsonResponse;
 use Accounting\Infrastructure\Auth;
 
@@ -36,8 +37,9 @@ use Accounting\Infrastructure\Auth;
 class FsController
 {
     private FsService $fs;
+    private XbrlGenerator $xbrl;
 
-    public function __construct(FsService $fs) { $this->fs = $fs; }
+    public function __construct(FsService $fs, XbrlGenerator $xbrl) { $this->fs = $fs; $this->xbrl = $xbrl; }
 
     // NGHIỆP VỤ: BC 01 — Bảng Cân đối kế toán (Balance Sheet)
     // Input: GET ?period=2025
@@ -192,6 +194,69 @@ class FsController
     public function viewTT99(): void
     {
         require __DIR__ . '/../../../../../public/views/bc09.php';
+    }
+
+    //
+    // NGHIỆP VỤ: Xuất BC01 dạng XBRL theo Taxonomy GDT
+    // Input: GET ?period=2025
+    // Output: file .xbrl (Content-Type: application/xml)
+    // Service: XbrlGenerator.generateBC01() — map fs_line_items → tags GDT
+    // Tuân thủ: XBRL 2.1 + GDT namespace http://www.gdt.gov.vn/2025/btc
+    // Rủi ro: Sai namespace → GDT từ chối. Sai period → BC kỳ khác.
+    // Ảnh hưởng: Bắt buộc cho DN >₫10B doanh thu (Thông tư 99/2025/TT-BTC)
+    //
+    public function exportXbrlBC01(): void
+    {
+        Auth::requirePermission('report', 'export');
+        $period = $_GET['period'] ?? date('Y');
+        $data = $this->fs->generateBC01($period);
+
+        $errors = $this->fs->validateBC01($data);
+        if (!empty($errors)) {
+            JsonResponse::error('BC01 mất cân đối, không thể xuất XBRL: ' . implode('; ', $errors), 422);
+            return;
+        }
+
+        $xml = $this->xbrl->generateBC01($data, $period, '0123456789', 'Đơn vị báo cáo');
+        header('Content-Type: application/xml; charset=utf-8');
+        header('Content-Disposition: attachment; filename="BC01_' . $period . '.xbrl"');
+        echo $xml;
+    }
+
+    public function exportXbrlBC02(): void
+    {
+        Auth::requirePermission('report', 'export');
+        $period = $_GET['period'] ?? date('Y');
+        $data = $this->fs->generateBC02($period);
+
+        $errors = $this->fs->validateBC02($data);
+        if (!empty($errors)) {
+            JsonResponse::error('BC02 không hợp lệ, không thể xuất XBRL: ' . implode('; ', $errors), 422);
+            return;
+        }
+
+        $xml = $this->xbrl->generateBC02($data, $period, '0123456789', 'Đơn vị báo cáo');
+        header('Content-Type: application/xml; charset=utf-8');
+        header('Content-Disposition: attachment; filename="BC02_' . $period . '.xbrl"');
+        echo $xml;
+    }
+
+    public function exportXbrlBC03(): void
+    {
+        Auth::requirePermission('report', 'export');
+        $period = $_GET['period'] ?? date('Y');
+        $data = $this->fs->generateBC03($period);
+
+        $errors = $this->fs->validateBC03($data);
+        if (!empty($errors)) {
+            JsonResponse::error('BC03 không hợp lệ, không thể xuất XBRL: ' . implode('; ', $errors), 422);
+            return;
+        }
+
+        $xml = $this->xbrl->generateBC03($data, $period, '0123456789', 'Đơn vị báo cáo');
+        header('Content-Type: application/xml; charset=utf-8');
+        header('Content-Disposition: attachment; filename="BC03_' . $period . '.xbrl"');
+        echo $xml;
     }
 
     private function findValue(array $items, string $maSo): float
