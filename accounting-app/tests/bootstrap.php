@@ -1,6 +1,9 @@
 <?php
 // Shared test bootstrap: autoloader + assert helpers
 
+// Đặt timezone Việt Nam — khớp với entry point
+date_default_timezone_set('Asia/Ho_Chi_Minh');
+
 spl_autoload_register(function ($class) {
     $prefix = 'Accounting\\';
     $baseDir = __DIR__ . '/../src/Accounting/';

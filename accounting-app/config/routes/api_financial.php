@@ -119,3 +119,12 @@ $router->put('/api/fs/bc09/:periodId/indicator/:code', function($periodId, $code
 $router->post('/api/fs/bc09/:periodId/validate', function($periodId) use ($c) { $c['FsNotesController']->validate($periodId); });
 $router->get('/api/fs/bc09/policies', function() use ($c) { $c['FsNotesController']->getPolicies(); });
 $router->get('/bao-cao-tai-chinh/thuyet-minh-bc09', function() use ($c) { $c['FsNotesController']->viewIndex(); });
+
+// === IMPORT (R-4 Safety Framework + R-5 Items + R-6 Opening Balance) ===
+$router->get('/api/import/supported-types', function() use ($c) { $c['ImportController']->supportedTypes(); });
+$router->get('/api/import/template/:type', function($type) use ($c) { $c['ImportController']->template($type); });
+$router->post('/api/import/dry-run/:type', function($type) use ($c) { $c['ImportController']->dryRun($type); });
+$router->post('/api/import/commit/:type', function($type) use ($c) { $c['ImportController']->commit($type); });
+$router->post('/api/import/rollback/:batchId', function($batchId) use ($c) { $c['ImportController']->rollback($batchId); });
+$router->get('/api/import/batches', function() use ($c) { $c['ImportController']->listBatches(); });
+$router->get('/api/import/batches/:id', function($id) use ($c) { $c['ImportController']->getBatch($id); });

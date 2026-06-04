@@ -4,6 +4,7 @@
 use Accounting\Domain\Service\PeriodService;
 use Accounting\Domain\Service\FsService;
 use Accounting\Domain\Service\XbrlGenerator;
+use Accounting\Domain\Service\ImportService;
 use Accounting\Domain\Service\ApService;
 use Accounting\Domain\Service\ArService;
 use Accounting\Domain\Service\GlService;
@@ -19,6 +20,7 @@ use Accounting\Domain\Service\ReportExportService;
 $periodService = new PeriodService($pdo, $accountRepository, $transactionRepository, $journalService, $auditLogger, $inventoryService, $reconciliationService);
 $fsService = new FsService($pdo, $accountRepository, $auditLogger);
 $xbrlGenerator = new XbrlGenerator($pdo, $auditLogger);
+$importService = new ImportService($pdo, $accountRepository, $auditLogger);
 $apService = new ApService($pdo, $supplierRepository, $accountRepository, $journalService, $auditLogger);
 $arService = new ArService($pdo, $accountRepository, $journalService, $auditLogger, $customerRepository);
 $glService = new GlService($pdo, $accountRepository);

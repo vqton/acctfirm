@@ -4,6 +4,10 @@
 // Đây là front controller của toàn bộ hệ thống kế toán
 // Xử lý: autoload → khởi tạo request → static files → auth guard → routing
 
+// Đặt timezone Việt Nam cho toàn bộ ứng dụng
+// (DB thường dùng VN timezone; nếu không set, PHP mặc định UTC → lệch 7h khi so sánh timestamp)
+date_default_timezone_set('Asia/Ho_Chi_Minh');
+
 // Autoload PSR-4-like: Accounting\ → src/Accounting/
 // KHÔNG dùng Composer autoload — tự viết để kiểm soát hoàn toàn
 // Mapping: Accounting\Domain\Service\JournalService → src/Accounting/Domain/Service/JournalService.php
