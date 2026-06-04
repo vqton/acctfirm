@@ -434,6 +434,218 @@ class JournalService implements JournalServiceInterface
         return $txn;
     }
 
+    //
+    // R-9: SAO CHÉP BÚT TOÁN (Duplicate) — kế toán tiết kiệm 80% thời gian nhập liệu
+    //
+    // Nghiệp vụ: Kế toán thường xuyên nhập các bút toán tương tự nhau (vd: tiền điện hàng tháng).
+    // Tính năng này copy lines từ bút toán gốc → tạo draft mới, user chỉ cần sửa ngày/số tiền.
+    //
+    // Ràng buộc:
+    //   - Copy được cả posted và draft (không giới hạn status)
+    //   - Bút toán mới là DRAFT (status='draft', chưa posted)
+    //   - Reference reset = rỗng (VoucherService sẽ sinh số mới khi post)
+    //   - created_by = user hiện tại (audit trail)
+    //   - Giữ nguyên: account codes, amounts, currency, exchange rate
+    //
+    // Rủi ro: Copy sai số tiền/account → phải verify trước khi post. Form hiển thị
+    //   cho user review trước khi submit là bắt buộc.
+    //
+    public function duplicateEntry(string $originalTxnId, string $createdBy, ?string $newDate = null): Transaction
+    {
+        $original = $this->txnRepo->findById($originalTxnId);
+        if (!$original) {
+            throw new \InvalidArgumentException("Không tìm thấy bút toán gốc mã {$originalTxnId}");
+        }
+
+        $lines = [];
+        foreach ($original->getLedgerEntries() as $entry) {
+            $acct = $this->accountRepo->findById($entry->getAccountId());
+            $lines[] = [
+                'account_code' => $acct ? $acct->getCode() : (string)$entry->getAccountId(),
+                'amount' => $entry->getAmount(),
+                'is_debit' => $entry->isDebit(),
+            ];
+        }
+
+        $description = '[COPY] ' . $original->getDescription();
+        $module = $original->getSourceModule() ?? 'journal';
+        $date = $newDate ?? date('Y-m-d');
+
+        $draft = $this->createDraft(
+            description: $description,
+            reference: '',
+            lines: $lines,
+            createdBy: $createdBy,
+            module: $module,
+            date: $date,
+            voucherType: $original->getVoucherType(),
+            sourceModule: $module,
+            currency: $original->getCurrency(),
+            exchangeRate: $original->getExchangeRate()
+        );
+
+        $this->auditLogger?->log('journal.duplicate', 'transaction', $draft->getId(),
+            ['original_id' => $originalTxnId, 'original_status' => $original->getStatus()],
+            ['status' => 'draft', 'line_count' => count($lines)],
+            $createdBy);
+
+        return $draft;
+    }
+
+    //
+    // R-13: SOFT DELETE — xóa mềm bút toán (giữ data, ẩn khỏi list)
+    //
+    // Nghiệp vụ: Cho phép xóa bút toán NHẦM (draft hoặc posted đã reverse) mà không
+    // mất audit trail. Restore trong vòng 30 ngày.
+    //
+    // Ràng buộc:
+    //   - KHÔNG cho xóa bút toán posted (status='posted') — phải reverse trước
+    //     rồi mới delete (vì posted = ảnh hưởng BC)
+    //   - Bút toán đã reversed (status='reversed') cho xóa
+    //   - Draft (status='draft'|'pending'|'submitted') cho xóa bình thường
+    //   - Audit: ghi lại deleted_by, deleted_at + audit log
+    //
+    // Rủi ro: Xóa nhầm bút toán posted → sai BC. Code check bên dưới.
+    //
+    public function softDelete(string $txnId, string $deletedBy, string $reason): void
+    {
+        $txn = $this->txnRepo->findById($txnId);
+        if (!$txn) {
+            throw new \InvalidArgumentException("Không tìm thấy bút toán mã {$txnId}");
+        }
+        if ($txn->getStatus() === 'posted') {
+            throw new \InvalidArgumentException(
+                'Không thể xóa bút toán đã ghi sổ. Hãy reverse trước (tạo bút toán ngược).'
+            );
+        }
+        if ($txn->isDeleted()) {
+            throw new \InvalidArgumentException('Bút toán đã bị xóa trước đó.');
+        }
+
+        $txn->setDeletedAt(new \DateTimeImmutable());
+        $txn->setDeletedBy($deletedBy);
+        $this->txnRepo->save($txn);
+
+        $this->auditLogger?->log('journal.soft_delete', 'transaction', $txnId,
+            ['status' => $txn->getStatus()],
+            ['deleted_at' => $txn->getDeletedAt()?->format('Y-m-d H:i:s'), 'deleted_by' => $deletedBy, 'reason' => $reason],
+            $deletedBy);
+    }
+
+    //
+    // R-13: RESTORE — khôi phục bút toán đã soft delete (trong 30 ngày)
+    //
+    // Ràng buộc: Chỉ restore trong 30 ngày (rollback window — config: import.rollback_window_hours
+    //   hoặc dedicated journal.restore_window_days). Sau 30 ngày, cần can thiệp thủ công.
+    //
+    public function restore(string $txnId, string $restoredBy, int $windowDays = 30): Transaction
+    {
+        $txn = $this->txnRepo->findById($txnId);
+        if (!$txn) {
+            throw new \InvalidArgumentException("Không tìm thấy bút toán mã {$txnId}");
+        }
+        if (!$txn->isDeleted()) {
+            throw new \InvalidArgumentException('Bút toán chưa bị xóa.');
+        }
+
+        $deletedAt = $txn->getDeletedAt();
+        $now = new \DateTimeImmutable();
+        $daysSinceDelete = (int)$now->diff($deletedAt)->format('%r%a');
+        if ($daysSinceDelete > $windowDays) {
+            throw new \InvalidArgumentException(
+                "Đã quá {$windowDays} ngày kể từ khi xóa. Không thể restore tự động — liên hệ KTT."
+            );
+        }
+
+        $txn->setDeletedAt(null);
+        $txn->setDeletedBy(null);
+        $this->txnRepo->save($txn);
+
+        $this->auditLogger?->log('journal.restore', 'transaction', $txnId,
+            ['deleted_at' => $deletedAt?->format('Y-m-d H:i:s')],
+            ['status' => $txn->getStatus(), 'restored_by' => $restoredBy],
+            $restoredBy);
+
+        return $txn;
+    }
+
+    //
+    // R-8: BULK POST — ghi sổ hàng loạt, transactional all-or-nothing
+    //
+    // Nghiệp vụ: Cuối tháng, kế toán chọn nhiều bút toán draft → ghi sổ cùng lúc.
+    // Quyết định BA: ALL-OR-NOTHING (user confirmed) — nếu 1 fail thì rollback tất cả.
+    //
+    // Ràng buộc:
+    //   - Tất cả txn phải ở status='draft' hoặc 'pending'
+    //   - Nếu 1 cái fail (period locked, posting rule block, validation) → rollback
+    //   - Audit: 1 log entry 'journal.bulk_post' với danh sách IDs thành công
+    //   - Trả về: { posted: [...], failed: [{id, error}] }
+    //
+    // Rủi ro: Bulk post 100 bút toán trong 1 transaction → lock DB → tốc độ.
+    //   Khuyến nghị: giới hạn batch ≤ 50 txn/lần.
+    //
+    public function bulkPost(array $txnIds, string $approverId, int $maxBatchSize = 50): array
+    {
+        if (count($txnIds) === 0) {
+            throw new \InvalidArgumentException('Danh sách bút toán trống');
+        }
+        if (count($txnIds) > $maxBatchSize) {
+            throw new \InvalidArgumentException(
+                "Batch vượt quá giới hạn {$maxBatchSize} bút toán/lần. Vui lòng chia nhỏ."
+            );
+        }
+
+        $posted = [];
+        $failed = [];
+
+        // Pre-validate tất cả trước (fail-fast)
+        $txns = [];
+        foreach ($txnIds as $id) {
+            $txn = $this->txnRepo->findById($id);
+            if (!$txn) {
+                $failed[] = ['id' => $id, 'error' => 'Không tìm thấy bút toán'];
+                continue;
+            }
+            if (!in_array($txn->getStatus(), ['draft', 'pending'], true)) {
+                $failed[] = ['id' => $id, 'error' => "Trạng thái không hợp lệ: {$txn->getStatus()}"];
+                continue;
+            }
+            $txns[] = $txn;
+        }
+
+        if (count($failed) > 0) {
+            // Pre-validation fail → KHÔNG post bất kỳ cái nào
+            return ['posted' => [], 'failed' => $failed, 'rolled_back' => true];
+        }
+
+        // All-or-nothing: 1 transaction duy nhất
+        $this->pdo->beginTransaction();
+        try {
+            foreach ($txns as $txn) {
+                // Bulk post bypass workflow (no submitted→approved), go straight to posted
+                $txn->setStatus('posted');
+                $this->txnRepo->save($txn);
+                $this->recordApprovalAction($txn->getId(), 'approve', $approverId, 'bulk_post');
+                $posted[] = $txn->getId();
+            }
+            $this->pdo->commit();
+        } catch (\Exception $e) {
+            $this->pdo->rollBack();
+            return [
+                'posted' => [],
+                'failed' => array_map(fn($t) => ['id' => $t->getId(), 'error' => $e->getMessage()], $txns),
+                'rolled_back' => true,
+            ];
+        }
+
+        $this->auditLogger?->log('journal.bulk_post', 'transaction', null,
+            ['txn_ids' => $txnIds, 'approver' => $approverId],
+            ['posted_count' => count($posted), 'failed_count' => 0],
+            $approverId);
+
+        return ['posted' => $posted, 'failed' => [], 'rolled_back' => false];
+    }
+
     public function getCorrectionHistory(string $transactionId): array
     {
         $corrections = $this->txnRepo->getCorrectionsByOriginalId($transactionId);

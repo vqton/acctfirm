@@ -20,7 +20,7 @@ class PDOTransactionRepository implements TransactionRepositoryInterface
         $stmt = $this->pdo->prepare(
             'SELECT id, date, description, reference, status, created_by, voucher_type, source_module,
                     currency, exchange_rate, is_correction, correction_type, original_transaction_id, correction_reason,
-                    reversed_by, reversed_at
+                    reversed_by, reversed_at, deleted_at, deleted_by
              FROM transactions WHERE id = ?'
         );
         $stmt->execute([$id]);
@@ -49,6 +49,8 @@ class PDOTransactionRepository implements TransactionRepositoryInterface
         $transaction->setCreatedBy($row['created_by']);
         $transaction->setReversedBy($row['reversed_by'] ?? null);
         $transaction->setReversedAt(!empty($row['reversed_at']) ? new \DateTimeImmutable($row['reversed_at']) : null);
+        $transaction->setDeletedAt(!empty($row['deleted_at']) ? new \DateTimeImmutable($row['deleted_at']) : null);
+        $transaction->setDeletedBy($row['deleted_by'] ?? null);
 
         $stmt = $this->pdo->prepare(
             'SELECT id, account_id, amount, is_debit, note, currency, exchange_rate, fc_amount, line_order
@@ -133,13 +135,14 @@ class PDOTransactionRepository implements TransactionRepositoryInterface
     public function save(Transaction $transaction): void
     {
         $stmt = $this->pdo->prepare(
-            'INSERT INTO transactions (id, date, description, reference, status, created_by, voucher_type, source_module, currency, exchange_rate, is_correction, correction_type, original_transaction_id, correction_reason, reversed_by, reversed_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            'INSERT INTO transactions (id, date, description, reference, status, created_by, voucher_type, source_module, currency, exchange_rate, is_correction, correction_type, original_transaction_id, correction_reason, reversed_by, reversed_at, deleted_at, deleted_by)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON DUPLICATE KEY UPDATE
                date = ?, description = ?, reference = ?, status = ?, created_by = ?,
                voucher_type = ?, source_module = ?, currency = ?, exchange_rate = ?,
                is_correction = ?, correction_type = ?, original_transaction_id = ?, correction_reason = ?,
-               reversed_by = ?, reversed_at = ?'
+               reversed_by = ?, reversed_at = ?,
+               deleted_at = ?, deleted_by = ?'
         );
         $stmt->execute([
             $transaction->getId(),
@@ -158,6 +161,8 @@ class PDOTransactionRepository implements TransactionRepositoryInterface
             $transaction->getCorrectionReason(),
             $transaction->getReversedBy(),
             $transaction->getReversedAt()?->format('Y-m-d H:i:s'),
+            $transaction->getDeletedAt()?->format('Y-m-d H:i:s'),
+            $transaction->getDeletedBy(),
             $transaction->getDate()->format('Y-m-d H:i:s'),
             $transaction->getDescription(),
             $transaction->getReference(),
@@ -172,7 +177,9 @@ class PDOTransactionRepository implements TransactionRepositoryInterface
             $transaction->getOriginalTransactionId(),
             $transaction->getCorrectionReason(),
             $transaction->getReversedBy(),
-            $transaction->getReversedAt()?->format('Y-m-d H:i:s')
+            $transaction->getReversedAt()?->format('Y-m-d H:i:s'),
+            $transaction->getDeletedAt()?->format('Y-m-d H:i:s'),
+            $transaction->getDeletedBy()
         ]);
 
         $stmt = $this->pdo->prepare('DELETE FROM ledger_entries WHERE transaction_id = ?');
@@ -236,23 +243,36 @@ class PDOTransactionRepository implements TransactionRepositoryInterface
         return $this->buildTransactions($stmt->fetchAll(PDO::FETCH_ASSOC));
     }
 
-    public function getTransactionsByPeriod(string $periodCode): array
+    public function getTransactionsByPeriod(string $periodCode, ?string $createdByFilter = null, bool $includeDeleted = false): array
     {
+        $where = '(DATE_FORMAT(t.date, \'%Y-%m\') = ? OR
+                  (t.date >= (SELECT start_date FROM accounting_periods WHERE period_code = ?)
+                   AND t.date <= (SELECT end_date FROM accounting_periods WHERE period_code = ?)))';
+        $params = [$periodCode, $periodCode, $periodCode];
+
+        if (!$includeDeleted) {
+            $where .= ' AND t.deleted_at IS NULL';
+        }
+
+        if ($createdByFilter !== null) {
+            $where .= ' AND t.created_by = ?';
+            $params[] = $createdByFilter;
+        }
+
         $stmt = $this->pdo->prepare(
-            'SELECT t.id, t.date, t.description, t.reference, t.status, t.created_by,
+            "SELECT t.id, t.date, t.description, t.reference, t.status, t.created_by,
                     t.voucher_type, t.source_module, t.currency, t.exchange_rate,
                     t.is_correction, t.correction_type, t.original_transaction_id, t.correction_reason,
+                    t.deleted_at, t.deleted_by,
                     le.id AS le_id, le.account_id, le.amount AS le_amount, le.is_debit, le.note,
                     le.currency AS le_currency, le.exchange_rate AS le_exchange_rate,
                     le.fc_amount, le.line_order
              FROM transactions t
              LEFT JOIN ledger_entries le ON le.transaction_id = t.id
-             WHERE DATE_FORMAT(t.date, \'%Y-%m\') = ? OR
-                   (t.date >= (SELECT start_date FROM accounting_periods WHERE period_code = ?)
-                    AND t.date <= (SELECT end_date FROM accounting_periods WHERE period_code = ?))
-             ORDER BY t.date DESC, t.id DESC, le.line_order, le.id'
+             WHERE $where
+             ORDER BY t.date DESC, t.id DESC, le.line_order, le.id"
         );
-        $stmt->execute([$periodCode, $periodCode, $periodCode]);
+        $stmt->execute($params);
         return $this->buildTransactions($stmt->fetchAll(\PDO::FETCH_ASSOC));
     }
 

@@ -88,9 +88,10 @@ function loadData(){
             var drStr=drLines.map(function(l){return l.account_code;}).join(', ');
             var crStr=crLines.map(function(l){return l.account_code;}).join(', ');
             var total=r.lines.reduce(function(s,l){return s+parseFloat(l.amount);},0)/2;
-            var badge=r.status==='posted'?'<span class="badge-status badge-active">Đã ghi sổ</span>':'<span class="badge bg-warning text-dark">Nháp</span>';
+            var badge=r.status==='posted'?'<span class="badge-status badge-active">Đã ghi sổ</span>':(r.status==='reversed'?'<span class="badge bg-secondary">Đã đảo</span>':'<span class="badge bg-warning text-dark">Nháp</span>');
             var actions='';
             if(r.status==='pending')actions='<button class="btn btn-sm btn-outline-success" onclick="approveEntry(\''+esc(r.id)+'\')"><i class="bi bi-check-lg"></i> Duyệt</button>';
+            else if(r.status==='posted')actions='<button class="btn btn-sm btn-outline-warning" onclick="reverseEntry(\''+esc(r.id)+'\')"><i class="bi bi-arrow-counterclockwise"></i> Đảo ngược</button>';
             tbody.append('<tr><td>'+esc(r.reference)+'</td><td>'+esc(r.description)+'</td><td style="font-size:12px">'+esc(r.date)+'</td><td>'+esc(drStr)+'</td><td>'+esc(crStr)+'</td><td class="text-end font-monospace">'+parseFloat(total).toLocaleString()+'</td><td>'+badge+'</td><td>'+actions+'</td></tr>');
         });
     });
@@ -101,6 +102,20 @@ function approveEntry(id){
     if(!confirm('Duyệt bút toán này? Giao dịch sẽ được ghi sổ.'))return;
     $.ajax({url:'/api/journal/approve/'+id,method:'POST',headers:{'X-CSRF-Token':csrf},
         success:function(){showToast('Đã ghi sổ bút toán thành công.','success');loadData();},
+        error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}
+    });
+}
+// R-2: Đảo ngược bút toán đã ghi sổ — tạo bút toán ngược (R-1)
+// NGHIỆP VỤ: Khi phát hiện sai sót, tạo bút toán ngược thay vì sửa/xóa (audit trail)
+// RỦI RO: Không thể khôi phục sau khi reverse — phải tạo bút toán mới nếu muốn sửa lại
+function reverseEntry(id){
+    var reason=prompt('Lý do đảo ngược (bắt buộc, ghi vào audit trail):');
+    if(!reason||!reason.trim())return;
+    if(!confirm('Xác nhận đảo ngược bút toán này? Hành động này không thể hoàn tác.'))return;
+    $.ajax({url:'/api/corrections/negative',method:'POST',headers:{'X-CSRF-Token':csrf},
+        contentType:'application/json',
+        data:JSON.stringify({original_transaction_id:id,reason:reason.trim()}),
+        success:function(r){showToast('Đã tạo bút toán ngược: '+r.reference,'success');loadData();},
         error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}
     });
 }

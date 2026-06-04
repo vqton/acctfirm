@@ -20,6 +20,8 @@ class Transaction
     private ?string $correctionReason;
     private ?string $reversedBy = null;
     private ?\DateTimeImmutable $reversedAt = null;
+    private ?\DateTimeImmutable $deletedAt = null;
+    private ?string $deletedBy = null;
 
     public function __construct(
         string $id,
@@ -113,6 +115,11 @@ class Transaction
     public function getReversedAt(): ?\DateTimeImmutable { return $this->reversedAt; }
     public function setReversedBy(?string $v): void { $this->reversedBy = $v; }
     public function setReversedAt(?\DateTimeImmutable $v): void { $this->reversedAt = $v; }
+    public function getDeletedAt(): ?\DateTimeImmutable { return $this->deletedAt; }
+    public function getDeletedBy(): ?string { return $this->deletedBy; }
+    public function setDeletedAt(?\DateTimeImmutable $v): void { $this->deletedAt = $v; }
+    public function setDeletedBy(?string $v): void { $this->deletedBy = $v; }
+    public function isDeleted(): bool { return $this->deletedAt !== null; }
     public function getOriginalTransactionId(): ?string { return $this->originalTransactionId; }
     public function getCorrectionReason(): ?string { return $this->correctionReason; }
 

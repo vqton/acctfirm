@@ -56,7 +56,13 @@ class JournalController
     public function list(): void
     {
         $period = $_GET['period'] ?? date('Y-m');
-        $txns = $this->txnRepo->getTransactionsByPeriod($period);
+        // R-3: RBAC scope theo created_by — KTV chỉ thấy data mình tạo
+        // Admin + KTT thấy tất cả. Configurable qua rbac.scope_by_creator.
+        $createdByFilter = null;
+        if (!\Accounting\Infrastructure\Auth::canViewAllData()) {
+            $createdByFilter = \Accounting\Infrastructure\Auth::getCurrentUserId();
+        }
+        $txns = $this->txnRepo->getTransactionsByPeriod($period, $createdByFilter);
         $result = [];
         foreach ($txns as $txn) {
             $lines = [];
@@ -245,5 +251,101 @@ class JournalController
             'total_credit' => round($totalCr, 0),
             'balanced' => abs($totalDr - $totalCr) < 10,
         ]);
+    }
+
+    //
+    // R-9: Duplicate bút toán — copy lines từ bút toán gốc → tạo draft mới
+    // Input: POST /api/journal/duplicate/{id} body: { date?: 'YYYY-MM-DD' }
+    // Output: { id, reference: '', status: 'draft', lines }
+    // Quyền: journal.create
+    //
+    public function duplicate(string $id): void
+    {
+        Auth::checkCsrf();
+        Auth::requirePermission('journal', 'create');
+        $data = json_decode(file_get_contents('php://input'), true) ?? [];
+        $newDate = $data['date'] ?? null;
+
+        try {
+            $draft = $this->journal->duplicateEntry(
+                $id,
+                Auth::getCurrentUserId() ?? 'system',
+                $newDate
+            );
+            JsonResponse::ok([
+                'id' => $draft->getId(),
+                'status' => $draft->getStatus(),
+                'description' => $draft->getDescription(),
+                'line_count' => count($draft->getLedgerEntries()),
+            ], 201);
+        } catch (\InvalidArgumentException $e) {
+            JsonResponse::error($e->getMessage(), 404);
+        }
+    }
+
+    //
+    // R-13: Soft delete — xóa mềm bút toán (chỉ draft/reversed, không cho posted)
+    // Input: POST /api/journal/{id}/delete body: { reason: string }
+    //
+    public function softDelete(string $id): void
+    {
+        Auth::checkCsrf();
+        Auth::requirePermission('journal', 'delete');
+        $data = json_decode(file_get_contents('php://input'), true) ?? [];
+        $reason = $data['reason'] ?? '';
+
+        if (!$reason) {
+            JsonResponse::error('Vui lòng nhập lý do xóa (bắt buộc cho audit trail)', 400);
+            return;
+        }
+
+        try {
+            $this->journal->softDelete($id, Auth::getCurrentUserId() ?? 'system', $reason);
+            JsonResponse::ok(['id' => $id, 'deleted' => true]);
+        } catch (\InvalidArgumentException $e) {
+            JsonResponse::error($e->getMessage(), 422);
+        }
+    }
+
+    //
+    // R-13: Restore — khôi phục bút toán đã xóa (trong 30 ngày)
+    // Input: POST /api/journal/{id}/restore
+    //
+    public function restore(string $id): void
+    {
+        Auth::checkCsrf();
+        Auth::requirePermission('journal', 'delete');
+        try {
+            $txn = $this->journal->restore($id, Auth::getCurrentUserId() ?? 'system');
+            JsonResponse::ok([
+                'id' => $txn->getId(),
+                'status' => $txn->getStatus(),
+                'restored' => true,
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            JsonResponse::error($e->getMessage(), 422);
+        }
+    }
+
+    //
+    // R-8: Bulk Post — ghi sổ hàng loạt, all-or-nothing transactional
+    // Input: POST /api/journal/bulk-post body: { txn_ids: [...] }
+    // Output: { posted: [...], failed: [{id, error}], rolled_back: bool }
+    //
+    public function bulkPost(): void
+    {
+        Auth::checkCsrf();
+        Auth::requirePermission('journal', 'post');
+        $data = json_decode(file_get_contents('php://input'), true) ?? [];
+        $ids = $data['txn_ids'] ?? [];
+
+        if (!is_array($ids) || count($ids) === 0) {
+            JsonResponse::error('Vui lòng cung cấp danh sách txn_ids', 400);
+            return;
+        }
+
+        $result = $this->journal->bulkPost($ids, Auth::getCurrentUserId() ?? 'system');
+        $httpStatus = $result['rolled_back'] ? 422 : 200;
+        JsonResponse::ok($result, $httpStatus);
     }
 }

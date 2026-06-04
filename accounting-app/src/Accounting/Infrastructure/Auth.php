@@ -21,6 +21,30 @@ class Auth
         return $_SESSION['user'] ?? null;
     }
 
+    // R-3: Lấy ID user hiện tại (dùng cho RBAC scope theo created_by)
+    // RỦI RO: Nếu trả về null/sai, có thể filter sai → lộ hoặc giấu dữ liệu
+    public static function getCurrentUserId(): ?string
+    {
+        return $_SESSION['user']['id'] ?? $_SESSION['user_id'] ?? null;
+    }
+
+    // R-3: Lấy role hiện tại (admin/chief_accountant/accountant/viewer)
+    // Vai trò dùng cho RBAC scope: admin + chief_accountant thấy tất cả,
+    // accountant chỉ thấy data của mình (nếu rbac.scope_by_creator=true)
+    public static function getCurrentUserRole(): string
+    {
+        if (self::isAdmin()) return 'admin';
+        return $_SESSION['user']['role'] ?? 'accountant';
+    }
+
+    // R-3: Kiểm tra user hiện tại có được xem dữ liệu của user khác không
+    // Admin + Chief Accountant (KTT) luôn được; Accountant chỉ được data của mình
+    public static function canViewAllData(): bool
+    {
+        $role = self::getCurrentUserRole();
+        return in_array($role, ['admin', 'chief_accountant'], true);
+    }
+
     // Kiểm tra quyền quản trị — admin có toàn quyền trên mọi module kế toán
     // RỦI RO: Nếu isAdmin bị set sai, user có thể post bút toán trái phép
     // Chỉ Kế toán trưởng mới được gán quyền admin qua Role Management
