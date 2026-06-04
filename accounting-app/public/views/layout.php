@@ -224,6 +224,7 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
             <a href="/so-chi-tiet" class="nav-link-s<?= isActive('so_chi_tiet',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Sổ chi tiết tổng hợp</a>
             <a href="/he-thong/kiem-tra-truoc-khi-khoa-so" class="nav-link-s<?= isActive('pre_close',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Kiểm tra trước khóa sổ</a>
             <a href="/tong-hop/khoa-so-cuoi-ky" class="nav-link-s<?= isActive('period_close',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Khóa sổ cuối kỳ</a>
+            <a href="/tong-hop/so-sanh-ky" class="nav-link-s<?= isActive('period_compare',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> So sánh số liệu 2 kỳ</a>
             <a href="/bao-cao/ty-gia" class="nav-link-s<?= isActive('fx_revaluation',$activeMenu)?' active':'' ?>"><i class="bi bi-currency-exchange"></i> Đánh giá lại ngoại tệ</a>
             <a href="/he-thong/noi-bo" class="nav-link-s<?= isActive('intercompany',$activeMenu)?' active':'' ?>"><i class="bi bi-diagram-3"></i> Giao dịch nội bộ</a>
                 <a href="/tong-hop/bang-can-doi-so-phat-sinh" class="nav-link-s<?= isActive('trial_balance',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> BCĐ số phát sinh</a>

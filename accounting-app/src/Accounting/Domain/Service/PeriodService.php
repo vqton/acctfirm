@@ -872,4 +872,167 @@ class PeriodService
             null, ['deadline' => $deadline], $setBy);
         return $this->getPeriod($id);
     }
+
+    //
+    // NGHIỆP VỤ: So sánh số liệu giữa 2 kỳ kế toán
+    //
+    // Mục đích: Phân tích biến động doanh thu/chi phí/tài sản giữa kỳ A và kỳ B.
+    // Thường dùng cho:
+    //   - BC quản trị: so sánh tháng này vs tháng trước, quý này vs quý trước
+    //   - Audit: phát hiện tài khoản có biến động bất thường
+    //   - Kế hoạch: so sánh thực tế vs kế hoạch
+    //
+    // Input: periodA code, periodB code (vd '2025-01' vs '2025-02')
+    // Output: {
+    //   period_a: { period_code, total_debit, total_credit, txn_count, by_type: { asset: {dr, cr}, liability: ..., } },
+    //   period_b: tương tự,
+    //   variance: {
+    //     by_type: { asset: { dr_diff, cr_diff, dr_pct, cr_pct }, ... },
+    //     by_account: [ { code, name, type, a_debit, b_debit, diff, pct } ]   (chỉ accounts có biến động)
+    //   }
+    // }
+    //
+    // RỦI RO: Nếu một kỳ chưa tồn tại → throw exception (kế toán phải tạo kỳ trước khi compare)
+    //
+    public function comparePeriods(string $periodA, string $periodB): array
+    {
+        // Validate cả 2 kỳ tồn tại + lấy date range
+        $rangeA = $this->getPeriodDateRange($periodA);
+        $rangeB = $this->getPeriodDateRange($periodB);
+
+        $summaryA = $this->periodSummary($rangeA, $periodA);
+        $summaryB = $this->periodSummary($rangeB, $periodB);
+
+        $byType = [];
+        $allTypes = array_unique(array_merge(array_keys($summaryA['by_type']), array_keys($summaryB['by_type'])));
+        foreach ($allTypes as $type) {
+            $a = $summaryA['by_type'][$type] ?? ['debit' => 0, 'credit' => 0];
+            $b = $summaryB['by_type'][$type] ?? ['debit' => 0, 'credit' => 0];
+            $byType[$type] = [
+                'a_debit' => $a['debit'],
+                'b_debit' => $b['debit'],
+                'debit_diff' => $b['debit'] - $a['debit'],
+                'debit_pct' => $a['debit'] > 0 ? round(($b['debit'] - $a['debit']) / $a['debit'] * 100, 2) : null,
+                'a_credit' => $a['credit'],
+                'b_credit' => $b['credit'],
+                'credit_diff' => $b['credit'] - $a['credit'],
+                'credit_pct' => $a['credit'] > 0 ? round(($b['credit'] - $a['credit']) / $a['credit'] * 100, 2) : null,
+            ];
+        }
+
+        // Per-account variance
+        $stmt = $this->pdo->prepare(
+            "SELECT a.code, a.name, a.type,
+                    COALESCE(SUM(CASE WHEN t.transaction_date BETWEEN ? AND ? THEN CASE WHEN le.is_debit=1 THEN le.amount ELSE 0 END END), 0) AS a_debit,
+                    COALESCE(SUM(CASE WHEN t.transaction_date BETWEEN ? AND ? THEN CASE WHEN le.is_debit=0 THEN le.amount ELSE 0 END END), 0) AS a_credit,
+                    COALESCE(SUM(CASE WHEN t.transaction_date BETWEEN ? AND ? THEN CASE WHEN le.is_debit=1 THEN le.amount ELSE 0 END END), 0) AS b_debit,
+                    COALESCE(SUM(CASE WHEN t.transaction_date BETWEEN ? AND ? THEN CASE WHEN le.is_debit=0 THEN le.amount ELSE 0 END END), 0) AS b_credit
+             FROM accounts a
+             LEFT JOIN ledger_entries le ON le.account_id = a.id
+             LEFT JOIN transactions t ON t.id = le.transaction_id
+                AND t.status IN ('posted','reversed')
+                AND t.deleted_at IS NULL
+             WHERE a.status = 1
+             GROUP BY a.id, a.code, a.name, a.type
+             HAVING (a_debit + a_credit + b_debit + b_credit) > 0"
+        );
+        $stmt->execute([
+            $rangeA[0], $rangeA[1],
+            $rangeA[0], $rangeA[1],
+            $rangeB[0], $rangeB[1],
+            $rangeB[0], $rangeB[1],
+        ]);
+        $byAccount = [];
+        foreach ($stmt->fetchAll(\PDO::FETCH_ASSOC) as $r) {
+            $drDiff = (float)$r['b_debit'] - (float)$r['a_debit'];
+            $crDiff = (float)$r['b_credit'] - (float)$r['a_credit'];
+            if (abs($drDiff) > 0.01 || abs($crDiff) > 0.01) {
+                $byAccount[] = [
+                    'code' => $r['code'],
+                    'name' => $r['name'],
+                    'type' => $r['type'],
+                    'a_debit' => (float)$r['a_debit'],
+                    'a_credit' => (float)$r['a_credit'],
+                    'b_debit' => (float)$r['b_debit'],
+                    'b_credit' => (float)$r['b_credit'],
+                    'debit_diff' => $drDiff,
+                    'credit_diff' => $crDiff,
+                ];
+            }
+        }
+
+        $this->auditLogger?->log('period.compare', 'accounting_period', "{$periodA}|{$periodB}",
+            null, ['account_count' => count($byAccount)], 'system');
+
+        return [
+            'period_a' => $summaryA,
+            'period_b' => $summaryB,
+            'variance' => [
+                'by_type' => $byType,
+                'by_account' => $byAccount,
+                'by_account_count' => count($byAccount),
+            ],
+        ];
+    }
+
+    //
+    // Helper: Lấy date range của period (start_date, end_date)
+    //
+    private function getPeriodDateRange(string $periodCode): array
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT start_date, end_date FROM accounting_periods WHERE period_code = ?"
+        );
+        $stmt->execute([$periodCode]);
+        $r = $stmt->fetch(\PDO::FETCH_ASSOC);
+        if (!$r) {
+            throw new \InvalidArgumentException("Kỳ kế toán {$periodCode} không tồn tại");
+        }
+        return [$r['start_date'], $r['end_date']];
+    }
+
+    //
+    // Helper: Tổng hợp số liệu 1 kỳ (theo type)
+    //
+    private function periodSummary(array $range, string $periodCode): array
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT COUNT(DISTINCT t.id) AS txn_count,
+                    COALESCE(SUM(CASE WHEN le.is_debit=1 THEN le.amount ELSE 0 END), 0) AS total_debit,
+                    COALESCE(SUM(CASE WHEN le.is_debit=0 THEN le.amount ELSE 0 END), 0) AS total_credit
+             FROM transactions t
+             INNER JOIN ledger_entries le ON le.transaction_id = t.id
+             WHERE t.transaction_date BETWEEN ? AND ?
+                AND t.status IN ('posted','reversed')
+                AND t.deleted_at IS NULL"
+        );
+        $stmt->execute([$range[0], $range[1]]);
+        $head = $stmt->fetch(\PDO::FETCH_ASSOC);
+
+        $stmt = $this->pdo->prepare(
+            "SELECT a.type,
+                    COALESCE(SUM(CASE WHEN le.is_debit=1 THEN le.amount ELSE 0 END), 0) AS debit,
+                    COALESCE(SUM(CASE WHEN le.is_debit=0 THEN le.amount ELSE 0 END), 0) AS credit
+             FROM transactions t
+             INNER JOIN ledger_entries le ON le.transaction_id = t.id
+             INNER JOIN accounts a ON a.id = le.account_id
+             WHERE t.transaction_date BETWEEN ? AND ?
+                AND t.status IN ('posted','reversed')
+                AND t.deleted_at IS NULL
+             GROUP BY a.type"
+        );
+        $stmt->execute([$range[0], $range[1]]);
+        $byType = [];
+        foreach ($stmt->fetchAll(\PDO::FETCH_ASSOC) as $r) {
+            $byType[$r['type']] = ['debit' => (float)$r['debit'], 'credit' => (float)$r['credit']];
+        }
+
+        return [
+            'period_code' => $periodCode,
+            'txn_count' => (int)$head['txn_count'],
+            'total_debit' => (float)$head['total_debit'],
+            'total_credit' => (float)$head['total_credit'],
+            'by_type' => $byType,
+        ];
+    }
 }

@@ -271,4 +271,36 @@ class PeriodController
             JsonResponse::ok($this->period->overrideDeadline($id, $reason, $_SESSION['user']['username'] ?? 'system'));
         } catch (\InvalidArgumentException $e) { JsonResponse::error($e->getMessage()); }
     }
+
+    //
+    // NGHIỆP VỤ: So sánh số liệu giữa 2 kỳ kế toán (R-7)
+    //
+    // Mục đích: Phân tích biến động doanh thu, chi phí, tài sản giữa 2 kỳ
+    // Sử dụng: BC quản trị, audit phát hiện biến động bất thường, so sánh thực tế vs kế hoạch
+    //
+    // Input: ?from=2025-01&to=2025-02 (period_code)
+    // Output: { period_a, period_b, variance: { by_type, by_account, by_account_count } }
+    //
+    // Permission: report.read (ai có quyền xem BC)
+    // Rủi ro: Query nặng nếu nhiều accounts — có thể cache hoặc async nếu data lớn
+    //
+    public function compare(): void
+    {
+        Auth::requirePermission('report', 'read');
+        $from = $_GET['from'] ?? '';
+        $to = $_GET['to'] ?? '';
+        if (!$from || !$to) {
+            JsonResponse::error('Thiếu tham số from/to (period_code)', 400);
+            return;
+        }
+        if ($from === $to) {
+            JsonResponse::error('Kỳ so sánh phải khác nhau', 400);
+            return;
+        }
+        try {
+            JsonResponse::ok($this->period->comparePeriods($from, $to));
+        } catch (\InvalidArgumentException $e) {
+            JsonResponse::error($e->getMessage(), 404);
+        }
+    }
 }

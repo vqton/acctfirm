@@ -63,6 +63,7 @@ $router->get('/api/fs/xbrl/bc03', function() use ($c) { $c['FsController']->expo
 
 // === PERIODS ===
 $router->get('/api/periods', function() use ($c) { $c['PeriodController']->list(); });
+$router->get('/api/periods/compare', function() use ($c) { $c['PeriodController']->compare(); });
 $router->get('/api/periods/:id', function($id) use ($c) { $c['PeriodController']->get($id); });
 $router->post('/api/periods', function() use ($c) { $c['PeriodController']->create(); });
 $router->post('/api/periods/generate', function() use ($c) { $c['PeriodController']->generate(); });
