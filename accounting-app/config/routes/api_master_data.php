@@ -87,6 +87,7 @@ $router->delete('/api/exchange-rates/:id', function($id) use ($c) { $c['Exchange
 
 // === TAX RATES ===
 $router->get('/api/tax-rates', function() use ($c) { $c['TaxRateController']->list(); });
+$router->get('/api/vat-rates', function() use ($c) { $c['TaxRateController']->vatRates(); });
 $router->get('/api/tax-rates/:id', function($id) use ($c) { $c['TaxRateController']->get($id); });
 $router->post('/api/tax-rates', function() use ($c) { $c['TaxRateController']->create(); });
 $router->put('/api/tax-rates/:id', function($id) use ($c) { $c['TaxRateController']->update($id); });

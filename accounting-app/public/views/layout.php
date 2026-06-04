@@ -320,6 +320,29 @@ document.getElementById('confirmBtn').addEventListener('click',function(){
     hideConfirm();
 });
 
+// Tải danh sách thuế suất VAT active từ API và render vào <select>
+// selector: CSS selector của <select>, defaultRate: giá trị mặc định (VD: 10)
+function loadVatRates(selector, defaultRate) {
+    fetch('/api/vat-rates').then(function(r){return r.json();}).then(function(data){
+        var sel = document.querySelector(selector);
+        if (!sel) return;
+        sel.innerHTML = '';
+        if (!data || !data.length) {
+            sel.innerHTML = '<option value="10">10%</option>';
+            return;
+        }
+        data.forEach(function(r){
+            var opt = document.createElement('option');
+            opt.value = r.rate;
+            opt.textContent = r.name;
+            if (parseFloat(r.rate) === parseFloat(defaultRate)) opt.selected = true;
+            sel.appendChild(opt);
+        });
+    }).catch(function(){
+        // Fallback: giữ nguyên option cứng nếu API lỗi
+    });
+}
+
 $(function(){
     $('.sidebar-scroll .nav-link-s[href="#"]').on('click',function(e){
         e.preventDefault();

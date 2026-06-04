@@ -85,6 +85,6 @@ class IntercompanyController
 
     public function view(): void
     {
-        require __DIR__ . '/../../../public/views/intercompany.php';
+        require __DIR__ . '/../../../../public/views/intercompany.php';
     }
 }

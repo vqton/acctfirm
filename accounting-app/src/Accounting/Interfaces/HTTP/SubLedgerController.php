@@ -96,7 +96,7 @@ class SubLedgerController
 
         $title = 'Sổ chi tiết';
         $activeMenu = 'so_chi_tiet';
-        require __DIR__ . '/../../../public/views/sub-ledger.php';
+        require __DIR__ . '/../../../../public/views/sub-ledger.php';
     }
 
     // GET /api/reports/sub-ledger/parameters?type=general_ledger

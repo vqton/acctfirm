@@ -100,7 +100,12 @@ $o = $order ? $order->toArray() : null;
     <?php endif; ?>
 </div>
 
+<select id="vatRateTemplate" style="display:none"></select>
 <script>
+function populateItemTax(sel) {
+    var tmpl = document.getElementById('vatRateTemplate');
+    sel.innerHTML = tmpl.innerHTML;
+}
 function addItemRow() {
     const tbody = $('#itemsBody');
     tbody.find('.empty-state').parent().remove();
@@ -111,10 +116,11 @@ function addItemRow() {
         + '<td><input type="number" class="form-control form-control-sm item-qty" value="1" min="0.01" step="1" style="width:70px" onchange="calcLine(this)"></td>'
         + '<td><input type="number" class="form-control form-control-sm item-price" value="0" min="0" step="1000" style="width:110px" onchange="calcLine(this)"></td>'
         + '<td><input type="number" class="form-control form-control-sm item-disc" value="0" min="0" max="100" step="0.1" style="width:60px" onchange="calcLine(this)"></td>'
-        + '<td><select class="form-select form-select-sm item-tax" style="width:70px" onchange="calcLine(this)"><option value="10">10%</option><option value="8">8%</option><option value="5">5%</option><option value="0">0%</option></select></td>'
+        + '<td><select class="form-select form-select-sm item-tax" style="width:100px" onchange="calcLine(this)"></select></td>'
         + '<td class="text-end item-total pt-2">0</td>'
         + '<td><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest(\'tr\').remove();calcTotals();"><i class="bi bi-trash"></i></button></td></tr>';
     tbody.append(row);
+    populateItemTax(tbody.find('tr:last .item-tax')[0]);
 }
 function calcLine(el) {
     const tr = $(el).closest('tr');
@@ -225,6 +231,7 @@ function doAction(action, msg, extra) {
         error: function(xhr) { const r = xhr.responseJSON || {}; alert('Lỗi: ' + (r.error || 'Thất bại')); }
     });
 }
+$(document).ready(function(){loadVatRates('#vatRateTemplate',10);});
 </script>
 <?php
 $content = ob_get_clean();

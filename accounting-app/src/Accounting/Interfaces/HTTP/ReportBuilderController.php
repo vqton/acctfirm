@@ -105,8 +105,8 @@ class ReportBuilderController
     {
         Auth::requirePermission('report', 'read');
         ob_start();
-        require __DIR__ . '/../../public/views/report-builder.php';
-        $content = ob_get_clean();
-        require __DIR__ . '/../../public/views/layout.php';
+require __DIR__ . '/../../../../public/views/report-builder.php';
+        ob_get_clean();
+        require __DIR__ . '/../../../../public/views/layout.php';
     }
 }

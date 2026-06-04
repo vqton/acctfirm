@@ -146,8 +146,8 @@ class ContractManagementController
     {
         Auth::requirePermission('contract', 'read');
         ob_start();
-        require __DIR__ . '/../../public/views/contracts.php';
-        $content = ob_get_clean();
-        require __DIR__ . '/../../public/views/layout.php';
+require __DIR__ . '/../../../../public/views/contracts.php';
+        ob_get_clean();
+        require __DIR__ . '/../../../../public/views/layout.php';
     }
 }

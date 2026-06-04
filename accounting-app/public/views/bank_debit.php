@@ -18,7 +18,7 @@ $title = 'Giấy báo Nợ'; $activeMenu = 'bank_debit'; ob_start(); ?>
 <div class="modal-header"><h5 class="modal-title">Giấy báo Nợ</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
 <div class="modal-body">
     <div class="row g-2"><div class="col-4 mb-2"><label>Loại chi</label><select class="form-select" id="paymentType"><option value="">-- Chọn loại --</option></select></div><div class="col-4 mb-2"><label>TK Nợ (đối ứng)</label><select class="form-select" id="debitAccount" required></select></div><div class="col-4 mb-2"><label>Số tiền</label><input type="number" class="form-control" id="amount" step="1" min="1" required></div></div>
-    <div class="row g-2"><div class="col-2 mb-2" id="vatRateGroup" style="display:none"><label>VAT %</label><select class="form-select" id="vatRate"><option value="0">0%</option><option value="5">5%</option><option value="8">8%</option><option value="10" selected>10%</option></select></div><div class="col-2 mb-2" id="vatAmountGroup" style="display:none"><label>Tiền VAT</label><input type="number" class="form-control" id="vatAmount" readonly step="1" style="background:#f5f5f5"></div><div class="col-4 mb-2" id="netAmountGroup" style="display:none"><label>Tiền chưa thuế</label><input type="number" class="form-control" id="netAmount" readonly step="1" style="background:#f5f5f5"></div></div>
+    <div class="row g-2"><div class="col-2 mb-2" id="vatRateGroup" style="display:none"><label>VAT %</label><select class="form-select" id="vatRate"></select></div><div class="col-2 mb-2" id="vatAmountGroup" style="display:none"><label>Tiền VAT</label><input type="number" class="form-control" id="vatAmount" readonly step="1" style="background:#f5f5f5"></div><div class="col-4 mb-2" id="netAmountGroup" style="display:none"><label>Tiền chưa thuế</label><input type="number" class="form-control" id="netAmount" readonly step="1" style="background:#f5f5f5"></div></div>
     <div class="mb-2"><label>Diễn giải</label><input class="form-control" id="description" placeholder="Thanh toán qua NH..."></div>
 </div>
 <div class="modal-footer"><button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Hủy</button><button type="submit" class="btn btn-sm btn-primary">Ghi nhận</button></div>
@@ -84,6 +84,6 @@ $('#chargeForm').submit(function(e){e.preventDefault();
         error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}
     });
 });
-$(document).ready(function(){loadTemplates();loadData();});
+$(document).ready(function(){loadTemplates();loadData();loadVatRates('#vatRate',10);});
 </script>
 <?php $content = ob_get_clean(); require __DIR__ . '/layout.php'; ?>

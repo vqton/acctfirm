@@ -69,6 +69,6 @@ class FxController
     // View
     public function view(): void
     {
-        require __DIR__ . '/../../../public/views/fx_revaluation.php';
+        require __DIR__ . '/../../../../public/views/fx_revaluation.php';
     }
 }

@@ -50,7 +50,7 @@ $title = 'Công nợ phải trả'; $activeMenu = 'ap_invoices'; ob_start(); ?>
 <div class="modal-body">
     <div class="mb-2"><label>Nhà cung cấp</label><select class="form-select" id="supplierId" required></select></div>
     <div class="row g-2"><div class="col-6 mb-2"><label>Số hóa đơn</label><input class="form-control" id="invoiceNumber" required></div><div class="col-6 mb-2"><label>TK kho</label><select class="form-select" id="invAccount"><option value="152">152 - NVL</option><option value="156">156 - Hàng hóa</option><option value="153">153 - CCDC</option><option value="211">211 - TSCĐ</option><option value="642">642 - CP QLDN</option></select></div></div>
-    <div class="row g-2"><div class="col-4 mb-2"><label>Ngày HĐ</label><input type="date" class="form-control" id="invDate" value="<?=date('Y-m-d')?>"></div><div class="col-4 mb-2"><label>Hạn thanh toán</label><input type="date" class="form-control" id="dueDate" value="<?=date('Y-m-d', strtotime('+30 days'))?>"></div><div class="col-4 mb-2"><label>Thuế GTGT (%)</label><input type="number" class="form-control" id="vatRate" value="10" step="0.5" min="0"></div></div>
+    <div class="row g-2"><div class="col-4 mb-2"><label>Ngày HĐ</label><input type="date" class="form-control" id="invDate" value="<?=date('Y-m-d')?>"></div><div class="col-4 mb-2"><label>Hạn thanh toán</label><input type="date" class="form-control" id="dueDate" value="<?=date('Y-m-d', strtotime('+30 days'))?>"></div><div class="col-4 mb-2"><label>Thuế GTGT</label><select class="form-select" id="vatRate"></select></div></div>
     <div class="row g-2"><div class="col-6 mb-2"><label>Tiền hàng (chưa VAT)</label><input type="number" class="form-control" id="netAmount" step="1000" min="1" required></div><div class="col-6 mb-2"><label>Tiền VAT</label><input type="number" class="form-control" id="vatAmount" step="1000" min="0"></div></div>
     <div class="mb-2"><label>Diễn giải</label><input class="form-control" id="invDesc"></div>
 </div>
@@ -189,6 +189,6 @@ $('#prepayForm').submit(function(e){e.preventDefault();
         error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}
     });
 });
-$(document).ready(function(){loadSuppliers();loadData();});
+$(document).ready(function(){loadSuppliers();loadData();loadVatRates('#vatRate',10);});
 </script>
 <?php $content = ob_get_clean(); require __DIR__ . '/layout.php'; ?>

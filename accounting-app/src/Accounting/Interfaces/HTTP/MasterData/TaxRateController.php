@@ -52,4 +52,16 @@ class TaxRateController
         if (isset($data['tax_type'])) $entity->setTaxType($data['tax_type']);
         if (isset($data['status'])) $entity->setStatus((bool)$data['status']);
     }
+
+    // API: danh sách thuế suất VAT active — dùng cho dropdown chọn thuế suất trong form
+    public function vatRates(): void
+    {
+        $all = $this->repo()->findAll();
+        $vatRates = array_values(array_filter(
+            array_map(fn($x) => $x->toArray(), $all),
+            fn($r) => ($r['tax_type'] ?? '') === 'vat' && !empty($r['status'])
+        ));
+        usort($vatRates, fn($a, $b) => (float)$a['rate'] <=> (float)$b['rate']);
+        JsonResponse::ok($vatRates);
+    }
 }
