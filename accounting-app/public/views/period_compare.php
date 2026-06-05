@@ -4,17 +4,23 @@
 
     <div class="card mb-3">
         <div class="card-body">
-            <div class="row g-2">
-                <div class="col-md-4">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-3">
                     <label class="form-label">Kỳ A (cũ)</label>
                     <select id="periodA" class="form-select"></select>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <label class="form-label">Kỳ B (mới)</label>
                     <select id="periodB" class="form-select"></select>
                 </div>
-                <div class="col-md-4 d-flex align-items-end">
-                    <button class="btn btn-primary" id="btnCompare">
+                <div class="col-md-3">
+                    <label class="form-label">Hiển thị (R-11)</label>
+                    <select id="displayCurrency" class="form-select">
+                        <option value="VND">VND (mặc định)</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <button class="btn btn-primary w-100" id="btnCompare">
                         <i class="bi bi-arrow-left-right"></i> So sánh
                     </button>
                 </div>
@@ -51,6 +57,42 @@ async function loadPeriods() {
 function fmt(n) {
     if (n == null) return '—';
     return new Intl.NumberFormat('vi-VN').format(Math.round(n));
+}
+
+let rateCache = {};
+
+async function loadCurrencies() {
+    try {
+        const res = await fetch('/api/currencies');
+        const json = await res.json();
+        const cs = json.data?.currencies || [];
+        rateCache = {};
+        const sel = document.getElementById('displayCurrency');
+        sel.innerHTML = cs.map(c => {
+            rateCache[c.code] = c.rate;
+            return `<option value="${c.code}">${c.code} — ${c.name} (1 ${c.code} = ${c.rate.toLocaleString('vi-VN')} VND)</option>`;
+        }).join('');
+        // Lấy preference user
+        try {
+            const prefRes = await fetch('/api/currencies/preference');
+            const prefJson = await prefRes.json();
+            if (prefJson.data?.display_currency) {
+                sel.value = prefJson.data.display_currency;
+            }
+        } catch (e) {}
+    } catch (e) {
+        console.error('loadCurrencies failed', e);
+    }
+}
+
+function fmtDual(amountVnd) {
+    const ccy = document.getElementById('displayCurrency').value;
+    if (!amountVnd) return '—';
+    const vnd = fmt(amountVnd) + ' VND';
+    if (ccy === 'VND' || !rateCache[ccy]) return vnd;
+    const conv = amountVnd / rateCache[ccy];
+    const dec = (ccy === 'JPY') ? 0 : 2;
+    return vnd + ' (~' + conv.toLocaleString('en-US', {maximumFractionDigits: dec, minimumFractionDigits: dec}) + ' ' + ccy + ')';
 }
 
 function pctStr(pct) {
@@ -116,12 +158,12 @@ function render(d) {
     for (const [type, x] of Object.entries(v.by_type)) {
         html += `<tr>
             <td><strong>${type}</strong></td>
-            <td class="text-end">${fmt(x.a_debit)}</td>
-            <td class="text-end">${fmt(x.b_debit)}</td>
+            <td class="text-end">${fmtDual(x.a_debit)}</td>
+            <td class="text-end">${fmtDual(x.b_debit)}</td>
             <td class="text-end">${diffStr(x.debit_diff)}</td>
             <td class="text-end">${pctStr(x.debit_pct)}</td>
-            <td class="text-end">${fmt(x.a_credit)}</td>
-            <td class="text-end">${fmt(x.b_credit)}</td>
+            <td class="text-end">${fmtDual(x.a_credit)}</td>
+            <td class="text-end">${fmtDual(x.b_credit)}</td>
             <td class="text-end">${diffStr(x.credit_diff)}</td>
             <td class="text-end">${pctStr(x.credit_pct)}</td>
         </tr>`;
@@ -140,11 +182,11 @@ function render(d) {
                 <td><code>${a.code}</code></td>
                 <td>${a.name}</td>
                 <td><span class="badge bg-secondary">${a.type}</span></td>
-                <td class="text-end">${fmt(a.a_debit)}</td>
-                <td class="text-end">${fmt(a.b_debit)}</td>
+                <td class="text-end">${fmtDual(a.a_debit)}</td>
+                <td class="text-end">${fmtDual(a.b_debit)}</td>
                 <td class="text-end">${diffStr(a.debit_diff)}</td>
-                <td class="text-end">${fmt(a.a_credit)}</td>
-                <td class="text-end">${fmt(a.b_credit)}</td>
+                <td class="text-end">${fmtDual(a.a_credit)}</td>
+                <td class="text-end">${fmtDual(a.b_credit)}</td>
                 <td class="text-end">${diffStr(a.credit_diff)}</td>
             </tr>`;
         }
@@ -158,12 +200,12 @@ function summaryCard(title, p) {
     let html = '<div class="card"><div class="card-header"><strong>' + title + '</strong></div>';
     html += '<div class="card-body">';
     html += `<p class="mb-1">Số bút toán: <strong>${p.txn_count}</strong></p>`;
-    html += `<p class="mb-1">Tổng phát sinh Nợ: <strong>${fmt(p.total_debit)}</strong></p>`;
-    html += `<p class="mb-2">Tổng phát sinh Có: <strong>${fmt(p.total_credit)}</strong></p>`;
+    html += `<p class="mb-1">Tổng phát sinh Nợ: <strong>${fmtDual(p.total_debit)}</strong></p>`;
+    html += `<p class="mb-2">Tổng phát sinh Có: <strong>${fmtDual(p.total_credit)}</strong></p>`;
     if (Object.keys(p.by_type).length > 0) {
         html += '<table class="table table-sm mb-0"><thead><tr><th>Loại</th><th class="text-end">Nợ</th><th class="text-end">Có</th></tr></thead><tbody>';
         for (const [t, x] of Object.entries(p.by_type)) {
-            html += `<tr><td>${t}</td><td class="text-end">${fmt(x.debit)}</td><td class="text-end">${fmt(x.credit)}</td></tr>`;
+            html += `<tr><td>${t}</td><td class="text-end">${fmtDual(x.debit)}</td><td class="text-end">${fmtDual(x.credit)}</td></tr>`;
         }
         html += '</tbody></table>';
     }
@@ -172,6 +214,7 @@ function summaryCard(title, p) {
 }
 
 document.getElementById('btnCompare').addEventListener('click', doCompare);
+loadCurrencies();
 loadPeriods();
 </script>
 <?php $content = ob_get_clean(); require __DIR__ . '/layout.php'; ?>

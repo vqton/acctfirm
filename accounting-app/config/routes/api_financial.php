@@ -129,3 +129,10 @@ $router->post('/api/import/commit/:type', function($type) use ($c) { $c['ImportC
 $router->post('/api/import/rollback/:batchId', function($batchId) use ($c) { $c['ImportController']->rollback($batchId); });
 $router->get('/api/import/batches', function() use ($c) { $c['ImportController']->listBatches(); });
 $router->get('/api/import/batches/:id', function($id) use ($c) { $c['ImportController']->getBatch($id); });
+
+// === CURRENCY (R-11 Multi-Currency Display) ===
+$router->get('/api/currencies', function() use ($c) { $c['CurrencyController']->listCurrencies(); });
+$router->get('/api/currencies/rate/:code', function($code) use ($c) { $c['CurrencyController']->getRate($code); });
+$router->post('/api/currencies/convert', function() use ($c) { $c['CurrencyController']->convert(); });
+$router->get('/api/currencies/preference', function() use ($c) { $c['CurrencyController']->getPreference(); });
+$router->post('/api/currencies/preference', function() use ($c) { $c['CurrencyController']->setPreference(); });

@@ -262,6 +262,7 @@ function createContainer(): array
         'FixedAssetLifecycleController' => $fixedAssetLifecycleController,
         'FsController' => $fsController,
         'ImportController' => $importController,
+        'CurrencyController' => $currencyController,
         'GlController' => $glController,
         'JournalBookController' => $journalBookController,
         'ReconciliationController' => $reconciliationController,
