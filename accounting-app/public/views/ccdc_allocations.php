@@ -1,6 +1,5 @@
 <?php
 $activeMenu = 'ccdc_allocations';
-require __DIR__ . '/layout.php';
 ob_start();
 ?>
 <div class="container-fluid py-3">
