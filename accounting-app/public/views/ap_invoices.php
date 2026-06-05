@@ -115,6 +115,7 @@ function renderRows(data){
         if(r.status!=='paid'&&r.status!=='written_off'&&r.balance>1){
             actions+='<button class="btn btn-sm btn-outline-success me-1" onclick="openPay('+r.id+','+r.balance+')"><i class="bi bi-cash"></i></button>';
         }
+        actions+='<button class="btn btn-sm btn-outline-info me-1" onclick="printInvoice(\''+r.id+'\')" title="In hóa đơn"><i class="bi bi-printer"></i></button>';
         var agingLabel=aging>0?aging+' ngày':'';
         tbody.append('<tr'+rowClass+'><td>'+esc(r.invoice_number)+'</td><td>'+esc(r.supplier_name)+'</td><td style="font-size:12px">'+esc(r.invoice_date)+'</td><td style="font-size:12px">'+esc(r.due_date)+'</td><td class="text-end font-monospace">'+parseFloat(r.gross_amount).toLocaleString()+'</td><td class="text-end font-monospace">'+parseFloat(r.paid_amount).toLocaleString()+'</td><td class="text-end font-monospace">'+parseFloat(r.balance).toLocaleString()+'</td><td class="text-end font-monospace" style="font-size:11px">'+agingLabel+'</td><td><span class="badge-status '+badge+'">'+esc(r.status)+'</span></td><td>'+actions+'</td></tr>');
     });
@@ -168,6 +169,25 @@ function exportCSV(){
     document.body.appendChild(a);a.click();document.body.removeChild(a);
 }
 function openPay(id,bal){$('#payInvId').val(id);$('#payBalance').text(parseFloat(bal).toLocaleString());$('#payAmount').val(bal);$('#payModal').modal('show');}
+async function printInvoice(id){
+    try {
+        const tplRes = await fetch('/api/print/templates?type=ap_invoice', { headers: { 'X-CSRF-Token': csrf } });
+        const tplJson = await tplRes.json();
+        const defTpl = (tplJson.data || []).find(t => t.is_default) || (tplJson.data || [])[0];
+        if (!defTpl) { showToast('Chưa có mẫu in nào cho hóa đơn mua', 'error'); return; }
+        const res = await fetch('/api/print/templates/' + defTpl.id + '/render', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+            body: JSON.stringify({ resource_type: 'ap_invoice', resource_id: id })
+        });
+        const json = await res.json();
+        if (!res.ok) { showToast(json.error || 'Lỗi in', 'error'); return; }
+        const w = window.open('', '_blank');
+        w.document.write('<html><head><title>In hóa đơn ' + id + '</title><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"></head><body class="p-4">' + json.html + '</body></html>');
+        w.document.close();
+        setTimeout(() => w.print(), 300);
+    } catch(e) { showToast('Lỗi: ' + e.message, 'error'); }
+}
 function calcVat(){var net=parseFloat($('#netAmount').val())||0;var rate=parseFloat($('#vatRate').val())||0;$('#vatAmount').val(Math.round(net*rate/100));}
 $('#netAmount,#vatRate').on('input',calcVat);
 $('#invForm').submit(function(e){e.preventDefault();

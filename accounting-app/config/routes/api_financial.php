@@ -142,3 +142,11 @@ $router->get('/api/notifications', function() use ($c) { $c['NotificationControl
 $router->get('/api/notifications/unread', function() use ($c) { $c['NotificationController']->unreadCount(); });
 $router->post('/api/notifications/:id/read', function($id) use ($c) { $c['NotificationController']->markRead($id); });
 $router->post('/api/notifications/read-all', function() use ($c) { $c['NotificationController']->markAllRead(); });
+
+// === PRINT TEMPLATES (R-10 Print Designer v1) ===
+$router->get('/api/print/templates', function() use ($c) { $c['PrintTemplateController']->list(); });
+$router->post('/api/print/templates', function() use ($c) { $c['PrintTemplateController']->save(); });
+$router->get('/api/print/templates/:id', function($id) use ($c) { $c['PrintTemplateController']->get($id); });
+$router->post('/api/print/templates/:id/preview', function($id) use ($c) { $c['PrintTemplateController']->preview($id); });
+$router->post('/api/print/templates/:id/render', function($id) use ($c) { $c['PrintTemplateController']->render($id); });
+$router->delete('/api/print/templates/:id', function($id) use ($c) { $c['PrintTemplateController']->deactivate($id); });

@@ -66,8 +66,10 @@ class Auth
 
         $actionMap = [
             'view' => 'can_view',
+            'read' => 'can_view',
             'create' => 'can_create',
             'edit' => 'can_edit',
+            'update' => 'can_edit',
             'delete' => 'can_delete',
             'post' => 'can_post',
             'print' => 'can_print',

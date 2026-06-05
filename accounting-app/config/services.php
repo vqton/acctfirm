@@ -264,6 +264,7 @@ function createContainer(): array
         'ImportController' => $importController,
         'CurrencyController' => $currencyController,
         'NotificationController' => $notificationController,
+        'PrintTemplateController' => $printTemplateController,
         'GlController' => $glController,
         'JournalBookController' => $journalBookController,
         'ReconciliationController' => $reconciliationController,

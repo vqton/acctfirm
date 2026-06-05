@@ -89,6 +89,7 @@ $router->get('/bao-cao/nhat-ky-chung', function() use ($c) { $c['JournalBookCont
 $router->get('/he-thong/quan-ly-ky', function() { require __DIR__ . '/../../public/views/periods.php'; });
 $router->get('/tong-hop/so-sanh-ky', function() { require __DIR__ . '/../../public/views/period_compare.php'; });
 $router->get('/he-thong/thong-bao', function() { require __DIR__ . '/../../public/views/notifications.php'; });
+$router->get('/he-thong/thiet-ke-mau-in', function() { require __DIR__ . '/../../public/views/print_designer.php'; });
 $router->get('/he-thong/kiem-tra-truoc-khi-khoa-so', function() { require __DIR__ . '/../../public/views/pre_close_checklist.php'; });
 $router->get('/he-thong/noi-bo', function() use ($c) { $c['IntercompanyController']->view(); });
 $router->get('/he-thong/nhat-ky-hoat-dong', function() { require __DIR__ . '/../../public/views/audit_log.php'; });
