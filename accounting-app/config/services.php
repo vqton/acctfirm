@@ -263,6 +263,7 @@ function createContainer(): array
         'FsController' => $fsController,
         'ImportController' => $importController,
         'CurrencyController' => $currencyController,
+        'NotificationController' => $notificationController,
         'GlController' => $glController,
         'JournalBookController' => $journalBookController,
         'ReconciliationController' => $reconciliationController,

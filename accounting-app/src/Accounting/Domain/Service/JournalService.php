@@ -29,6 +29,7 @@ class JournalService implements JournalServiceInterface
     private ?PostingRuleService $postingRuleService;
     private ?VoucherService $voucherService;
     private ?ApprovalRoutingService $approvalRoutingService;
+    private ?\Accounting\Domain\Service\NotificationService $notificationService;
 
     public function __construct(
         AccountRepositoryInterface $accountRepo,
@@ -37,7 +38,8 @@ class JournalService implements JournalServiceInterface
         ?AuditLoggerInterface $auditLogger = null,
         ?PostingRuleService $postingRuleService = null,
         ?VoucherService $voucherService = null,
-        ?ApprovalRoutingService $approvalRoutingService = null
+        ?ApprovalRoutingService $approvalRoutingService = null,
+        ?\Accounting\Domain\Service\NotificationService $notificationService = null
     ) {
         $this->accountRepo = $accountRepo;
         $this->txnRepo = $txnRepo;
@@ -46,6 +48,7 @@ class JournalService implements JournalServiceInterface
         $this->postingRuleService = $postingRuleService;
         $this->voucherService = $voucherService;
         $this->approvalRoutingService = $approvalRoutingService;
+        $this->notificationService = $notificationService;
     }
 
     // NGHIỆP VỤ: Kiểm tra từng cặp Dr-Cr theo posting rules đã seed trong bảng posting_rules (75 rules).
@@ -168,6 +171,10 @@ class JournalService implements JournalServiceInterface
         $this->recordApprovalAction($txnId, 'submit', $submittedBy);
         $this->auditLogger?->log('journal.submit', 'transaction', $txnId,
             ['status' => 'pending'], ['status' => 'submitted'], $submittedBy);
+        // R-12: thông báo broadcast cho KTT/admin — có bút toán cần duyệt
+        $this->notificationService?->notifyPendingApproval(
+            $txnId, $submittedBy, $txn->getDescription(), $this->txnAmount($txnId)
+        );
         return $txn;
     }
 
@@ -185,6 +192,10 @@ class JournalService implements JournalServiceInterface
         $this->recordApprovalAction($txnId, 'approve', $approverId, $comment);
         $this->auditLogger?->log('journal.approve', 'transaction', $txnId,
             ['status' => 'submitted'], ['status' => 'approved'], $approverId);
+        // R-12: thông báo cho người tạo biết kết quả
+        $this->notificationService?->notifyApprovalResult(
+            $txnId, $txn->getCreatedBy() ?? 'system', true, $approverId, $comment
+        );
         return $txn;
     }
 
@@ -202,6 +213,10 @@ class JournalService implements JournalServiceInterface
         $this->recordApprovalAction($txnId, 'reject', $approverId, $reason);
         $this->auditLogger?->log('journal.reject', 'transaction', $txnId,
             ['status' => 'submitted'], ['status' => 'rejected', 'reason' => $reason], $approverId);
+        // R-12: thông báo cho người tạo biết bị từ chối
+        $this->notificationService?->notifyApprovalResult(
+            $txnId, $txn->getCreatedBy() ?? 'system', false, $approverId, $reason
+        );
         return $txn;
     }
 
@@ -831,5 +846,20 @@ class JournalService implements JournalServiceInterface
             if ($inTransaction) $this->pdo->rollBack();
             throw $e;
         }
+    }
+
+    //
+    // Helper (R-12): Tính tổng Nợ của 1 bút toán — dùng cho notification message
+    // Trả về 0 nếu txn không tồn tại hoặc chưa có ledger entries
+    //
+    private function txnAmount(string $txnId): float
+    {
+        if (!$this->pdo) return 0.0;
+        $stmt = $this->pdo->prepare(
+            "SELECT COALESCE(SUM(CASE WHEN is_debit = 1 THEN amount ELSE 0 END), 0)
+             FROM ledger_entries WHERE transaction_id = ?"
+        );
+        $stmt->execute([$txnId]);
+        return (float)$stmt->fetchColumn();
     }
 }

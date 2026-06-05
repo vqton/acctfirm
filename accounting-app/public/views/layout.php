@@ -256,6 +256,7 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
             <a href="/he-thong/so-du-dau-ky" class="nav-link-s<?= isActive('opening_balances',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Số dư đầu kỳ</a>
             <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Cấu hình</a>
             <a href="/he-thong/quan-ly-ky" class="nav-link-s<?= isActive('periods',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Quản lý kỳ</a>
+            <a href="/he-thong/thong-bao" class="nav-link-s<?= isActive('notifications',$activeMenu)?' active':'' ?>"><i class="bi bi-circle-fill"></i> Thông báo</a>
             <a href="#" class="nav-link-s"><i class="bi bi-circle-fill"></i> Sao lưu & Phục hồi</a>
         </div></div>
     </div>

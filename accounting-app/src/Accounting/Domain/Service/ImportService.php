@@ -31,6 +31,7 @@ class ImportService
     private PDO $pdo;
     private AccountRepositoryInterface $accountRepo;
     private ?AuditLoggerInterface $auditLogger;
+    private ?\Accounting\Domain\Service\NotificationService $notificationService;
 
     // Đăng ký schema cho từng loại entity
     // Mỗi schema khai báo: table, unique_keys (check trùng), required columns, validators
@@ -39,11 +40,13 @@ class ImportService
     public function __construct(
         PDO $pdo,
         AccountRepositoryInterface $accountRepo,
-        ?AuditLoggerInterface $auditLogger = null
+        ?AuditLoggerInterface $auditLogger = null,
+        ?\Accounting\Domain\Service\NotificationService $notificationService = null
     ) {
         $this->pdo = $pdo;
         $this->accountRepo = $accountRepo;
         $this->auditLogger = $auditLogger;
+        $this->notificationService = $notificationService;
         $this->registerSchemas();
     }
 
@@ -350,6 +353,11 @@ class ImportService
             null,
             ['entity_type' => $entityType, 'file_name' => $fileName, 'row_count' => $inserted],
             $userId);
+
+        // R-12: thông báo import hoàn tất
+        $this->notificationService?->notifyImportResult(
+            $entityType, $fileName, $inserted, true
+        );
 
         return [
             'batch_id' => $batchId,

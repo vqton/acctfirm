@@ -136,3 +136,9 @@ $router->get('/api/currencies/rate/:code', function($code) use ($c) { $c['Curren
 $router->post('/api/currencies/convert', function() use ($c) { $c['CurrencyController']->convert(); });
 $router->get('/api/currencies/preference', function() use ($c) { $c['CurrencyController']->getPreference(); });
 $router->post('/api/currencies/preference', function() use ($c) { $c['CurrencyController']->setPreference(); });
+
+// === NOTIFICATIONS (R-12 In-App Notifications) ===
+$router->get('/api/notifications', function() use ($c) { $c['NotificationController']->list(); });
+$router->get('/api/notifications/unread', function() use ($c) { $c['NotificationController']->unreadCount(); });
+$router->post('/api/notifications/:id/read', function($id) use ($c) { $c['NotificationController']->markRead($id); });
+$router->post('/api/notifications/read-all', function() use ($c) { $c['NotificationController']->markAllRead(); });

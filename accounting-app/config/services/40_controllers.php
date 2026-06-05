@@ -32,6 +32,7 @@ use Accounting\Interfaces\HTTP\FixedAsset\LifecycleController as FixedAssetLifec
 use Accounting\Interfaces\HTTP\Financial\FsController;
 use Accounting\Interfaces\HTTP\Financial\ImportController;
 use Accounting\Interfaces\HTTP\Financial\CurrencyController;
+use Accounting\Interfaces\HTTP\Financial\NotificationController;
 use Accounting\Interfaces\HTTP\Financial\GlController;
 use Accounting\Interfaces\HTTP\Financial\JournalBookController;
 use Accounting\Interfaces\HTTP\ReconciliationController;
@@ -97,6 +98,7 @@ $fixedAssetLifecycleController = new FixedAssetLifecycleController($fixedAssetSe
 $fsController = new FsController($fsService, $xbrlGenerator);
 $importController = new ImportController($importService, $pdo);
 $currencyController = new CurrencyController($currencyDisplayService);
+$notificationController = new NotificationController($notificationService);
 $glController = new GlController($glService);
 $journalBookController = new JournalBookController($journalBookService);
 $reconciliationController = new ReconciliationController($reconciliationService);
