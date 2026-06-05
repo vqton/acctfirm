@@ -149,13 +149,13 @@ class JournalService implements JournalServiceInterface
     // KIỂM SOÁT: Ghi nhật ký duyệt — ai duyệt, hành động gì, ý kiến gì, thời gian nào.
     // Bắt buộc theo yêu cầu Kiểm toán độc lập: phải trace được toàn bộ vòng đời phê duyệt.
     // Dữ liệu này không được xóa — phục vụ đối chiếu sau này.
-    private function recordApprovalAction(string $txnId, string $action, string $actor, ?string $comment = null): void
+    private function recordApprovalAction(string $txnId, string $action, string $actor, ?string $comment = null, int $level = 1): void
     {
         if ($this->pdo === null) return;
         $stmt = $this->pdo->prepare(
-            'INSERT INTO journal_entry_approvals (transaction_id, action, actor, comment) VALUES (?, ?, ?, ?)'
+            'INSERT INTO journal_entry_approvals (transaction_id, action, approval_level, actor, comment) VALUES (?, ?, ?, ?, ?)'
         );
-        $stmt->execute([$txnId, $action, $actor, $comment]);
+        $stmt->execute([$txnId, $action, $level, $actor, $comment]);
     }
 
     // LUỒNG DUYỆT Bước 1: Người tạo gửi duyệt. pending → submitted.
@@ -181,21 +181,46 @@ class JournalService implements JournalServiceInterface
     // LUỒNG DUYỆT Bước 2: Kế toán trưởng phê duyệt. submitted → approved.
     // Lưu ý: approved ≠ posted — bút toán mới chỉ được duyệt, chưa ảnh hưởng số dư tài khoản.
     // Cần gọi approveDraft để thực sự ghi nhận vào sổ cái.
+    //
+    // R-16 Multi-level: nếu giao dịch cần N cấp duyệt:
+    //   - Cấp hiện tại < N: ghi nhận approve, status vẫn là "submitted", chờ cấp tiếp theo
+    //   - Cấp hiện tại = N: set status = "approved", cho phép post
     public function approveEntry(string $txnId, string $approverId, ?string $comment = null): Transaction
     {
         $txn = $this->txnRepo->findById($txnId);
         if (!$txn) {
             throw new \InvalidArgumentException("Không tìm thấy bút toán mã {$txnId}");
         }
-        $txn->approve();
-        $this->txnRepo->save($txn);
-        $this->recordApprovalAction($txnId, 'approve', $approverId, $comment);
+
+        // R-16: xác định số cấp duyệt cần thiết
+        $requiredSteps = ['chief_accountant']; // default fallback
+        $currentLevel = 1;
+        if ($this->approvalRoutingService !== null) {
+            $total = $this->txnAmount($txnId);
+            $module = $txn->getSourceModule();
+            $requiredSteps = $this->approvalRoutingService->getRequiredApprovalSteps($total, $module);
+            $currentLevel = $this->approvalRoutingService->getCurrentApprovalLevel($txnId, $requiredSteps);
+        }
+        $isFinalLevel = $currentLevel >= count($requiredSteps);
+
+        if ($isFinalLevel) {
+            $txn->approve();
+            $this->txnRepo->save($txn);
+        }
+        // Ghi nhận approval action với level hiện tại
+        $this->recordApprovalAction($txnId, 'approve', $approverId, $comment, $currentLevel);
+
         $this->auditLogger?->log('journal.approve', 'transaction', $txnId,
-            ['status' => 'submitted'], ['status' => 'approved'], $approverId);
-        // R-12: thông báo cho người tạo biết kết quả
-        $this->notificationService?->notifyApprovalResult(
-            $txnId, $txn->getCreatedBy() ?? 'system', true, $approverId, $comment
-        );
+            ['status' => 'submitted', 'level' => $currentLevel - 1],
+            ['status' => $isFinalLevel ? 'approved' : 'submitted', 'level' => $currentLevel, 'required_levels' => count($requiredSteps)],
+            $approverId);
+
+        // R-12: thông báo — chỉ thông báo khi duyệt xong (final level) để tránh spam
+        if ($isFinalLevel) {
+            $this->notificationService?->notifyApprovalResult(
+                $txnId, $txn->getCreatedBy() ?? 'system', true, $approverId, $comment
+            );
+        }
         return $txn;
     }
 

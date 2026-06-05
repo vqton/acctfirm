@@ -80,4 +80,74 @@ class ApprovalRoutingService
         $row = $stmt->fetch(\PDO::FETCH_ASSOC);
         return $row ? [$row['required_role']] : ['chief_accountant'];
     }
+
+    // NGHIỆP VỤ: R-16 Multi-level approval
+    //
+    // Trả về danh sách role theo THỨ TỰ duyệt (level 1 → 2 → 3...).
+    // Nếu approval_sequence = ["chief_accountant","director"]:
+    //   - Level 1: chief_accountant
+    //   - Level 2: director
+    //   - Tổng cộng: 2 cấp duyệt
+    //
+    // Nếu rule có approval_sequence NULL → fallback về [required_role] (1 cấp, backward compat)
+    // Nếu không có rule nào match → trả về ['chief_accountant'] (1 cấp mặc định)
+    //
+    // Edge cases:
+    //   - totalAmount = 0: vẫn trả sequence (bút toán điều chỉnh 0 vẫn cần duyệt)
+    //   - approval_sequence JSON không hợp lệ: fallback về [required_role]
+    public function getRequiredApprovalSteps(float $totalAmount, ?string $module = null, ?string $accountType = null): array
+    {
+        $sql = "SELECT required_role, approval_sequence FROM approval_routing
+                WHERE is_active = 1
+                  AND (min_amount IS NULL OR ? >= min_amount)
+                  AND (max_amount IS NULL OR ? <= max_amount)
+                  AND (module IS NULL OR module = ?)
+                  AND (account_type IS NULL OR account_type = ?)
+                ORDER BY priority ASC
+                LIMIT 1";
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([$totalAmount, $totalAmount, $module, $accountType]);
+        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+        if (!$row) {
+            return ['chief_accountant'];
+        }
+        // Parse approval_sequence nếu có
+        if (!empty($row['approval_sequence'])) {
+            $seq = json_decode($row['approval_sequence'], true);
+            if (is_array($seq) && count($seq) > 0) {
+                return $seq;
+            }
+        }
+        // Fallback: dùng required_role
+        return [$row['required_role']];
+    }
+
+    // Trả về level hiện tại cần duyệt (1-based)
+    // Nếu chưa approve đủ → level = count + 1
+    // Nếu approve đủ rồi → level = count (= số cấp, không vượt quá)
+    public function getCurrentApprovalLevel(string $transactionId, array $requiredSteps): int
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT COUNT(*) FROM journal_entry_approvals
+             WHERE transaction_id = ? AND action = 'approve'"
+        );
+        $stmt->execute([$transactionId]);
+        $count = (int)$stmt->fetchColumn();
+        if ($count >= count($requiredSteps)) {
+            return count($requiredSteps);
+        }
+        return $count + 1;
+    }
+
+    // Kiểm tra còn cần duyệt nữa không
+    public function isFullyApproved(string $transactionId, array $requiredSteps): bool
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT COUNT(*) FROM journal_entry_approvals
+             WHERE transaction_id = ? AND action = 'approve'"
+        );
+        $stmt->execute([$transactionId]);
+        $count = (int)$stmt->fetchColumn();
+        return $count >= count($requiredSteps);
+    }
 }

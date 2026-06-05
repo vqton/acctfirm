@@ -11,6 +11,23 @@ use Accounting\Domain\Service\CurrencyDisplayService;
 $pdo = new PDO("mysql:host=127.0.0.1;dbname=accounting_db;charset=utf8mb4", "dev", "123456",
     [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 
+// Self-seed: đảm bảo rates tồn tại (test khác có thể đã xóa)
+$today = date('Y-m-d');
+$seedRates = [
+    ['USD', 'US Dollar', 25480.00], ['EUR', 'Euro', 27700.00],
+    ['JPY', 'Japanese Yen', 162.50], ['GBP', 'British Pound', 32200.00],
+    ['CNY', 'Chinese Yuan', 3510.00], ['SGD', 'Singapore Dollar', 18900.00],
+    ['AUD', 'Australian Dollar', 16800.00],
+];
+foreach ($seedRates as $r) {
+    $check = $pdo->prepare("SELECT id FROM exchange_rates WHERE currency_code = ?");
+    $check->execute([$r[0]]);
+    if (!$check->fetchColumn()) {
+        $pdo->prepare("INSERT INTO exchange_rates (id, currency_code, currency_name, rate, rate_date) VALUES (?, ?, ?, ?, ?)")
+            ->execute(['fx_' . $r[0] . '_testseed', $r[0], $r[1], $r[2], $today]);
+    }
+}
+
 $svc = new CurrencyDisplayService($pdo);
 
 // Helper: ensure user exists

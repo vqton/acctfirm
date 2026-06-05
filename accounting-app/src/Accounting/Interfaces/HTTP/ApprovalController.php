@@ -50,7 +50,7 @@ class ApprovalController
         $role = $_SESSION['user']['role'] ?? '';
 
         $stmt = $this->pdo->prepare("
-            SELECT t.id, t.date, t.description, t.reference, t.status, t.created_by, t.created_at
+            SELECT t.id, t.date, t.description, t.reference, t.status, t.created_by, t.created_at, t.source_module
             FROM transactions t
             WHERE t.status = 'submitted'
             ORDER BY t.created_at DESC
@@ -61,7 +61,11 @@ class ApprovalController
 
         $pending = [];
         foreach ($txns as $txn) {
-            if ($this->userCanApprove($txn['id'], $role)) {
+            $info = $this->userCanApprove($txn['id'], $role);
+            if ($info['can_approve']) {
+                $txn['approval_level'] = $info['current_level'];
+                $txn['required_levels'] = $info['required_count'];
+                $txn['required_role_current'] = $info['required_role_current'] ?? null;
                 $pending[] = $txn;
             }
         }
@@ -86,7 +90,24 @@ class ApprovalController
         $comment = $input['comment'] ?? null;
 
         $txn = $this->journalService->approveEntry($txnId, $userId, $comment);
-        JsonResponse::ok(['id' => $txn->getId(), 'status' => $txn->getStatus()]);
+        // R-16: trả về thông tin multi-level
+        $requiredSteps = $this->routingService->getRequiredApprovalSteps($this->txnTotal($txnId));
+        $currentLevel = $this->routingService->getCurrentApprovalLevel($txnId, $requiredSteps);
+        $isFinal = $currentLevel > count($requiredSteps);
+        JsonResponse::ok([
+            'id' => $txn->getId(),
+            'status' => $txn->getStatus(),
+            'approval_level' => $isFinal ? count($requiredSteps) : $currentLevel,
+            'required_levels' => count($requiredSteps),
+            'fully_approved' => $isFinal,
+        ]);
+    }
+
+    private function txnTotal(string $txnId): float
+    {
+        $stmt = $this->pdo->prepare("SELECT COALESCE(SUM(amount), 0) FROM ledger_entries WHERE transaction_id = ? AND is_debit = 1");
+        $stmt->execute([$txnId]);
+        return (float)$stmt->fetchColumn();
     }
 
     // NGHIỆP VỤ: Từ chối bút toán — chuyển status từ submitted → draft
@@ -111,7 +132,7 @@ class ApprovalController
     {
         Auth::requirePermission('journal', 'read');
         $stmt = $this->pdo->prepare(
-            'SELECT id, action, actor, comment, created_at FROM journal_entry_approvals WHERE transaction_id = ? ORDER BY created_at'
+            'SELECT id, action, approval_level, actor, comment, created_at FROM journal_entry_approvals WHERE transaction_id = ? ORDER BY created_at, approval_level'
         );
         $stmt->execute([$txnId]);
         JsonResponse::ok($stmt->fetchAll(\PDO::FETCH_ASSOC));
@@ -122,24 +143,26 @@ class ApprovalController
         Auth::requirePermission('journal', 'read');
         $amount = (float)($_GET['amount'] ?? 0);
         $module = $_GET['module'] ?? null;
-        $roles = $this->routingService->getRequiredRoles($amount, $module);
-        JsonResponse::ok(['required_roles' => $roles]);
+        $steps = $this->routingService->getRequiredApprovalSteps($amount, $module);
+        JsonResponse::ok(['required_steps' => $steps, 'count' => count($steps)]);
     }
 
     // NGHIỆP VỤ: Kiểm tra quyền phê duyệt dựa trên giá trị bút toán và role
-    // Process: Tính tổng tiền bút toán → gọi ApprovalRoutingService.getRequiredRoles()
-    // Multi-level approval: Bút toán giá trị lớn cần role cao hơn duyệt
-    // Audit trail: Mọi approve/reject được AuditLogger ghi lại
-    private function userCanApprove(string $txnId, string $userRole): bool
+    // R-16 Multi-level: user chỉ duyệt được nếu role của họ khớp với cấp hiện tại
+    // (không phải bất kỳ cấp nào trong sequence)
+    // Trả về: can_approve + current_level + required_count + required_role_current
+    private function userCanApprove(string $txnId, string $userRole): array
     {
-        // Compute total amount
-        $stmt = $this->pdo->prepare("
-            SELECT COALESCE(SUM(amount), 0) AS total FROM ledger_entries WHERE transaction_id = ? AND is_debit = 1
-        ");
-        $stmt->execute([$txnId]);
-        $total = (float)$stmt->fetchColumn();
-
-        $roles = $this->routingService->getRequiredRoles($total);
-        return in_array($userRole, $roles, true);
+        $total = $this->txnTotal($txnId);
+        $steps = $this->routingService->getRequiredApprovalSteps($total);
+        $currentLevel = $this->routingService->getCurrentApprovalLevel($txnId, $steps);
+        $requiredRoleCurrent = $currentLevel <= count($steps) ? ($steps[$currentLevel - 1] ?? null) : null;
+        $canApprove = $requiredRoleCurrent !== null && $userRole === $requiredRoleCurrent;
+        return [
+            'can_approve' => $canApprove,
+            'current_level' => $currentLevel,
+            'required_count' => count($steps),
+            'required_role_current' => $requiredRoleCurrent,
+        ];
     }
 }
