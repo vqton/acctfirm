@@ -47,7 +47,7 @@ class PrintTemplateController
         Auth::requirePermission('print', 'update');
         Auth::checkCsrf();
         $body = json_decode(file_get_contents('php://input'), true) ?: [];
-        $actor = Auth::user()['username'] ?? 'system';
+        $actor = Auth::currentUser()['username'] ?? 'system';
         try {
             $id = $this->service->save($body, $actor);
             AuditLogger::log('print_template.save', 'print_template', $id, null, ['type' => $body['template_type'] ?? null, 'code' => $body['code'] ?? null], $actor);
@@ -104,7 +104,7 @@ class PrintTemplateController
             JsonResponse::error("Không tìm thấy template: {$id}", 404);
             return;
         }
-        $actor = Auth::user()['username'] ?? 'system';
+        $actor = Auth::currentUser()['username'] ?? 'system';
         AuditLogger::log('print_template.deactivate', 'print_template', $id, null, null, $actor);
         JsonResponse::ok(['message' => 'Đã vô hiệu hóa template']);
     }
