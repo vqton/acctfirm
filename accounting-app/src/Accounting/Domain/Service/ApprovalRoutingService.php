@@ -150,4 +150,87 @@ class ApprovalRoutingService
         $count = (int)$stmt->fetchColumn();
         return $count >= count($requiredSteps);
     }
+
+    // NGHIỆP VỤ: R-17 Delegation
+    //
+    // Tạo ủy quyền phê duyệt
+    // Ràng buộc:
+    //   - start_date < end_date
+    //   - delegate_id != delegator_id (không tự ủy cho mình)
+    //   - Cho phép nhiều delegation cùng lúc (vd: KTT ủy cho cả A và B)
+    public function createDelegation(
+        string $delegatorId, string $delegateId, string $role,
+        string $startDate, string $endDate, ?string $reason, string $createdBy
+    ): string {
+        if ($delegatorId === $delegateId) {
+            throw new \InvalidArgumentException("Không thể tự ủy quyền cho chính mình");
+        }
+        if (strtotime($endDate) <= strtotime($startDate)) {
+            throw new \InvalidArgumentException("Ngày kết thúc phải sau ngày bắt đầu");
+        }
+        $id = 'dele_' . substr(uniqid('', true), 0, 15);
+        $stmt = $this->pdo->prepare(
+            "INSERT INTO approval_delegations
+                (id, delegator_id, delegate_id, role, start_date, end_date, reason, is_active, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 1, NOW())"
+        );
+        $stmt->execute([$id, $delegatorId, $delegateId, $role, $startDate, $endDate, $reason]);
+        return $id;
+    }
+
+    // Hủy ủy quyền (revoke) — chỉ delegator hoặc admin mới revoke được
+    public function revokeDelegation(string $id, string $revokedBy): bool
+    {
+        $stmt = $this->pdo->prepare(
+            "UPDATE approval_delegations
+             SET is_active = 0, revoked_at = NOW(), revoked_by = ?
+             WHERE id = ? AND is_active = 1"
+        );
+        $stmt->execute([$revokedBy, $id]);
+        return $stmt->rowCount() > 0;
+    }
+
+    // Tìm ủy quyền ACTIVE cho user + role tại thời điểm hiện tại
+    // Trả về: array of {id, delegator_id, delegate_id, role, start_date, end_date, reason}
+    public function findActiveDelegationsFor(string $delegateId, string $role): array
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT * FROM approval_delegations
+             WHERE delegate_id = ? AND role = ? AND is_active = 1
+               AND NOW() BETWEEN start_date AND end_date
+             ORDER BY created_at DESC"
+        );
+        $stmt->execute([$delegateId, $role]);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC);
+    }
+
+    // Lấy tất cả delegations của 1 user (active + inactive, dùng cho view quản lý)
+    public function listDelegations(string $userId, bool $activeOnly = false): array
+    {
+        $sql = "SELECT * FROM approval_delegations
+                WHERE (delegator_id = ? OR delegate_id = ?)";
+        $params = [$userId, $userId];
+        if ($activeOnly) {
+            $sql .= " AND is_active = 1 AND NOW() BETWEEN start_date AND end_date";
+        }
+        $sql .= " ORDER BY created_at DESC";
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll(\PDO::FETCH_ASSOC);
+    }
+
+    // Lấy role "thực sự" của user khi duyệt: nếu user có delegation active
+    // cho role X → user có thể duyệt như role X
+    // Trả về: list of roles user CÓ THỂ dùng để duyệt (bao gồm delegated roles)
+    public function getEffectiveRolesFor(string $delegateId, array $originalRoles): array
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT DISTINCT role FROM approval_delegations
+             WHERE delegate_id = ? AND is_active = 1
+               AND NOW() BETWEEN start_date AND end_date"
+        );
+        $stmt->execute([$delegateId]);
+        $delegatedRoles = $stmt->fetchAll(\PDO::FETCH_COLUMN);
+        return array_unique(array_merge($originalRoles, $delegatedRoles));
+    }
 }

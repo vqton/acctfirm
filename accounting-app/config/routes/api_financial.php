@@ -21,6 +21,11 @@ $router->post('/api/approvals/:id/reject', function($id) use ($c) { $c['Approval
 $router->get('/api/approvals/history/:id', function($id) use ($c) { $c['ApprovalController']->history($id); });
 $router->get('/api/approvals/routing', function() use ($c) { $c['ApprovalController']->routing(); });
 
+// === R-17 DELEGATION ===
+$router->get('/api/delegations', function() use ($c) { $c['ApprovalController']->listDelegations($_SESSION['user']['username'] ?? ''); });
+$router->post('/api/delegations', function() use ($c) { $c['ApprovalController']->createDelegation(); });
+$router->post('/api/delegations/:id/revoke', function($id) use ($c) { $c['ApprovalController']->revokeDelegation($id); });
+
 // === AP (TK 331) ===
 $router->get('/api/ap/invoices', function() use ($c) { $c['ApController']->invoices(); });
 $router->post('/api/ap/invoices', function() use ($c) { $c['ApController']->create(); });

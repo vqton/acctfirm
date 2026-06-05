@@ -81,26 +81,53 @@ class ApprovalController
     // Permission: journal, approve
     // Rủi ro: R007 — sau khi approve, bút toán không sửa/xóa được
     // Ràng buộc: Chỉ approve bút toán status=submitted. Kiểm tra period open trước khi post.
+    //
+    // R-17: Nếu user không có role khớp current level → check delegation
+    //       Audit ghi cả actual_approver (delegate) lẫn on_behalf_of (delegator)
     public function approve(string $txnId): void
     {
         Auth::checkCsrf();
         Auth::requirePermission('journal', 'approve');
         $userId = $_SESSION['user']['username'] ?? '';
+        $userRole = $_SESSION['user']['role'] ?? '';
         $input = json_decode(file_get_contents('php://input'), true) ?? [];
         $comment = $input['comment'] ?? null;
 
-        $txn = $this->journalService->approveEntry($txnId, $userId, $comment);
-        // R-16: trả về thông tin multi-level
+        // R-17: check delegation nếu user không có role khớp
         $requiredSteps = $this->routingService->getRequiredApprovalSteps($this->txnTotal($txnId));
         $currentLevel = $this->routingService->getCurrentApprovalLevel($txnId, $requiredSteps);
+        $requiredRoleCurrent = $currentLevel <= count($requiredSteps) ? ($requiredSteps[$currentLevel - 1] ?? null) : null;
+        $onBehalfOf = null;
+
+        if ($requiredRoleCurrent !== null && $userRole !== $requiredRoleCurrent) {
+            // Check delegation: user có được ủy quyền cho requiredRoleCurrent không?
+            $delegations = $this->routingService->findActiveDelegationsFor($userId, $requiredRoleCurrent);
+            if (empty($delegations)) {
+                JsonResponse::error("Bạn không có quyền duyệt cấp {$currentLevel} (cần role {$requiredRoleCurrent})", 403);
+                return;
+            }
+            $onBehalfOf = $delegations[0]['delegator_id'];
+        }
+
+        $txn = $this->journalService->approveEntry($txnId, $userId, $comment);
         $isFinal = $currentLevel > count($requiredSteps);
-        JsonResponse::ok([
+        $resp = [
             'id' => $txn->getId(),
             'status' => $txn->getStatus(),
             'approval_level' => $isFinal ? count($requiredSteps) : $currentLevel,
             'required_levels' => count($requiredSteps),
             'fully_approved' => $isFinal,
-        ]);
+        ];
+        if ($onBehalfOf !== null) {
+            $resp['on_behalf_of'] = $onBehalfOf;
+            $resp['delegated'] = true;
+            // Ghi audit bổ sung cho delegation
+            $this->pdo->prepare(
+                "INSERT INTO journal_entry_approvals (transaction_id, action, approval_level, actor, comment)
+                 VALUES (?, 'delegate_approve', ?, ?, ?)"
+            )->execute([$txnId, $currentLevel, $userId, "On behalf of: {$onBehalfOf}"]);
+        }
+        JsonResponse::ok($resp);
     }
 
     private function txnTotal(string $txnId): float
@@ -108,6 +135,52 @@ class ApprovalController
         $stmt = $this->pdo->prepare("SELECT COALESCE(SUM(amount), 0) FROM ledger_entries WHERE transaction_id = ? AND is_debit = 1");
         $stmt->execute([$txnId]);
         return (float)$stmt->fetchColumn();
+    }
+
+    // R-17: Quản lý delegation
+    public function listDelegations(string $userId): void
+    {
+        Auth::requirePermission('journal', 'read');
+        $rows = $this->routingService->listDelegations($userId);
+        JsonResponse::ok($rows);
+    }
+
+    public function createDelegation(): void
+    {
+        Auth::checkCsrf();
+        Auth::requirePermission('journal', 'approve');
+        $userId = $_SESSION['user']['username'] ?? '';
+        $body = json_decode(file_get_contents('php://input'), true) ?? [];
+        $delegateId = $body['delegate_id'] ?? null;
+        $role = $body['role'] ?? null;
+        $startDate = $body['start_date'] ?? null;
+        $endDate = $body['end_date'] ?? null;
+        $reason = $body['reason'] ?? null;
+        if (!$delegateId || !$role || !$startDate || !$endDate) {
+            JsonResponse::error("Thiếu trường bắt buộc: delegate_id, role, start_date, end_date", 400);
+            return;
+        }
+        try {
+            $id = $this->routingService->createDelegation(
+                $userId, $delegateId, $role, $startDate, $endDate, $reason, $userId
+            );
+            JsonResponse::ok(['id' => $id, 'message' => 'Đã tạo ủy quyền']);
+        } catch (\InvalidArgumentException $e) {
+            JsonResponse::error($e->getMessage(), 422);
+        }
+    }
+
+    public function revokeDelegation(string $id): void
+    {
+        Auth::checkCsrf();
+        Auth::requirePermission('journal', 'approve');
+        $userId = $_SESSION['user']['username'] ?? '';
+        $ok = $this->routingService->revokeDelegation($id, $userId);
+        if (!$ok) {
+            JsonResponse::error("Không tìm thấy ủy quyền hoặc đã bị hủy", 404);
+            return;
+        }
+        JsonResponse::ok(['message' => 'Đã hủy ủy quyền']);
     }
 
     // NGHIỆP VỤ: Từ chối bút toán — chuyển status từ submitted → draft
