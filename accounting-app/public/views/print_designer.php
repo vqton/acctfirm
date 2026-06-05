@@ -57,11 +57,11 @@ ob_start();
                         </div>
                         <div class="col-md-4">
                             <label class="form-label small">Mã mẫu</label>
-                            <input type="text" class="form-control form-control-sm" id="tplCode" placeholder="vd: ap_invoice_v2">
+                            <input type="text" class="form-control form-control-sm" id="tplCode" placeholder="vd: ap_invoice_v2" required>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label small">Tên mẫu</label>
-                            <input type="text" class="form-control form-control-sm" id="tplName" placeholder="Tên gợi nhớ">
+                            <input type="text" class="form-control form-control-sm" id="tplName" placeholder="Tên gợi nhớ" required>
                         </div>
                     </div>
                     <div class="mb-2">
@@ -71,7 +71,7 @@ ob_start();
                     <div class="row g-2">
                         <div class="col-md-6">
                             <label class="form-label small">Mã HTML (với cú pháp <code>{{var}}</code>, <code>{{#if}}</code>, <code>{{#each}}</code>)</label>
-                            <textarea class="form-control form-control-sm" id="tplContent" rows="18" style="font-family: monospace; font-size: 12px"></textarea>
+                            <textarea class="form-control form-control-sm" id="tplContent" rows="18" style="font-family: monospace; font-size: 12px" required></textarea>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label small">Xem trước (rendered HTML)</label>
@@ -157,9 +157,16 @@ function newTemplate() {
 }
 
 async function saveTemplate() {
+    // Auto-generate code từ name nếu trống
+    let code = document.getElementById('tplCode').value.trim();
+    if (!code) {
+        const name = document.getElementById('tplName').value.trim();
+        code = name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'template_' + Date.now();
+        document.getElementById('tplCode').value = code;
+    }
     const body = {
         template_type: document.getElementById('tplType').value,
-        code: document.getElementById('tplCode').value,
+        code: code,
         name: document.getElementById('tplName').value,
         description: document.getElementById('tplDesc').value,
         content: document.getElementById('tplContent').value,
