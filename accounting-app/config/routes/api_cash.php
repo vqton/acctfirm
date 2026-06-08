@@ -41,9 +41,20 @@ $router->get('/api/cash-book', function() use ($c) { $c['CashController']->cashB
 $router->get('/api/petty-cash/funds', function() use ($c) { $c['PettyCashController']->funds(); });
 $router->post('/api/petty-cash/funds', function() use ($c) { $c['PettyCashController']->createFund(); });
 $router->post('/api/petty-cash/disburse', function() use ($c) { $c['PettyCashController']->disburse(); });
+$router->post('/api/petty-cash/disburse-from-request', function() use ($c) { $c['PettyCashController']->disburseFromRequest(); });
 $router->post('/api/petty-cash/replenish', function() use ($c) { $c['PettyCashController']->replenish(); });
 $router->post('/api/petty-cash/close', function() use ($c) { $c['PettyCashController']->closeFund(); });
 $router->get('/api/petty-cash/:id/transactions', function($id) use ($c) { $c['PettyCashController']->transactions($id); });
+
+// === ADVANCE PAYMENT REQUEST (Mẫu 03-TT) ===
+$router->post('/api/advance-payment/draft', function() use ($c) { $c['AdvancePaymentRequestController']->createDraft(); });
+$router->post('/api/advance-payment/{id}/submit', function($id) use ($c) { $c['AdvancePaymentRequestController']->submit($id); });
+$router->post('/api/advance-payment/{id}/approve', function($id) use ($c) { $c['AdvancePaymentRequestController']->approve($id); });
+$router->post('/api/advance-payment/{id}/reject', function($id) use ($c) { $c['AdvancePaymentRequestController']->reject($id); });
+$router->post('/api/advance-payment/{id}/cancel', function($id) use ($c) { $c['AdvancePaymentRequestController']->cancel($id); });
+$router->post('/api/advance-payment/{id}/paid', function($id) use ($c) { $c['AdvancePaymentRequestController']->markPaid($id); });
+$router->get('/api/advance-payment/{id}', function($id) use ($c) { $c['AdvancePaymentRequestController']->getDetail($id); });
+$router->get('/api/advance-payment/list', function() use ($c) { $c['AdvancePaymentRequestController']->list(); });
 
 // === FX ===
 $router->get('/api/fx/balances', function() use ($c) { $c['CashController']->fcBalances(); });

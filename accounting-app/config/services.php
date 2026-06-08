@@ -153,6 +153,11 @@ use Accounting\Domain\Repository\BomRepositoryInterface;
 use Accounting\Infrastructure\Persistence\PDOBomRepository;
 use Accounting\Domain\Repository\ProductionOrderRepositoryInterface;
 use Accounting\Infrastructure\Persistence\PDOProductionOrderRepository;
+use Accounting\Domain\Service\GoodsIssueService;
+use Accounting\Domain\Service\AdvancePaymentRequestService;
+use Accounting\Interfaces\HTTP\Cash\AdvancePaymentRequestController;
+use Accounting\Domain\Service\DashboardService;
+use Accounting\Interfaces\HTTP\DashboardController;
 
 // Tạo DI container — khởi tạo tất cả service, repository, controller
 // Dependency graph:
@@ -167,6 +172,8 @@ function createContainer(): array
     require __DIR__ . '/services/30_journal.php';
     require __DIR__ . '/services/31_cash.php';
     require __DIR__ . '/services/32_inventory.php';
+    // GoodsIssueService — Mẫu 02-VT (Phiếu xuất kho) theo TT99
+    $goodsIssueService = new GoodsIssueService($pdo, $inventoryService, $voucherService, $itemRepository, $auditLogger);
     require __DIR__ . '/services/33_financial.php';
     require __DIR__ . '/services/34_account.php';
     require __DIR__ . '/services/35_debt_collection.php';
@@ -197,6 +204,18 @@ function createContainer(): array
     $menuService = new MenuService($menuRepository, $pdo);
     $menuController = new MenuController($menuService, $pdo);
 
+    // === ADVANCE PAYMENT REQUEST SERVICE (Mẫu 03-TT) ===
+    $advancePaymentRequestService = new AdvancePaymentRequestService($pdo, $voucherService, $auditLogger);
+    $advancePaymentRequestController = new AdvancePaymentRequestController($advancePaymentRequestService);
+
+    // TÍCH HỢP: Gắn AdvancePaymentRequestService vào PettyCashService cho disburseFromRequest()
+    $pettyCashService->setAdvancePaymentService($advancePaymentRequestService);
+
+    // === DASHBOARD SERVICE ===
+    // Tổng hợp KPI từ nhiều nguồn — cash balance, revenue/expense YTD, pending approvals, trends
+    $dashboardService = new DashboardService($accountRepository, $transactionRepository, $pdo);
+    $dashboardController = new DashboardController($dashboardService);
+
     require __DIR__ . '/services/40_controllers.php';
 
     // === CONTAINER: Map tên → instance ===
@@ -219,6 +238,7 @@ function createContainer(): array
         'auditLogger' => $auditLogger,
         'journalService' => $journalService,
         'inventoryService' => $inventoryService,
+        'goodsIssueService' => $goodsIssueService,
         'cashService' => $cashService,
         'pettyCashService' => $pettyCashService,
         'bankReconciliationService' => $bankReconciliationService,
@@ -244,6 +264,8 @@ function createContainer(): array
         'CashController' => $cashController,
         'CashReportController' => $cashReportController,
         'PettyCashController' => $pettyCashController,
+        'AdvancePaymentRequestController' => $advancePaymentRequestController,
+        'advancePaymentRequestService' => $advancePaymentRequestService,
         'CcdcController' => $ccdcController,
         'CcdcAllocationController' => $ccdcAllocationController,
         'CitController' => $citController,
@@ -344,6 +366,8 @@ function createContainer(): array
         'menuRepository' => $menuRepository,
         'menuService' => $menuService,
         'MenuController' => $menuController,
+        'dashboardService' => $dashboardService,
+        'DashboardController' => $dashboardController,
     ];
 }
 

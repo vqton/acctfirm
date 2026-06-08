@@ -102,6 +102,41 @@ class PettyCashController
         }
     }
 
+    // NGHIỆP VỤ: Chi tiền từ đề nghị tạm ứng đã duyệt (Mẫu 03-TT)
+    // TÍCH HỢP: Petty Cash → Advance Payment Request (03-TT)
+    // Input: { fund_id, request_id, request_number, amount, description?, created_by? }
+    // Output: { transaction_id, amount, request_id, request_number, type }
+    // Service: PettyCashService.disburseFromRequest()
+    //   - Kiểm tra quỹ đủ số dư
+    //   - Kiểm tra đề nghị đã duyệt, chưa thanh toán
+    //   - Tạo giao dịch chi + liên kết request_id
+    //   - Tự động gọi AdvancePaymentRequestService::markAsPaid()
+    //   - All trong 1 DB transaction
+    // Permission: CSRF check
+    // Audit trail: Ghi request_id để trace ngược từ PC → 03-TT
+    public function disburseFromRequest(): void
+    {
+        Auth::checkCsrf();
+        $data = json_decode(file_get_contents('php://input'), true);
+        if (!$data || !isset($data['fund_id'], $data['request_id'], $data['request_number'], $data['amount'])) {
+            JsonResponse::error('Vui lòng nhập mã quỹ, mã đề nghị, số chứng từ và số tiền', 400);
+            return;
+        }
+        try {
+            $result = $this->pettyCash->disburseFromRequest(
+                $data['fund_id'], $data['request_id'], $data['request_number'],
+                (float)$data['amount'],
+                $data['description'] ?? 'Chi tạm ứng từ đề nghị ' . $data['request_number'],
+                $data['created_by'] ?? 'system'
+            );
+            JsonResponse::ok($result, 201);
+        } catch (\InvalidArgumentException $e) {
+            JsonResponse::error($e->getMessage(), 400);
+        } catch (\RuntimeException $e) {
+            JsonResponse::error($e->getMessage(), 500);
+        }
+    }
+
     // NGHIỆP VỤ: Bổ sung quỹ tạm ứng + ghi nhận chi phí thực tế
     // Input: { fund_id, expense_account, total_amount, description?, reference?, created_by? }
     // Output: { transaction_id, status }

@@ -12,6 +12,7 @@ use Accounting\Domain\Repository\TransactionRepositoryInterface;
 // Trình tự hạch toán:
 //   - establishPettyCash: Cấp quỹ - Nợ TK 111 / Có TK 111 (chuyển quỹ chính → quỹ TM)
 //   - disbursePettyCash: Tạm ứng - Nợ TK chi phí / Có TK 111
+//   - disburseFromRequest: Chi từ đề nghị tạm ứng đã duyệt (Mẫu 03-TT) + tự động markAsPaid
 //   - replenishPettyCash: Hoàn ứng - Nợ TK chi phí / Có TK 111 (đưa quỹ về mức ấn định)
 //   - closePettyCash: Đóng quỹ - Thu hồi tiền thừa về quỹ chính
 //
@@ -25,17 +26,27 @@ class PettyCashService
     private TransactionRepositoryInterface $txnRepo;
     private ?\PDO $pdo;
     private JournalServiceInterface $journal;
+    private ?AdvancePaymentRequestService $advancePaymentService;
 
     public function __construct(
         AccountRepositoryInterface $accountRepo,
         TransactionRepositoryInterface $txnRepo,
         JournalServiceInterface $journal,
-        ?\PDO $pdo = null
+        ?\PDO $pdo = null,
+        ?AdvancePaymentRequestService $advancePaymentService = null
     ) {
         $this->accountRepo = $accountRepo;
         $this->txnRepo = $txnRepo;
         $this->journal = $journal;
         $this->pdo = $pdo;
+        $this->advancePaymentService = $advancePaymentService;
+    }
+
+    // Setter injection cho AdvancePaymentRequestService — optional dependency
+    // Dùng khi service chưa sẵn sàng tại thời điểm construct (singleton cycle)
+    public function setAdvancePaymentService(AdvancePaymentRequestService $service): void
+    {
+        $this->advancePaymentService = $service;
     }
 
     public function establishPettyCash(string $fundName, float $imprestAmount, string $createdBy): array
@@ -99,6 +110,74 @@ class PettyCashService
         }
 
         return ['transaction_id' => $txId, 'amount' => $amount, 'type' => 'disbursement'];
+    }
+
+    // Chi tiền từ đề nghị tạm ứng đã duyệt (Mẫu 03-TT → chi tiền mặt)
+    //
+    // Input: fundId, requestId, requestNumber, description, createdBy
+    // Output: { transaction_id, amount, type, request_id, request_number }
+    //
+    // TÍCH HỢP: Kết nối Petty Cash với Mẫu 03-TT (advance_payment_requests)
+    // Quy trình:
+    //   1. Kiểm tra quỹ tồn tại, active, đủ số dư
+    //   2. Kiểm tra đề nghị tạm ứng tồn tại, đã duyệt, chưa thanh toán
+    //   3. Tạo giao dịch chi (type='disbursement') + link request_id/request_number
+    //   4. Giảm current_balance của quỹ
+    //   5. Gọi AdvancePaymentRequestService::markAsPaid() để cập nhật trạng thái
+    //
+    // RỦI RO: Nếu không inject AdvancePaymentRequestService, method sẽ throw
+    // Đảm bảo tính toàn vẹn: chi tiền = tự động ghi nhận đã thanh toán
+    //
+    // Audit trail: Ghi lại request_id để trace ngược từ PC transaction → 03-TT
+    public function disburseFromRequest(string $fundId, string $requestId, string $requestNumber, float $amount, string $description, string $createdBy): array
+    {
+        if ($amount <= 0) throw new \InvalidArgumentException('Số tiền phải lớn hơn 0');
+        if (!$this->advancePaymentService) {
+            throw new \RuntimeException('AdvancePaymentRequestService chưa được inject. Không thể chi từ đề nghị tạm ứng.');
+        }
+
+        $fund = $this->getPettyCashFundById($fundId);
+        if (!$fund) throw new \InvalidArgumentException("Không tìm thấy quỹ tạm ứng: {$fundId}");
+        if ($fund['status'] !== 'active') throw new \InvalidArgumentException('Quỹ tạm ứng không ở trạng thái hoạt động');
+        if ($fund['current_balance'] < $amount) {
+            throw new \InvalidArgumentException("Số dư quỹ không đủ: hiện có {$fund['current_balance']}, cần {$amount}");
+        }
+
+        // Xác thực đề nghị tạm ứng và cập nhật trạng thái
+        $request = $this->advancePaymentService->getRequest($requestId);
+        if ($request['status'] !== 'approved') throw new \InvalidArgumentException("Đề nghị tạm ứng {$requestNumber} chưa được duyệt (trạng thái: {$request['status']})");
+
+        // Tạo giao dịch chi
+        $txId = uniqid('pctx_');
+        if ($this->pdo) {
+            $this->pdo->beginTransaction();
+            try {
+                $this->pdo->prepare(
+                    'INSERT INTO petty_cash_transactions (id, fund_id, amount, type, description, reference, created_by, request_id, request_number)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                )->execute([$txId, $fundId, $amount, 'disbursement', $description, "REQ-{$requestNumber}", $createdBy, $requestId, $requestNumber]);
+
+                $this->pdo->prepare(
+                    'UPDATE petty_cash_funds SET current_balance = current_balance - ? WHERE id = ?'
+                )->execute([$amount, $fundId]);
+
+                // Đánh dấu đề nghị đã thanh toán
+                $this->advancePaymentService->markAsPaid($requestId, $createdBy);
+
+                $this->pdo->commit();
+            } catch (\Exception $e) {
+                $this->pdo->rollBack();
+                throw $e;
+            }
+        }
+
+        return [
+            'transaction_id' => $txId,
+            'amount' => $amount,
+            'type' => 'disbursement',
+            'request_id' => $requestId,
+            'request_number' => $requestNumber,
+        ];
     }
 
     // Hoàn ứng quỹ tạm ứng (Replenish / Top-up)
