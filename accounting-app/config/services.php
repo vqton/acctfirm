@@ -140,6 +140,10 @@ use Accounting\Domain\Service\ContractService;
 use Accounting\Domain\Service\ProjectAccountingService;
 use Accounting\Domain\Service\BudgetService;
 use Accounting\Domain\Service\ReportBuilderService;
+use Accounting\Domain\Service\MenuService;
+use Accounting\Domain\Repository\MenuRepositoryInterface;
+use Accounting\Infrastructure\Persistence\PDOMenuRepository;
+use Accounting\Interfaces\HTTP\MenuController;
 use Accounting\Interfaces\HTTP\BudgetController;
 use Accounting\Interfaces\HTTP\ReportBuilderController;
 use Accounting\Interfaces\HTTP\ContractManagementController;
@@ -186,6 +190,12 @@ function createContainer(): array
 
     $reportBuilderService = new ReportBuilderService($pdo, $reportExportService);
     $reportBuilderController = new ReportBuilderController($reportBuilderService);
+
+    // === MENU SERVICE ===
+    // Quản lý menu điều hướng động — role-based filtering + favorites
+    $menuRepository = new PDOMenuRepository($pdo);
+    $menuService = new MenuService($menuRepository, $pdo);
+    $menuController = new MenuController($menuService, $pdo);
 
     require __DIR__ . '/services/40_controllers.php';
 
@@ -261,6 +271,8 @@ function createContainer(): array
         'FixedAssetController' => $fixedAssetController,
         'FixedAssetLifecycleController' => $fixedAssetLifecycleController,
         'FsController' => $fsController,
+        'FsNotesController' => $fsNotesController,
+        'ExportController' => $exportController,
         'ImportController' => $importController,
         'CurrencyController' => $currencyController,
         'NotificationController' => $notificationController,
@@ -329,6 +341,9 @@ function createContainer(): array
         'SubLedgerController' => $subLedgerController,
         'ReportBuilderController' => $reportBuilderController,
         'reportBuilderService' => $reportBuilderService,
+        'menuRepository' => $menuRepository,
+        'menuService' => $menuService,
+        'MenuController' => $menuController,
     ];
 }
 

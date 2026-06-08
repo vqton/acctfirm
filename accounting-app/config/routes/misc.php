@@ -60,3 +60,12 @@ $router->get('/so-chi-tiet', function() use ($c) { $c['SubLedgerController']->vi
 // Response: file download với Content-Disposition: attachment
 // Yêu cầu quyền report.export (Auth::requirePermission)
 $router->post('/api/export', function() use ($c) { $c['ExportController']->export(); });
+
+// === MENU API (Navigation) ===
+// Menu động — sidebar load dữ liệu từ API, render bằng JS
+$router->get('/api/menu/sidebar', function() use ($c) { $c['MenuController']->getSidebar(); });
+$router->get('/api/menu/search', function() use ($c) { $c['MenuController']->search(); });
+$router->get('/api/menu/section/:section', function($section) use ($c) { $c['MenuController']->getSection($section); });
+$router->get('/api/menu/favorites', function() use ($c) { $c['MenuController']->getFavorites(); });
+$router->post('/api/menu/favorites', function() use ($c) { $c['MenuController']->addFavorite(); });
+$router->delete('/api/menu/favorites/:id', function($id) use ($c) { $c['MenuController']->removeFavorite($id); });
