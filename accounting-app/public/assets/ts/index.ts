@@ -4,6 +4,7 @@
 import { VAS } from './lib/vas-financial';
 import { statusBadge } from './lib/status-badge';
 import { exportCSV, printForm, printTransaction, printFromData } from './lib/print-utils';
+import { importFromExcel, importValidate, importCommit, downloadTemplate } from './lib/import-utils';
 import { FormToast } from './components/form-toast';
 import { FormConfirm } from './components/form-confirm';
 import { FormValidation } from './components/form-validation';
@@ -13,7 +14,7 @@ import { AccountPicker } from './components/account-picker';
 import { PartnerPicker } from './components/partner-picker';
 
 // Export types for consumers that import from the bundle
-export { VAS, statusBadge, exportCSV, printForm, printTransaction, printFromData, FormToast, FormConfirm, FormValidation, FormModal, FormGrid, AccountPicker, PartnerPicker };
+export { VAS, statusBadge, exportCSV, printForm, printTransaction, printFromData, importFromExcel, importValidate, importCommit, downloadTemplate, FormToast, FormConfirm, FormValidation, FormModal, FormGrid, AccountPicker, PartnerPicker };
 export type { VasApi } from './lib/vas-financial';
 
 // Extend Window interface for TypeScript consumers
@@ -25,6 +26,10 @@ declare global {
     printForm: (title: string, bodyHtml: string) => Window | null;
     printTransaction: (title: string, apiUrl: string, fieldMap: Record<string, string>, linesField?: string, lineFields?: Record<string, string>, partnerField?: string) => void;
     printFromData: (title: string, data: Record<string, unknown>, fieldMap: Record<string, string>, linesField?: string, lineFields?: Record<string, string>) => void;
+    importFromExcel: (entityType: string) => void;
+    importValidate: () => void;
+    importCommit: () => void;
+    downloadTemplate: (entityType: string) => void;
     FormToast: typeof FormToast;
     FormConfirm: typeof FormConfirm;
     FormValidation: typeof FormValidation;
@@ -44,6 +49,10 @@ window.exportCSV = exportCSV;
 window.printForm = printForm;
 window.printTransaction = printTransaction;
 window.printFromData = printFromData;
+window.importFromExcel = importFromExcel;
+window.importValidate = importValidate;
+window.importCommit = importCommit;
+window.downloadTemplate = downloadTemplate;
 window.FormToast = FormToast;
 window.FormConfirm = FormConfirm;
 window.FormValidation = FormValidation;
