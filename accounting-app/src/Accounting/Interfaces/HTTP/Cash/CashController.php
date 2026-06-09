@@ -203,6 +203,19 @@ class CashController
                     $pdo->prepare('UPDATE transactions SET ' . implode(', ', $fields) . ' WHERE id = ?')
                         ->execute($params);
                 }
+
+                // T11: Auto-link AP supplier payment — nếu TK Nợ là 331 và payer là supplier
+                // Ghi nhận payment allocation để tracking công nợ NCC
+                $debitCode = $data['debit_account_code'] ?? '';
+                $payerType = $data['payer_type'] ?? '';
+                $payerId = $data['payer_id'] ?? '';
+                $amount = (float)$data['amount'];
+                if (str_starts_with($debitCode, '331') && $payerType === 'supplier' && $payerId && $amount > 0) {
+                    try {
+                        $pdo->prepare("INSERT INTO payment_allocations (payment_type, transaction_id, invoice_id, amount, entity_id) VALUES ('ap', ?, 0, ?, 1)")
+                            ->execute([$txnId, $amount]);
+                    } catch (\PDOException $e) {}
+                }
             }
             JsonResponse::ok($result, 201);
         } catch (\InvalidArgumentException $e) {

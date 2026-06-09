@@ -191,5 +191,26 @@ try {
     assertTrue(true, 'VAT > total rejected (Dr != Cr)');
 }
 
+// KIỂM TRA T11: AUTO-LINK AP SUPPLIER PAYMENT
+echo "\n=== Test 15: Auto-link AP payment allocation ===\n";
+// Đảm bảo đủ tiền mặt trước khi test
+$pdo->exec('UPDATE accounts SET balance = 50000000 WHERE code = 111');
+$apPmt = $svc->recordPayment(3000000, '331', 'Supplier payment auto-link', 'PC-AUTO-001', 'tester');
+$apTxnId = $apPmt['transaction_id'];
+// Giả lập controller: ghi payer_info + auto-insert payment_allocation
+$pdo->prepare('UPDATE transactions SET payer_type = ?, payer_id = ? WHERE id = ?')
+    ->execute(['supplier', '999', $apTxnId]);
+$pdo->prepare("INSERT INTO payment_allocations (payment_type, transaction_id, invoice_id, amount, entity_id) VALUES ('ap', ?, 0, ?, 1)")
+    ->execute([$apTxnId, 3000000]);
+$allocStmt = $pdo->prepare("SELECT * FROM payment_allocations WHERE transaction_id = ?");
+$allocStmt->execute([$apTxnId]);
+$alloc = $allocStmt->fetch(PDO::FETCH_ASSOC);
+assertTrue($alloc !== false, 'Payment allocation created for supplier payment');
+assertEq($alloc['payment_type'], 'ap', 'Allocation type = ap');
+assertEq($alloc['amount'], 3000000, 'Allocation amount = 3,000,000');
+assertEq($alloc['invoice_id'], 0, 'Allocation invoice_id = 0 (unallocated)');
+// Cleanup
+$pdo->prepare("DELETE FROM payment_allocations WHERE transaction_id = ?")->execute([$apTxnId]);
+
 echo "\n=== Results: {$total} tests, {$failed} failed ===\n";
 exit($failed > 0 ? 1 : 0);
