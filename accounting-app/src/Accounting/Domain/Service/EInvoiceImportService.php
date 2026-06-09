@@ -420,6 +420,34 @@ class EInvoiceImportService
         ];
     }
 
+    // Ghi nhận tạm ứng cho hóa đơn đã import
+    public function recordPrepay(string $importId, float $amount, string $transactionId, string $createdBy): array
+    {
+        $import = $this->getImport($importId);
+        if (!$import) {
+            throw new \InvalidArgumentException('Không tìm thấy import: ' . $importId);
+        }
+        $stmt = $this->pdo->prepare(
+            "UPDATE einvoice_imports SET prepay_amount = prepay_amount + ?, prepay_transaction_id = ? WHERE id = ?"
+        );
+        $stmt->execute([$amount, $transactionId, $importId]);
+
+        $this->auditLogger->log(
+            'einvoice.prepay',
+            'einvoice_import',
+            $importId,
+            null,
+            ['prepay_amount' => $amount, 'transaction_id' => $transactionId],
+            $createdBy
+        );
+
+        return [
+            'import_id' => $importId,
+            'prepay_amount' => $amount,
+            'prepay_transaction_id' => $transactionId,
+        ];
+    }
+
     // Kiểm tra trùng lặp
     public function checkDuplicate(string $fkey): bool
     {
@@ -432,7 +460,7 @@ class EInvoiceImportService
         $stmt = $this->pdo->query(
             "SELECT id, invoice_number, invoice_date, supplier_tax_code, supplier_name,
                     total_before_vat, total_vat, grand_total, status, transaction_id,
-                    payment_status, paid_amount, goods_receipt_id,
+                    payment_status, paid_amount, prepay_amount, prepay_transaction_id, goods_receipt_id,
                     created_by, created_at, processed_at
              FROM einvoice_imports
              ORDER BY created_at DESC LIMIT $limit"
@@ -443,6 +471,7 @@ class EInvoiceImportService
             $r['total_vat'] = (float)$r['total_vat'];
             $r['grand_total'] = (float)$r['grand_total'];
             $r['paid_amount'] = (float)$r['paid_amount'];
+            $r['prepay_amount'] = (float)($r['prepay_amount'] ?? 0);
         }
         return $rows;
     }
@@ -461,6 +490,7 @@ class EInvoiceImportService
         $row['total_vat'] = (float)$row['total_vat'];
         $row['grand_total'] = (float)$row['grand_total'];
         $row['paid_amount'] = (float)($row['paid_amount'] ?? 0);
+        $row['prepay_amount'] = (float)($row['prepay_amount'] ?? 0);
         return $row;
     }
 

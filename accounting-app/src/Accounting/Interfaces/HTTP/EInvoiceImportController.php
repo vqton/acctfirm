@@ -142,6 +142,34 @@ class EInvoiceImportController
         JsonResponse::ok($this->importService->getVatSummary($period));
     }
 
+    // POST /api/einvoice/import/{id}/prepay — Ghi nhận tạm ứng cho hóa đơn đã import
+    public function prepay(string $id): void
+    {
+        Auth::requirePermission('einvoice', 'create');
+        Auth::checkCsrf();
+        $input = json_decode(file_get_contents('php://input'), true);
+        $amount = (float)($input['amount'] ?? 0);
+        $txnId = trim($input['transaction_id'] ?? '');
+        if ($amount <= 0) {
+            JsonResponse::error('Số tiền tạm ứng phải lớn hơn 0.', 400);
+            return;
+        }
+        if (!$txnId) {
+            JsonResponse::error('Vui lòng nhập ID giao dịch tạm ứng.', 400);
+            return;
+        }
+        try {
+            $result = $this->importService->recordPrepay(
+                $id, $amount, $txnId, $_SESSION['user_id'] ?? 'system'
+            );
+            JsonResponse::ok($result);
+        } catch (\InvalidArgumentException $e) {
+            JsonResponse::error($e->getMessage(), 422);
+        } catch (\Throwable $e) {
+            JsonResponse::error('Lỗi: ' . $e->getMessage(), 500);
+        }
+    }
+
     // POST /api/einvoice/import/{id}/pay — Ghi nhận thanh toán hóa đơn đã import
     public function pay(string $id): void
     {
