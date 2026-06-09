@@ -14,7 +14,7 @@ $title = 'Phiếu chi'; $activeMenu = 'cash_payments'; ob_start(); ?>
     </div>
 </div>
 <div class="card-table"><table class="table table-hover">
-    <thead><tr><th>Số CT</th><th>Người nhận</th><th>Diễn giải</th><th class="text-end">Số tiền</th><th>TK Nợ</th><th>Ngày</th><th>Trạng thái</th><th></th></tr></thead>
+    <thead><tr><th>Số CT</th><th>Người nhận</th><th>Diễn giải</th><th class="text-end">Số tiền</th><th>TK Nợ</th><th>Ngày</th><th>Loại T</th><th>Trạng thái</th><th></th></tr></thead>
     <tbody id="dataBody"></tbody>
 </table></div>
 
@@ -29,7 +29,10 @@ $title = 'Phiếu chi'; $activeMenu = 'cash_payments'; ob_start(); ?>
         <div class="col-3 mb-2"><label>TK Nợ (đối ứng)</label><select class="form-select" id="debitAccount" data-v-required="TK Nợ" required></select></div>
     </div>
     <div class="row g-2">
-        <div class="col-4 mb-2"><label>Số tiền</label><input type="number" class="form-control" id="amount" step="1" min="1" data-v-required="Số tiền" data-v-number="Số tiền" required></div>
+        <div class="col-3 mb-2"><label>Số tiền</label><input type="number" class="form-control" id="amount" step="1" min="1" data-v-required="Số tiền" data-v-number="Số tiền" required></div>
+        <div class="col-2 mb-2"><label>Loại tiền</label><select class="form-select" id="currency"></select></div>
+        <div class="col-2 mb-2" id="fxRateGroup" style="display:none"><label>Tỷ giá</label><input type="number" class="form-control" id="exchangeRate" step="any" min="0" value="1"></div>
+        <div class="col-3 mb-2" id="vndAmountGroup" style="display:none"><label>Quy đổi VND</label><input type="number" class="form-control" id="vndAmount" readonly step="1" style="background:#f5f5f5"></div>
         <div class="col-2 mb-2" id="vatRateGroup" style="display:none"><label>VAT %</label><select class="form-select" id="vatRate"></select></div>
         <div class="col-2 mb-2" id="vatAmountGroup" style="display:none"><label>Tiền VAT</label><input type="number" class="form-control" id="vatAmount" readonly step="1" style="background:#f5f5f5"></div>
         <div class="col-4 mb-2" id="netAmountGroup" style="display:none"><label>Tiền chưa thuế</label><input type="number" class="form-control" id="netAmount" readonly step="1" style="background:#f5f5f5"></div>
@@ -60,7 +63,8 @@ function loadData(){
             var payer=esc(r.payer_name||'');
             var date=esc((r.transaction_date||r.created_at||'').substring(0,10));
             var printUrl = '/print/cash-payment/' + r.id;
-            tbody.append('<tr><td>'+esc(r.reference)+'</td><td>'+payer+'</td><td>'+esc(r.description)+'</td><td class="text-end font-monospace">'+fmtZero(r.amount)+'</td><td>'+esc(r.debit_account||'')+'</td><td style="font-size:12px">'+date+'</td><td>'+statusBadge(r.status)+'</td><td><a href="'+printUrl+'" target="_blank" class="btn-action me-1" title="In Mẫu 02-TT"><i class="bi bi-printer"></i></a></td></tr>');
+            var cur=esc(r.currency||'VND');
+            tbody.append('<tr><td>'+esc(r.reference)+'</td><td>'+payer+'</td><td>'+esc(r.description)+'</td><td class="text-end font-monospace">'+fmtZero(r.amount)+'</td><td>'+esc(r.debit_account||'')+'</td><td style="font-size:12px">'+date+'</td><td>'+cur+'</td><td>'+statusBadge(r.status)+'</td><td><a href="'+printUrl+'" target="_blank" class="btn-action me-1" title="In Mẫu 02-TT"><i class="bi bi-printer"></i></a></td></tr>');
         });
     }});
 }
@@ -75,6 +79,29 @@ function loadTemplates(){
         $('#debitAccount').html(o);
         $('#loadStatus').text('OK: '+l.length+' tài khoản').css('color','');
     }).fail(function(x){$('#debitAccount').html('<option>Lỗi: '+x.status+'</option>');$('#loadStatus').text('LỖI: '+x.status).css('color','red');});
+    $.get('/api/currencies',function(r){
+        var cur=r.currencies||[];
+        var o='<option value="VND" data-rate="1">VND (Việt Nam Đồng)</option>';
+        cur.forEach(function(c){if(c.code!=='VND')o+='<option value="'+esc(c.code)+'" data-rate="'+c.rate+'">'+esc(c.code)+' - '+esc(c.name||'')+' ('+c.rate+')</option>';});
+        $('#currency').html(o);
+    });
+}
+
+// FX: khi đổi loại tiền
+$('#currency').on('change',function(){
+    var opt=$(this).find(':selected');
+    var rate=parseFloat(opt.data('rate'))||1;
+    var isFc=opt.val()!=='VND';
+    $('#fxRateGroup,#vndAmountGroup').toggle(isFc);
+    if(isFc){$('#exchangeRate').val(rate);calcFx();}
+});
+$('#amount,#exchangeRate').on('input',function(){
+    if($('#fxRateGroup').is(':visible'))calcFx();
+});
+function calcFx(){
+    var fc=parseFloat($('#amount').val())||0;
+    var rate=parseFloat($('#exchangeRate').val())||1;
+    $('#vndAmount').val(Math.round(fc*rate));
 }
 // Khi chọn loại chi — tự động điền TK Nợ mặc định và hiển thị VAT nếu có
 // Nghiệp vụ: Nếu loại chi có VAT (ví dụ mua hàng), phân tách tiền hàng và VAT đầu vào
@@ -129,8 +156,11 @@ $(document).on('click',function(e){if(!$(e.target).closest('#payerSearch,#payerR
 // RỦI RO: Chi tiền cho NCC phải ghi nhận đúng supplier_id để theo dõi công nợ 331
 $('#paymentForm').submit(function(e){e.preventDefault();
     var v=FormValidation.validate('#paymentForm');if(!v.valid)return;
+    var isFc=$('#currency').val()!=='VND';
     var data={
-        amount: parseFloat($('#amount').val()),
+        amount: isFc?Math.round(parseFloat($('#vndAmount').val())||0):parseFloat($('#amount').val()),
+        currency: $('#currency').val()||null,
+        exchange_rate: isFc?parseFloat($('#exchangeRate').val())||null:null,
         debit_account_code: $('#debitAccount').val(),
         description: $('#description').val(),
         transaction_date: $('#txnDate').val()||null,

@@ -157,6 +157,9 @@ ob_start(); ?>
 </table>
 
 <p class="amount-row">Tổng số tiền: <u><?= number_format($amount, 0, ',', '.') ?></u> VNĐ</p>
+<?php if (($txn['currency'] ?? 'VND') !== 'VND' && ($txn['exchange_rate'] ?? 0) > 0): ?>
+<p style="font-size:12px;margin:4px 0;">Tương đương: <?= number_format($amount / (float)$txn['exchange_rate'], 2, ',', '.') ?> <?= esc($txn['currency']) ?> (tỷ giá: <?= number_format((float)$txn['exchange_rate'], 2, ',', '.') ?>)</p>
+<?php endif; ?>
 <p style="font-size:12px;margin:4px 0 16px;">Bằng chữ: <em><?= esc($amountWords) ?></em></p>
 
 <p style="font-size:12px;margin:4px 0;">Kèm theo: ................................ chứng từ gốc</p>

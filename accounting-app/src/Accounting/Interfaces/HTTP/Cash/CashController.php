@@ -56,7 +56,7 @@ class CashController
         $stmt = $pdo->query("SELECT t.id, t.description, t.reference, t.status,
             t.created_at, t.created_by,
             t.transaction_date, t.payer_name, t.payer_type, t.payer_id,
-            t.payer_address, t.book_number,
+            t.payer_address, t.book_number, t.currency, t.exchange_rate,
             (SELECT SUM(le.amount) FROM ledger_entries le WHERE le.transaction_id = t.id AND le.is_debit = 1) as amount,
             (SELECT a.code FROM ledger_entries le JOIN accounts a ON a.id = le.account_id WHERE le.transaction_id = t.id AND le.is_debit = 0 LIMIT 1) as credit_account
             FROM transactions t WHERE t.description LIKE 'Cash receipt:%'
@@ -125,7 +125,7 @@ class CashController
         $stmt = $pdo->query("SELECT t.id, t.description, t.reference, t.status,
             t.created_at, t.created_by,
             t.transaction_date, t.payer_name, t.payer_type, t.payer_id,
-            t.payer_address, t.book_number,
+            t.payer_address, t.book_number, t.currency, t.exchange_rate,
             (SELECT SUM(le.amount) FROM ledger_entries le WHERE le.transaction_id = t.id AND le.is_debit = 0) as amount,
             (SELECT a.code FROM ledger_entries le JOIN accounts a ON a.id = le.account_id WHERE le.transaction_id = t.id AND le.is_debit = 1 LIMIT 1) as debit_account
             FROM transactions t WHERE t.description LIKE 'Cash payment:%'
@@ -192,8 +192,8 @@ class CashController
                 $pdo = $this->getPdo();
                 $fields = [];
                 $params = [];
-                foreach (['transaction_date', 'payer_name', 'payer_type', 'payer_id', 'payer_address', 'book_number'] as $f) {
-                    if (isset($data[$f])) {
+                foreach (['transaction_date', 'payer_name', 'payer_type', 'payer_id', 'payer_address', 'book_number', 'currency', 'exchange_rate'] as $f) {
+                    if (isset($data[$f]) && $data[$f] !== '') {
                         $fields[] = "$f = ?";
                         $params[] = $data[$f];
                     }
