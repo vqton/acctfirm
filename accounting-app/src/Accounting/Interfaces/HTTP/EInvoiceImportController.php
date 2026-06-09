@@ -141,4 +141,27 @@ class EInvoiceImportController
         Auth::requirePermission('einvoice', 'read');
         JsonResponse::ok($this->importService->getVatSummary($period));
     }
+
+    // POST /api/einvoice/import/{id}/pay — Ghi nhận thanh toán hóa đơn đã import
+    public function pay(string $id): void
+    {
+        Auth::requirePermission('einvoice', 'create');
+        Auth::checkCsrf();
+        $input = json_decode(file_get_contents('php://input'), true);
+        $amount = (float)($input['amount'] ?? 0);
+        if ($amount <= 0) {
+            JsonResponse::error('Số tiền thanh toán phải lớn hơn 0.', 400);
+            return;
+        }
+        try {
+            $result = $this->importService->recordPayment(
+                $id, $amount, $_SESSION['user_id'] ?? 'system'
+            );
+            JsonResponse::ok($result);
+        } catch (\InvalidArgumentException $e) {
+            JsonResponse::error($e->getMessage(), 422);
+        } catch (\Throwable $e) {
+            JsonResponse::error('Lỗi: ' . $e->getMessage(), 500);
+        }
+    }
 }

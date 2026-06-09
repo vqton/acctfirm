@@ -354,7 +354,9 @@ class EInvoiceImportService
                 COALESCE(SUM(total_vat), 0) as total_vat_input,
                 COALESCE(SUM(grand_total), 0) as total_payable,
                 COUNT(DISTINCT supplier_tax_code) as supplier_count,
-                COUNT(DISTINCT CASE WHEN goods_receipt_id IS NOT NULL THEN id END) as with_goods_receipt
+                COUNT(DISTINCT CASE WHEN goods_receipt_id IS NOT NULL THEN id END) as with_goods_receipt,
+                COUNT(DISTINCT CASE WHEN payment_status = 'paid' THEN id END) as paid_count,
+                COALESCE(SUM(paid_amount), 0) as total_paid
              FROM einvoice_imports
              WHERE status = 'processed'
                AND invoice_date >= ? AND invoice_date <= ?"
@@ -367,7 +369,55 @@ class EInvoiceImportService
         $summary['total_invoices'] = (int)$summary['total_invoices'];
         $summary['supplier_count'] = (int)$summary['supplier_count'];
         $summary['with_goods_receipt'] = (int)$summary['with_goods_receipt'];
+        $summary['paid_count'] = (int)$summary['paid_count'];
+        $summary['total_paid'] = (float)$summary['total_paid'];
         return $summary;
+    }
+
+    // Ghi nhận thanh toán cho hóa đơn đã import
+    public function recordPayment(string $importId, float $amount, string $paidBy, ?string $bankTransactionId = null): array
+    {
+        $import = $this->getImport($importId);
+        if (!$import) {
+            throw new \InvalidArgumentException('Không tìm thấy import: ' . $importId);
+        }
+        if ($import['status'] !== 'processed') {
+            throw new \InvalidArgumentException('Chỉ có thể thanh toán cho hóa đơn đã import thành công.');
+        }
+
+        $grandTotal = (float)$import['grand_total'];
+        $currentPaid = (float)$import['paid_amount'];
+        $newPaid = $currentPaid + $amount;
+
+        if ($newPaid > $grandTotal + 10) {
+            throw new \InvalidArgumentException(
+                "Số tiền thanh toán ($amount) vượt quá số còn phải trả (" 
+                . ($grandTotal - $currentPaid) . ")."
+            );
+        }
+
+        $paymentStatus = abs($newPaid - $grandTotal) <= 10 ? 'paid' : 'partial';
+
+        $stmt = $this->pdo->prepare(
+            "UPDATE einvoice_imports SET payment_status = ?, paid_amount = ? WHERE id = ?"
+        );
+        $stmt->execute([$paymentStatus, $newPaid, $importId]);
+
+        $this->auditLogger->log(
+            'einvoice.payment',
+            'einvoice_import',
+            $importId,
+            ['paid_amount' => $currentPaid, 'payment_status' => $import['payment_status'] ?? 'unpaid'],
+            ['paid_amount' => $newPaid, 'payment_status' => $paymentStatus],
+            $paidBy
+        );
+
+        return [
+            'import_id' => $importId,
+            'payment_status' => $paymentStatus,
+            'paid_amount' => $newPaid,
+            'remaining' => $grandTotal - $newPaid,
+        ];
     }
 
     // Kiểm tra trùng lặp
@@ -382,6 +432,7 @@ class EInvoiceImportService
         $stmt = $this->pdo->query(
             "SELECT id, invoice_number, invoice_date, supplier_tax_code, supplier_name,
                     total_before_vat, total_vat, grand_total, status, transaction_id,
+                    payment_status, paid_amount, goods_receipt_id,
                     created_by, created_at, processed_at
              FROM einvoice_imports
              ORDER BY created_at DESC LIMIT $limit"
@@ -391,6 +442,7 @@ class EInvoiceImportService
             $r['total_before_vat'] = (float)$r['total_before_vat'];
             $r['total_vat'] = (float)$r['total_vat'];
             $r['grand_total'] = (float)$r['grand_total'];
+            $r['paid_amount'] = (float)$r['paid_amount'];
         }
         return $rows;
     }
@@ -408,6 +460,7 @@ class EInvoiceImportService
         $row['total_before_vat'] = (float)$row['total_before_vat'];
         $row['total_vat'] = (float)$row['total_vat'];
         $row['grand_total'] = (float)$row['grand_total'];
+        $row['paid_amount'] = (float)($row['paid_amount'] ?? 0);
         return $row;
     }
 

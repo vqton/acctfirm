@@ -29,3 +29,4 @@ $router->get('/api/einvoice/imports', fn() => $eimp->list());
 $router->get('/api/einvoice/imports/:id', fn(string $id) => $eimp->get($id));
 $router->post('/api/einvoice/import/parse', fn() => $eimp->parseXml());
 $router->get('/api/einvoice/import/vat-summary/:period', fn(string $period) => $eimp->vatSummary($period));
+$router->post('/api/einvoice/import/:id/pay', fn(string $id) => $eimp->pay($id));
