@@ -97,13 +97,19 @@ ob_start(); ?>
                     </div>
                     <div class="col-md-4">
                         <label class="form-label small">Loại xuất <span class="text-danger">*</span></label>
-                        <select class="form-select form-select-sm" id="issueType">
-                            <option value="sale">Bán hàng (Nợ 632)</option>
-                            <option value="production">Sản xuất (Nợ 621/622/627)</option>
-                            <option value="construction">XDCB (Nợ 241)</option>
+                        <select class="form-select form-select-sm" id="issueType" onchange="onIssueTypeChange()">
+                            <option value="sale">Bán hàng</option>
+                            <option value="production">Sản xuất</option>
+                            <option value="construction">XDCB</option>
                             <option value="internal">Nội bộ</option>
                             <option value="other">Khác</option>
                         </select>
+                    </div>
+                    <div class="col-md-4">
+                        <div id="accountMapping" class="p-2 rounded small fw-bold" style="background:#f0f7ff;border:1px solid #cce5ff;margin-top:20px;">
+                            <span id="mappingDebit">Nợ 632 (Giá vốn hàng bán)</span> /
+                            <span id="mappingCredit" class="text-danger">Có 152, 156 (Hàng hóa)</span>
+                        </div>
                     </div>
                 </div>
                 <div class="row g-2 mb-3">
@@ -190,6 +196,20 @@ function badge(s){ return statusBadge(s); }
 function fmt(n){ return VAS.fmt(n||0); }
 function typeLabel(t){ var m={sale:'Bán hàng',production:'SX',construction:'XDCB',internal:'Nội bộ',other:'Khác'}; return m[t]||t; }
 
+var accountMapping={
+    sale:{debit:'632 (Giá vốn hàng bán)',credit:'152, 156 (Hàng hóa)'},
+    production:{debit:'621 (Chi phí NVL trực tiếp)',credit:'152 (Nguyên liệu, vật liệu)'},
+    construction:{debit:'241 (XDCB dở dang)',credit:'152 (Nguyên liệu, vật liệu)'},
+    internal:{debit:'136 (Phải thu nội bộ)',credit:'152, 155, 156 (Hàng hóa)'},
+    other:{debit:'(nhập tay)',credit:'(nhập tay)'}
+};
+function onIssueTypeChange(){
+    var t=$('#issueType').val();
+    var m=accountMapping[t]||accountMapping.sale;
+    $('#mappingDebit').text('Nợ '+m.debit);
+    $('#mappingCredit').text('Có '+m.credit);
+}
+
 // Tải danh mục
 function loadItems(){ $.get('/api/inventory/issue/items',function(d){ items=d.data||d||[]; }); }
 function loadWarehouses(){
@@ -225,7 +245,7 @@ function viewIssue(id){
         $('#issueNumber').val(d.issue_number);
         $('#issueDate').val(d.issue_date);
         $('#warehouseId').val(d.warehouse_id||'');
-        $('#issueType').val(d.issue_type);
+        $('#issueType').val(d.issue_type);onIssueTypeChange();
         $('#receiverName').val(d.receiver_name||'');
         $('#receiverDepartment').val(d.receiver_department||'');
         $('#issueReason').val(d.issue_reason||'');
@@ -265,7 +285,7 @@ function showCreateForm(){
     $('#totalAmountDisplay').text('0');
     $('#totalInWords').text('Không');
     $('#linesBody').empty();
-    addLine();
+    addLine();onIssueTypeChange();
     $('#btnSaveDraft').text('Lưu nháp').prop('disabled',false).show();
     $('#btnPost').addClass('d-none');
     $('#btnCancel').addClass('d-none');
@@ -442,7 +462,7 @@ function printPXK(){
 // Flatpickr
 $(document).ready(function(){
     flatpickr('.datepicker',{dateFormat:'Y-m-d',locale:'vn'});
-    loadItems();loadWarehouses();loadData();
+    loadItems();loadWarehouses();loadData();onIssueTypeChange();
 });
 </script>
 <?php $content = ob_get_clean(); require __DIR__ . '/layout.php'; ?>

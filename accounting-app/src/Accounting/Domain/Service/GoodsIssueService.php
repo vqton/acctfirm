@@ -7,6 +7,7 @@ use Accounting\Domain\Model\GoodsIssueItem;
 use Accounting\Domain\Contract\InventoryServiceInterface;
 use Accounting\Domain\Contract\AuditLoggerInterface;
 use Accounting\Domain\Repository\ItemRepositoryInterface;
+use Accounting\Domain\Service\PeriodService;
 
 // NGHIỆP VỤ: Quản lý Phiếu xuất kho (PXK) — Mẫu số 02-VT theo TT 99/2025/TT-BTC
 // Service này quản lý vòng đời PXK: Draft → Post (tạo bút toán + giảm tồn kho) → Cancelled
@@ -46,6 +47,13 @@ class GoodsIssueService
         $issueDate = $data['issue_date'] ?? date('Y-m-d');
         $issueType = $data['issue_type'] ?? 'sale';
         $createdBy = $data['created_by'] ?? 'system';
+
+        // KIỂM SOÁT KỲ: Không cho tạo PXK trong kỳ đã khóa
+        if (!PeriodService::isPeriodOpen($issueDate, $this->pdo)) {
+            throw new \InvalidArgumentException(
+                "Không thể tạo phiếu xuất kho trong kỳ kế toán đã khóa. Ngày: {$issueDate}."
+            );
+        }
 
         $this->pdo->beginTransaction();
         try {
@@ -133,6 +141,13 @@ class GoodsIssueService
         }
         $issueType = $issue['issue_type'];
 
+        // KIỂM SOÁT KỲ: Không cho ghi sổ PXK trong kỳ đã khóa
+        if (!PeriodService::isPeriodOpen($issue['issue_date'], $this->pdo)) {
+            throw new \InvalidArgumentException(
+                "Không thể ghi sổ phiếu xuất kho trong kỳ kế toán đã khóa. Ngày: {$issue['issue_date']}."
+            );
+        }
+
         $updateLine = $this->pdo->prepare(
             "UPDATE inventory_issue_items SET unit_price = ?, total_amount = ?, transaction_id = ? WHERE id = ?"
         );
@@ -164,6 +179,12 @@ class GoodsIssueService
         $issue = $this->getIssue($issueId);
         if ($issue['status'] !== 'draft') {
             throw new \InvalidArgumentException("Chỉ có thể hủy phiếu xuất kho ở trạng thái nháp. Trạng thái hiện tại: {$issue['status']}");
+        }
+        // KIỂM SOÁT KỲ: Không cho hủy PXK trong kỳ đã khóa
+        if (!PeriodService::isPeriodOpen($issue['issue_date'], $this->pdo)) {
+            throw new \InvalidArgumentException(
+                "Không thể hủy phiếu xuất kho trong kỳ kế toán đã khóa. Ngày: {$issue['issue_date']}."
+            );
         }
         $stmt = $this->pdo->prepare("UPDATE inventory_issues SET status = 'cancelled', updated_at = NOW() WHERE id = ?");
         $stmt->execute([$issueId]);

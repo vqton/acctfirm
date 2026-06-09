@@ -185,4 +185,18 @@ try {
     assertTrue(true, 'Throws on nonexistent: ' . $e->getMessage());
 }
 
+echo "\n--- Test 10: createDraft — từ chối trong kỳ đã khóa ---\n";
+try {
+    $goodsIssueService->createDraft([
+        'issue_date' => '2020-01-15',
+        'receiver_name' => 'Test',
+        'issue_reason' => 'Test period lock',
+        'lines' => [['item_id' => $itemId, 'requested_qty' => 1]],
+        'created_by' => 'tester'
+    ]);
+    assertTrue(false, 'Should throw on closed period');
+} catch (\InvalidArgumentException $e) {
+    assertTrue(true, 'Throws on closed period: ' . $e->getMessage());
+}
+
 results();
