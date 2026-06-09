@@ -3,6 +3,7 @@
 
 import { VAS } from './lib/vas-financial';
 import { statusBadge } from './lib/status-badge';
+import { exportCSV, printForm, printTransaction, printFromData } from './lib/print-utils';
 import { FormToast } from './components/form-toast';
 import { FormConfirm } from './components/form-confirm';
 import { FormValidation } from './components/form-validation';
@@ -12,7 +13,7 @@ import { AccountPicker } from './components/account-picker';
 import { PartnerPicker } from './components/partner-picker';
 
 // Export types for consumers that import from the bundle
-export { VAS, statusBadge, FormToast, FormConfirm, FormValidation, FormModal, FormGrid, AccountPicker, PartnerPicker };
+export { VAS, statusBadge, exportCSV, printForm, printTransaction, printFromData, FormToast, FormConfirm, FormValidation, FormModal, FormGrid, AccountPicker, PartnerPicker };
 export type { VasApi } from './lib/vas-financial';
 
 // Extend Window interface for TypeScript consumers
@@ -20,6 +21,10 @@ declare global {
   interface Window {
     VAS: typeof VAS;
     statusBadge: (status: string) => string;
+    exportCSV: (tableSelector: string | HTMLTableElement, filename: string) => void;
+    printForm: (title: string, bodyHtml: string) => Window | null;
+    printTransaction: (title: string, apiUrl: string, fieldMap: Record<string, string>, linesField?: string, lineFields?: Record<string, string>, partnerField?: string) => void;
+    printFromData: (title: string, data: Record<string, unknown>, fieldMap: Record<string, string>, linesField?: string, lineFields?: Record<string, string>) => void;
     FormToast: typeof FormToast;
     FormConfirm: typeof FormConfirm;
     FormValidation: typeof FormValidation;
@@ -35,6 +40,10 @@ declare global {
 // Assign to window for backward compat with inline PHP scripts
 window.VAS = VAS;
 window.statusBadge = statusBadge;
+window.exportCSV = exportCSV;
+window.printForm = printForm;
+window.printTransaction = printTransaction;
+window.printFromData = printFromData;
 window.FormToast = FormToast;
 window.FormConfirm = FormConfirm;
 window.FormValidation = FormValidation;
