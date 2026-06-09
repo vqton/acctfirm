@@ -40,6 +40,11 @@ $title = 'Chứng từ ghi sổ'; $activeMenu = 'journal'; ob_start(); ?>
         <div class="col-2 text-end fw-bold">Tổng:</div>
         <div class="col-4"><span id="totalAmount" class="fw-bold font-monospace">0</span></div>
     </div>
+    <div class="row g-1 mt-1">
+        <div class="col-5"></div>
+        <div class="col-2 text-end text-muted" style="font-size:11px;">Bằng chữ:</div>
+        <div class="col-5"><span id="amountInWords" class="text-muted" style="font-size:12px;font-style:italic;">—</span></div>
+    </div>
 </div>
 <div class="modal-footer">
     <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Hủy</button>
@@ -56,24 +61,6 @@ function loadPeriods(){
         data.forEach(function(p){if(p.period_type==='month')sel.append('<option value="'+esc(p.period_code)+'">'+esc(p.name)+'</option>');});
         var m=('0'+(new Date().getMonth()+1)).slice(-2);
         sel.val(new Date().getFullYear()+'-'+m);loadData();
-    });
-}
-// Tải danh sách bút toán theo kỳ, hiển thị trạng thái (nháp/đã ghi sổ) và nút duyệt
-function loadData(){
-    var period=$('#periodFilter').val()||'';
-    $.get('/api/transactions?period='+period,function(data){
-        var tbody=$('#dataBody');tbody.empty();
-        if(!data.length){tbody.append('<tr><td colspan="8" class="text-center text-muted py-4">Chưa có bút toán</td></tr>');return;}
-        data.forEach(function(r){
-            var drLines=r.lines.filter(function(l){return l.is_debit;});
-            var crLines=r.lines.filter(function(l){return !l.is_debit;});
-            var drStr=drLines.map(function(l){return l.account_code;}).join(', ');
-            var crStr=crLines.map(function(l){return l.account_code;}).join(', ');
-            var total=r.lines.reduce(function(s,l){return s+parseFloat(l.amount);},0)/2;
-            var actions='';
-            if(r.status==='pending')actions='<button class="btn btn-sm btn-outline-success" onclick="approveEntry(\''+esc(r.id)+'\')"><i class="bi bi-check-lg"></i> Duyệt</button>';
-            tbody.append('<tr><td>'+esc(r.reference)+'</td><td>'+esc(r.description)+'</td><td style="font-size:12px">'+esc(r.date)+'</td><td>'+esc(drStr)+'</td><td>'+esc(crStr)+'</td><td class="text-end font-monospace">'+fmtZero(total)+'</td><td>'+statusBadge(r.status)+'</td><td>'+actions+'</td></tr>');
-        });
     });
 }
 function loadData(){
@@ -125,6 +112,17 @@ function reverseEntry(id){
 // Tính toán và hiển thị trạng thái cân đối Nợ/Có real-time
 // Nghiệp vụ: Tổng Dr phải = Tổng Cr (sai lệch tối đa ±10 VND do làm tròn)
 // Nếu lệch > 10 VND → cảnh báo đỏ, không cho submit
+// Amount-in-words: debounced call to /api/utils/to-words
+var wordsTimer;
+function updateAmountInWords(amount){
+    clearTimeout(wordsTimer);
+    wordsTimer=setTimeout(function(){
+        if(amount<=0){$('#amountInWords').text('—');return;}
+        $.get('/api/utils/to-words?amount='+amount,function(r){
+            $('#amountInWords').text(r.words||'—');
+        }).fail(function(){$('#amountInWords').text('—');});
+    },400);
+}
 function recalcTotal(){
     var totalDr=0,totalCr=0;
     $('#linesContainer .line-row').each(function(){
@@ -133,9 +131,14 @@ function recalcTotal(){
         if(isDr)totalDr+=amt;else totalCr+=amt;
     });
     var diff=Math.abs(totalDr-totalCr);
-    if(diff<10){$('#drCrStatus').text('Nợ = Có ('+totalDr.toLocaleString()+')').removeClass().addClass('text-success fw-bold');}
-    else{$('#drCrStatus').text('CHÊNH LỆCH: Nợ '+totalDr.toLocaleString()+' / Có '+totalCr.toLocaleString()).removeClass().addClass('text-danger fw-bold');}
-    $('#totalAmount').text(totalDr.toLocaleString());
+    var bal=Math.max(totalDr,totalCr);
+    if(diff<10){
+        $('#drCrStatus').text('✓ Nợ = Có ('+VAS.fmt(bal)+')').removeClass().addClass('text-success fw-bold');
+    }else{
+        $('#drCrStatus').html('✗ CHÊNH LỆCH: Nợ '+VAS.fmt(totalDr)+' / Có '+VAS.fmt(totalCr)).removeClass().addClass('text-danger fw-bold');
+    }
+    $('#totalAmount').text(VAS.fmt(bal));
+    updateAmountInWords(bal);
 }
 // Thêm dòng định khoản mới — tối thiểu 2 dòng (1 Nợ + 1 Có)
 // Nghiệp vụ: Mỗi bút toán cần ít nhất 1 Nợ và 1 Có, tổng tiền bằng nhau
