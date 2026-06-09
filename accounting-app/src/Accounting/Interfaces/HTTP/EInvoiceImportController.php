@@ -1,0 +1,129 @@
+<?php
+namespace Accounting\Interfaces\HTTP;
+
+use Accounting\Domain\Service\EInvoiceImportService;
+use Accounting\Infrastructure\Auth;
+use Accounting\Infrastructure\JsonResponse;
+
+class EInvoiceImportController
+{
+    private EInvoiceImportService $importService;
+
+    public function __construct(EInvoiceImportService $importService)
+    {
+        $this->importService = $importService;
+    }
+
+    // POST /api/einvoice/import — Import XML hóa đơn đầu vào
+    public function import(): void
+    {
+        Auth::requirePermission('einvoice', 'create');
+        Auth::checkCsrf();
+
+        if (empty($_FILES['xml_file']['tmp_name'])) {
+            JsonResponse::error('Vui lòng chọn file XML hóa đơn.', 400);
+            return;
+        }
+
+        $xmlContent = file_get_contents($_FILES['xml_file']['tmp_name']);
+        if (!$xmlContent) {
+            JsonResponse::error('Không đọc được file XML.', 400);
+            return;
+        }
+
+        try {
+            $result = $this->importService->importXml(
+                $xmlContent,
+                $_SESSION['user_id'] ?? 'system'
+            );
+            JsonResponse::ok($result, 201);
+        } catch (\InvalidArgumentException $e) {
+            JsonResponse::error($e->getMessage(), 422);
+        } catch (\Throwable $e) {
+            JsonResponse::error('Lỗi import: ' . $e->getMessage(), 500);
+        }
+    }
+
+    // POST /api/einvoice/import/preview — Xem trước dữ liệu từ XML
+    public function preview(): void
+    {
+        Auth::requirePermission('einvoice', 'read');
+
+        if (empty($_FILES['xml_file']['tmp_name'])) {
+            JsonResponse::error('Vui lòng chọn file XML hóa đơn.', 400);
+            return;
+        }
+
+        $xmlContent = file_get_contents($_FILES['xml_file']['tmp_name']);
+        if (!$xmlContent) {
+            JsonResponse::error('Không đọc được file XML.', 400);
+            return;
+        }
+
+        try {
+            $parsed = $this->importService->parseXml($xmlContent);
+
+            // Kiểm tra trùng
+            $isDuplicate = $this->importService->checkDuplicate($parsed['fkey']);
+
+            JsonResponse::ok([
+                'fkey' => $parsed['fkey'],
+                'invoice_number' => $parsed['invoice_number'],
+                'invoice_date' => $parsed['invoice_date'],
+                'template_code' => $parsed['template_code'],
+                'template_symbol' => $parsed['template_symbol'],
+                'currency' => $parsed['currency'],
+                'supplier' => $parsed['supplier'],
+                'buyer' => $parsed['buyer'],
+                'totals' => $parsed['totals'],
+                'items' => $parsed['items'],
+                'is_duplicate' => $isDuplicate,
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            JsonResponse::error($e->getMessage(), 422);
+        } catch (\Throwable $e) {
+            JsonResponse::error('Lỗi đọc XML: ' . $e->getMessage(), 500);
+        }
+    }
+
+    // GET /api/einvoice/imports — Danh sách lịch sử import
+    public function list(): void
+    {
+        Auth::requirePermission('einvoice', 'read');
+        JsonResponse::ok($this->importService->listImports());
+    }
+
+    // GET /api/einvoice/imports/:id — Chi tiết import
+    public function get(string $id): void
+    {
+        Auth::requirePermission('einvoice', 'read');
+        $import = $this->importService->getImport($id);
+        if (!$import) {
+            JsonResponse::error('Không tìm thấy import.', 404);
+            return;
+        }
+        JsonResponse::ok($import);
+    }
+
+    // GET /api/einvoice/import/parse — Parse XML preview (for AJAX in browser)
+    public function parseXml(): void
+    {
+        Auth::requirePermission('einvoice', 'read');
+        $input = json_decode(file_get_contents('php://input'), true);
+        $xmlContent = $input['xml_content'] ?? '';
+
+        if (!$xmlContent) {
+            JsonResponse::error('Thiếu nội dung XML.', 400);
+            return;
+        }
+
+        try {
+            $parsed = $this->importService->parseXml($xmlContent);
+            $isDuplicate = $this->importService->checkDuplicate($parsed['fkey']);
+            $parsed['is_duplicate'] = $isDuplicate;
+            JsonResponse::ok($parsed);
+        } catch (\Throwable $e) {
+            JsonResponse::error('Lỗi parse XML: ' . $e->getMessage(), 422);
+        }
+    }
+}

@@ -376,6 +376,8 @@ function createContainer(): array
         'citDeclarationEngine' => $citDeclarationEngine,
         'pitDeclarationService' => $pitDeclarationService,
         'EInvoiceController' => $einvoiceController,
+        'einvoiceImportService' => $einvoiceImportService,
+        'EInvoiceImportController' => $einvoiceImportController,
         'subLedgerService' => $subLedgerService,
         'SubLedgerController' => $subLedgerController,
         'ReportBuilderController' => $reportBuilderController,

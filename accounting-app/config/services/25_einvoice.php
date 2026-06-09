@@ -46,3 +46,17 @@ $einvoiceGateway = new VnptEInvoiceGateway($tvanConfig, $digitalSignatureService
 $invoiceService = new InvoiceService($pdo, $xmlBuilder, $digitalSignatureService, $einvoiceGateway, $auditLogger, $voucherService, $accountService);
 $vatDeclarationEngine = new VatDeclarationEngine($pdo);
 $einvoiceController = new EInvoiceController($invoiceService, $vatDeclarationEngine);
+
+// === E-INVOICE IMPORT (XML đầu vào — G06 gap closure) ===
+// Nghiệp vụ: Nhập khẩu hóa đơn điện tử XML từ nhà cung cấp → tự động tạo chứng từ mua hàng
+// Tuân thủ: NĐ 123/2020/NĐ-CP Điều 12 (XML format), TT 32/2025/TT-BTC
+use Accounting\Domain\Service\EInvoiceImportService;
+use Accounting\Interfaces\HTTP\EInvoiceImportController;
+$einvoiceImportService = new EInvoiceImportService(
+    $pdo,
+    $supplierRepository,
+    $accountRepository,
+    $journalService,
+    $auditLogger
+);
+$einvoiceImportController = new EInvoiceImportController($einvoiceImportService);

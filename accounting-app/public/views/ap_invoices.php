@@ -9,6 +9,7 @@ $title = 'Công nợ phải trả'; $activeMenu = 'ap_invoices'; ob_start(); ?>
         <button class="btn btn-outline-secondary btn-sm" onclick="exportCSV()" title="Xuất Excel"><i class="bi bi-download"></i> Excel</button>
         <button class="btn btn-primary btn-sm ms-1" data-bs-toggle="modal" data-bs-target="#invModal"><i class="bi bi-plus-lg"></i> Ghi nhận hóa đơn</button>
         <button class="btn btn-outline-primary btn-sm ms-1" data-bs-toggle="modal" data-bs-target="#prepayModal"><i class="bi bi-credit-card"></i> Tạm ứng</button>
+        <button class="btn btn-outline-success btn-sm ms-1" data-bs-toggle="modal" data-bs-target="#importEinvModal"><i class="bi bi-file-earmark-arrow-up"></i> Import HĐĐT</button>
     </div>
 </div>
 <div class="card p-2 mb-3 border-0 shadow-sm bg-white" style="font-size:13px;">
@@ -55,6 +56,49 @@ $title = 'Công nợ phải trả'; $activeMenu = 'ap_invoices'; ob_start(); ?>
     <div class="mb-2"><label>Diễn giải</label><input class="form-control" id="invDesc"></div>
 </div>
 <div class="modal-footer"><button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Hủy</button><button type="submit" class="btn btn-sm btn-primary">Ghi nhận</button></div>
+</form>
+</div></div></div>
+
+<!-- Modal Import HĐĐT XML -->
+<div class="modal fade" id="importEinvModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content">
+<form id="importEinvForm">
+<div class="modal-header"><h5 class="modal-title">Import hóa đơn điện tử (XML)</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+<div class="modal-body">
+    <div class="mb-3">
+        <label class="form-label">Chọn file XML hóa đơn từ nhà cung cấp</label>
+        <input type="file" class="form-control" id="einvXmlFile" accept=".xml" required>
+        <div class="form-text">Chấp nhận file XML theo chuẩn TCT (TT 32/2025/TT-BTC). Hỗ trợ mẫu 01GTKT.</div>
+    </div>
+    <div id="importEinvPreview" class="d-none">
+        <hr>
+        <h6 class="text-primary mb-3">📋 Thông tin hóa đơn</h6>
+        <div class="row g-2">
+            <div class="col-md-4"><small>Nhà cung cấp</small><div id="previewSupplier" class="fw-semibold fs-6">—</div></div>
+            <div class="col-md-3"><small>MST</small><div id="previewTaxCode" class="fw-semibold fs-6">—</div></div>
+            <div class="col-md-2"><small>Số hóa đơn</small><div id="previewInvoiceNo" class="fw-semibold fs-6">—</div></div>
+            <div class="col-md-2"><small>Ngày</small><div id="previewDate" class="fw-semibold fs-6">—</div></div>
+            <div class="col-md-1"><small>Mặt hàng</small><div id="previewItems" class="fw-semibold fs-6">—</div></div>
+        </div>
+        <div class="row g-2 mt-2">
+            <div class="col-md-3"><small>Tiền hàng</small><div id="previewTotalBeforeVat" class="fw-semibold fs-6">—</div></div>
+            <div class="col-md-3"><small>Thuế GTGT</small><div id="previewTotalVat" class="fw-semibold fs-6">—</div></div>
+            <div class="col-md-3"><small>Tổng thanh toán</small><div id="previewGrandTotal" class="fw-semibold fs-6">—</div></div>
+            <div class="col-md-3"><small>Trạng thái</small><div id="previewStatus" class="fw-semibold fs-6 text-success">Mới</div></div>
+        </div>
+        <hr>
+        <div class="table-responsive"><table class="table table-sm table-bordered"><thead><tr><th>STT</th><th>Tên hàng hóa</th><th class="text-end">SL</th><th>ĐVT</th><th class="text-end">Đơn giá</th><th class="text-end">Tiền</th><th class="text-end">Thuế</th></tr></thead><tbody id="previewItemsTable"></tbody></table></div>
+        <div class="alert alert-info py-2" style="font-size:13px">
+            <i class="bi bi-info-circle"></i> Hạch toán tự động: Nợ 156 (Hàng hóa) <span id="previewDrAmount"></span> / Nợ 1331 (Thuế GTGT) <span id="previewVatAmount"></span> / Có 331 (Phải trả NCC) <span id="previewCrAmount"></span>
+        </div>
+    </div>
+    <div id="importEinvDuplicate" class="alert alert-danger d-none py-2 mt-2"><i class="bi bi-exclamation-triangle"></i> Hóa đơn này đã được import trước đó.</div>
+    <div id="importEinvError" class="alert alert-warning d-none py-2 mt-2">—</div>
+</div>
+<div class="modal-footer">
+    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Hủy</button>
+    <button type="button" class="btn btn-sm btn-outline-primary" id="btnPreviewXml"><i class="bi bi-eye"></i> Xem trước</button>
+    <button type="submit" class="btn btn-sm btn-success" id="btnImportXml" disabled><i class="bi bi-file-earmark-arrow-up"></i> Import</button>
+</div>
 </form>
 </div></div></div>
 
@@ -256,6 +300,109 @@ $('#returnForm').submit(function(e){e.preventDefault();
     $.ajax({url:'/api/ap/invoices/'+$('#returnInvId').val()+'/return',method:'POST',contentType:'application/json',data:JSON.stringify({amount:parseFloat($('#returnAmount').val()),inventory_account:$('#returnAccount').val()}),
         success:function(){$('#returnModal').modal('hide');FormToast.success('Ghi nhận trả lại hàng thành công');loadData();},
         error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}FormToast.error(m);}
+    });
+});
+// === Import HĐĐT XML ===
+$('#einvXmlFile').on('change', function() {
+    $('#importEinvPreview').addClass('d-none');
+    $('#importEinvDuplicate').addClass('d-none');
+    $('#importEinvError').addClass('d-none');
+    $('#btnImportXml').prop('disabled', true);
+    $('#btnPreviewXml').prop('disabled', !this.files.length);
+});
+$('#btnPreviewXml').click(function() {
+    const file = $('#einvXmlFile')[0].files[0];
+    if (!file) { FormToast.warning('Chọn file XML trước.'); return; }
+    const formData = new FormData();
+    formData.append('xml_file', file);
+    $('#btnPreviewXml').prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> Đang đọc...');
+    $.ajax({
+        url: '/api/einvoice/import/preview',
+        method: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        success: function(res) {
+            const d = res.data;
+            if (d.error) { $('#importEinvError').removeClass('d-none').text(d.error); return; }
+            $('#previewSupplier').text(d.supplier.name || '—');
+            $('#previewTaxCode').text(d.supplier.tax_code || '—');
+            $('#previewInvoiceNo').text(d.invoice_number || '—');
+            $('#previewDate').text(d.invoice_date || '—');
+            $('#previewItems').text(d.items ? d.items.length : 0);
+            $('#previewTotalBeforeVat').text(fmt(d.totals.total_before_vat));
+            $('#previewTotalVat').text(fmt(d.totals.total_vat));
+            $('#previewGrandTotal').text(fmt(d.totals.grand_total));
+            $('#previewDrAmount').text(fmt(d.totals.total_before_vat));
+            $('#previewVatAmount').text(d.totals.total_vat > 0 ? fmt(d.totals.total_vat) : '0 ₫');
+            $('#previewCrAmount').text(fmt(d.totals.grand_total));
+            if (d.is_duplicate) {
+                $('#previewStatus').text('Đã import').removeClass('text-success').addClass('text-danger');
+                $('#importEinvDuplicate').removeClass('d-none');
+                $('#btnImportXml').prop('disabled', true);
+            } else {
+                $('#previewStatus').text('Mới').removeClass('text-danger').addClass('text-success');
+                $('#importEinvDuplicate').addClass('d-none');
+                $('#btnImportXml').prop('disabled', false);
+            }
+            // Items table
+            var itemsHtml = '';
+            if (d.items) {
+                d.items.forEach(function(item, i) {
+                    itemsHtml += '<tr><td>' + (i+1) + '</td><td>' + escapeHtml(item.product_name || '') + '</td>'
+                        + '<td class="text-end">' + (item.quantity || 0) + '</td>'
+                        + '<td>' + (item.unit || '') + '</td>'
+                        + '<td class="text-end">' + fmt(item.unit_price || 0) + '</td>'
+                        + '<td class="text-end">' + fmt(item.total_before_vat || 0) + '</td>'
+                        + '<td class="text-end">' + (item.vat_rate !== undefined ? item.vat_rate + '%' : '—') + '</td></tr>';
+                });
+            }
+            $('#previewItemsTable').html(itemsHtml);
+            $('#importEinvPreview').removeClass('d-none');
+            $('#importEinvError').addClass('d-none');
+        },
+        error: function(x) {
+            var m = 'Lỗi đọc XML';
+            try { m = JSON.parse(x.responseText).error; } catch(e) {}
+            if (x.status === 422) { $('#importEinvError').removeClass('d-none').text('⚠ ' + m); }
+            else { FormToast.error(m); }
+        },
+        complete: function() {
+            $('#btnPreviewXml').prop('disabled', false).html('<i class="bi bi-eye"></i> Xem trước');
+        }
+    });
+});
+$('#importEinvForm').submit(function(e) {
+    e.preventDefault();
+    if ($('#btnImportXml').prop('disabled')) return;
+    if (!confirm('Xác nhận import hóa đơn này? Hệ thống sẽ tự động tạo chứng từ mua hàng.')) return;
+    const file = $('#einvXmlFile')[0].files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('xml_file', file);
+    formData.append('csrf_token', csrf);
+    $('#btnImportXml').prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> Đang import...');
+    $.ajax({
+        url: '/api/einvoice/import',
+        method: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        success: function(res) {
+            $('#importEinvModal').modal('hide');
+            $('#importEinvForm')[0].reset();
+            $('#importEinvPreview').addClass('d-none');
+            FormToast.success('Import HĐĐT thành công! Đã tạo chứng từ: ' + res.data.description);
+            loadData();
+        },
+        error: function(x) {
+            var m = 'Lỗi import';
+            try { m = JSON.parse(x.responseText).error; } catch(e) {}
+            FormToast.error(m);
+        },
+        complete: function() {
+            $('#btnImportXml').html('<i class="bi bi-file-earmark-arrow-up"></i> Import');
+        }
     });
 });
 $(document).ready(function(){loadSuppliers();loadData();loadVatRates('#vatRate',10);FormValidation.setup('#invForm');FormValidation.setup('#payForm');FormValidation.setup('#prepayForm');FormValidation.setup('#discountForm');FormValidation.setup('#returnForm');});
