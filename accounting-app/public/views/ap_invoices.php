@@ -69,6 +69,10 @@ $title = 'Công nợ phải trả'; $activeMenu = 'ap_invoices'; ob_start(); ?>
         <input type="file" class="form-control" id="einvXmlFile" accept=".xml" required>
         <div class="form-text">Chấp nhận file XML theo chuẩn TCT (TT 32/2025/TT-BTC). Hỗ trợ mẫu 01GTKT.</div>
     </div>
+    <div class="form-check mb-3">
+        <input type="checkbox" class="form-check-input" id="autoGoodsReceipt" checked>
+        <label class="form-check-label" for="autoGoodsReceipt">Tự động tạo phiếu nhập kho (PNK) từ hóa đơn</label>
+    </div>
     <div id="importEinvPreview" class="d-none">
         <hr>
         <h6 class="text-primary mb-3">📋 Thông tin hóa đơn</h6>
@@ -381,6 +385,7 @@ $('#importEinvForm').submit(function(e) {
     const formData = new FormData();
     formData.append('xml_file', file);
     formData.append('csrf_token', csrf);
+    formData.append('auto_goods_receipt', $('#autoGoodsReceipt').is(':checked') ? '1' : '0');
     $('#btnImportXml').prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> Đang import...');
     $.ajax({
         url: '/api/einvoice/import',
@@ -392,7 +397,9 @@ $('#importEinvForm').submit(function(e) {
             $('#importEinvModal').modal('hide');
             $('#importEinvForm')[0].reset();
             $('#importEinvPreview').addClass('d-none');
-            FormToast.success('Import HĐĐT thành công! Đã tạo chứng từ: ' + res.data.description);
+            var msg = 'Import HĐĐT thành công! Đã tạo chứng từ: ' + res.data.description;
+            if (res.data.goods_receipt_id) msg += ' & PNK: ' + res.data.goods_receipt_id;
+            FormToast.success(msg);
             loadData();
         },
         error: function(x) {

@@ -31,10 +31,18 @@ class EInvoiceImportController
             return;
         }
 
+        $input = json_decode($_POST['options'] ?? '{}', true) ?: [];
+        $options = [
+            'auto_goods_receipt' => !empty($_POST['auto_goods_receipt']) || !empty($input['auto_goods_receipt']),
+            'warehouse_id' => $_POST['warehouse_id'] ?? $input['warehouse_id'] ?? null,
+            'receipt_type' => $_POST['receipt_type'] ?? $input['receipt_type'] ?? 'purchase',
+        ];
+
         try {
             $result = $this->importService->importXml(
                 $xmlContent,
-                $_SESSION['user_id'] ?? 'system'
+                $_SESSION['user_id'] ?? 'system',
+                $options
             );
             JsonResponse::ok($result, 201);
         } catch (\InvalidArgumentException $e) {
@@ -125,5 +133,12 @@ class EInvoiceImportController
         } catch (\Throwable $e) {
             JsonResponse::error('Lỗi parse XML: ' . $e->getMessage(), 422);
         }
+    }
+
+    // GET /api/einvoice/import/vat-summary/:period — Tổng hợp VAT từ hóa đơn đã import
+    public function vatSummary(string $period): void
+    {
+        Auth::requirePermission('einvoice', 'read');
+        JsonResponse::ok($this->importService->getVatSummary($period));
     }
 }

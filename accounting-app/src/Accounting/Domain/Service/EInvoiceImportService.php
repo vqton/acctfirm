@@ -5,6 +5,7 @@ use Accounting\Domain\Repository\SupplierRepositoryInterface;
 use Accounting\Domain\Repository\AccountRepositoryInterface;
 use Accounting\Domain\Contract\AuditLoggerInterface;
 use PDO;
+use Accounting\Domain\Service\GoodsReceiptService;
 
 class EInvoiceImportService
 {
@@ -15,6 +16,7 @@ class EInvoiceImportService
     private AccountRepositoryInterface $accountRepo;
     private JournalService $journalService;
     private AuditLoggerInterface $auditLogger;
+    private ?GoodsReceiptService $goodsReceiptService = null;
 
     public function __construct(
         PDO $pdo,
@@ -28,6 +30,12 @@ class EInvoiceImportService
         $this->accountRepo = $accountRepo;
         $this->journalService = $journalService;
         $this->auditLogger = $auditLogger;
+    }
+
+    // Gắn GoodsReceiptService để tự động tạo phiếu nhập kho khi import
+    public function setGoodsReceiptService(GoodsReceiptService $service): void
+    {
+        $this->goodsReceiptService = $service;
     }
 
     // Parse XML hóa đơn → cấu trúc PHP
@@ -128,7 +136,11 @@ class EInvoiceImportService
     }
 
     // Import XML → tạo chứng từ mua hàng
-    public function importXml(string $xmlContent, string $createdBy): array
+    // Options:
+    //   auto_goods_receipt (bool): Tự động tạo phiếu nhập kho
+    //   warehouse_id (string|null): Kho nhập (mặc định: kho đầu tiên)
+    //   receipt_type (string): Loại nhập (purchase|transfer|return|other) mặc định: purchase
+    public function importXml(string $xmlContent, string $createdBy, array $options = []): array
     {
         $parsed = $this->parseXml($xmlContent);
 
@@ -137,6 +149,10 @@ class EInvoiceImportService
         if ($existing) {
             throw new \InvalidArgumentException('Hóa đơn này đã được import. FKey: ' . $parsed['fkey']);
         }
+
+        $warehouseId = $options['warehouse_id'] ?? $this->getDefaultWarehouseId();
+        $receiptType = $options['receipt_type'] ?? 'purchase';
+        $autoGoodsReceipt = $options['auto_goods_receipt'] ?? ($this->goodsReceiptService !== null);
 
         $this->pdo->beginTransaction();
         try {
@@ -200,6 +216,8 @@ class EInvoiceImportService
                 $parsed['invoice_date'] ?: date('Y-m-d')
             );
 
+            $goodsReceiptId = null;
+
             // 4. Lưu record import
             $importId = uniqid('eimp_');
             $stmt = $this->pdo->prepare(
@@ -208,8 +226,8 @@ class EInvoiceImportService
                   supplier_tax_code, supplier_name, supplier_address,
                   buyer_tax_code, buyer_name,
                   total_before_vat, total_vat, grand_total, currency, items,
-                  status, fkey, transaction_id, supplier_id, created_by)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'processed', ?, ?, ?, ?)"
+                  status, fkey, transaction_id, goods_receipt_id, supplier_id, warehouse_id, receipt_type, created_by)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'processed', ?, ?, ?, ?, ?, ?, ?)"
             );
             $stmt->execute([
                 $importId,
@@ -230,11 +248,55 @@ class EInvoiceImportService
                 json_encode($parsed['items']),
                 $parsed['fkey'],
                 $txn->getId(),
+                $goodsReceiptId,
                 $supplierId,
+                $warehouseId,
+                $receiptType,
                 $createdBy,
             ]);
 
             $this->pdo->commit();
+
+            // 3b. Tự động tạo phiếu nhập kho (sau commit để tránh nested transaction)
+            if ($autoGoodsReceipt && $this->goodsReceiptService && $warehouseId) {
+                try {
+                    $grLines = [];
+                    foreach ($parsed['items'] as $item) {
+                        $grLines[] = [
+                            'item_id' => $item['item_id'],
+                            'qty_received' => $item['quantity'],
+                            'unit_price' => $item['unit_price'],
+                        ];
+                    }
+                    $gr = $this->goodsReceiptService->createDraft(
+                        null,
+                        $parsed['supplier']['name'],
+                        $parsed['supplier']['address'] ?? null,
+                        $receiptType,
+                        $warehouseId,
+                        $parsed['invoice_date'] ?: date('Y-m-d'),
+                        null,
+                        'Tự động từ HĐĐT: ' . $parsed['invoice_number'],
+                        $grLines,
+                        $createdBy
+                    );
+                    $postedGr = $this->goodsReceiptService->postReceipt($gr['id'], $createdBy);
+                    $goodsReceiptId = $postedGr['id'];
+                    // Cập nhật goods_receipt_id vào import record
+                    $this->pdo->prepare("UPDATE einvoice_imports SET goods_receipt_id = ? WHERE id = ?")
+                        ->execute([$goodsReceiptId, $importId]);
+                } catch (\Throwable $grE) {
+                    // GR failed but import succeeded — log warning, không rollback import
+                    $this->auditLogger->log(
+                        'einvoice.import.gr_failed',
+                        'einvoice_import',
+                        $importId,
+                        null,
+                        ['error' => $grE->getMessage()],
+                        $createdBy
+                    );
+                }
+            }
 
             $this->auditLogger->log(
                 'einvoice.import',
@@ -246,11 +308,12 @@ class EInvoiceImportService
                     'supplier' => $parsed['supplier']['name'],
                     'total' => $parsed['totals']['grand_total'],
                     'transaction_id' => $txn->getId(),
+                    'goods_receipt_id' => $goodsReceiptId,
                 ],
                 $createdBy
             );
 
-            return [
+            $result = [
                 'import_id' => $importId,
                 'fkey' => $parsed['fkey'],
                 'transaction_id' => $txn->getId(),
@@ -261,11 +324,50 @@ class EInvoiceImportService
                 'grand_total' => $parsed['totals']['grand_total'],
                 'items_count' => count($parsed['items']),
             ];
+            if ($goodsReceiptId) {
+                $result['goods_receipt_id'] = $goodsReceiptId;
+            }
+            return $result;
 
         } catch (\Throwable $e) {
             $this->pdo->rollBack();
             throw $e;
         }
+    }
+
+    // Tổng hợp số liệu VAT từ hóa đơn đã import theo kỳ
+    public function getVatSummary(string $periodCode): array
+    {
+        // Xác định start_date/end_date từ period_code (YYYY-MM)
+        if (preg_match('/^(\d{4})-(\d{2})$/', $periodCode, $m)) {
+            $startDate = $m[1] . '-' . $m[2] . '-01';
+            $endDate = date('Y-m-t', strtotime($startDate));
+        } else {
+            $startDate = $periodCode . '-01-01';
+            $endDate = $periodCode . '-12-31';
+        }
+
+        $stmt = $this->pdo->prepare(
+            "SELECT
+                COUNT(*) as total_invoices,
+                COALESCE(SUM(total_before_vat), 0) as total_purchases,
+                COALESCE(SUM(total_vat), 0) as total_vat_input,
+                COALESCE(SUM(grand_total), 0) as total_payable,
+                COUNT(DISTINCT supplier_tax_code) as supplier_count,
+                COUNT(DISTINCT CASE WHEN goods_receipt_id IS NOT NULL THEN id END) as with_goods_receipt
+             FROM einvoice_imports
+             WHERE status = 'processed'
+               AND invoice_date >= ? AND invoice_date <= ?"
+        );
+        $stmt->execute([$startDate, $endDate]);
+        $summary = $stmt->fetch(PDO::FETCH_ASSOC);
+        $summary['total_purchases'] = (float)$summary['total_purchases'];
+        $summary['total_vat_input'] = (float)$summary['total_vat_input'];
+        $summary['total_payable'] = (float)$summary['total_payable'];
+        $summary['total_invoices'] = (int)$summary['total_invoices'];
+        $summary['supplier_count'] = (int)$summary['supplier_count'];
+        $summary['with_goods_receipt'] = (int)$summary['with_goods_receipt'];
+        return $summary;
     }
 
     // Kiểm tra trùng lặp
@@ -358,5 +460,11 @@ class EInvoiceImportService
         )->execute([$id, $code, $productName, $unit]);
 
         return $id;
+    }
+
+    private function getDefaultWarehouseId(): ?string
+    {
+        $stmt = $this->pdo->query("SELECT id FROM warehouses WHERE status = 1 ORDER BY created_at ASC LIMIT 1");
+        return $stmt->fetchColumn() ?: null;
     }
 }

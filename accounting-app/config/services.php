@@ -226,6 +226,11 @@ function createContainer(): array
     );
     $goodsReceiptController = new GoodsReceiptController($goodsReceiptService);
 
+    // === E-INVOICE IMPORT: Gắn GoodsReceiptService để auto tạo phiếu nhập kho ===
+    if (isset($einvoiceImportService)) {
+        $einvoiceImportService->setGoodsReceiptService($goodsReceiptService);
+    }
+
     // === DASHBOARD SERVICE ===
     // Tổng hợp KPI từ nhiều nguồn — cash balance, revenue/expense YTD, pending approvals, trends
     $dashboardService = new DashboardService($accountRepository, $transactionRepository, $pdo);
