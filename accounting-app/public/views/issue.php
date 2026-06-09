@@ -58,6 +58,7 @@ ob_start(); ?>
     .tt99-signature .sig-col .sig-line { border-top: 1px solid #000 !important; width: 80%; margin: 50px auto 4px; }
     .badge { border: 1px solid #000; color: #000 !important; background: #fff !important; }
     #accountMapping { background: #fff !important; border: 1px solid #000 !important; }
+    .sig-name { border: none !important; background: transparent !important; text-align: center; font-size: 11pt; font-style: italic; padding: 0 !important; margin-top: 30px !important; }
     .text-muted { color: #000 !important; }
     small { font-size: 9pt; }
 }
@@ -161,7 +162,22 @@ ob_start(); ?>
                 </div>
                 <div class="mb-3">
                     <label class="form-label small">Lý do xuất <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control form-control-sm" id="issueReason" placeholder="VD: Xuất bán hàng cho KH..., Xuất NVL sản xuất...">
+                    <div class="input-group input-group-sm">
+                        <select class="form-select form-select-sm" id="issueReasonSelect" onchange="onReasonChange()">
+                            <option value="">-- Chọn lý do --</option>
+                            <option value="Xuất bán hàng cho khách hàng">Xuất bán hàng cho khách hàng</option>
+                            <option value="Xuất nguyên vật liệu sản xuất">Xuất nguyên vật liệu sản xuất</option>
+                            <option value="Xuất công cụ dụng cụ sản xuất">Xuất công cụ dụng cụ sản xuất</option>
+                            <option value="Xuất hàng XDCB">Xuất hàng XDCB</option>
+                            <option value="Xuất nội bộ">Xuất nội bộ</option>
+                            <option value="Xuất hàng mẫu / khuyến mãi">Xuất hàng mẫu / khuyến mãi</option>
+                            <option value="Xuất hàng gửi bán đại lý">Xuất hàng gửi bán đại lý</option>
+                            <option value="Xuất điều chuyển kho">Xuất điều chuyển kho</option>
+                            <option value="Xuất trả lại nhà cung cấp">Xuất trả lại nhà cung cấp</option>
+                            <option value="_other_">Khác (nhập tay)...</option>
+                        </select>
+                        <input type="text" class="form-control form-control-sm" id="issueReason" placeholder="Nhập lý do xuất..." style="display:none">
+                    </div>
                 </div>
                 <div class="mb-3">
                     <label class="form-label small">Ghi chú</label>
@@ -178,15 +194,17 @@ ob_start(); ?>
                         <thead>
                             <tr>
                                 <th width="4%">STT</th>
-                                <th width="22%">Tên vật tư, hàng hóa</th>
-                                <th width="7%">Mã số</th>
-                                <th width="6%">ĐVT</th>
-                                <th width="10%">Tồn kho</th>
-                                <th width="9%">SL Yêu cầu<br><small>(1)</small></th>
-                                <th width="9%">SL Thực xuất<br><small>(2)</small></th>
-                                <th width="11%">Đơn giá<br><small>(3)</small></th>
-                                <th width="14%">Thành tiền<br><small>(4=2x3)</small></th>
-                                <th width="5%"></th>
+                                <th width="20%">Tên vật tư, hàng hóa</th>
+                                <th width="6%">Mã số</th>
+                                <th width="5%">ĐVT</th>
+                                <th width="8%">Tồn kho</th>
+                                <th width="8%">TK Nợ</th>
+                                <th width="8%">TK Có</th>
+                                <th width="7%">SL YC<br><small>(1)</small></th>
+                                <th width="7%">SL TX<br><small>(2)</small></th>
+                                <th width="10%">Đơn giá<br><small>(3)</small></th>
+                                <th width="13%">Thành tiền<br><small>(4=2x3)</small></th>
+                                <th width="4%"></th>
                             </tr>
                         </thead>
                         <tbody id="linesBody"></tbody>
@@ -205,11 +223,31 @@ ob_start(); ?>
 
                 <div class="tt99-signature row g-2">
                     <div class="col-12 text-end small mb-2" id="sigDateLine"><i>Ngày ... tháng ... năm ...</i></div>
-                    <div class="col sig-col"><div class="sig-line">Người lập phiếu</div><small>(Ký, họ tên)</small></div>
-                    <div class="col sig-col"><div class="sig-line">Người nhận hàng</div><small>(Ký, họ tên)</small></div>
-                    <div class="col sig-col"><div class="sig-line">Thủ kho</div><small>(Ký, họ tên)</small></div>
-                    <div class="col sig-col"><div class="sig-line">Kế toán trưởng</div><small>(Ký, họ tên)</small></div>
-                    <div class="col sig-col"><div class="sig-line">Giám đốc</div><small>(Ký, họ tên)</small></div>
+                    <div class="col sig-col">
+                        <div class="sig-line" id="sigLabel1">Người lập phiếu</div>
+                        <small>(Ký, họ tên)</small>
+                        <input type="text" class="form-control form-control-sm mt-1 sig-name" data-role="1" placeholder="Họ tên">
+                    </div>
+                    <div class="col sig-col">
+                        <div class="sig-line" id="sigLabel2">Người nhận hàng</div>
+                        <small>(Ký, họ tên)</small>
+                        <input type="text" class="form-control form-control-sm mt-1 sig-name" data-role="2" placeholder="Họ tên">
+                    </div>
+                    <div class="col sig-col">
+                        <div class="sig-line" id="sigLabel3">Thủ kho</div>
+                        <small>(Ký, họ tên)</small>
+                        <input type="text" class="form-control form-control-sm mt-1 sig-name" data-role="3" placeholder="Họ tên">
+                    </div>
+                    <div class="col sig-col">
+                        <div class="sig-line" id="sigLabel4">Kế toán trưởng</div>
+                        <small>(Ký, họ tên)</small>
+                        <input type="text" class="form-control form-control-sm mt-1 sig-name" data-role="4" placeholder="Họ tên">
+                    </div>
+                    <div class="col sig-col">
+                        <div class="sig-line" id="sigLabel5">Giám đốc</div>
+                        <small>(Ký, họ tên)</small>
+                        <input type="text" class="form-control form-control-sm mt-1 sig-name" data-role="5" placeholder="Họ tên">
+                    </div>
                 </div>
 
                 <div class="mt-3 d-flex gap-2" id="formActions">
@@ -243,6 +281,16 @@ function onIssueTypeChange(){
     var m=accountMapping[t]||accountMapping.sale;
     $('#mappingDebit').text('Nợ '+m.debit);
     $('#mappingCredit').text('Có '+m.credit);
+    $('#linesBody tr').each(function(){updateLineAccounts($(this));});
+}
+function onReasonChange(){
+    var v=$('#issueReasonSelect').val();
+    if(v==='_other_'){ $('#issueReason').show().val('').focus(); }
+    else if(v){ $('#issueReason').hide().val(v); }
+    else { $('#issueReason').hide().val(''); }
+}
+function getReason(){
+    return $('#issueReasonSelect').val()==='_other_' ? $('#issueReason').val() : $('#issueReasonSelect').val();
 }
 function updateSigDate(d){
     if(!d)return;
@@ -290,7 +338,10 @@ function viewIssue(id){
         updateSigDate(d.issue_date);
         $('#receiverName').val(d.receiver_name||'');
         $('#receiverDepartment').val(d.receiver_department||'');
-        $('#issueReason').val(d.issue_reason||'');
+        var reason=d.issue_reason||'';
+        var selectOpt=$('#issueReasonSelect option[value="'+esc(reason)+'"]');
+        if(selectOpt.length){$('#issueReasonSelect').val(reason);$('#issueReason').hide().val('');}
+        else{$('#issueReasonSelect').val('_other_');$('#issueReason').show().val(reason);}
         $('#reference').val(d.reference||'');
         $('#notes').val(d.notes||'');
         $('#totalAmountDisplay').text(fmt(d.total_amount));
@@ -333,6 +384,7 @@ function showCreateForm(){
     $('#btnCancel').addClass('d-none');
     $('#btnPrint').addClass('d-none');
     $('.datepicker, #warehouseId, #issueType, #receiverName, #receiverDepartment, #issueReason, #reference, #notes').prop('disabled',false);
+    $('#issueReasonSelect').val('');$('#issueReason').hide().val('');
     $('#formTitle').text('Tạo phiếu xuất kho mới');
     $('#formSubtitle').text('Mẫu số 02-VT (Kèm theo TT 99/2025/TT-BTC)');
     $('#listView').hide();
@@ -349,7 +401,7 @@ function showList(){
 function addLineRow(line){
     var i=$('#linesBody tr').length+1;
     var opts='<option value="">-- Chọn --</option>';
-    items.forEach(function(it){opts+='<option value="'+esc(it.id)+'" data-code="'+esc(it.code||'')+'" data-uom="'+esc(it.uom||'')+'" data-name="'+esc(it.name)+'" '+(line&&line.item_id===it.id?'selected':'')+'>'+esc(it.code)+' - '+esc(it.name)+'</option>';});
+    items.forEach(function(it){opts+='<option value="'+esc(it.id)+'" data-code="'+esc(it.code||'')+'" data-uom="'+esc(it.uom||'')+'" data-name="'+esc(it.name)+'" data-item-type="'+esc(it.item_type||'')+'" '+(line&&line.item_id===it.id?'selected':'')+'>'+esc(it.code)+' - '+esc(it.name)+'</option>';});
     var qtyReq=line?line.requested_qty:'';
     var qtyAct=line?line.actual_qty:'';
     var price=line?line.unit_price:'';
@@ -360,6 +412,8 @@ function addLineRow(line){
         '<td class="text-center item-code">'+(line?esc(line.item_code):'')+'</td>'+
         '<td class="text-center item-uom">'+(line?esc(line.uom):'')+'</td>'+
         '<td class="stock-info small"></td>'+
+        '<td class="text-center debit-acc font-monospace small fw-bold text-primary"></td>'+
+        '<td class="text-center credit-acc font-monospace small fw-bold text-danger"></td>'+
         '<td><input type="number" class="form-control form-control-sm qty-req" step="0.01" min="0" value="'+qtyReq+'" oninput="updateLineTotal(this)"></td>'+
         '<td><input type="number" class="form-control form-control-sm qty-act" step="0.01" min="0" value="'+qtyAct+'" oninput="updateLineTotal(this)"></td>'+
         '<td><input type="text" class="form-control form-control-sm unit-price text-end" value="'+price+'" readonly style="background:#f5f5f5"></td>'+
@@ -367,9 +421,13 @@ function addLineRow(line){
         '<td class="text-center"><span class="line-remove" onclick="removeLine(this)">×</span></td>'+
     '</tr>');
     if(line && line.item_id) { fetchStock(line.item_id, $('#linesBody tr:last')); }
+    updateLineAccounts($('#linesBody tr:last'));
 }
 
 function addLine(){ addLineRow(null); }
+
+var debitAccMap={sale:'632',production:'621',construction:'241',internal:'136',other:'???'};
+var creditAccMap={goods:'156',material:'152',tool:'153',product:'155',semi_product:'154',other:'152'};
 
 function onItemChange(el){
     var opt=$(el).find(':selected');
@@ -383,6 +441,13 @@ function onItemChange(el){
     }else{
         row.find('.stock-info').text('').removeClass('text-warning text-danger');
     }
+    updateLineAccounts(row);
+}
+function updateLineAccounts(row){
+    var iType=$('#issueType').val();
+    var itemType=row.find('.item-select option:selected').data('item-type')||'goods';
+    row.find('.debit-acc').text('Nợ '+(debitAccMap[iType]||'632'));
+    row.find('.credit-acc').text('Có '+(creditAccMap[itemType]||'152'));
 }
 function fetchStock(itemId,row){
     $.get('/api/inventory/issues/stock-check/'+itemId,function(d){
@@ -447,7 +512,7 @@ function amountToWords(n){
 // Submit tạo nháp
 $('#issueForm').submit(function(e){
     e.preventDefault();
-    if(!$('#issueReason').val().trim()){showToast('Vui lòng nhập lý do xuất kho.','error');return;}
+    if(!getReason()){showToast('Vui lòng nhập lý do xuất kho.','error');return;}
     if(!$('#receiverName').val().trim()){showToast('Vui lòng nhập người nhận hàng.','error');return;}
     var lines=[];
     $('#linesBody tr').each(function(){
@@ -464,7 +529,7 @@ $('#issueForm').submit(function(e){
         issue_type: $('#issueType').val(),
         receiver_name: $('#receiverName').val().trim(),
         receiver_department: $('#receiverDepartment').val().trim()||null,
-        issue_reason: $('#issueReason').val().trim(),
+        issue_reason: getReason(),
         reference: $('#reference').val().trim()||null,
         notes: $('#notes').val().trim()||null,
         lines: lines
