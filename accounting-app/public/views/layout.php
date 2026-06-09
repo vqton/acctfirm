@@ -5,8 +5,10 @@ header('Content-Type: text/html; charset=utf-8');
 $title = $title ?? 'BookWise';
 $activeMenu = $activeMenu ?? 'dashboard';
 
-function isActive($keys, $menu) {
-    return in_array($menu, (array)$keys);
+if (!function_exists('isActive')) {
+    function isActive($keys, $menu) {
+        return in_array($menu, (array)$keys);
+    }
 }
 
 // === MENU DYNAMIC LOAD ===
@@ -34,10 +36,19 @@ $currentUri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
 <link rel="icon" type="image/svg+xml" href="/assets/images/bookwise-icon.svg">
 <link href="/assets/css/bootstrap.min.css" rel="stylesheet">
 <link href="/assets/css/bootstrap-icons.css" rel="stylesheet">
+<link href="/assets/js/components/form-components.css" rel="stylesheet">
+<link href="/assets/css/vas-financial.css" rel="stylesheet">
 <script src="/assets/js/jquery-3.7.1.min.js"></script>
 <script src="/assets/js/bootstrap.bundle.min.js"></script>
+<script src="/assets/js/components/form-toast.js"></script>
+<script src="/assets/js/components/form-confirm.js"></script>
+<script src="/assets/js/components/form-modal.js"></script>
+<script src="/assets/js/components/form-validation.js"></script>
+<script src="/assets/js/components/form-grid.js"></script>
+<script src="/assets/js/components/account-picker.js"></script>
+<script src="/assets/js/vas-financial.js"></script>
 <style>
-body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; }
+body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; line-height:1.6; }
 .sidebar { width:250px; background:#1e2a3a; color:#b4bcc8; position:fixed; top:0; left:0; height:100vh; z-index:1000; display:flex; flex-direction:column; }
 .sidebar .brand { padding:16px 20px; background:#15202b; border-bottom:1px solid #2a3546; }
 .sidebar .brand h6 { margin:0; color:#fff; font-weight:600; letter-spacing:.3px; }
@@ -180,7 +191,7 @@ if (!empty($section['children'])) {
             <a class="nav-link-s" data-bs-toggle="collapse" href="#menu<?= $secId ?>">
                 <?php if ($section['icon']): ?><i class="bi <?= \Accounting\Infrastructure\Helpers::e($section['icon']) ?>"></i><?php endif; ?>
                 <span><?= \Accounting\Infrastructure\Helpers::e($section['label'] ?? '') ?></span>
-                <?php if ($section['badge']): ?><span class="badge badge-sidebar"><?= \Accounting\Infrastructure\Helpers::e($section['badge']) ?></span><?php endif; ?>
+                <?php if (!empty($section['badge'])): ?><span class="badge badge-sidebar"><?= \Accounting\Infrastructure\Helpers::e($section['badge']) ?></span><?php endif; ?>
                 <i class="bi bi-chevron-right ms-auto"></i>
             </a>
             <div class="collapse sub-menu<?= $hasActive ? ' show' : '' ?>" id="menu<?= $secId ?>">
@@ -191,7 +202,7 @@ $isChildActive = $childRoute !== '#' && ($currentUri === $childRoute || $current
                 <a href="<?= \Accounting\Infrastructure\Helpers::e($childRoute) ?>" class="nav-link-s<?= $isChildActive ? ' active' : '' ?>">
                     <?php if ($child['icon']): ?><i class="bi <?= \Accounting\Infrastructure\Helpers::e($child['icon']) ?>"></i><?php endif; ?>
                     <span><?= \Accounting\Infrastructure\Helpers::e($child['label'] ?? '') ?></span>
-                    <?php if ($child['badge']): ?><span class="badge badge-sidebar"><?= \Accounting\Infrastructure\Helpers::e($child['badge']) ?></span><?php endif; ?>
+                    <?php if (!empty($child['badge'])): ?><span class="badge badge-sidebar"><?= \Accounting\Infrastructure\Helpers::e($child['badge']) ?></span><?php endif; ?>
                 </a>
 <?php endforeach; ?>
             </div>
@@ -237,30 +248,68 @@ $isChildActive = $childRoute !== '#' && ($currentUri === $childRoute || $current
 var csrf=<?= json_encode(Auth::csrfToken()) ?>;
 function esc(s){return String(s).replace(/[&<>"']/g,function(m){if(m==='&')return'&amp;';if(m==='<')return'&lt;';if(m==='>')return'&gt;';if(m==='"')return'&quot;';return'&#39;';});}
 
-function showToast(msg,type){
-    var icon=type==='success'?'bi-check-circle-fill text-success':'bi-x-circle-fill text-danger';
-    var t=$('<div class="toast show align-items-center border-0" role="alert"><div class="d-flex"><div class="toast-body"><i class="bi '+icon+' me-2"></i>'+msg+'</div><button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast"></button></div></div>');
-    $('#toastContainer').append(t);
-    setTimeout(function(){t.remove();},3000);
+// === VAS FINANCIAL HELPERS ===
+// Global shorthands for VAS.fmt — available in ALL views
+function fmt(n, opts) { return VAS.fmt(n, opts); }
+function fmtZero(n, opts) { return VAS.fmt(n, Object.assign({}, opts||{}, {zeroDash:true})); }
+function fmtDrCr(d, c) { return VAS.fmtDrCr(d, c); }
+
+// Global status badge — unified across all views
+function statusBadge(status) {
+    var labels = {
+        draft:'Nháp',submitted:'Chờ duyệt',pending:'Chờ duyệt',
+        approved:'Đã duyệt',posted:'Đã ghi sổ',paid:'Đã chi',
+        cancelled:'Đã hủy',reversed:'Đã đảo',closed:'Đã đóng',
+        active:'Hoạt động',inactive:'Ngừng',
+        completed:'Hoàn thành',confirmed:'Đã xác nhận',
+        finalised:'Đã chốt',issued:'Đã phát hành',
+        matched:'Đã đối chiếu',sent:'Đã gửi',
+        running:'Đang chạy',in_progress:'Đang thực hiện',
+        written_off:'Đã xóa sổ',prepayment:'Tạm ứng',
+        unpaid:'Chưa TT',partial:'Một phần',
+        released:'Đã phát hành',costed:'Đã tính giá',
+        liquidated:'Đã thanh lý',open:'Đang mở',
+        verified:'Đã xác thực',unverified:'Chưa xác thực',
+        yes:'Có',no:'Không',
+        warning:'Cảnh báo',mismatch:'Lệch',
+        pending_approval:'Chờ duyệt',partially_received:'Nhận một phần',
+        rejected:'Từ chối',fulfilled:'Đã đặt hàng'
+    };
+    var classes = {
+        draft:'badge-warning',submitted:'badge-info',pending:'badge-info',
+        approved:'badge-active',posted:'badge-active',paid:'badge-active',
+        cancelled:'badge-inactive',reversed:'badge-inactive',closed:'badge-secondary',
+        active:'badge-active',inactive:'badge-inactive',
+        completed:'badge-active',confirmed:'badge-active',
+        finalised:'badge-success',issued:'badge-active',
+        matched:'badge-active',sent:'badge-active',
+        running:'badge-warning',in_progress:'badge-warning',
+        written_off:'badge-inactive',prepayment:'badge-warning',
+        unpaid:'badge-warning',partial:'badge-warning',
+        released:'badge-warning',costed:'badge-success',
+        liquidated:'badge-light',open:'badge-active',
+        verified:'badge-active',unverified:'badge-warning',
+        yes:'badge-active',no:'badge-inactive',
+        warning:'badge-warning',mismatch:'badge-danger',
+        pending_approval:'badge-info',partially_received:'badge-info',
+        rejected:'badge-danger',fulfilled:'badge-inactive'
+    };
+    var label = labels[status] || status;
+    var cls = classes[status] || 'badge-secondary';
+    return '<span class="badge-status ' + cls + '">' + esc(label) + '</span>';
 }
 
-function hideConfirm(){document.getElementById('confirmOverlay').style.display='none';}
+// Backward-compatible: showToast → FormToast (already set by form-toast.js)
+// Backward-compatible: hideConfirm → ẩn cả overlay cũ và modal mới
+function hideConfirm(){
+    document.getElementById('confirmOverlay').style.display='none';
+    $('#formConfirmModal').modal('hide');
+}
 
-var deleteId=null,deleteApi=null;
+// Backward-compatible: confirmDelete → FormConfirm
 function confirmDelete(id,api,name){
-    deleteId=id;deleteApi=api;
-    document.getElementById('confirmTitle').textContent='Xóa';
-    document.getElementById('confirmMessage').textContent='Bạn có chắc chắn muốn xóa "'+esc(name)+'"?';
-    document.getElementById('confirmOverlay').style.display='flex';
+    FormConfirm.confirmDelete(api+'/'+id, name, function(){ if(typeof loadData==='function') loadData(); });
 }
-document.getElementById('confirmBtn').addEventListener('click',function(){
-    if(deleteId&&deleteApi){
-        fetch(deleteApi+'/'+deleteId,{method:'DELETE'})
-            .then(function(){showToast('Đã xóa dữ liệu thành công.','success');loadData();})
-            .catch(function(){showToast('Có lỗi xảy ra khi xóa dữ liệu. Vui lòng thử lại.','error');});
-    }
-    hideConfirm();
-});
 
 // Tải danh sách thuế suất VAT active từ API và render vào <select>
 // selector: CSS selector của <select>, defaultRate: giá trị mặc định (VD: 10)

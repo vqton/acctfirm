@@ -1,0 +1,97 @@
+/**
+ * FormComponents CSS — Phong cách chung cho thư viện thành phần
+ */
+
+/* FormGrid */
+.form-grid .table { margin-bottom: 0; }
+.form-grid .table td { padding: 2px 4px !important; vertical-align: middle; }
+.form-grid .table td input,
+.form-grid .table td select {
+    border-radius: 3px !important;
+    min-height: 28px;
+}
+.form-grid .table td input:focus,
+.form-grid .table td select:focus {
+    border-color: #4f6ef7 !important;
+    box-shadow: 0 0 0 2px rgba(79,110,247,.15) !important;
+    outline: none;
+}
+.form-grid .grid-total-row td {
+    border-top: 2px solid #1a2a3a !important;
+    font-weight: 600;
+    background: #f8f9fc;
+}
+.form-grid .grid-remove-btn {
+    opacity: 0.5;
+    transition: opacity 0.15s;
+    cursor: pointer;
+}
+.form-grid .grid-remove-btn:hover { opacity: 1; background: #fef2f2 !important; }
+.form-grid tr:hover .grid-remove-btn { opacity: 0.8; }
+
+/* FormValidation */
+.is-invalid { border-color: #dc2626 !important; }
+.is-valid { border-color: #10b981 !important; }
+.form-validation-error {
+    animation: fvFadeIn 0.2s ease-out;
+}
+@keyframes fvFadeIn {
+    from { opacity: 0; transform: translateY(-2px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* FormConfirm */
+#formConfirmModal .modal-footer { gap: 6px; }
+
+/* FormModal loading */
+.form-modal-loading { min-height: 120px; }
+
+/* Toast improvements */
+.toast-notification .toast {
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.12);
+    transition: opacity 0.2s;
+}
+
+/* Input group consistency */
+.input-group-sm-custom { display: flex; gap: 4px; align-items: center; }
+.input-group-sm-custom select,
+.input-group-sm-custom input { flex: 1; min-width: 0; }
+
+/* Badge cố định cho trạng thái */
+.badge-fixed { min-width: 60px; text-align: center; }
+
+/* Hover highlight cho grid row */
+.form-grid tbody tr { transition: background 0.1s; }
+.form-grid tbody tr:hover { background: #f5f7ff; }
+
+/* Scrollbar cho grid dài */
+.form-grid .table-responsive { max-height: 400px; overflow-y: auto; }
+.form-grid .table-responsive thead th { position: sticky; top: 0; z-index: 2; }
+
+/* Hiệu ứng khi thêm/xóa dòng */
+.form-grid tr.line-row {
+    animation: gridRowIn 0.15s ease-out;
+}
+@keyframes gridRowIn {
+    from { opacity: 0.5; background: #eef2ff; }
+    to { opacity: 1; background: transparent; }
+}
+
+/* AccountPicker */
+.acc-picker-wrapper .acc-picker-input {
+    font-size: 13px;
+    min-height: 28px;
+}
+.acc-picker-wrapper .acc-picker-dropdown {
+    font-size: 13px;
+}
+.acc-picker-wrapper .acc-picker-item.active {
+    background: #eef2ff;
+}
+.acc-picker-wrapper .acc-picker-item:hover {
+    background: #f5f7ff;
+}
+.acc-picker-wrapper .acc-picker-item:last-child {
+    border-bottom: none !important;
+}

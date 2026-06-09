@@ -22,14 +22,14 @@ $title = 'Chứng từ ghi sổ'; $activeMenu = 'journal'; ob_start(); ?>
 <div class="modal-header"><h5 class="modal-title">Nhập bút toán</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
 <div class="modal-body">
     <div class="row g-2 mb-2">
-        <div class="col-6"><label>Diễn giải</label><input class="form-control" id="description" placeholder="Nội dung nghiệp vụ" required></div>
-        <div class="col-3"><label>Ngày</label><input type="date" class="form-control" id="txnDate"></div>
+        <div class="col-6"><label>Diễn giải</label><input class="form-control" id="description" placeholder="Nội dung nghiệp vụ" data-v-required="Diễn giải"></div>
+        <div class="col-3"><label>Ngày</label><input type="date" class="form-control" id="txnDate" data-v-required="Ngày chứng từ" data-v-date="Ngày chứng từ"></div>
         <div class="col-3"><label>Số CT</label><input class="form-control" id="reference" placeholder="Để trống = tự động"></div>
     </div>
     <div class="mb-2"><label class="d-flex justify-content-between"><span>Định khoản</span><span id="drCrStatus" class="text-success fw-bold">Nợ = Có (0)</span></label></div>
     <div id="linesContainer">
         <div class="row g-1 mb-1 line-row">
-            <div class="col-5"><select class="form-select form-select-sm acc-picker" required><option value="">-- TK --</option></select></div>
+            <div class="col-5"><select class="form-select form-select-sm acc-picker" required><option value="">-- TK --</option></select><span class="acc-picker-note" style="font-size:10px;color:#6d8aaa;display:block;margin-top:1px;">Gõ mã hoặc tên TK</span></div>
             <div class="col-2"><select class="form-select form-select-sm dr-cr"><option value="1">Nợ</option><option value="0">Có</option></select></div>
             <div class="col-4"><input type="number" class="form-control form-control-sm amount-input" step="1" min="1" placeholder="Số tiền"></div>
             <div class="col-1"><button type="button" class="btn btn-sm btn-outline-danger add-line"><i class="bi bi-plus-lg"></i></button></div>
@@ -70,10 +70,9 @@ function loadData(){
             var drStr=drLines.map(function(l){return l.account_code;}).join(', ');
             var crStr=crLines.map(function(l){return l.account_code;}).join(', ');
             var total=r.lines.reduce(function(s,l){return s+parseFloat(l.amount);},0)/2;
-            var badge=r.status==='posted'?'<span class="badge-status badge-active">Đã ghi sổ</span>':'<span class="bg-warning text-dark">Nháp</span>';
             var actions='';
             if(r.status==='pending')actions='<button class="btn btn-sm btn-outline-success" onclick="approveEntry(\''+esc(r.id)+'\')"><i class="bi bi-check-lg"></i> Duyệt</button>';
-            tbody.append('<tr><td>'+esc(r.reference)+'</td><td>'+esc(r.description)+'</td><td style="font-size:12px">'+esc(r.date)+'</td><td>'+esc(drStr)+'</td><td>'+esc(crStr)+'</td><td class="text-end font-monospace">'+parseFloat(total).toLocaleString()+'</td><td>'+badge+'</td><td>'+actions+'</td></tr>');
+            tbody.append('<tr><td>'+esc(r.reference)+'</td><td>'+esc(r.description)+'</td><td style="font-size:12px">'+esc(r.date)+'</td><td>'+esc(drStr)+'</td><td>'+esc(crStr)+'</td><td class="text-end font-monospace">'+fmtZero(total)+'</td><td>'+statusBadge(r.status)+'</td><td>'+actions+'</td></tr>');
         });
     });
 }
@@ -88,42 +87,39 @@ function loadData(){
             var drStr=drLines.map(function(l){return l.account_code;}).join(', ');
             var crStr=crLines.map(function(l){return l.account_code;}).join(', ');
             var total=r.lines.reduce(function(s,l){return s+parseFloat(l.amount);},0)/2;
-            var badge=r.status==='posted'?'<span class="badge-status badge-active">Đã ghi sổ</span>':(r.status==='reversed'?'<span class="badge bg-secondary">Đã đảo</span>':'<span class="badge bg-warning text-dark">Nháp</span>');
             var actions='';
             if(r.status==='pending')actions='<button class="btn btn-sm btn-outline-success" onclick="approveEntry(\''+esc(r.id)+'\')"><i class="bi bi-check-lg"></i> Duyệt</button>';
             else if(r.status==='posted')actions='<button class="btn btn-sm btn-outline-warning" onclick="reverseEntry(\''+esc(r.id)+'\')"><i class="bi bi-arrow-counterclockwise"></i> Đảo ngược</button>';
-            tbody.append('<tr><td>'+esc(r.reference)+'</td><td>'+esc(r.description)+'</td><td style="font-size:12px">'+esc(r.date)+'</td><td>'+esc(drStr)+'</td><td>'+esc(crStr)+'</td><td class="text-end font-monospace">'+parseFloat(total).toLocaleString()+'</td><td>'+badge+'</td><td>'+actions+'</td></tr>');
+            tbody.append('<tr><td>'+esc(r.reference)+'</td><td>'+esc(r.description)+'</td><td style="font-size:12px">'+esc(r.date)+'</td><td>'+esc(drStr)+'</td><td>'+esc(crStr)+'</td><td class="text-end vas-number">'+fmtZero(total)+'</td><td>'+statusBadge(r.status)+'</td><td>'+actions+'</td></tr>');
         });
     });
 }
 // Duyệt và ghi sổ bút toán — gọi POST /api/journal/approve/{id}
 // RỦI RO: Sau khi duyệt, bút toán không thể sửa/xóa — cần xác nhận trước
 function approveEntry(id){
-    if(!confirm('Duyệt bút toán này? Giao dịch sẽ được ghi sổ.'))return;
-    $.ajax({url:'/api/journal/approve/'+id,method:'POST',headers:{'X-CSRF-Token':csrf},
-        success:function(){showToast('Đã ghi sổ bút toán thành công.','success');loadData();},
-        error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}
+    FormConfirm.confirm('Duyệt bút toán','Bút toán này sẽ được ghi sổ và không thể sửa/xóa. Tiếp tục?',function(ok){
+        if(!ok)return;
+        $.ajax({url:'/api/journal/approve/'+id,method:'POST',headers:{'X-CSRF-Token':csrf},
+            success:function(){FormToast.success('Đã ghi sổ bút toán thành công.');loadData();},
+            error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}FormToast.error(m);}
+        });
     });
 }
 // R-2: Đảo ngược bút toán đã ghi sổ — tạo bút toán ngược (R-1)
 // NGHIỆP VỤ: Khi phát hiện sai sót, tạo bút toán ngược thay vì sửa/xóa (audit trail)
 // RỦI RO: Không thể khôi phục sau khi reverse — phải tạo bút toán mới nếu muốn sửa lại
 function reverseEntry(id){
-    var reason=prompt('Lý do đảo ngược (bắt buộc, ghi vào audit trail):');
-    if(!reason||!reason.trim())return;
-    if(!confirm('Xác nhận đảo ngược bút toán này? Hành động này không thể hoàn tác.'))return;
-    $.ajax({url:'/api/corrections/negative',method:'POST',headers:{'X-CSRF-Token':csrf},
-        contentType:'application/json',
-        data:JSON.stringify({original_transaction_id:id,reason:reason.trim()}),
-        success:function(r){showToast('Đã tạo bút toán ngược: '+r.reference,'success');loadData();},
-        error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}
-    });
-}
-function loadAccounts(sel){
-    $.get('/api/coa',function(data){
-        var o='<option value="">-- TK --</option>';
-        data.forEach(function(a){o+='<option value="'+esc(a.code)+'">'+esc(a.code)+' - '+esc(a.name)+'</option>';});
-        sel.html(o);
+    FormConfirm.prompt('Đảo ngược bút toán','Lý do đảo ngược (bắt buộc, ghi vào audit trail):',function(reason){
+        if(!reason||!reason.trim())return;
+        FormConfirm.confirm('Xác nhận đảo ngược','Hành động này không thể hoàn tác. Tiếp tục?',function(ok){
+            if(!ok)return;
+            $.ajax({url:'/api/corrections/negative',method:'POST',headers:{'X-CSRF-Token':csrf},
+                contentType:'application/json',
+                data:JSON.stringify({original_transaction_id:id,reason:reason.trim()}),
+                success:function(r){FormToast.success('Đã tạo bút toán ngược: '+r.reference);loadData();},
+                error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}FormToast.error(m);}
+            });
+        });
     });
 }
 // Tính toán và hiển thị trạng thái cân đối Nợ/Có real-time
@@ -145,10 +141,12 @@ function recalcTotal(){
 // Nghiệp vụ: Mỗi bút toán cần ít nhất 1 Nợ và 1 Có, tổng tiền bằng nhau
 $(document).on('click','.add-line',function(){
     var row=$('.line-row:first').clone();
-    row.find('.acc-picker').html('<option value="">-- TK --</option>');row.find('.amount-input').val('');
+    row.find('.acc-picker').val('');row.find('.amount-input').val('').attr('data-v-required','Số tiền').attr('data-v-number','Số tiền');
     row.find('.add-line').removeClass('btn-outline-danger add-line').addClass('btn-outline-secondary remove-line').html('<i class="bi bi-dash-lg"></i>');
+    row.find('.acc-picker-wrapper').remove();
+    row.find('.acc-picker').show().data('acc-picker-initialized',false);
     $('#linesContainer').append(row);
-    loadAccounts(row.find('.acc-picker'));
+    AccountPicker.enhance(row.find('.acc-picker'));
     recalcTotal();
 });
 $(document).on('click','.remove-line',function(){$(this).closest('.line-row').remove();recalcTotal();});
@@ -160,24 +158,29 @@ $(document).on('change input','.amount-input,.dr-cr',recalcTotal);
 //   3. Mỗi dòng phải có tài khoản và số tiền
 // RỦI RO: Nếu bỏ qua kiểm tra Dr=Cr, bút toán sẽ làm sai bảng CĐPS
 $('#entryForm').submit(function(e){e.preventDefault();
+    // Validate form fields
+    var v=FormValidation.validate('#entryForm');
+    if(!v.valid)return;
     var lines=[];$('#linesContainer .line-row').each(function(){
         var ac=$(this).find('.acc-picker').val();var amt=$(this).find('.amount-input').val();var dr=$(this).find('.dr-cr').val();
         if(ac&&amt)lines.push({account_code:ac,amount:parseFloat(amt),is_debit:parseInt(dr)?true:false});
     });
-    if(lines.length<2){showToast('Bút toán cần có ít nhất 2 dòng định khoản (Nợ và Có).','error');return;}
+    if(lines.length<2){FormToast.error('Bút toán cần có ít nhất 2 dòng định khoản (Nợ và Có).');return;}
     var totalDr=0,totalCr=0;
     lines.forEach(function(l){if(l.is_debit)totalDr+=l.amount;else totalCr+=l.amount;});
-    if(Math.abs(totalDr-totalCr)>10){showToast('Tổng Nợ và tổng Có chưa cân bằng. Vui lòng kiểm tra lại số tiền các dòng định khoản.','error');return;}
+    var drcr=FormValidation.checkDrCr(totalDr,totalCr);
+    if(!drcr.valid){FormToast.error(drcr.message);return;}
     $.ajax({url:'/api/journal/draft',method:'POST',contentType:'application/json',headers:{'X-CSRF-Token':csrf},
         data:JSON.stringify({description:$('#description').val(),reference:$('#reference').val(),lines:lines,transaction_date:$('#txnDate').val()}),
-        success:function(){$('#entryModal').modal('hide');$('#entryForm')[0].reset();$('#linesContainer .line-row:not(:first)').remove();showToast('Đã lưu bút toán nháp thành công.','success');loadData();},
-        error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}
+        success:function(){$('#entryModal').modal('hide');$('#entryForm')[0].reset();$('#linesContainer .line-row:not(:first)').remove();FormToast.success('Đã lưu bút toán nháp thành công.');loadData();},
+        error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}FormToast.error(m);}
     });
 });
 $(document).ready(function(){
     loadPeriods();
     $('#periodFilter').on('change',loadData);
-    $('.line-row:first').each(function(){loadAccounts($(this).find('.acc-picker'));});
+    AccountPicker.enhance('.acc-picker');
+    FormValidation.setup('#entryForm');
 });
 </script>
 <?php $content = ob_get_clean(); require __DIR__ . '/layout.php'; ?>
