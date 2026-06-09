@@ -6,6 +6,17 @@ use Accounting\Infrastructure\JsonResponse;
 // CSRF token
 $router->get('/api/csrf-token', function() { JsonResponse::ok(['token' => Auth::csrfToken()]); });
 
+// VnWords — chuyển số thành chữ (VD: "Một trăm triệu đồng")
+$router->get('/api/helpers/vn-words', function() {
+    $amount = (float)($_GET['amount'] ?? 0);
+    $words = '';
+    if ($amount > 0) {
+        try { $words = \Accounting\Domain\ValueObject\VnWords::toWords($amount); }
+        catch (\Exception $e) { $words = ''; }
+    }
+    JsonResponse::ok(['words' => $words]);
+});
+
 // === INTERCOMPANY (Nội bộ) ===
 $router->get('/api/ic/entities', function() use ($c) { $c['IntercompanyController']->entities(); });
 $router->get('/api/ic/match/:entityId', function($entityId) use ($c) { $c['IntercompanyController']->match($entityId); });
@@ -69,3 +80,85 @@ $router->get('/api/menu/section/:section', function($section) use ($c) { $c['Men
 $router->get('/api/menu/favorites', function() use ($c) { $c['MenuController']->getFavorites(); });
 $router->post('/api/menu/favorites', function() use ($c) { $c['MenuController']->addFavorite(); });
 $router->delete('/api/menu/favorites/:id', function($id) use ($c) { $c['MenuController']->removeFavorite($id); });
+
+// === JOURNAL ATTACHMENTS (Slice 4) ===
+// Upload file đính kèm cho bút toán — hỗ trợ PDF, JPG, PNG, Excel
+// Nghiệp vụ: TT99 Điều 16 — chứng từ gốc phải được đính kèm bút toán
+// Rủi ro: File upload không validate → file độc hại. Giới hạn 10MB, white-list MIME
+$router->post('/api/journal/attachments/upload', function() {
+    Auth::requirePermission('journal', 'create');
+    $txnId = $_POST['transaction_id'] ?? '';
+    if (!$txnId) { JsonResponse::error('Thiếu transaction_id', 400); return; }
+    if (!isset($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
+        JsonResponse::error('Lỗi upload file', 400); return;
+    }
+    $file = $_FILES['file'];
+    $allowedMime = ['application/pdf','image/jpeg','image/png','image/gif',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.ms-excel','application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    $mime = finfo_file($finfo, $file['tmp_name']);
+    finfo_close($finfo);
+    if (!in_array($mime, $allowedMime)) {
+        JsonResponse::error('Định dạng file không được hỗ trợ. Chấp nhận: PDF, JPG, PNG, GIF, Excel, Word', 400);
+        return;
+    }
+    $maxSize = 10 * 1024 * 1024;
+    if ($file['size'] > $maxSize) {
+        JsonResponse::error('File quá lớn (tối đa 10MB)', 400); return;
+    }
+    $ext = pathinfo($file['name'], PATHINFO_EXTENSION);
+    $storedName = uniqid('att_') . '.' . $ext;
+    $uploadDir = __DIR__ . '/../../public/uploads/attachments/';
+    if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+    $dest = $uploadDir . $storedName;
+    if (!move_uploaded_file($file['tmp_name'], $dest)) {
+        JsonResponse::error('Không thể lưu file', 500); return;
+    }
+    $pdo = $GLOBALS['container']['pdo'];
+    $stmt = $pdo->prepare("INSERT INTO journal_attachments (transaction_id, original_name, stored_name, mime_type, file_size, uploaded_by)
+        VALUES (?, ?, ?, ?, ?, ?)");
+    $stmt->execute([$txnId, $file['name'], $storedName, $mime, $file['size'], $_SESSION['user']['username'] ?? 'system']);
+    $id = $pdo->lastInsertId();
+    JsonResponse::ok(['id' => $id, 'original_name' => $file['name'], 'stored_name' => $storedName, 'file_size' => $file['size']], 201);
+});
+
+// Download attachment
+$router->get('/api/journal/attachments/:id/download', function($id) {
+    $pdo = $GLOBALS['container']['pdo'];
+    $stmt = $pdo->prepare("SELECT * FROM journal_attachments WHERE id = ?");
+    $stmt->execute([$id]);
+    $att = $stmt->fetch(\PDO::FETCH_ASSOC);
+    if (!$att) { JsonResponse::error('Không tìm thấy file', 404); return; }
+    $path = __DIR__ . '/../../public/uploads/attachments/' . $att['stored_name'];
+    if (!file_exists($path)) { JsonResponse::error('File không tồn tại trên server', 404); return; }
+    header('Content-Type: ' . $att['mime_type']);
+    header('Content-Disposition: attachment; filename="' . $att['original_name'] . '"');
+    header('Content-Length: ' . filesize($path));
+    readfile($path);
+    exit;
+});
+
+// List attachments for a transaction
+$router->get('/api/journal/attachments/:transactionId', function($transactionId) {
+    $pdo = $GLOBALS['container']['pdo'];
+    $stmt = $pdo->prepare("SELECT id, transaction_id, original_name, mime_type, file_size, description, uploaded_by, created_at FROM journal_attachments WHERE transaction_id = ? ORDER BY created_at DESC");
+    $stmt->execute([$transactionId]);
+    JsonResponse::ok($stmt->fetchAll(\PDO::FETCH_ASSOC));
+});
+
+// Delete attachment
+$router->delete('/api/journal/attachments/:id', function($id) {
+    Auth::requirePermission('journal', 'create');
+    $pdo = $GLOBALS['container']['pdo'];
+    $stmt = $pdo->prepare("SELECT * FROM journal_attachments WHERE id = ?");
+    $stmt->execute([$id]);
+    $att = $stmt->fetch(\PDO::FETCH_ASSOC);
+    if (!$att) { JsonResponse::error('Không tìm thấy file', 404); return; }
+    $path = __DIR__ . '/../../public/uploads/attachments/' . $att['stored_name'];
+    if (file_exists($path)) unlink($path);
+    $stmt = $pdo->prepare("DELETE FROM journal_attachments WHERE id = ?");
+    $stmt->execute([$id]);
+    JsonResponse::ok(['deleted' => true]);
+});

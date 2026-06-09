@@ -46,6 +46,17 @@ $title = 'Chứng từ ghi sổ'; $activeMenu = 'journal'; ob_start(); ?>
         <div class="col-2 text-end text-muted" style="font-size:11px;">Bằng chữ:</div>
         <div class="col-5"><span id="amountInWords" class="text-muted" style="font-size:12px;font-style:italic;">—</span></div>
     </div>
+    <!-- File đính kèm -->
+    <div class="mt-2 pt-1 border-top">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+            <span style="font-size:12px;font-weight:600;color:#1a2a3a;">File đính kèm</span>
+            <button type="button" class="btn btn-sm btn-outline-secondary" style="font-size:11px;" onclick="$('#attachmentInput').click()">
+                <i class="bi bi-paperclip"></i> Chọn file
+            </button>
+        </div>
+        <input type="file" id="attachmentInput" style="display:none;" multiple accept=".pdf,.jpg,.jpeg,.png,.gif,.xls,.xlsx,.doc,.docx">
+        <div id="attachmentList" class="text-muted" style="font-size:11px;min-height:24px;">Chưa có file đính kèm</div>
+    </div>
 </div>
 <div class="modal-footer">
     <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Hủy</button>
@@ -179,10 +190,96 @@ $('#entryForm').submit(function(e){e.preventDefault();
     if(partnerName)desc=(desc?desc+' | ':'')+'ĐT: '+partnerName;
     $.ajax({url:'/api/journal/draft',method:'POST',contentType:'application/json',headers:{'X-CSRF-Token':csrf},
         data:JSON.stringify({description:desc,reference:$('#reference').val(),lines:lines,transaction_date:$('#txnDate').val()}),
-        success:function(){$('#entryModal').modal('hide');$('#entryForm')[0].reset();$('#linesContainer .line-row:not(:first)').remove();FormToast.success('Đã lưu bút toán nháp thành công.');loadData();},
+        success:function(r){$('#entryModal').modal('hide');$('#entryForm')[0].reset();$('#linesContainer .line-row:not(:first)').remove();FormToast.success('Đã lưu bút toán nháp thành công.');loadData();if(r&&r.id)loadAttachments(r.id);},
         error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}FormToast.error(m);}
     });
 });
+// File đính kèm
+// Nghiệp vụ: Upload file chứng từ gốc (hóa đơn, phiếu thu/chi, ...)
+// Limit: 10MB, white-list: PDF, JPG, PNG, GIF, Excel, Word
+// Rủi ro: Upload sau khi lưu nháp — cần transaction_id đã tồn tại
+var currentAttachmentTxnId = null;
+$('#attachmentInput').on('change', function () {
+    var files = this.files;
+    if (!files.length || !currentAttachmentTxnId) {
+        if (!currentAttachmentTxnId) FormToast.warning('Lưu bút toán trước khi đính kèm file.');
+        return;
+    }
+    var formData = new FormData();
+    formData.append('transaction_id', currentAttachmentTxnId);
+    for (var i = 0; i < files.length; i++) {
+        formData.append('file', files[i]);
+    }
+    $.ajax({
+        url: '/api/journal/attachments/upload',
+        method: 'POST',
+        headers: { 'X-CSRF-Token': csrf },
+        data: formData,
+        processData: false,
+        contentType: false,
+        success: function () {
+            FormToast.success('Đã tải lên file đính kèm.');
+            loadAttachments(currentAttachmentTxnId);
+        },
+        error: function (x) {
+            var m = 'Lỗi upload'; try { m = JSON.parse(x.responseText).error; } catch (e) {}
+            FormToast.error(m);
+        }
+    });
+    this.value = '';
+});
+
+function loadAttachments(txnId) {
+    currentAttachmentTxnId = txnId;
+    if (!txnId) { $('#attachmentList').html('Chưa có file đính kèm'); return; }
+    $.get('/api/journal/attachments/' + txnId, function (data) {
+        if (!data || !data.length) {
+            $('#attachmentList').html('Chưa có file đính kèm');
+            return;
+        }
+        var html = '';
+        data.forEach(function (att) {
+            var icon = 'bi-file-earmark';
+            if (att.mime_type.indexOf('pdf') !== -1) icon = 'bi-file-earmark-pdf';
+            else if (att.mime_type.indexOf('image') !== -1) icon = 'bi-file-earmark-image';
+            else if (att.mime_type.indexOf('excel') !== -1 || att.mime_type.indexOf('spreadsheet') !== -1) icon = 'bi-file-earmark-excel';
+            else if (att.mime_type.indexOf('word') !== -1 || att.mime_type.indexOf('document') !== -1) icon = 'bi-file-earmark-word';
+            var size = att.file_size > 1024 * 1024
+                ? (att.file_size / 1024 / 1024).toFixed(1) + ' MB'
+                : Math.round(att.file_size / 1024) + ' KB';
+            html += '<div class="d-flex align-items-center justify-content-between py-1 border-bottom" style="font-size:12px;">' +
+                '<span><i class="bi ' + icon + ' me-1"></i> ' + esc(att.original_name) + ' <span class="text-muted">(' + size + ')</span></span>' +
+                '<span>' +
+                '<a href="/api/journal/attachments/' + att.id + '/download" class="text-decoration-none me-2" style="font-size:11px;"><i class="bi bi-download"></i></a>' +
+                '<a href="#" class="text-danger" style="font-size:11px;" onclick="deleteAttachment(' + att.id + ',this);return false;"><i class="bi bi-trash"></i></a>' +
+                '</span></div>';
+        });
+        $('#attachmentList').html(html);
+    }).fail(function () {
+        $('#attachmentList').html('Chưa có file đính kèm');
+    });
+}
+
+function deleteAttachment(id, btn) {
+    if (!confirm('Xóa file đính kèm này?')) return;
+    $.ajax({
+        url: '/api/journal/attachments/' + id,
+        method: 'DELETE',
+        headers: { 'X-CSRF-Token': csrf },
+        success: function () {
+            $(btn).closest('div.d-flex').remove();
+            FormToast.success('Đã xóa file đính kèm.');
+            if ($('#attachmentList').children().length === 0) {
+                $('#attachmentList').html('Chưa có file đính kèm');
+            }
+        },
+        error: function (x) {
+            var m = 'Lỗi'; try { m = JSON.parse(x.responseText).error; } catch (e) {}
+            FormToast.error(m);
+        }
+    });
+}
+
 $(document).ready(function(){
     loadPeriods();
     $('#periodFilter').on('change',loadData);
