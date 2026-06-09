@@ -1,5 +1,10 @@
 {
+  "scripts": {
+    "compress": "node scripts/compress-context.mjs",
+    "compress:dry": "node scripts/compress-context.mjs --dry-run"
+  },
   "dependencies": {
+    "headroom-ai": "^0.22.4",
     "vanilla-framework": "^4.51.0"
   },
   "devDependencies": {

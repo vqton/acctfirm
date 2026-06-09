@@ -4,3 +4,4 @@ accounting-app/logs/
 .DS_Store
 node_modules/
 vendor/
+accounting-app/docs/context-compressed.md
