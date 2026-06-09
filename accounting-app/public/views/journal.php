@@ -22,9 +22,10 @@ $title = 'Chứng từ ghi sổ'; $activeMenu = 'journal'; ob_start(); ?>
 <div class="modal-header"><h5 class="modal-title">Nhập bút toán</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
 <div class="modal-body">
     <div class="row g-2 mb-2">
-        <div class="col-6"><label>Diễn giải</label><input class="form-control" id="description" placeholder="Nội dung nghiệp vụ" data-v-required="Diễn giải"></div>
-        <div class="col-3"><label>Ngày</label><input type="date" class="form-control" id="txnDate" data-v-required="Ngày chứng từ" data-v-date="Ngày chứng từ"></div>
+        <div class="col-4"><label>Diễn giải</label><input class="form-control" id="description" placeholder="Nội dung nghiệp vụ" data-v-required="Diễn giải"></div>
+        <div class="col-2"><label>Ngày</label><input type="date" class="form-control" id="txnDate" data-v-required="Ngày chứng từ" data-v-date="Ngày chứng từ"></div>
         <div class="col-3"><label>Số CT</label><input class="form-control" id="reference" placeholder="Để trống = tự động"></div>
+        <div class="col-3"><label>Đối tượng</label><input class="form-control partner-picker" id="partnerInput" placeholder="KH/NCC/NV..."></div>
     </div>
     <div class="mb-2"><label class="d-flex justify-content-between"><span>Định khoản</span><span id="drCrStatus" class="text-success fw-bold">Nợ = Có (0)</span></label></div>
     <div id="linesContainer">
@@ -173,8 +174,11 @@ $('#entryForm').submit(function(e){e.preventDefault();
     lines.forEach(function(l){if(l.is_debit)totalDr+=l.amount;else totalCr+=l.amount;});
     var drcr=FormValidation.checkDrCr(totalDr,totalCr);
     if(!drcr.valid){FormToast.error(drcr.message);return;}
+    var partnerName=$('#partnerInput').val();
+    var desc=$('#description').val();
+    if(partnerName)desc=(desc?desc+' | ':'')+'ĐT: '+partnerName;
     $.ajax({url:'/api/journal/draft',method:'POST',contentType:'application/json',headers:{'X-CSRF-Token':csrf},
-        data:JSON.stringify({description:$('#description').val(),reference:$('#reference').val(),lines:lines,transaction_date:$('#txnDate').val()}),
+        data:JSON.stringify({description:desc,reference:$('#reference').val(),lines:lines,transaction_date:$('#txnDate').val()}),
         success:function(){$('#entryModal').modal('hide');$('#entryForm')[0].reset();$('#linesContainer .line-row:not(:first)').remove();FormToast.success('Đã lưu bút toán nháp thành công.');loadData();},
         error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}FormToast.error(m);}
     });
@@ -183,6 +187,7 @@ $(document).ready(function(){
     loadPeriods();
     $('#periodFilter').on('change',loadData);
     AccountPicker.enhance('.acc-picker');
+    PartnerPicker.enhance('.partner-picker');
     FormValidation.setup('#entryForm');
 });
 </script>

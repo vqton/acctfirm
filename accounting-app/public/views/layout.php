@@ -46,6 +46,7 @@ $currentUri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
 <script src="/assets/js/components/form-validation.js"></script>
 <script src="/assets/js/components/form-grid.js"></script>
 <script src="/assets/js/components/account-picker.js"></script>
+<script src="/assets/js/components/partner-picker.js"></script>
 <script src="/assets/js/vas-financial.js"></script>
 <style>
 body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; line-height:1.6; }
