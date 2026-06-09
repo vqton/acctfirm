@@ -1,5 +1,5 @@
 <?php // Màn hình: Quản lý công nợ phải trả nhà cung cấp (TK 331)
-// API: GET /api/ap/suppliers, GET /api/ap/invoices, POST /api/ap/invoices, POST /api/ap/invoices/{id}/pay, POST /api/ap/invoices/{id}/discount, POST /api/ap/prepay
+// API: GET /api/ap/suppliers, GET /api/ap/invoices, POST /api/ap/invoices, POST /api/ap/invoices/{id}/pay, POST /api/ap/invoices/{id}/discount, POST /api/ap/invoices/{id}/return, POST /api/ap/invoices/{id}/write-off, POST /api/ap/prepay
 // Nghiệp vụ: Ghi nhận hóa đơn mua hàng (Nợ 156/152/211 + 1331/Có 331), thanh toán (Nợ 331/Có 1111/1121), tạm ứng (Nợ 331/Có 1111)
 // Rủi ro: Chọn sai inventory_account sẽ sai tài khoản hàng tồn kho và sai BC01
 $title = 'Công nợ phải trả'; $activeMenu = 'ap_invoices'; ob_start(); ?>
@@ -95,6 +95,20 @@ $title = 'Công nợ phải trả'; $activeMenu = 'ap_invoices'; ob_start(); ?>
 </form>
 </div></div></div>
 
+<div class="modal fade" id="returnModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
+<form id="returnForm">
+<div class="modal-header"><h5 class="modal-title">Trả lại hàng mua</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+<div class="modal-body">
+    <input type="hidden" id="returnInvId">
+    <p class="text-muted">Công nợ còn lại: <strong id="returnBalance"></strong></p>
+    <p class="text-muted" style="font-size:12px">Hạch toán: Nợ 331 / Có <span id="returnAccountLabel">152</span> + Có 1331 (thuế GTGT hoàn lại)</p>
+    <div class="row g-2"><div class="col-6 mb-2"><label>Số tiền trả lại</label><input type="number" class="form-control" id="returnAmount" step="1000" min="1" data-v-required="Số tiền" data-v-number="Số tiền trả lại" required></div>
+    <div class="col-6 mb-2"><label>TK hàng</label><select class="form-select" id="returnAccount" onchange="$('#returnAccountLabel').text(this.value)"><option value="152">152 - NVL</option><option value="156">156 - Hàng hóa</option><option value="153">153 - CCDC</option></select></div></div>
+</div>
+<div class="modal-footer"><button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Hủy</button><button type="submit" class="btn btn-sm btn-secondary">Xác nhận trả lại</button></div>
+</form>
+</div></div></div>
+
 <script>
 var allData=[];
 function loadSuppliers(cb){
@@ -127,6 +141,8 @@ function renderRows(data){
         if(r.status!=='paid'&&r.status!=='written_off'&&r.balance>1){
             actions+='<button class="btn btn-sm btn-outline-success me-1" onclick="openPay('+r.id+','+r.balance+')"><i class="bi bi-cash"></i></button>';
             actions+='<button class="btn btn-sm btn-outline-warning me-1" onclick="openDiscount('+r.id+','+r.balance+')" title="Chiết khấu thanh toán"><i class="bi bi-percent"></i></button>';
+            actions+='<button class="btn btn-sm btn-outline-secondary me-1" onclick="openReturn('+r.id+','+r.balance+')" title="Trả lại hàng mua"><i class="bi bi-arrow-return-left"></i></button>';
+            actions+='<button class="btn btn-sm btn-outline-danger me-1" onclick="openWriteOff('+r.id+')" title="Xóa sổ công nợ"><i class="bi bi-trash3"></i></button>';
         }
         actions+='<button class="btn btn-sm btn-outline-info me-1" onclick="printInvoice(\''+r.id+'\')" title="In hóa đơn"><i class="bi bi-printer"></i></button>';
         var agingLabel=aging>0?aging+' ngày':'';
@@ -183,6 +199,8 @@ function exportCSV(){
 }
 function openPay(id,bal){$('#payInvId').val(id);$('#payBalance').text(fmt(bal));$('#payAmount').val(bal);$('#payModal').modal('show');}
 function openDiscount(id,bal){$('#discountInvId').val(id);$('#discountBalance').text(fmt(bal));$('#discountAmount').val(Math.round(bal*0.5/1000)*1000);$('#discountModal').modal('show');}
+function openReturn(id,bal){$('#returnInvId').val(id);$('#returnBalance').text(fmt(bal));$('#returnAmount').val(bal);$('#returnAccount').val('152');$('#returnAccountLabel').text('152');$('#returnModal').modal('show');}
+function openWriteOff(id){if(!confirm('Bạn có chắc chắn xóa sổ công nợ này? Thao tác này sẽ tạo bút toán Nợ 331 / Có 711 (Thu nhập khác) và không thể hoàn tác.'))return;$.ajax({url:'/api/ap/invoices/'+id+'/write-off',method:'POST',contentType:'application/json',success:function(){FormToast.success('Xóa sổ công nợ thành công');loadData();},error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}FormToast.error(m);}});}
 async function printInvoice(id){
     try {
         const tplRes = await fetch('/api/print/templates?type=ap_invoice', { headers: { 'X-CSRF-Token': csrf } });
@@ -233,6 +251,13 @@ $('#discountForm').submit(function(e){e.preventDefault();
         error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}FormToast.error(m);}
     });
 });
-$(document).ready(function(){loadSuppliers();loadData();loadVatRates('#vatRate',10);FormValidation.setup('#invForm');FormValidation.setup('#payForm');FormValidation.setup('#prepayForm');FormValidation.setup('#discountForm');});
+$('#returnForm').submit(function(e){e.preventDefault();
+    var v=FormValidation.validate('#returnForm');if(!v.valid)return;
+    $.ajax({url:'/api/ap/invoices/'+$('#returnInvId').val()+'/return',method:'POST',contentType:'application/json',data:JSON.stringify({amount:parseFloat($('#returnAmount').val()),inventory_account:$('#returnAccount').val()}),
+        success:function(){$('#returnModal').modal('hide');FormToast.success('Ghi nhận trả lại hàng thành công');loadData();},
+        error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}FormToast.error(m);}
+    });
+});
+$(document).ready(function(){loadSuppliers();loadData();loadVatRates('#vatRate',10);FormValidation.setup('#invForm');FormValidation.setup('#payForm');FormValidation.setup('#prepayForm');FormValidation.setup('#discountForm');FormValidation.setup('#returnForm');});
 </script>
 <?php $content = ob_get_clean(); require __DIR__ . '/layout.php'; ?>
