@@ -98,6 +98,29 @@ class IssueController
         JsonResponse::ok(array_map(fn($x) => $x->toArray(), $this->itemRepo->findAll()));
     }
 
+    // NGHIỆP VỤ: Kiểm tra tồn kho realtime cho 1 mặt hàng
+    // Output: { item_id, name, stock_qty, unit, allow_negative }
+    public function stockCheck(string $itemId): void
+    {
+        Auth::requirePermission('inventory', 'read');
+        $stmt = $this->pdo->prepare(
+            "SELECT id, name, stock_qty, unit, allow_negative_stock FROM items WHERE id = ?"
+        );
+        $stmt->execute([$itemId]);
+        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+        if (!$row) {
+            JsonResponse::error('Không tìm thấy mặt hàng');
+            return;
+        }
+        JsonResponse::ok([
+            'item_id' => $row['id'],
+            'name' => $row['name'],
+            'stock_qty' => (float)$row['stock_qty'],
+            'unit' => $row['unit'],
+            'allow_negative' => (bool)$row['allow_negative_stock'],
+        ]);
+    }
+
     // NGHIỆP VỤ: Tạo PXK dạng nháp (multi-line) — Mẫu 02-VT
     // Input: { issue_date, warehouse_id, receiver_name, receiver_department, issue_reason,
     //          issue_type, lines: [{ item_id, requested_qty, actual_qty }], notes }

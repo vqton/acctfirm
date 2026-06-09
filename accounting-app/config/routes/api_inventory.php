@@ -31,6 +31,7 @@ $router->post('/api/inventory/issues/{id}/post', function($id) use ($c) { $c['Is
 $router->post('/api/inventory/issues/{id}/cancel', function($id) use ($c) { $c['IssueController']->cancelDraft($id); });
 $router->get('/api/inventory/issues/{id}', function($id) use ($c) { $c['IssueController']->getDetail($id); });
 $router->get('/api/inventory/issues/list', function() use ($c) { $c['IssueController']->listIssues(); });
+$router->get('/api/inventory/issues/stock-check/{itemId}', function($itemId) use ($c) { $c['IssueController']->stockCheck($itemId); });
 
 // === CUSTOMER RETURN ===
 $router->post('/api/inventory/customer-return', function() use ($c) { $c['CustomerReturnController']->return(); });

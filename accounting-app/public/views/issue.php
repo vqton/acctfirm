@@ -28,6 +28,39 @@ ob_start(); ?>
 .badge-draft { background: #fff3cd; color: #856404; }
 .badge-posted { background: #d4edda; color: #155724; }
 .badge-cancelled { background: #f8d7da; color: #721c24; }
+
+/* G03 — In ấn Mẫu 02-VT khổ A4 */
+@media print {
+    @page { size: A4; margin: 15mm 20mm; }
+    body { font-family: 'Times New Roman', Times, serif; font-size: 12pt; line-height: 1.4; color: #000 !important; background: #fff !important; }
+    .toolbar, #filterStatus, #searchInput, .card-header-x, #recordCount, #formActions, .btn,
+    .card-header .btn, .sidebar, .navbar, footer, .no-print, .line-remove { display: none !important; }
+    #formView { display: block !important; }
+    .card { border: none !important; box-shadow: none !important; }
+    .card-header { border-bottom: 1px solid #000 !important; padding: 8px 0 !important; }
+    .card-body { padding: 0 !important; }
+    .tt99-header { border-bottom: 2px solid #000 !important; }
+    #formTitle { font-size: 16pt; font-weight: bold; text-align: center; }
+    #formSubtitle { font-size: 10pt; text-align: center; display: block; }
+    .form-label, label { font-size: 11pt; font-weight: normal; }
+    input, select, textarea { border: none !important; background: transparent !important; padding: 2px 0 !important; font-size: 11pt; }
+    input[readonly] { border: none !important; }
+    .tt99-grid { border: 1px solid #000 !important; }
+    .tt99-grid th { border: 1px solid #000 !important; background: #fff !important; font-size: 10pt; font-weight: bold; }
+    .tt99-grid td { border: 1px solid #000 !important; padding: 4px !important; font-size: 10pt; }
+    .tt99-grid input { border: none !important; padding: 0 !important; }
+    .item-select { display: none; }
+    .item-code { display: table-cell; }
+    #totalAmountDisplay { font-size: 12pt; font-weight: bold; }
+    #totalInWords { font-size: 11pt; }
+    .tt99-signature { border-top: 1px solid #000 !important; margin-top: 30px !important; }
+    .tt99-signature .sig-col { font-size: 10pt; }
+    .tt99-signature .sig-col .sig-line { border-top: 1px solid #000 !important; width: 80%; margin: 50px auto 4px; }
+    .badge { border: 1px solid #000; color: #000 !important; background: #fff !important; }
+    #accountMapping { background: #fff !important; border: 1px solid #000 !important; }
+    .text-muted { color: #000 !important; }
+    small { font-size: 9pt; }
+}
 </style>
 
 <div class="toolbar">
@@ -145,13 +178,14 @@ ob_start(); ?>
                         <thead>
                             <tr>
                                 <th width="4%">STT</th>
-                                <th width="26%">Tên vật tư, hàng hóa</th>
-                                <th width="8%">Mã số</th>
-                                <th width="7%">ĐVT</th>
+                                <th width="22%">Tên vật tư, hàng hóa</th>
+                                <th width="7%">Mã số</th>
+                                <th width="6%">ĐVT</th>
+                                <th width="10%">Tồn kho</th>
                                 <th width="9%">SL Yêu cầu<br><small>(1)</small></th>
                                 <th width="9%">SL Thực xuất<br><small>(2)</small></th>
-                                <th width="12%">Đơn giá<br><small>(3)</small></th>
-                                <th width="15%">Thành tiền<br><small>(4=2x3)</small></th>
+                                <th width="11%">Đơn giá<br><small>(3)</small></th>
+                                <th width="14%">Thành tiền<br><small>(4=2x3)</small></th>
                                 <th width="5%"></th>
                             </tr>
                         </thead>
@@ -170,6 +204,7 @@ ob_start(); ?>
                 </div>
 
                 <div class="tt99-signature row g-2">
+                    <div class="col-12 text-end small mb-2" id="sigDateLine"><i>Ngày ... tháng ... năm ...</i></div>
                     <div class="col sig-col"><div class="sig-line">Người lập phiếu</div><small>(Ký, họ tên)</small></div>
                     <div class="col sig-col"><div class="sig-line">Người nhận hàng</div><small>(Ký, họ tên)</small></div>
                     <div class="col sig-col"><div class="sig-line">Thủ kho</div><small>(Ký, họ tên)</small></div>
@@ -188,7 +223,7 @@ ob_start(); ?>
 </div>
 
 <script>
-var items = [], warehouses = [], editingId = null;
+var items = [], warehouses = [], editingId = null, stockCache = {};
 
 // Hàm tiện ích
 function esc(s){ return $('<span>').text(s).html(); }
@@ -209,6 +244,12 @@ function onIssueTypeChange(){
     $('#mappingDebit').text('Nợ '+m.debit);
     $('#mappingCredit').text('Có '+m.credit);
 }
+function updateSigDate(d){
+    if(!d)return;
+    var p=d.split('-');
+    if(p.length===3) $('#sigDateLine').html('<i>Ngày '+parseInt(p[2])+' tháng '+parseInt(p[1])+' năm '+p[0]+'</i>');
+}
+$(document).on('change', '#issueDate', function(){ updateSigDate($(this).val()); });
 
 // Tải danh mục
 function loadItems(){ $.get('/api/inventory/issue/items',function(d){ items=d.data||d||[]; }); }
@@ -246,6 +287,7 @@ function viewIssue(id){
         $('#issueDate').val(d.issue_date);
         $('#warehouseId').val(d.warehouse_id||'');
         $('#issueType').val(d.issue_type);onIssueTypeChange();
+        updateSigDate(d.issue_date);
         $('#receiverName').val(d.receiver_name||'');
         $('#receiverDepartment').val(d.receiver_department||'');
         $('#issueReason').val(d.issue_reason||'');
@@ -285,7 +327,7 @@ function showCreateForm(){
     $('#totalAmountDisplay').text('0');
     $('#totalInWords').text('Không');
     $('#linesBody').empty();
-    addLine();onIssueTypeChange();
+    addLine();onIssueTypeChange();updateSigDate($('#issueDate').val());
     $('#btnSaveDraft').text('Lưu nháp').prop('disabled',false).show();
     $('#btnPost').addClass('d-none');
     $('#btnCancel').addClass('d-none');
@@ -317,12 +359,14 @@ function addLineRow(line){
         '<td><select class="form-select form-select-sm item-select" onchange="onItemChange(this)">'+opts+'</select></td>'+
         '<td class="text-center item-code">'+(line?esc(line.item_code):'')+'</td>'+
         '<td class="text-center item-uom">'+(line?esc(line.uom):'')+'</td>'+
+        '<td class="stock-info small"></td>'+
         '<td><input type="number" class="form-control form-control-sm qty-req" step="0.01" min="0" value="'+qtyReq+'" oninput="updateLineTotal(this)"></td>'+
         '<td><input type="number" class="form-control form-control-sm qty-act" step="0.01" min="0" value="'+qtyAct+'" oninput="updateLineTotal(this)"></td>'+
         '<td><input type="text" class="form-control form-control-sm unit-price text-end" value="'+price+'" readonly style="background:#f5f5f5"></td>'+
         '<td><input type="text" class="form-control form-control-sm line-total text-end fw-bold" value="'+fmt(amount)+'" readonly style="background:#f5f5f5"></td>'+
         '<td class="text-center"><span class="line-remove" onclick="removeLine(this)">×</span></td>'+
     '</tr>');
+    if(line && line.item_id) { fetchStock(line.item_id, $('#linesBody tr:last')); }
 }
 
 function addLine(){ addLineRow(null); }
@@ -330,8 +374,28 @@ function addLine(){ addLineRow(null); }
 function onItemChange(el){
     var opt=$(el).find(':selected');
     var row=$(el).closest('tr');
+    var itemId=$(el).val();
     row.find('.item-code').text(opt.data('code')||'');
     row.find('.item-uom').text(opt.data('uom')||'');
+    if(itemId){
+        if(!stockCache[itemId]) fetchStock(itemId,row);
+        else updateStockDisplay(row,stockCache[itemId]);
+    }else{
+        row.find('.stock-info').text('').removeClass('text-warning text-danger');
+    }
+}
+function fetchStock(itemId,row){
+    $.get('/api/inventory/issues/stock-check/'+itemId,function(d){
+        var s=d.data||d;
+        stockCache[itemId]=s;
+        updateStockDisplay(row,s);
+    });
+}
+function updateStockDisplay(row,s){
+    var txt='Tồn: '+s.stock_qty+' '+s.unit;
+    if(s.allow_negative) txt+=' (cho phép âm)';
+    var cls=s.allow_negative?'text-warning':(s.stock_qty>0?'text-success':'text-danger');
+    row.find('.stock-info').text(txt).removeClass('text-warning text-danger text-success').addClass(cls);
 }
 
 function updateLineTotal(el){
@@ -462,7 +526,7 @@ function printPXK(){
 // Flatpickr
 $(document).ready(function(){
     flatpickr('.datepicker',{dateFormat:'Y-m-d',locale:'vn'});
-    loadItems();loadWarehouses();loadData();onIssueTypeChange();
+    loadItems();loadWarehouses();loadData();onIssueTypeChange();updateSigDate($('#issueDate').val());
 });
 </script>
 <?php $content = ob_get_clean(); require __DIR__ . '/layout.php'; ?>
