@@ -113,6 +113,7 @@ $router->get('/thue/quyet-toan-tndn', function() use ($c) { $c['CitController']-
 $router->get('/thue/quyet-toan-tncn', function() { require __DIR__ . '/../../public/views/payroll_tax.php'; });
 $router->get('/thue/nha-thau-nuoc-ngoai', function() use ($c) { $c['FctController']->view(); });
 $router->get('/hoa-don-dien-tu', function() { require __DIR__ . '/../../public/views/einvoice.php'; });
+$router->get('/hoa-don-dien-tu/import-history', function() { require __DIR__ . '/../../public/views/einvoice_import_history.php'; });
 $router->get('/thue/gui-nop-thue', function() { require __DIR__ . '/../../public/views/tax_submission.php'; });
 
 // === ĐIỀU CHỈNH BÚT TOÁN ===

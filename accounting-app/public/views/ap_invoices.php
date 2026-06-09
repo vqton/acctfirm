@@ -10,6 +10,7 @@ $title = 'Công nợ phải trả'; $activeMenu = 'ap_invoices'; ob_start(); ?>
         <button class="btn btn-primary btn-sm ms-1" data-bs-toggle="modal" data-bs-target="#invModal"><i class="bi bi-plus-lg"></i> Ghi nhận hóa đơn</button>
         <button class="btn btn-outline-primary btn-sm ms-1" data-bs-toggle="modal" data-bs-target="#prepayModal"><i class="bi bi-credit-card"></i> Tạm ứng</button>
         <button class="btn btn-outline-success btn-sm ms-1" data-bs-toggle="modal" data-bs-target="#importEinvModal"><i class="bi bi-file-earmark-arrow-up"></i> Import HĐĐT</button>
+        <a href="/hoa-don-dien-tu/import-history" class="btn btn-outline-info btn-sm ms-1"><i class="bi bi-clock-history"></i> Lịch sử import</a>
     </div>
 </div>
 <div class="card p-2 mb-3 border-0 shadow-sm bg-white" style="font-size:13px;">
