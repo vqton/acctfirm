@@ -37,7 +37,8 @@ $router->get('/ban/phan-tich-tuoi-no', function() { require __DIR__ . '/../../pu
 $router->get('/ban/so-chi-tiet-cong-no', function() { require __DIR__ . '/../../public/views/ar_statement.php'; });
 
 // === KHO ===
-$router->get('/kho/nhap-kho', function() { require __DIR__ . '/../../public/views/receipt.php'; });
+$router->get('/kho/nhap-kho', function() use ($c) { $c['GoodsReceiptController']->viewIndex(); });
+$router->get('/kho/nhap-kho/phieu-nhap-kho', function() use ($c) { $c['GoodsReceiptController']->viewIndex(); });
 $router->get('/kho/xuat-kho', function() { require __DIR__ . '/../../public/views/issue.php'; });
 $router->get('/kho/hang-ban-tra-lai', function() { require __DIR__ . '/../../public/views/customer_return.php'; });
 $router->get('/kho/dieu-chuyen', function() { require __DIR__ . '/../../public/views/transfers.php'; });

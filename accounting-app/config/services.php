@@ -154,6 +154,9 @@ use Accounting\Infrastructure\Persistence\PDOBomRepository;
 use Accounting\Domain\Repository\ProductionOrderRepositoryInterface;
 use Accounting\Infrastructure\Persistence\PDOProductionOrderRepository;
 use Accounting\Domain\Service\GoodsIssueService;
+use Accounting\Domain\Service\GoodsReceiptService;
+use Accounting\Infrastructure\Persistence\PDOGoodsReceiptLineRepository;
+use Accounting\Interfaces\HTTP\Inventory\GoodsReceiptController;
 use Accounting\Domain\Service\AdvancePaymentRequestService;
 use Accounting\Interfaces\HTTP\Cash\AdvancePaymentRequestController;
 use Accounting\Domain\Service\DashboardService;
@@ -205,11 +208,23 @@ function createContainer(): array
     $menuController = new MenuController($menuService, $pdo);
 
     // === ADVANCE PAYMENT REQUEST SERVICE (Mẫu 03-TT) ===
-    $advancePaymentRequestService = new AdvancePaymentRequestService($pdo, $voucherService, $auditLogger);
+    $advancePaymentRequestService = new AdvancePaymentRequestService($pdo, $voucherService, $auditLogger, $journalService);
     $advancePaymentRequestController = new AdvancePaymentRequestController($advancePaymentRequestService);
 
     // TÍCH HỢP: Gắn AdvancePaymentRequestService vào PettyCashService cho disburseFromRequest()
     $pettyCashService->setAdvancePaymentService($advancePaymentRequestService);
+
+    // === GOODS RECEIPT SERVICE (Mẫu 01-VT) ===
+    // Phiếu nhập kho — full lifecycle: draft → posted → cancelled
+    // Hạch toán: Nợ 15x / Có 331
+    $grLineRepo = new PDOGoodsReceiptLineRepository($pdo);
+    $goodsReceiptService = new GoodsReceiptService(
+        $pdo, $voucherService, $journalService,
+        $goodsReceiptRepo, $grLineRepo,
+        $itemRepository, $warehouseRepository,
+        $auditLogger, $inventoryService
+    );
+    $goodsReceiptController = new GoodsReceiptController($goodsReceiptService);
 
     // === DASHBOARD SERVICE ===
     // Tổng hợp KPI từ nhiều nguồn — cash balance, revenue/expense YTD, pending approvals, trends

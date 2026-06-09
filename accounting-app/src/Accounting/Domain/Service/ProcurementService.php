@@ -258,7 +258,11 @@ class ProcurementService
             $id = uniqid('gr_');
             $number = 'PNK' . date('Y') . '-' . str_pad((string) random_int(1, 999999), 6, '0', STR_PAD_LEFT);
 
-            $gr = new GoodsReceipt($id, $number, $poId, 'draft', $warehouseId, $receivedDate);
+            $gr = new GoodsReceipt(
+                $id, $number, $poId,
+                null, null, 'purchase', 'draft',
+                $warehouseId, $receivedDate
+            );
             $this->grRepo->save($gr);
 
             $transactionIds = [];

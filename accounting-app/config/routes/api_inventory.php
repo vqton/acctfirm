@@ -7,9 +7,16 @@ $router->post('/api/inventory/ccdc-allocations/run', function() use ($c) { $c['C
 $router->get('/api/inventory/ccdc-allocations/history', function() use ($c) { $c['CcdcAllocationController']->history(); });
 
 // === RECEIPT (Nhập kho) ===
+// Backward compat: single-item quick receipt
 $router->post('/api/inventory/receive', function() use ($c) { $c['ReceiptController']->receive(); });
 $router->get('/api/inventory/receipts', function() use ($c) { $c['ReceiptController']->list(); });
 $router->get('/api/inventory/receive/items', function() use ($c) { $c['ReceiptController']->items(); });
+// Mẫu 01-VT: multi-line batch PNK với header fields
+$router->post('/api/goods-receipt/draft', function() use ($c) { $c['GoodsReceiptController']->createDraft(); });
+$router->post('/api/goods-receipt/{id}/post', function($id) use ($c) { $c['GoodsReceiptController']->postReceipt($id); });
+$router->post('/api/goods-receipt/{id}/cancel', function($id) use ($c) { $c['GoodsReceiptController']->cancelReceipt($id); });
+$router->get('/api/goods-receipt/{id}', function($id) use ($c) { $c['GoodsReceiptController']->getDetail($id); });
+$router->get('/api/goods-receipt/list', function() use ($c) { $c['GoodsReceiptController']->list(); });
 
 // === ISSUE (Xuất kho) ===
 // Backward compat: single-item quick issue

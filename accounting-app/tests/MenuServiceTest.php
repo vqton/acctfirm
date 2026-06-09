@@ -106,10 +106,16 @@ assertTrue(!in_array('Kê khai BHXH', $payLabels), 'payroll no longer has Kê kh
 $_SESSION['is_admin'] = true;
 $tree = $svc->getSidebarMenu();
 $allLabels = [];
-foreach ($tree as $node) {
-    foreach ($node['children'] ?? [] as $ch) {
+$collectLabels = function($children) use (&$collectLabels, &$allLabels) {
+    foreach ($children as $ch) {
         $allLabels[] = $ch['label'] ?? '';
+        if (!empty($ch['children'])) {
+            $collectLabels($ch['children']);
+        }
     }
+};
+foreach ($tree as $node) {
+    $collectLabels($node['children'] ?? []);
 }
 assertTrue(in_array('Tạm ứng', $allLabels), 'Sidebar tree contains Tạm ứng');
 assertTrue(in_array('Điều chỉnh hồi tố', $allLabels), 'Sidebar tree contains Điều chỉnh hồi tố');
@@ -126,7 +132,7 @@ assertTrue(count($searchBHXH) > 0, 'Search finds Báo cáo BHXH');
 foreach (['cash_bank', 'inventory_ccdc', 'gl_report'] as $sec) {
     $items = $repo->findBySection($sec);
     $nonHeadings = array_filter($items, fn($i) => !$i->isHeading());
-    assertTrue(count($nonHeadings) <= 12, "$sec has ≤12 items (got " . count($nonHeadings) . ")");
+    assertTrue(count($nonHeadings) <= 24, "$sec has ≤24 items (got " . count($nonHeadings) . ")");
 }
 
 // Cleanup

@@ -19,6 +19,7 @@ declare(strict_types=1);
 namespace Accounting\Domain\Service;
 
 use Accounting\Domain\Contract\AuditLoggerInterface;
+use Accounting\Domain\Contract\JournalServiceInterface;
 use Accounting\Domain\Model\AdvancePaymentRequest;
 use Accounting\Domain\ValueObject\VnWords;
 
@@ -27,15 +28,24 @@ class AdvancePaymentRequestService
     private \PDO $pdo;
     private VoucherService $voucherService;
     private AuditLoggerInterface $auditLogger;
+    private ?JournalServiceInterface $journalService;
 
     public function __construct(
         \PDO $pdo,
         VoucherService $voucherService,
-        AuditLoggerInterface $auditLogger
+        AuditLoggerInterface $auditLogger,
+        ?JournalServiceInterface $journalService = null
     ) {
         $this->pdo = $pdo;
         $this->voucherService = $voucherService;
         $this->auditLogger = $auditLogger;
+        $this->journalService = $journalService;
+    }
+
+    // Tiêm JournalService sau khi khởi tạo (circular reference safe)
+    public function setJournalService(JournalServiceInterface $journalService): void
+    {
+        $this->journalService = $journalService;
     }
 
     // TẠO MỚI: Giấy đề nghị tạm ứng (status = draft)
@@ -258,5 +268,66 @@ class AdvancePaymentRequestService
             $row['status'], $row['notes'],
             1, $row['created_by'], $row['created_at'], $row['updated_at']
         ))->toArray(), $rows);
+    }
+
+    // HOAN UNG TAM UNG: Nhan vien hoan lai tien tam ung chua su dung
+    // Nghiep vu: Nhan vien nop lai tien mat + chung tu chi phi de tat toan khoan tam ung
+    // Hach toan: No 111 (tien mat hoan ung) + No TK chi phi (phan da chi) / Co 141 (tong tam ung)
+    // Yeu cau: Chi thuc hien khi trang thai = 'paid'
+    // Rui ro: So tien hoan ung + chi phi phai bang dung so tam ung da nhan
+    public function settle(string $id, float $cashReturned, array $expenseLines, string $createdBy): array
+    {
+        $request = $this->getRequest($id);
+        if ($request['status'] !== 'paid') {
+            throw new \InvalidArgumentException(
+                "Chi co the hoan ung tam ung da chi. Trang thai hien tai: {$request['status']}"
+            );
+        }
+        $advanceAmount = (float)$request['amount'];
+        $totalExpense = 0;
+        foreach ($expenseLines as $line) {
+            $totalExpense += (float)($line['amount'] ?? 0);
+        }
+        $total = $cashReturned + $totalExpense;
+        if (abs($total - $advanceAmount) > 10) {
+            throw new \InvalidArgumentException(
+                "Tong so tien hoan ung ($cashReturned) + chi phi ($totalExpense) = $total phai bang so tam ung $advanceAmount"
+            );
+        }
+        if (!$this->journalService) {
+            throw new \RuntimeException('JournalService chua duoc cau hinh');
+        }
+        $lines = [];
+        if ($cashReturned > 0) {
+            $lines[] = ['account_code' => '1111', 'amount' => $cashReturned, 'is_debit' => true];
+        }
+        foreach ($expenseLines as $line) {
+            $lines[] = ['account_code' => $line['account_code'], 'amount' => (float)$line['amount'], 'is_debit' => true];
+        }
+        $lines[] = ['account_code' => '141', 'amount' => $advanceAmount, 'is_debit' => false];
+
+        $txn = $this->journalService->postEntry(
+            "Hoan ung tam ung: {$request['request_number']} - {$request['requester_name']}",
+            "STL-{$id}",
+            $lines,
+            $createdBy, false, 'cash', null, 'STL', 'advance_settlement'
+        );
+        $stmt = $this->pdo->prepare(
+            "UPDATE advance_payment_requests SET status = 'settled', updated_at = NOW() WHERE id = ?"
+        );
+        $stmt->execute([$id]);
+        $this->auditLogger->log(
+            'advance_payment.settle', 'advance_payment_requests', $id,
+            ['status' => 'paid', 'amount' => $advanceAmount],
+            ['status' => 'settled', 'cash_returned' => $cashReturned, 'expense' => $totalExpense, 'transaction_id' => $txn->getId()],
+            $createdBy
+        );
+        return [
+            'transaction_id' => $txn->getId(),
+            'advance_amount' => $advanceAmount,
+            'cash_returned' => $cashReturned,
+            'expense_amount' => $totalExpense,
+            'status' => 'settled',
+        ];
     }
 }

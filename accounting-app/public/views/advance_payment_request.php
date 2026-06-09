@@ -44,6 +44,7 @@ $title = 'Giấy đề nghị tạm ứng'; $activeMenu = 'advance_payment'; ob_
         <button class="btn btn-outline-danger btn-sm ms-1" id="btnReject" style="display:none"><i class="bi bi-x-lg"></i> Từ chối</button>
         <button class="btn btn-outline-warning btn-sm ms-1" id="btnCancel" style="display:none"><i class="bi bi-trash"></i> Hủy</button>
         <button class="btn btn-outline-danger btn-sm ms-1" id="btnPay" style="display:none"><i class="bi bi-cash"></i> Lập phiếu chi</button>
+        <button class="btn btn-outline-success btn-sm ms-1" id="btnSettle" style="display:none"><i class="bi bi-arrow-return-left"></i> Hoàn ứng</button>
         <button class="btn btn-outline-info btn-sm ms-1" id="btnPrint"><i class="bi bi-printer"></i> In</button>
     </div>
 </div>
@@ -59,6 +60,7 @@ $title = 'Giấy đề nghị tạm ứng'; $activeMenu = 'advance_payment'; ob_
                     <option value="submitted">Chờ duyệt</option>
                     <option value="approved">Đã duyệt</option>
                     <option value="paid">Đã chi</option>
+                    <option value="settled">Đã hoàn ứng</option>
                     <option value="cancelled">Đã hủy</option>
                 </select>
             </div>
@@ -235,6 +237,73 @@ $title = 'Giấy đề nghị tạm ứng'; $activeMenu = 'advance_payment'; ob_
                 </div>
             </div>
         </div>
+
+        <!-- Modal: Hoàn ứng tạm ứng (thanh toán tạm ứng) -->
+        <div class="modal fade" id="settleModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h6 class="modal-title">Hoàn ứng tạm ứng</h6>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-2">
+                            <label class="form-label small">Số chứng từ</label>
+                            <input type="text" class="form-control form-control-sm" id="stlRequestNumber" readonly>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small">Người đề nghị</label>
+                            <input type="text" class="form-control form-control-sm" id="stlRequester" readonly>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small">Số tiền tạm ứng</label>
+                            <input type="text" class="form-control form-control-sm" id="stlAdvanceAmount" readonly>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small">Số tiền hoàn ứng (tiền mặt) <span class="text-danger">*</span></label>
+                            <div class="input-group input-group-sm">
+                                <input type="number" class="form-control" id="stlCashReturned" step="1000" min="0">
+                                <span class="input-group-text">VNĐ</span>
+                            </div>
+                            <div class="form-text">Nhập số tiền nhân viên nộp lại quỹ. Nếu hoàn ứng toàn bộ, nhập bằng số tiền tạm ứng.</div>
+                        </div>
+                        <div id="stlExpenseSection" style="display:none">
+                            <hr>
+                            <div class="mb-1"><strong>Phần chi phí (chênh lệch)</strong></div>
+                            <div class="mb-2">
+                                <label class="form-label small">Tài khoản chi phí <span class="text-danger">*</span></label>
+                                <select class="form-select form-select-sm" id="stlExpenseAccount">
+                                    <option value="">-- Chọn TK --</option>
+                                    <option value="621">621 - CP NVL trực tiếp</option>
+                                    <option value="622">622 - CP nhân công trực tiếp</option>
+                                    <option value="627">627 - CP sản xuất chung</option>
+                                    <option value="635">635 - CP tài chính</option>
+                                    <option value="641">641 - CP bán hàng</option>
+                                    <option value="642">642 - CP quản lý doanh nghiệp</option>
+                                    <option value="811">811 - CP khác</option>
+                                </select>
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label small">Số tiền chi phí</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" class="form-control" id="stlExpenseAmount" readonly>
+                                    <span class="input-group-text">VNĐ</span>
+                                </div>
+                                <div class="form-text">Tự động tính = Số tạm ứng − Số hoàn ứng</div>
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small">Diễn giải</label>
+                            <input type="text" class="form-control form-control-sm" id="stlDescription" placeholder="Hoàn ứng tạm ứng...">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Hủy</button>
+                        <button class="btn btn-sm btn-success" id="btnConfirmSettle"><i class="bi bi-check-lg"></i> Xác nhận hoàn ứng</button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div><!-- /detailView -->
 </div>
 
@@ -322,7 +391,7 @@ function openDetail(id) {
         $('#dispStatusBadge').html(statusBadge(d.status));
 
         // Toolbar buttons
-        $('#btnApprove,#btnReject,#btnCancel,#btnSubmit,#btnPay').hide();
+        $('#btnApprove,#btnReject,#btnCancel,#btnSubmit,#btnPay,#btnSettle').hide();
         if (d.status === 'draft') {
             $('#btnSubmit').show();
             $('#btnCancel').show();
@@ -335,7 +404,10 @@ function openDetail(id) {
             $('#btnPay').show();
         }
         if (d.status === 'paid') {
+            $('#btnSettle').show();
             $('#paymentInfo').show().html('<i class="bi bi-check-circle text-success"></i> Đã lập phiếu chi. <a href="/chi/quy-tien-mat" target="_blank">Xem phiếu chi</a>');
+        } else if (d.status === 'settled') {
+            $('#paymentInfo').show().html('<i class="bi bi-check-double text-success"></i> Đã hoàn ứng');
         } else {
             $('#paymentInfo').hide();
         }
@@ -533,6 +605,83 @@ function confirmPay() {
     });
 }
 
+// Mở modal hoàn ứng tạm ứng
+function openSettleModal() {
+    if (!currentId) return;
+    $.get('/api/advance-payment/' + currentId, function(data) {
+        var d = data.data || data;
+        var amount = d.amount;
+        $('#stlRequestNumber').val(d.request_number);
+        $('#stlRequester').val(d.requester_name);
+        $('#stlAdvanceAmount').val(fmt(amount));
+        $('#stlCashReturned').val(amount);
+        $('#stlExpenseSection').hide();
+        $('#stlExpenseAmount').val(0);
+        $('#stlExpenseAccount').val('');
+        $('#stlDescription').val('Hoàn ứng tạm ứng: ' + d.request_number + ' - ' + d.requester_name);
+        $('#settleModal').modal('show');
+    });
+}
+
+// Tự động hiện phần chi phí khi nhập hoàn ứng < tạm ứng
+function onSettleCashChange() {
+    var advance = parseFloat($('#stlAdvanceAmount').val().replace(/[^\d]/g, '')) || 0;
+    var returned = parseFloat($('#stlCashReturned').val()) || 0;
+    if (returned < advance) {
+        var diff = advance - returned;
+        $('#stlExpenseSection').show();
+        $('#stlExpenseAmount').val(diff);
+    } else {
+        $('#stlExpenseSection').hide();
+        $('#stlExpenseAmount').val(0);
+    }
+}
+
+// Xác nhận hoàn ứng
+function confirmSettle() {
+    var cashReturned = parseFloat($('#stlCashReturned').val());
+    var advance = parseFloat($('#stlAdvanceAmount').val().replace(/[^\d]/g, '')) || 0;
+    if (isNaN(cashReturned) || cashReturned < 0) {
+        showToast('Vui lòng nhập số tiền hoàn ứng hợp lệ', 'warning');
+        return;
+    }
+    if (cashReturned > advance) {
+        showToast('Số tiền hoàn ứng không được lớn hơn số tạm ứng', 'warning');
+        return;
+    }
+    var expenseLines = [];
+    if (cashReturned < advance) {
+        var expenseAccount = $('#stlExpenseAccount').val();
+        var expenseAmount = parseFloat($('#stlExpenseAmount').val()) || 0;
+        if (!expenseAccount) {
+            showToast('Vui lòng chọn tài khoản chi phí cho phần chênh lệch', 'warning');
+            return;
+        }
+        if (expenseAmount <= 0) {
+            showToast('Số tiền chi phí không hợp lệ', 'warning');
+            return;
+        }
+        expenseLines.push({ account_code: expenseAccount, amount: expenseAmount });
+    }
+    if (!confirm('Xác nhận hoàn ứng ' + fmt(cashReturned) + ' cho "' + $('#stlRequester').val() + '"?')) return;
+    $.ajax({
+        url: '/api/advance-payment/' + currentId + '/settle',
+        method: 'POST',
+        contentType: 'application/json',
+        headers: {'X-CSRF-Token': csrf},
+        data: JSON.stringify({
+            cash_returned: cashReturned,
+            expense_lines: expenseLines
+        }),
+        success: function() {
+            $('#settleModal').modal('hide');
+            showToast('Đã hoàn ứng tạm ứng thành công', 'success');
+            openDetail(currentId);
+        },
+        error: function(x) { var m='Lỗi'; try{m=JSON.parse(x.responseText).error;}catch(e){} showToast(m,'error'); }
+    });
+}
+
 // In
 function printForm() { window.print(); }
 
@@ -548,6 +697,9 @@ $(document).ready(function() {
     $('#btnCancel').click(cancelRequest);
     $('#btnPay').click(openPayModal);
     $('#btnConfirmPay').click(confirmPay);
+    $('#btnSettle').click(openSettleModal);
+    $('#stlCashReturned').on('input', onSettleCashChange);
+    $('#btnConfirmSettle').click(confirmSettle);
     $('#btnPrint').click(printForm);
 
     // Tự động sinh chữ khi nhập số tiền

@@ -62,44 +62,79 @@ class MenuService
         return Auth::hasPermission($mod, $act);
     }
 
-    // Xây dựng cây menu phân cấp
+    // Xây dựng cây menu phân cấp — hỗ trợ nesting 3 cấp qua parent_id
     private function buildTree(array $items): array
     {
         $tree = [];
         $grouped = [];
+        $itemIndex = [];
 
+        // Index tất cả items theo ID
         foreach ($items as $item) {
+            $itemIndex[$item->getId()] = $item;
             $section = $item->getSection();
             if (!isset($grouped[$section])) {
-                $grouped[$section] = ['heading' => null, 'items' => []];
+                $grouped[$section] = ['heading' => null, 'orphans' => []];
             }
-            if ($item->isHeading()) {
+            if ($item->isHeading() && $item->getParentId() === null) {
                 $grouped[$section]['heading'] = $item;
             } else {
-                $grouped[$section]['items'][] = $item;
+                $grouped[$section]['orphans'][] = $item;
             }
         }
 
-        // Sắp xếp section theo sort_order của heading (hoặc item đầu tiên)
+        // Build parent→children map
+        $childMap = [];
+        foreach ($items as $item) {
+            $pid = $item->getParentId();
+            if ($pid !== null && isset($itemIndex[$pid])) {
+                $childMap[$pid][] = $item;
+            }
+        }
+        // Sort children by sort_order
+        foreach ($childMap as $pid => &$children) {
+            usort($children, fn($a, $b) => $a->getSortOrder() <=> $b->getSortOrder());
+            $itemIndex[$pid]->setChildren($children);
+        }
+        unset($children);
+
+        // Sắp xếp section theo sort_order
         uasort($grouped, function ($a, $b) {
             $orderA = $a['heading'] ? $a['heading']->getSortOrder() : 9999;
             $orderB = $b['heading'] ? $b['heading']->getSortOrder() : 9999;
-            if (empty($a['heading']) && !empty($a['items'])) {
-                $orderA = $a['items'][0]->getSortOrder();
+            if (empty($a['heading']) && !empty($a['orphans'])) {
+                $orderA = $a['orphans'][0]->getSortOrder();
             }
-            if (empty($b['heading']) && !empty($b['items'])) {
-                $orderB = $b['items'][0]->getSortOrder();
+            if (empty($b['heading']) && !empty($b['orphans'])) {
+                $orderB = $b['orphans'][0]->getSortOrder();
             }
             return $orderA <=> $orderB;
         });
 
         foreach ($grouped as $section => $data) {
             $heading = $data['heading'];
-            $children = $data['items'];
+            $children = [];
 
-            // Nếu là heading nhưng không có children nào → bỏ qua (section rỗng)
-            if ($heading && empty($children)) continue;
-            // Nếu không có heading nhưng có items → tạo heading ẩn
+            // Items → direct children, grouped by parent relationship
+            foreach ($data['orphans'] as $item) {
+                $pid = $item->getParentId();
+                if ($pid === null || !isset($itemIndex[$pid])) {
+                    // Không có parent → direct child của section
+                    if (!$item->isHeading()) {
+                        $children[] = $item;
+                    }
+                } elseif ($item->isHeading() && $item->hasChildren()) {
+                    // Sub-heading (parent=section heading, có children) → direct child
+                    $children[] = $item;
+                }
+                // Items có parent (không phải heading) → children của parent (xử lý qua childMap)
+            }
+
+            usort($children, fn($a, $b) => $a->getSortOrder() <=> $b->getSortOrder());
+
+            if ($heading && empty($children) && !$this->hasAnyChildWithChildren($childMap, $heading->getId())) continue;
+            if (!$heading && empty($children)) continue;
+
             if (!$heading && !empty($children)) {
                 $node = [
                     'heading' => null,
@@ -123,6 +158,12 @@ class MenuService
         }
 
         return $tree;
+    }
+
+    // Kiểm tra heading có child nào có children không (section không rỗng sau nesting)
+    private function hasAnyChildWithChildren(array $childMap, int $parentId): bool
+    {
+        return !empty($childMap[$parentId]);
     }
 
     // Lấy label cho section từ DB (fallback nếu không có heading)

@@ -144,6 +144,33 @@ class AdvancePaymentRequestController
         JsonResponse::ok($this->service->listRequests($status, $limit));
     }
 
+    // HOAN UNG TAM UNG
+    // NGHIEP VU: Nhan vien hoan lai tien tam ung chua dung + chi phi
+    // Input: { cash_returned, expense_lines: [{account_code, amount}], created_by? }
+    // Output: { transaction_id, cash_returned, expense_amount, status }
+    // Hach toan: No 111 + No TK chi phi / Co 141
+    public function settle(string $id): void
+    {
+        Auth::checkCsrf();
+        Auth::requirePermission('cash', 'post');
+        $data = json_decode(file_get_contents('php://input'), true);
+        if (!$data || !isset($data['cash_returned'])) {
+            JsonResponse::error('Vui lòng nhập số tiền hoàn ứng', 400);
+            return;
+        }
+        try {
+            $result = $this->service->settle(
+                $id,
+                (float)$data['cash_returned'],
+                $data['expense_lines'] ?? [],
+                $_SESSION['user_id'] ?? 'system'
+            );
+            JsonResponse::ok($result);
+        } catch (\Throwable $e) {
+            JsonResponse::error($e->getMessage());
+        }
+    }
+
     // VIEW
     public function viewIndex(): void
     {

@@ -64,6 +64,9 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; line-hei
 .sub-menu { background:#15202b; list-style:none; padding:0; margin:0; }
 .sub-menu .nav-link-s { padding-left:48px; font-size:12px; }
 .sub-menu .nav-link-s i { font-size:5px; width:auto; color:#5a7a98; }
+.sub-level .nav-link-s { padding-left:36px; font-size:12px; font-weight:600; color:#8aabcc; }
+.sub-level .nav-link-s i { font-size:12px; width:18px; color:#6d8aaa; }
+.sub-level .sub-menu .nav-link-s { padding-left:56px; font-weight:400; color:#b4bcc8; }
 .content-area { margin-left:250px; min-height:100vh; }
 .topbar { background:#fff; padding:10px 24px; border-bottom:1px solid #e2e6ef; display:flex; align-items:center; gap:16px; }
 .topbar h6 { margin:0; font-weight:600; color:#1a2a3a; font-size:15px; }
@@ -178,11 +181,18 @@ body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; line-hei
 <?php else: ?>
 <?php foreach ($menuTree as $section):
 $secId = preg_replace('/[^a-z0-9]/i', '', $section['section'] ?? 'sec' . $section['id']);
+// Check active trong cả children và sub-children
 $hasActive = false;
 if (!empty($section['children'])) {
     foreach ($section['children'] as $ch) {
         $r = $ch['route'] ?? '';
         if ($r && ($currentUri === $r || $currentUri === $r . '/')) { $hasActive = true; break; }
+        if (!empty($ch['children'])) {
+            foreach ($ch['children'] as $gc) {
+                $gr = $gc['route'] ?? '';
+                if ($gr && ($currentUri === $gr || $currentUri === $gr . '/')) { $hasActive = true; break 2; }
+            }
+        }
     }
 }
 ?>
@@ -197,14 +207,43 @@ if (!empty($section['children'])) {
             </a>
             <div class="collapse sub-menu<?= $hasActive ? ' show' : '' ?>" id="menu<?= $secId ?>">
 <?php foreach ($section['children'] as $child):
+$subChildren = $child['children'] ?? [];
+$hasSubChildren = !empty($subChildren);
 $childRoute = $child['route'] ?? '#';
 $isChildActive = $childRoute !== '#' && ($currentUri === $childRoute || $currentUri === $childRoute . '/');
+
+if ($hasSubChildren):
+    $subId = $secId . 'sub' . ($child['id'] ?? '');
+    $subActive = false;
+    foreach ($subChildren as $sc) {
+        $sr = $sc['route'] ?? '';
+        if ($sr && ($currentUri === $sr || $currentUri === $sr . '/')) { $subActive = true; break; }
+    }
 ?>
+                <div class="nav-item sub-level">
+                    <a class="nav-link-s" data-bs-toggle="collapse" href="#<?= $subId ?>">
+                        <?php if ($child['icon']): ?><i class="bi <?= \Accounting\Infrastructure\Helpers::e($child['icon']) ?>"></i><?php endif; ?>
+                        <span><?= \Accounting\Infrastructure\Helpers::e($child['label'] ?? '') ?></span>
+                        <i class="bi bi-chevron-right ms-auto"></i>
+                    </a>
+                    <div class="collapse sub-menu<?= $subActive ? ' show' : '' ?>" id="<?= $subId ?>">
+<?php foreach ($subChildren as $sc):
+$scRoute = $sc['route'] ?? '#';
+$scActive = $scRoute !== '#' && ($currentUri === $scRoute || $currentUri === $scRoute . '/');
+?>
+                        <a href="<?= \Accounting\Infrastructure\Helpers::e($scRoute) ?>" class="nav-link-s<?= $scActive ? ' active' : '' ?>">
+                            <span><?= \Accounting\Infrastructure\Helpers::e($sc['label'] ?? '') ?></span>
+                        </a>
+<?php endforeach; ?>
+                    </div>
+                </div>
+<?php else: ?>
                 <a href="<?= \Accounting\Infrastructure\Helpers::e($childRoute) ?>" class="nav-link-s<?= $isChildActive ? ' active' : '' ?>">
                     <?php if ($child['icon']): ?><i class="bi <?= \Accounting\Infrastructure\Helpers::e($child['icon']) ?>"></i><?php endif; ?>
                     <span><?= \Accounting\Infrastructure\Helpers::e($child['label'] ?? '') ?></span>
                     <?php if (!empty($child['badge'])): ?><span class="badge badge-sidebar"><?= \Accounting\Infrastructure\Helpers::e($child['badge']) ?></span><?php endif; ?>
                 </a>
+<?php endif; ?>
 <?php endforeach; ?>
             </div>
         </div>
@@ -260,7 +299,7 @@ function statusBadge(status) {
     var labels = {
         draft:'Nháp',submitted:'Chờ duyệt',pending:'Chờ duyệt',
         approved:'Đã duyệt',posted:'Đã ghi sổ',paid:'Đã chi',
-        cancelled:'Đã hủy',reversed:'Đã đảo',closed:'Đã đóng',
+        cancelled:'Đã hủy',settled:'Đã hoàn ứng',reversed:'Đã đảo',closed:'Đã đóng',
         active:'Hoạt động',inactive:'Ngừng',
         completed:'Hoàn thành',confirmed:'Đã xác nhận',
         finalised:'Đã chốt',issued:'Đã phát hành',

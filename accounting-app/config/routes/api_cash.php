@@ -53,6 +53,7 @@ $router->post('/api/advance-payment/{id}/approve', function($id) use ($c) { $c['
 $router->post('/api/advance-payment/{id}/reject', function($id) use ($c) { $c['AdvancePaymentRequestController']->reject($id); });
 $router->post('/api/advance-payment/{id}/cancel', function($id) use ($c) { $c['AdvancePaymentRequestController']->cancel($id); });
 $router->post('/api/advance-payment/{id}/paid', function($id) use ($c) { $c['AdvancePaymentRequestController']->markPaid($id); });
+$router->post('/api/advance-payment/{id}/settle', function($id) use ($c) { $c['AdvancePaymentRequestController']->settle($id); });
 $router->get('/api/advance-payment/{id}', function($id) use ($c) { $c['AdvancePaymentRequestController']->getDetail($id); });
 $router->get('/api/advance-payment/list', function() use ($c) { $c['AdvancePaymentRequestController']->list(); });
 

@@ -1238,6 +1238,21 @@ class InventoryService implements InventoryServiceInterface
         }
     }
 
+    // CAP NHAT TON KHO + COST LAYER CHO MOT MAT HANG
+    // Duoc goi tu GoodsReceiptService khi ghi so phieu nhap kho
+    // Khong wrap transaction — caller dam bao transaction
+    public function updateStockAndCostLayer(string $itemId, float $qty, float $unitPrice, ?string $batchCode = null, ?string $expiryDate = null): void
+    {
+        $item = $this->itemRepo->findById($itemId);
+        if (!$item) {
+            throw new \InvalidArgumentException("Không tìm thấy mặt hàng: {$itemId}");
+        }
+        $item->setStockQty(($item->getStockQty() ?? 0) + $qty);
+        $this->itemRepo->save($item);
+        $this->saveCostLayer($itemId, $qty, $unitPrice, 0, null, $batchCode, $expiryDate);
+        $this->calculateAndUpdateUnitCost($itemId);
+    }
+
     // BÁO CÁO: PHÂN TÍCH TUỔI TỒN KHO
     //
     // Phân loại hàng tồn kho theo thời gian lưu kho (0-30, 31-60, 61-90, 91-180, 180+ ngày).
