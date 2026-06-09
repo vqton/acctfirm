@@ -46,6 +46,11 @@ $title = 'Chứng từ ghi sổ'; $activeMenu = 'journal'; ob_start(); ?>
         <div class="col-2 text-end text-muted" style="font-size:11px;">Bằng chữ:</div>
         <div class="col-5"><span id="amountInWords" class="text-muted" style="font-size:12px;font-style:italic;">—</span></div>
     </div>
+    <!-- Thuế GTGT — hiển thị khi có TK 1331 hoặc 3331 -->
+    <div id="vatInfoRow" class="mt-2 pt-1 border-top" style="display:none;">
+        <div style="font-size:12px;font-weight:600;color:#1a2a3a;margin-bottom:4px;">Thuế GTGT</div>
+        <div id="vatInfoContent" style="font-size:12px;"></div>
+    </div>
     <!-- File đính kèm -->
     <div class="mt-2 pt-1 border-top">
         <div class="d-flex justify-content-between align-items-center mb-1">
@@ -137,10 +142,20 @@ function updateAmountInWords(amount){
 }
 function recalcTotal(){
     var totalDr=0,totalCr=0;
+    var vat1331=0,vat3331=0,vatBaseDr=0,vatBaseCr=0;
     $('#linesContainer .line-row').each(function(){
         var amt=parseFloat($(this).find('.amount-input').val())||0;
         var isDr=parseInt($(this).find('.dr-cr').val());
-        if(isDr)totalDr+=amt;else totalCr+=amt;
+        var ac=$(this).find('.acc-picker').val()||'';
+        if(isDr){totalDr+=amt;}else{totalCr+=amt;}
+        // VAT detection — TK 1331 (đầu vào), 3331 (đầu ra)
+        if(ac==='1331'||ac.indexOf('1331')===0){vat1331+=amt;}
+        else if(ac==='3331'||ac.indexOf('3331')===0){vat3331+=amt;}
+        // Base amount: opposite side of VAT account
+        if(vat1331>0||vat3331>0){
+            if(isDr&&ac!=='1331'&&ac.indexOf('1331')!==0){vatBaseDr+=amt;}
+            if(!isDr&&ac!=='3331'&&ac.indexOf('3331')!==0){vatBaseCr+=amt;}
+        }
     });
     var diff=Math.abs(totalDr-totalCr);
     var bal=Math.max(totalDr,totalCr);
@@ -151,6 +166,16 @@ function recalcTotal(){
     }
     $('#totalAmount').text(VAS.fmt(bal));
     updateAmountInWords(bal);
+    // VAT info display
+    if(vat1331>0||vat3331>0){
+        var vatHtml='';
+        if(vat1331>0)vatHtml+='<div><span class="badge bg-info me-1">1331</span> Thuế GTGT đầu vào: <strong>'+VAS.fmt(vat1331)+'</strong></div>';
+        if(vat3331>0)vatHtml+='<div><span class="badge bg-warning me-1">3331</span> Thuế GTGT đầu ra: <strong>'+VAS.fmt(vat3331)+'</strong></div>';
+        $('#vatInfoContent').html(vatHtml);
+        $('#vatInfoRow').show();
+    }else{
+        $('#vatInfoRow').hide();
+    }
 }
 // Thêm dòng định khoản mới — tối thiểu 2 dòng (1 Nợ + 1 Có)
 // Nghiệp vụ: Mỗi bút toán cần ít nhất 1 Nợ và 1 Có, tổng tiền bằng nhau
