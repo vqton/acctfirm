@@ -19,6 +19,7 @@ class GoodsReceiptLine
     private ?float $unitPrice;
     private ?float $total;
     private int $lineNumber;
+    private ?float $qtyInDocument;
 
     public function __construct(
         ?string $id = null,
@@ -34,7 +35,8 @@ class GoodsReceiptLine
         ?string $expiryDate = null,
         ?float $unitPrice = null,
         ?float $total = null,
-        int $lineNumber = 0
+        int $lineNumber = 0,
+        ?float $qtyInDocument = null
     ) {
         $this->id = $id;
         $this->grId = $grId;
@@ -50,6 +52,7 @@ class GoodsReceiptLine
         $this->unitPrice = $unitPrice;
         $this->total = $total;
         $this->lineNumber = $lineNumber;
+        $this->qtyInDocument = $qtyInDocument;
     }
 
     public function getId(): ?string { return $this->id; }
@@ -80,6 +83,8 @@ class GoodsReceiptLine
     public function setTotal(?float $v): void { $this->total = $v; }
     public function getLineNumber(): int { return $this->lineNumber; }
     public function setLineNumber(int $v): void { $this->lineNumber = $v; }
+    public function getQtyInDocument(): ?float { return $this->qtyInDocument; }
+    public function setQtyInDocument(?float $v): void { $this->qtyInDocument = $v; }
 
     public function toArray(): array
     {
@@ -98,6 +103,7 @@ class GoodsReceiptLine
             'unit_price' => $this->unitPrice,
             'total' => $this->total,
             'line_number' => $this->lineNumber,
+            'qty_in_document' => $this->qtyInDocument,
         ];
     }
 }

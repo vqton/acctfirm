@@ -26,6 +26,11 @@ class GoodsReceipt
     private ?string $createdBy;
     private ?string $createdAt;
     private ?string $updatedAt;
+    private ?string $invoiceRef;
+    private ?string $invoiceDate;
+    private ?string $delivererName;
+    private ?string $warehouseLocation;
+    private ?string $attachDoc;
 
     public function __construct(
         ?string $id = null,
@@ -43,7 +48,12 @@ class GoodsReceipt
         ?string $amountInWords = null,
         ?string $createdBy = null,
         ?string $createdAt = null,
-        ?string $updatedAt = null
+        ?string $updatedAt = null,
+        ?string $invoiceRef = null,
+        ?string $invoiceDate = null,
+        ?string $delivererName = null,
+        ?string $warehouseLocation = null,
+        ?string $attachDoc = null
     ) {
         $this->id = $id;
         $this->grNumber = $grNumber;
@@ -61,6 +71,11 @@ class GoodsReceipt
         $this->createdBy = $createdBy;
         $this->createdAt = $createdAt;
         $this->updatedAt = $updatedAt;
+        $this->invoiceRef = $invoiceRef;
+        $this->invoiceDate = $invoiceDate;
+        $this->delivererName = $delivererName;
+        $this->warehouseLocation = $warehouseLocation;
+        $this->attachDoc = $attachDoc;
     }
 
     public function getId(): ?string { return $this->id; }
@@ -95,6 +110,16 @@ class GoodsReceipt
     public function setCreatedAt(?string $v): void { $this->createdAt = $v; }
     public function getUpdatedAt(): ?string { return $this->updatedAt; }
     public function setUpdatedAt(?string $v): void { $this->updatedAt = $v; }
+    public function getInvoiceRef(): ?string { return $this->invoiceRef; }
+    public function setInvoiceRef(?string $v): void { $this->invoiceRef = $v; }
+    public function getInvoiceDate(): ?string { return $this->invoiceDate; }
+    public function setInvoiceDate(?string $v): void { $this->invoiceDate = $v; }
+    public function getDelivererName(): ?string { return $this->delivererName; }
+    public function setDelivererName(?string $v): void { $this->delivererName = $v; }
+    public function getWarehouseLocation(): ?string { return $this->warehouseLocation; }
+    public function setWarehouseLocation(?string $v): void { $this->warehouseLocation = $v; }
+    public function getAttachDoc(): ?string { return $this->attachDoc; }
+    public function setAttachDoc(?string $v): void { $this->attachDoc = $v; }
 
     public function toArray(): array
     {
@@ -115,6 +140,11 @@ class GoodsReceipt
             'created_by' => $this->createdBy,
             'created_at' => $this->createdAt,
             'updated_at' => $this->updatedAt,
+            'invoice_ref' => $this->invoiceRef,
+            'invoice_date' => $this->invoiceDate,
+            'deliverer_name' => $this->delivererName,
+            'warehouse_location' => $this->warehouseLocation,
+            'attach_doc' => $this->attachDoc,
         ];
     }
 }

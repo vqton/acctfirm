@@ -81,6 +81,21 @@ class GoodsReceiptService
     // TAO MOI PHIEU NHAP KHO (draft)
     // Input: Thông tin header + danh sách dòng hàng
     // Output: goods_receipt với status = draft
+    // THÔNG BÁO KHI SỐ LƯỢNG THEO CT KHÁC SỐ LƯỢNG THỰC NHẬP
+    private function buildQtyWarning(array $lines): ?string
+    {
+        $warnings = [];
+        foreach ($lines as $i => $line) {
+            $doc = (float)($line['qty_in_document'] ?? 0);
+            $actual = (float)($line['qty_received'] ?? 0);
+            if ($doc > 0 && $doc !== $actual) {
+                $name = $line['item_name'] ?? "dòng " . ($i + 1);
+                $warnings[] = "{$name}: CT={$doc}, thực nhập={$actual} (" . ($doc > $actual ? 'thiếu' : 'thừa') . " {$actual})";
+            }
+        }
+        return $warnings ? 'Chênh lệch số lượng: ' . implode('; ', $warnings) : null;
+    }
+
     public function createDraft(
         ?string $poId,
         ?string $supplierName,
@@ -91,7 +106,12 @@ class GoodsReceiptService
         ?string $department,
         ?string $note,
         array $lines,
-        string $createdBy
+        string $createdBy,
+        ?string $invoiceRef = null,
+        ?string $invoiceDate = null,
+        ?string $delivererName = null,
+        ?string $warehouseLocation = null,
+        ?string $attachDoc = null
     ): array {
         $this->assertPeriodOpen($receivedDate);
 
@@ -117,6 +137,7 @@ class GoodsReceiptService
         }
 
         $amountInWords = VnWords::toWords($totalAmount);
+        $qtyWarning = $this->buildQtyWarning($lines);
 
         $receipt = new GoodsReceipt(
             $id, $grNumber, $poId,
@@ -125,7 +146,10 @@ class GoodsReceiptService
             $warehouseId, $receivedDate,
             $department, $note,
             $totalAmount, $amountInWords,
-            $createdBy, date('Y-m-d H:i:s')
+            $createdBy, date('Y-m-d H:i:s'),
+            null,
+            $invoiceRef, $invoiceDate,
+            $delivererName, $warehouseLocation, $attachDoc
         );
 
         $this->pdo->beginTransaction();
@@ -151,7 +175,8 @@ class GoodsReceiptService
                     $line['batch_no'] ?? null,
                     $line['expiry_date'] ?? null,
                     $price, $total,
-                    $i + 1
+                    $i + 1,
+                    isset($line['qty_in_document']) ? (float)$line['qty_in_document'] : null
                 );
                 $this->grLineRepo->save($grLine);
             }
@@ -162,10 +187,14 @@ class GoodsReceiptService
             throw $e;
         }
 
+        $auditData = ['gr_number' => $grNumber, 'total_amount' => $totalAmount, 'lines' => count($lines)];
+        if ($qtyWarning) {
+            $auditData['qty_warning'] = $qtyWarning;
+        }
         $this->auditLogger->log(
             'goods_receipt.create_draft', 'goods_receipts', $id,
             null,
-            ['gr_number' => $grNumber, 'total_amount' => $totalAmount, 'lines' => count($lines)],
+            $auditData,
             $createdBy
         );
 
@@ -312,6 +341,42 @@ class GoodsReceiptService
             $this->grLineRepo->findByGrId($id)
         );
         return $result;
+    }
+
+    // LAY DU LIEU IN PHIEU NHAP KHO (Mẫu 01-VT)
+    // Trả về: thông tin in + danh sách dòng 8 cột A-D + 1-4
+    public function getPrintData(string $id): array
+    {
+        $data = $this->getReceipt($id);
+        // Xác định TK Nợ dựa trên item_type của từng line
+        $debitAccounts = [];
+        $lines = $data['lines'] ?? [];
+        foreach ($lines as $line) {
+            $item = $line['item_id'] ? $this->itemRepo->findById($line['item_id']) : null;
+            $itemType = $item ? $item->getItemType() : 'other';
+            $invCode = $this->inventoryAccountMap[$itemType] ?? '152';
+            $debitAccounts[$invCode] = ($debitAccounts[$invCode] ?? 0) + ($line['total'] ?? 0);
+        }
+
+        // Xác định TK Có
+        $supplierName = $data['supplier_name'] ?? null;
+        $creditAccount = $supplierName ? '331' : '1111';
+
+        $data['debit_accounts'] = $debitAccounts;
+        $data['credit_account'] = $creditAccount;
+        $data['qty_warning'] = null;
+        $hasDiff = false;
+        foreach ($lines as $line) {
+            $doc = (float)($line['qty_in_document'] ?? 0);
+            $act = (float)($line['qty_received'] ?? 0);
+            if ($doc > 0 && $doc !== $act) { $hasDiff = true; break; }
+        }
+        if ($hasDiff) {
+            $diffLines = array_filter($lines, fn($l) => (float)($l['qty_in_document'] ?? 0) !== (float)($l['qty_received'] ?? 0));
+            $names = array_map(fn($l) => $l['item_name'] ?? $l['item_code'] ?? '', array_slice($diffLines, 0, 3));
+            $data['qty_warning'] = 'Chênh lệch số lượng: ' . implode(', ', $names) . (count($diffLines) > 3 ? '...' : '');
+        }
+        return $data;
     }
 
     // DANH SACH PHIEU NHAP KHO

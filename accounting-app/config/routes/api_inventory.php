@@ -15,6 +15,8 @@ $router->get('/api/inventory/receive/items', function() use ($c) { $c['ReceiptCo
 $router->post('/api/goods-receipt/draft', function() use ($c) { $c['GoodsReceiptController']->createDraft(); });
 $router->post('/api/goods-receipt/{id}/post', function($id) use ($c) { $c['GoodsReceiptController']->postReceipt($id); });
 $router->post('/api/goods-receipt/{id}/cancel', function($id) use ($c) { $c['GoodsReceiptController']->cancelReceipt($id); });
+$router->get('/api/goods-receipt/{id}/print', function($id) use ($c) { $c['GoodsReceiptController']->getPrintData($id); });
+$router->get('/goods-receipt/{id}/print-view', function($id) use ($c) { $c['GoodsReceiptController']->viewPrint($id); });
 $router->get('/api/goods-receipt/{id}', function($id) use ($c) { $c['GoodsReceiptController']->getDetail($id); });
 $router->get('/api/goods-receipt/list', function() use ($c) { $c['GoodsReceiptController']->list(); });
 

@@ -27,8 +27,8 @@ class PDOGoodsReceiptLineRepository implements GoodsReceiptLineRepositoryInterfa
         // total = GENERATED ALWAYS AS (qty_received * unit_price) STORED — không insert
         $stmt = $this->pdo->prepare(
             'INSERT INTO goods_receipt_lines (id, gr_id, po_line_id, item_id, qty_received,
-                qty_rejected, batch_no, expiry_date, unit_price)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                qty_rejected, batch_no, expiry_date, unit_price, qty_in_document)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 gr_id = VALUES(gr_id),
                 po_line_id = VALUES(po_line_id),
@@ -37,7 +37,8 @@ class PDOGoodsReceiptLineRepository implements GoodsReceiptLineRepositoryInterfa
                 qty_rejected = VALUES(qty_rejected),
                 batch_no = VALUES(batch_no),
                 expiry_date = VALUES(expiry_date),
-                unit_price = VALUES(unit_price)'
+                unit_price = VALUES(unit_price),
+                qty_in_document = VALUES(qty_in_document)'
         );
         $stmt->execute([
             $line->getId(),
@@ -49,6 +50,7 @@ class PDOGoodsReceiptLineRepository implements GoodsReceiptLineRepositoryInterfa
             $line->getBatchNo(),
             $line->getExpiryDate(),
             $line->getUnitPrice(),
+            $line->getQtyInDocument(),
         ]);
     }
 
@@ -79,7 +81,8 @@ class PDOGoodsReceiptLineRepository implements GoodsReceiptLineRepositoryInterfa
             $row['batch_no'] ?? null, $row['expiry_date'] ?? null,
             isset($row['unit_price']) ? (float)$row['unit_price'] : null,
             isset($row['total']) ? (float)$row['total'] : null,
-            0
+            0,
+            isset($row['qty_in_document']) ? (float)$row['qty_in_document'] : null
         );
     }
 }

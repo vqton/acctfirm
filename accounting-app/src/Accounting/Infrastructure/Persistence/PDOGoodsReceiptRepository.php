@@ -57,8 +57,9 @@ class PDOGoodsReceiptRepository implements GoodsReceiptRepositoryInterface
         $stmt = $this->pdo->prepare(
             'INSERT INTO goods_receipts (id, gr_number, po_id, supplier_name, supplier_address,
                 receipt_type, status, warehouse_id, received_date, department, note,
-                total_amount, amount_in_words, created_by, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                total_amount, amount_in_words, created_by, created_at, updated_at,
+                invoice_ref, invoice_date, deliverer_name, warehouse_location, attach_doc)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 gr_number = VALUES(gr_number),
                 po_id = VALUES(po_id),
@@ -73,7 +74,12 @@ class PDOGoodsReceiptRepository implements GoodsReceiptRepositoryInterface
                 total_amount = VALUES(total_amount),
                 amount_in_words = VALUES(amount_in_words),
                 created_by = VALUES(created_by),
-                updated_at = VALUES(updated_at)'
+                updated_at = VALUES(updated_at),
+                invoice_ref = VALUES(invoice_ref),
+                invoice_date = VALUES(invoice_date),
+                deliverer_name = VALUES(deliverer_name),
+                warehouse_location = VALUES(warehouse_location),
+                attach_doc = VALUES(attach_doc)'
         );
         $stmt->execute([
             $receipt->getId(),
@@ -92,6 +98,11 @@ class PDOGoodsReceiptRepository implements GoodsReceiptRepositoryInterface
             $receipt->getCreatedBy(),
             $receipt->getCreatedAt(),
             $receipt->getUpdatedAt(),
+            $receipt->getInvoiceRef(),
+            $receipt->getInvoiceDate(),
+            $receipt->getDelivererName(),
+            $receipt->getWarehouseLocation(),
+            $receipt->getAttachDoc(),
         ]);
     }
 
@@ -112,7 +123,12 @@ class PDOGoodsReceiptRepository implements GoodsReceiptRepositoryInterface
             isset($row['total_amount']) ? (float)$row['total_amount'] : null,
             $row['amount_in_words'] ?? null,
             $row['created_by'] ?? null, $row['created_at'] ?? null,
-            $row['updated_at'] ?? null
+            $row['updated_at'] ?? null,
+            $row['invoice_ref'] ?? null,
+            $row['invoice_date'] ?? null,
+            $row['deliverer_name'] ?? null,
+            $row['warehouse_location'] ?? null,
+            $row['attach_doc'] ?? null
         );
     }
 }

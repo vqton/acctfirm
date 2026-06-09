@@ -60,7 +60,7 @@ function results() { global $total, $failed;
     echo "\n=== Results: {$total} tests, {$failed} failed ===\n"; exit($failed>0?1:0);
 }
 
-echo "=== GoodsReceiptService Test (Mẫu 01-VT) ===\n";
+echo "=== GoodsReceiptService Test (Mẫu 01-VT) — v2 với cột 1+2 + new fields ===\n";
 
 // Kiểm tra bảng goods_receipts tồn tại
 try { $pdo->query("SELECT 1 FROM goods_receipts LIMIT 1"); }
@@ -75,17 +75,30 @@ $pdo->prepare("INSERT IGNORE INTO items (id, code, name, item_type, stock_qty, c
     VALUES (?, ?, 'Hàng hóa test PNK', 'merchandise', 0, NOW())")
     ->execute([$itemId, 'PNK_TEST_' . substr($itemId, -4)]);
 
-// Test data
+// Test data — with new fields (invoice_ref, deliverer_name, qty_in_document)
 $supplierName = 'Công ty TNHH Test Supplier';
+$delivererName = 'Nguyễn Văn Giao';
+$invoiceRef = 'HD001234';
+$invoiceDate = '2026-06-01';
+$warehouseLocation = 'Kho A — Tầng 1';
+$attachDoc = '01 HĐ GTGT số HD001234';
 $lines = [
-    ['item_id' => $itemId, 'qty_received' => 10, 'unit_price' => 50000, 'item_name' => 'Hàng test', 'uom' => 'cái'],
+    [
+        'item_id' => $itemId,
+        'qty_received' => 10,
+        'unit_price' => 50000,
+        'item_name' => 'Hàng test',
+        'uom' => 'cái',
+        'qty_in_document' => 10,  // Cột 1: SL theo CT
+    ],
 ];
 
-echo "\n--- Test 1: createDraft — tạo PNK nháp ---\n";
+echo "\n--- Test 1: createDraft — tạo PNK nháp với Cột 1 + Cột 2 + fields mới ---\n";
 $draft = $goodsReceiptService->createDraft(
     null, $supplierName, '123 Đường Test',
     'purchase', null, date('Y-m-d'), 'Phòng Kinh doanh',
-    'Ghi chú test', $lines, 'test_user'
+    'Ghi chú test', $lines, 'test_user',
+    $invoiceRef, $invoiceDate, $delivererName, $warehouseLocation, $attachDoc
 );
 assertTrue(isset($draft['id']), 'PNK draft có id');
 assertEq($draft['status'], 'draft', 'Status = draft');
@@ -97,12 +110,33 @@ assertTrue(isset($draft['amount_in_words']), 'Amount in words not set');
 assertTrue(strpos($draft['gr_number'], 'PNK') === 0, 'Số PNK bắt đầu bằng PNK');
 echo "  PNK number: {$draft['gr_number']}, Total: " . ($draft['total_amount']) . "\n";
 
+// Kiểm tra fields mới
+assertEq($draft['invoice_ref'], $invoiceRef, 'invoice_ref chính xác');
+assertEq($draft['invoice_date'], $invoiceDate, 'invoice_date chính xác');
+assertEq($draft['deliverer_name'], $delivererName, 'deliverer_name chính xác');
+assertEq($draft['warehouse_location'], $warehouseLocation, 'warehouse_location chính xác');
+assertEq($draft['attach_doc'], $attachDoc, 'attach_doc chính xác');
+assertTrue(isset($draft['lines'][0]['qty_in_document']), 'Cột 1 (qty_in_document) có trong line');
+assertNear((float)$draft['lines'][0]['qty_in_document'], 10, 'Cột 1 = 10');
+assertNear((float)$draft['lines'][0]['qty_received'], 10, 'Cột 2 = 10');
+
 echo "\n--- Test 2: getReceipt — lấy chi tiết PNK ---\n";
 $detail = $goodsReceiptService->getReceipt($draft['id']);
 assertEq($detail['id'], $draft['id'], 'ID khớp');
 assertEq(count($detail['lines']), 1, 'Có 1 dòng hàng');
+assertEq($detail['invoice_ref'], $invoiceRef, 'getReceipt có invoice_ref');
+assertEq($detail['deliverer_name'], $delivererName, 'getReceipt có deliverer_name');
 
-echo "\n--- Test 3: postReceipt — ghi sổ PNK ---\n";
+echo "\n--- Test 3: getPrintData — dữ liệu in Mẫu 01-VT ---\n";
+$printData = $goodsReceiptService->getPrintData($draft['id']);
+assertTrue(isset($printData['debit_accounts']), 'Print data có debit_accounts');
+assertTrue(isset($printData['credit_account']), 'Print data có credit_account');
+assertTrue(count($printData['debit_accounts']) > 0, 'Có ít nhất 1 TK Nợ');
+assertEq($printData['credit_account'], '331', 'Credit account = 331 (có supplier)');
+assertEq($printData['invoice_ref'], $invoiceRef, 'Print data có invoice_ref');
+assertEq($printData['deliverer_name'], $delivererName, 'Print data có deliverer_name');
+
+echo "\n--- Test 4: postReceipt — ghi sổ PNK ---\n";
 $posted = $goodsReceiptService->postReceipt($draft['id'], 'test_user');
 assertEq($posted['status'], 'posted', 'Status = posted sau khi ghi sổ');
 assertTrue(isset($posted['lines']), 'Posted có lines');
@@ -111,7 +145,7 @@ assertTrue(isset($posted['lines']), 'Posted có lines');
 $item = $itemRepo->findById($itemId);
 assertNear($item->getStockQty(), 10, 'Stock qty = 10 sau khi nhập');
 
-echo "\n--- Test 4: postReceipt — từ chối ghi sổ PNK đã ghi sổ ---\n";
+echo "\n--- Test 5: postReceipt — từ chối ghi sổ PNK đã ghi sổ ---\n";
 $exceptionCaught = false;
 try {
     $goodsReceiptService->postReceipt($draft['id'], 'test_user');
@@ -121,16 +155,16 @@ try {
 }
 assertTrue($exceptionCaught, 'Không cho ghi sổ PNK đã ghi sổ');
 
-echo "\n--- Test 5: cancelReceipt — tạo PNK mới rồi hủy ---\n";
+echo "\n--- Test 6: cancelReceipt — tạo PNK mới rồi hủy ---\n";
 $draft2 = $goodsReceiptService->createDraft(
     null, 'Another Co', null, 'purchase', null, date('Y-m-d'), null, null,
-    [['item_id' => $itemId, 'qty_received' => 5, 'unit_price' => 30000, 'item_name' => 'Hàng 2']],
+    [['item_id' => $itemId, 'qty_received' => 5, 'unit_price' => 30000, 'item_name' => 'Hàng 2', 'qty_in_document' => 5]],
     'test_user'
 );
 $cancelled = $goodsReceiptService->cancelReceipt($draft2['id'], 'test_user');
 assertEq($cancelled['status'], 'cancelled', 'Status = cancelled');
 
-echo "\n--- Test 6: cancelReceipt — từ chối hủy PNK đã ghi sổ ---\n";
+echo "\n--- Test 7: cancelReceipt — từ chối hủy PNK đã ghi sổ ---\n";
 $exceptionCaught = false;
 try {
     $goodsReceiptService->cancelReceipt($draft['id'], 'test_user');
@@ -140,7 +174,7 @@ try {
 }
 assertTrue($exceptionCaught, 'Không cho hủy PNK đã ghi sổ');
 
-echo "\n--- Test 7: listReceipts — danh sách PNK ---\n";
+echo "\n--- Test 8: listReceipts — danh sách PNK ---\n";
 $list = $goodsReceiptService->listReceipts();
 assertTrue(count($list) >= 2, 'Có ít nhất 2 PNK trong danh sách');
 $listPosted = $goodsReceiptService->listReceipts('posted');
@@ -148,7 +182,7 @@ assertTrue(count($listPosted) >= 1, 'Có ít nhất 1 PNK posted');
 $listCancelled = $goodsReceiptService->listReceipts('cancelled');
 assertTrue(count($listCancelled) >= 1, 'Có ít nhất 1 PNK cancelled');
 
-echo "\n--- Test 8: createDraft — từ chối tạo PNK không có lines ---\n";
+echo "\n--- Test 9: createDraft — từ chối tạo PNK không có lines ---\n";
 $exceptionCaught = false;
 try {
     $goodsReceiptService->createDraft(
@@ -161,7 +195,7 @@ try {
 }
 assertTrue($exceptionCaught, 'Từ chối PNK không có lines');
 
-echo "\n--- Test 9: getReceipt — không tìm thấy PNK ---\n";
+echo "\n--- Test 10: getReceipt — không tìm thấy PNK ---\n";
 $exceptionCaught = false;
 try {
     $goodsReceiptService->getReceipt('nonexistent_id');
@@ -170,7 +204,7 @@ try {
 }
 assertTrue($exceptionCaught, 'Exception: không tìm thấy PNK');
 
-echo "\n--- Test 10: postReceipt — không tìm thấy PNK ---\n";
+echo "\n--- Test 11: postReceipt — không tìm thấy PNK ---\n";
 $exceptionCaught = false;
 try {
     $goodsReceiptService->postReceipt('nonexistent_id', 'test_user');
@@ -179,9 +213,24 @@ try {
 }
 assertTrue($exceptionCaught, 'Exception: không tìm thấy PNK để ghi sổ');
 
+echo "\n--- Test 12: createDraft — PNK với qty_in_document ≠ qty_received ---\n";
+$draft3 = $goodsReceiptService->createDraft(
+    null, 'Co C', null, 'purchase', null, date('Y-m-d'), null, null,
+    [['item_id' => $itemId, 'qty_received' => 8, 'unit_price' => 10000, 'item_name' => 'Hàng lệch', 'qty_in_document' => 10]],
+    'test_user'
+);
+assertNear((float)$draft3['lines'][0]['qty_in_document'], 10, 'Cột 1 (CT) = 10');
+assertNear((float)$draft3['lines'][0]['qty_received'], 8, 'Cột 2 (thực nhập) = 8');
+echo "  Cột 1 (10) ≠ Cột 2 (8) — chênh lệch\n";
+
+echo "\n--- Test 13: getPrintData — PNK chênh lệch có qty_warning ---\n";
+$print3 = $goodsReceiptService->getPrintData($draft3['id']);
+assertTrue(!empty($print3['qty_warning']), 'Print data có qty_warning khi chênh lệch');
+echo "  Cảnh báo: {$print3['qty_warning']}\n";
+
 // Cleanup: xóa dữ liệu test
-$pdo->prepare("DELETE FROM goods_receipt_lines WHERE gr_id IN (?, ?)")->execute([$draft['id'], $draft2['id']]);
-$pdo->prepare("DELETE FROM goods_receipts WHERE id IN (?, ?)")->execute([$draft['id'], $draft2['id']]);
+$pdo->prepare("DELETE FROM goods_receipt_lines WHERE gr_id IN (?, ?, ?)")->execute([$draft['id'], $draft2['id'], $draft3['id']]);
+$pdo->prepare("DELETE FROM goods_receipts WHERE id IN (?, ?, ?)")->execute([$draft['id'], $draft2['id'], $draft3['id']]);
 $pdo->prepare("DELETE FROM inventory_cost_layers WHERE item_id = ?")->execute([$itemId]);
 $pdo->prepare("DELETE FROM items WHERE id = ?")->execute([$itemId]);
 // Xóa transaction đã tạo

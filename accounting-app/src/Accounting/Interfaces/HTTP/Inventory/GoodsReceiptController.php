@@ -39,7 +39,12 @@ class GoodsReceiptController
                 $data['department'] ?? null,
                 $data['note'] ?? null,
                 $data['lines'],
-                $_SESSION['user_id'] ?? 'system'
+                $_SESSION['user_id'] ?? 'system',
+                $data['invoice_ref'] ?? null,
+                $data['invoice_date'] ?? null,
+                $data['deliverer_name'] ?? null,
+                $data['warehouse_location'] ?? null,
+                $data['attach_doc'] ?? null
             );
             JsonResponse::ok($result, 201);
         } catch (\Throwable $e) {
@@ -97,9 +102,35 @@ class GoodsReceiptController
         JsonResponse::ok($this->service->listReceipts($status, $limit));
     }
 
-    // VIEW
+    // IN PHIEU NHAP KHO (Mẫu 01-VT)
+    // GET /api/goods-receipt/{id}/print
+    public function getPrintData(string $id): void
+    {
+        Auth::requirePermission('inventory', 'read');
+        try {
+            JsonResponse::ok($this->service->getPrintData($id));
+        } catch (\Throwable $e) {
+            JsonResponse::error($e->getMessage(), 404);
+        }
+    }
+
+    // VIEW (danh sách + form)
     public function viewIndex(): void
     {
         require __DIR__ . '/../../../../public/views/goods_receipt.php';
+    }
+
+    // IN PHIEU NHAP KHO (Mẫu 01-VT) — server-rendered print view
+    // GET /goods-receipt/{id}/print-view
+    public function viewPrint(string $id): void
+    {
+        Auth::requirePermission('inventory', 'read');
+        try {
+            $data = $this->service->getPrintData($id);
+            require __DIR__ . '/../../../../public/views/goods_receipt_print.php';
+        } catch (\Throwable $e) {
+            http_response_code(404);
+            echo 'Không tìm thấy phiếu nhập kho';
+        }
     }
 }
