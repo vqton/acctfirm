@@ -10,6 +10,7 @@ $title = 'Báo cáo lưu chuyển tiền tệ'; $activeMenu = 'fs_bc03'; ob_star
             <label class="btn btn-outline-secondary" for="methodDirect">Trực tiếp</label>
         </div>
         <select class="form-select form-select-sm d-inline-block w-auto" id="periodSelect" onchange="loadData()"></select>
+        <button class="btn btn-outline-success btn-sm ms-1" id="saveManualBtn" onclick="saveManual()" style="display:none"><i class="bi bi-save"></i> Lưu giá trị nhập tay</button>
         <button class="btn btn-outline-success btn-sm ms-1" onclick="exportCsv()"><i class="bi bi-file-earmark-excel"></i> CSV</button>
         <button class="btn btn-outline-primary btn-sm ms-1" onclick="loadData()"><i class="bi bi-arrow-clockwise"></i> Làm mới</button>
         <a class="btn btn-outline-success btn-sm ms-1" id="xbrlLink" href="#" target="_blank"><i class="bi bi-download"></i> Xuất XBRL (GDT)</a>
@@ -19,10 +20,13 @@ $title = 'Báo cáo lưu chuyển tiền tệ'; $activeMenu = 'fs_bc03'; ob_star
 <div id="validationAlert" class="alert d-none"></div>
 
 <div class="card-table"><table class="table table-sm table-hover fs-table">
-    <thead><tr><th style="width:60px">Mã số</th><th>Chỉ tiêu</th><th class="text-end" style="width:200px">Năm nay</th><th class="text-end" style="width:200px">Năm trước</th></tr></thead>
+    <thead><tr><th style="width:60px">Mã số</th><th>Chỉ tiêu</th><th class="text-end" style="width:220px">Năm nay</th><th class="text-end" style="width:200px">Năm trước</th></tr></thead>
     <tbody id="dataBody"></tbody>
 </table></div>
 <script>
+var manualValues = {};
+var manualDirty = {};
+
 function getMethod() {
     return document.querySelector('input[name="methodRadio"]:checked').value;
 }
@@ -42,20 +46,60 @@ function loadData() {
         } else {
             $('#validationAlert').addClass('d-none');
         }
+        manualValues = {};
+        manualDirty = {};
+        $('#saveManualBtn').hide();
         var prior = res.prior || {};
         res.items.forEach(function(r){
             var cls = r.is_total ? 'fw-bold fs-total' : (r.is_control ? 'fw-semibold' : '');
-            var val = r.value !== 0 ? parseFloat(r.value).toLocaleString() : '-';
-            var pVal = prior[r.ma_so] !== undefined && prior[r.ma_so] !== 0 ? parseFloat(prior[r.ma_so]).toLocaleString() : '-';
-            var row = '<tr class="'+cls+'"><td>'+esc(r.ma_so)+'</td><td>'+esc(r.name_vi)+'</td><td class="text-end font-monospace">'+val+'</td>';
-            if (getMethod() === 'indirect') {
-                row += '<td class="text-end font-monospace text-muted">'+pVal+'</td>';
+            if (getMethod() === 'indirect' && r.is_manual) {
+                var manVal = r.value !== 0 ? r.value : '';
+                manualValues[r.ma_so] = r.value;
+                var pVal = VAS.fmt(prior[r.ma_so]);
+                var inputHtml = '<input type="text" class="form-control form-control-sm text-end font-monospace manual-input" data-maso="'+esc(r.ma_so)+'" value="'+manVal+'" placeholder="0" style="width:200px">';
+                tbody.append('<tr class="'+cls+'"><td>'+esc(r.ma_so)+'</td><td>'+esc(r.name_vi)+'</td><td class="text-end">'+inputHtml+'</td><td class="text-end font-monospace text-muted vas-number">'+pVal+'</td></tr>');
             } else {
-                row += '<td class="text-end font-monospace text-muted"></td>';
+                var val = VAS.fmt(r.value || 0);
+                var pVal = VAS.fmt(prior[r.ma_so]);
+                var row = '<tr class="'+cls+'"><td>'+esc(r.ma_so)+'</td><td>'+esc(r.name_vi)+'</td><td class="text-end vas-number">'+val+'</td>';
+                if (getMethod() === 'indirect') {
+                    row += '<td class="text-end vas-number text-muted">'+pVal+'</td>';
+                } else {
+                    row += '<td class="text-end vas-number text-muted"></td>';
+                }
+                row += '</tr>';
+                tbody.append(row);
             }
-            row += '</tr>';
-            tbody.append(row);
         });
+        $('.manual-input').off('input').on('input', function(){
+            var maso = $(this).data('maso');
+            var raw = $(this).val().replace(/,/g, '');
+            var num = parseFloat(raw);
+            if (!isNaN(num)) {
+                manualDirty[maso] = num;
+            } else {
+                delete manualDirty[maso];
+            }
+            $('#saveManualBtn').toggle(Object.keys(manualDirty).length > 0);
+        });
+    });
+}
+
+function saveManual() {
+    var period = $('#periodSelect').val() || '<?=date('Y')?>';
+    var values = {};
+    for (var k in manualDirty) { values[k] = manualDirty[k]; }
+    $.ajax({
+        url: '/api/fs/bc03/manual-values',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ statement: 'BC03', period: period, values: values }),
+        success: function(res) {
+            manualDirty = {};
+            $('#saveManualBtn').hide();
+            loadData();
+        },
+        error: function(xhr) { alert('Lỗi lưu: ' + (xhr.responseJSON ? xhr.responseJSON.error : xhr.statusText)); }
     });
 }
 

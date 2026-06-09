@@ -58,24 +58,6 @@ $title = 'Nhập kho theo PO'; $activeMenu = 'purchase_gr'; ob_start(); ?>
 var allData = [];
 var warehouses = [];
 
-function statusBadge(s) {
-    switch (s) {
-        case 'draft': return 'badge-warning';
-        case 'completed': return 'badge-active';
-        case 'cancelled': return 'badge-danger';
-        default: return 'badge-inactive';
-    }
-}
-
-function statusLabel(s) {
-    switch (s) {
-        case 'draft': return 'Nháp';
-        case 'completed': return 'Hoàn thành';
-        case 'cancelled': return 'Đã hủy';
-        default: return s;
-    }
-}
-
 function loadWarehouses() {
     fetch('/api/warehouses')
     .then(function(r) { return r.json(); })
@@ -115,7 +97,6 @@ function renderRows(data) {
     var tbody = document.getElementById('dataBody');
     document.getElementById('recordCount').textContent = '(' + data.length + ' bản ghi)';
     tbody.innerHTML = data.map(function(r) {
-        var badge = statusBadge(r.status);
         var warehouseName = r.warehouse_name || '';
         if (!warehouseName && r.warehouse_id) {
             var found = warehouses.find(function(w) { return w.id === r.warehouse_id; });
@@ -127,7 +108,7 @@ function renderRows(data) {
             '<td>' + esc(poRef) + '</td>' +
             '<td>' + esc(warehouseName) + '</td>' +
             '<td>' + (r.received_date || '') + '</td>' +
-            '<td><span class="badge-status ' + badge + '">' + statusLabel(r.status) + '</span></td>' +
+            '<td>' + statusBadge(r.status) + '</td>' +
             '<td class="text-center"><button class="btn-action" onclick="viewGrDetail(\'' + r.id + '\')"><i class="bi bi-eye"></i></button></td>' +
         '</tr>';
     }).join('');
@@ -156,7 +137,7 @@ function viewGrDetail(id) {
         var html = '<div class="row g-2 mb-3">' +
             '<div class="col-4"><strong>Số PNK:</strong> ' + esc(r.reference || r.id) + '</div>' +
             '<div class="col-4"><strong>PO:</strong> ' + esc(r.po_reference || r.po_id || '') + '</div>' +
-            '<div class="col-4"><strong>Trạng thái:</strong> <span class="badge-status ' + statusBadge(r.status) + '">' + statusLabel(r.status) + '</span></div>' +
+            '<div class="col-4"><strong>Trạng thái:</strong> ' + statusBadge(r.status) + '</div>' +
             '<div class="col-4"><strong>Kho:</strong> ' + esc(warehouseName) + '</div>' +
             '<div class="col-4"><strong>Ngày nhập:</strong> ' + (r.received_date || '') + '</div>' +
         '</div><hr><h6>Chi tiết nhập kho</h6>';

@@ -134,8 +134,8 @@ class FxRevaluationService
                     $totalGain += $unrealizedGainLoss;
                 } else {
                     $loss = abs($unrealizedGainLoss);
-                    // Lỗ tỷ giá: Nợ 635 / Có TK tiền tệ
-                    $adjustmentLines[] = ['account_code' => '635', 'amount' => $loss, 'is_debit' => true];
+                    // Lỗ tỷ giá: Nợ 6352 (Chi phí tài chính - Chênh lệch tỷ giá) / Có TK tiền tệ
+                    $adjustmentLines[] = ['account_code' => '6352', 'amount' => $loss, 'is_debit' => true];
                     $adjustmentLines[] = ['account_code' => $accCode, 'amount' => $loss, 'is_debit' => false];
                     $totalLoss += $loss;
                 }

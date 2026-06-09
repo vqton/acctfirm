@@ -65,37 +65,16 @@ $title = 'Đối chiếu hóa đơn'; $activeMenu = 'purchase_match'; ob_start()
 <script>
 var allData = [];
 
-function statusBadge(s) {
-    switch (s) {
-        case 'matched': return 'badge-active';
-        case 'warning': return 'badge-warning';
-        case 'mismatch': return 'badge-danger';
-        case 'pending': return 'badge-inactive';
-        default: return 'badge-inactive';
-    }
-}
-
-function statusLabel(s) {
-    switch (s) {
-        case 'matched': return 'Đã khớp';
-        case 'warning': return 'Cảnh báo';
-        case 'mismatch': return 'Lệch';
-        case 'pending': return 'Chờ xử lý';
-        default: return s;
-    }
-}
-
 function renderRows(data) {
     var tbody = document.getElementById('dataBody');
     document.getElementById('recordCount').textContent = '(' + data.length + ' bản ghi)';
     tbody.innerHTML = data.map(function(r) {
-        var badge = statusBadge(r.match_status);
         return '<tr>' +
             '<td>' + esc(r.supplier_invoice_no || '') + '</td>' +
             '<td>' + esc(r.po_id || '') + '</td>' +
             '<td>' + (r.invoice_date || '') + '</td>' +
             '<td class="text-end font-monospace">' + parseFloat(r.invoice_amount || 0).toLocaleString() + '</td>' +
-            '<td><span class="badge-status ' + badge + '">' + statusLabel(r.match_status) + '</span></td>' +
+            '<td>' + statusBadge(r.match_status) + '</td>' +
             '<td class="text-center"><button class="btn-action" onclick="viewMatchDetail(\'' + r.id + '\')"><i class="bi bi-eye"></i></button></td>' +
         '</tr>';
     }).join('');
@@ -133,7 +112,7 @@ function viewMatchDetail(id) {
     var html = '<div class="row g-2 mb-3">' +
         '<div class="col-4"><strong>Hóa đơn:</strong> ' + esc(match.supplier_invoice_no || '') + '</div>' +
         '<div class="col-4"><strong>PO:</strong> ' + esc(match.po_id || '') + '</div>' +
-        '<div class="col-4"><strong>Trạng thái:</strong> <span class="badge-status ' + statusBadge(match.match_status) + '">' + statusLabel(match.match_status) + '</span></div>' +
+        '<div class="col-4"><strong>Trạng thái:</strong> ' + statusBadge(match.match_status) + '</div>' +
         '<div class="col-4"><strong>Ngày HĐ:</strong> ' + (match.invoice_date || '') + '</div>' +
         '<div class="col-4"><strong>Tiền HĐ:</strong> ' + parseFloat(match.invoice_amount || 0).toLocaleString() + '</div>' +
         (match.vat_amount ? '<div class="col-4"><strong>Thuế GTGT:</strong> ' + parseFloat(match.vat_amount).toLocaleString() + '</div>' : '') +
@@ -263,7 +242,7 @@ document.getElementById('matchForm').addEventListener('submit', function(e) {
     })
     .then(function(result) {
         var statusClass = result.match_status === 'matched' ? 'alert-success' : (result.match_status === 'warning' ? 'alert-warning' : 'alert-danger');
-        var statusText = statusLabel(result.match_status);
+        var statusText = ({matched:'Đã khớp',warning:'Cảnh báo',mismatch:'Lệch',pending:'Chờ xử lý'})[result.match_status] || result.match_status;
         var resultDiv = document.getElementById('matchResult');
         var html = '<div class="alert ' + statusClass + '"><h6>Kết quả: ' + statusText + '</h6>';
         if (result.lines && result.lines.length) {

@@ -70,13 +70,19 @@ class FsController
     // Tuân thủ: TT 99 — Mẫu số B02-DN. Chỉ tiêu 60 = cơ sở tính thuế TNDN
     public function bc02(): void
     {
+        Auth::requirePermission('report', 'read');
         $period = $_GET['period'] ?? date('Y');
-        $data = $this->fs->generateBC02($period);
+        $manualValues = $this->fs->getManualValues('BC02', $period);
+        $data = $this->fs->generateBC02($period, $manualValues);
+        $prior = $this->fs->getPriorPeriodValues('BC02', $period);
         JsonResponse::ok([
             'items' => $data,
             'period' => $period,
+            'manual' => $manualValues,
             'errors' => $this->fs->validateBC02($data),
+            'warnings' => $this->fs->getBC02Warnings($data),
             'net_profit' => $this->findValue($data, '60'),
+            'prior' => $prior,
         ]);
     }
 
@@ -93,7 +99,8 @@ class FsController
         $period = $_GET['period'] ?? date('Y');
         $bc01 = $this->fs->generateBC01($period);
         $bc02 = $this->fs->generateBC02($period);
-        $bc03 = $this->fs->generateBC03($period);
+        $manualValues = $this->fs->getManualValues('BC03', $period);
+        $bc03 = $this->fs->generateBC03($period, $manualValues);
         $errors = array_merge($this->fs->validateBC01($bc01), $this->fs->validateBC02($bc02), $this->fs->validateBC03($bc03));
         $prior = $this->fs->getPriorPeriodValues('BC01', $period);
         $priorIncome = $this->fs->getPriorPeriodValues('BC02', $period);
@@ -134,7 +141,8 @@ class FsController
     {
         Auth::requirePermission('report', 'read');
         $period = $_GET['period'] ?? date('Y');
-        $data = $this->fs->generateBC03($period);
+        $manualValues = $this->fs->getManualValues('BC03', $period);
+        $data = $this->fs->generateBC03($period, $manualValues);
         $bc01 = $this->fs->generateBC01($period);
         $bc01Cash = $this->findValue($bc01, '110');
 
@@ -223,11 +231,43 @@ class FsController
         echo $xml;
     }
 
+    //
+    // NGHIỆP VỤ: Lưu giá trị nhập tay cho chỉ tiêu BC (BC02: MS 21,70,71; BC03: MS 02,04,07,...)
+    // Input: POST { statement: "BC03", period: "2025", values: { "02": 120000000 } }
+    // Output: { success: true, manual: { ... } }
+    // Lưu vào business_config với key = {statement}.manual.{period}
+    //
+    public function saveManualValues(): void
+    {
+        Auth::requirePermission('report', 'update');
+        Auth::checkCsrf();
+        $body = json_decode(file_get_contents('php://input'), true);
+        $period = $body['period'] ?? date('Y');
+        $statement = $body['statement'] ?? 'BC02';
+        $values = $body['values'] ?? [];
+        $user = $_SESSION['user']['username'] ?? 'system';
+        // Danh sách mã số được phép nhập tay theo từng loại báo cáo
+        $allowedMap = [
+            'BC02' => ['21', '70', '71'],
+            'BC03' => ['02', '04', '07', '14', '15', '16', '17', '22', '24', '26', '27', '35', '36', '61'],
+        ];
+        $allowed = $allowedMap[$statement] ?? $allowedMap['BC02'];
+        $filtered = [];
+        foreach ($values as $k => $v) {
+            if (in_array((string)$k, $allowed, true)) {
+                $filtered[(string)$k] = (float)$v;
+            }
+        }
+        $this->fs->saveManualValues($statement, $period, $filtered, $user);
+        JsonResponse::ok(['success' => true, 'manual' => $filtered]);
+    }
+
     public function exportXbrlBC02(): void
     {
         Auth::requirePermission('report', 'export');
         $period = $_GET['period'] ?? date('Y');
-        $data = $this->fs->generateBC02($period);
+        $manualValues = $this->fs->getManualValues('BC02', $period);
+        $data = $this->fs->generateBC02($period, $manualValues);
 
         $errors = $this->fs->validateBC02($data);
         if (!empty($errors)) {
@@ -245,7 +285,8 @@ class FsController
     {
         Auth::requirePermission('report', 'export');
         $period = $_GET['period'] ?? date('Y');
-        $data = $this->fs->generateBC03($period);
+        $manualValues = $this->fs->getManualValues('BC03', $period);
+        $data = $this->fs->generateBC03($period, $manualValues);
 
         $errors = $this->fs->validateBC03($data);
         if (!empty($errors)) {

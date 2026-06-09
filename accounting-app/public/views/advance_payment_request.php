@@ -272,9 +272,6 @@ function loadList(status) {
         }
         $('#listCount').text(data.length + ' đề nghị');
         data.forEach(function(r) {
-            var badge = r.status === 'draft' ? 'badge-warning' : (r.status === 'submitted' ? 'badge-info' :
-                r.status === 'approved' ? 'badge-success' : (r.status === 'paid' ? 'badge-active' : 'badge-inactive'));
-            var statusMap = {draft:'Nháp',submitted:'Chờ duyệt',approved:'Đã duyệt',paid:'Đã chi',cancelled:'Đã hủy'};
             tbody.append('<tr style="cursor:pointer" onclick="openDetail(\''+r.id+'\')">' +
                 '<td>'+esc(r.request_number)+'</td>' +
                 '<td style="font-size:12px">'+esc(r.request_date)+'</td>' +
@@ -282,7 +279,7 @@ function loadList(status) {
                 '<td>'+esc(r.requester_department||'')+'</td>' +
                 '<td class="text-end font-monospace">'+fmt(r.amount)+'</td>' +
                 '<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(r.reason||'')+'</td>' +
-                '<td><span class="badge-status '+badge+'">'+(statusMap[r.status]||r.status)+'</span></td>' +
+                '<td>'+statusBadge(r.status)+'</td>' +
                 '<td><button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation();openDetail(\''+r.id+'\')"><i class="bi bi-eye"></i></button></td>' +
             '</tr>');
         });
@@ -322,10 +319,7 @@ function openDetail(id) {
         $('#dispAccountantSign').html(d.status === 'submitted' || d.status === 'approved' || d.status === 'paid' ? '<span class="text-success">✓ Đã xem xét</span>' : '');
         $('#dispDeptHeadSign').html(d.status !== 'draft' ? '<span>'+esc(d.requester_department||'')+'</span>' : '');
 
-        var statusMap = {draft:'Nháp',submitted:'Chờ duyệt',approved:'Đã duyệt',paid:'Đã chi',cancelled:'Đã hủy'};
-        var badgeClass = d.status === 'draft' ? 'bg-warning' : (d.status === 'submitted' ? 'bg-info' :
-            d.status === 'approved' ? 'bg-success' : (d.status === 'paid' ? 'bg-primary' : 'bg-secondary'));
-        $('#dispStatusBadge').text(statusMap[d.status]||d.status).removeClass().addClass('badge badge-lg ' + badgeClass);
+        $('#dispStatusBadge').html(statusBadge(d.status));
 
         // Toolbar buttons
         $('#btnApprove,#btnReject,#btnCancel,#btnSubmit,#btnPay').hide();

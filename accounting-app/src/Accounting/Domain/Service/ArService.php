@@ -202,7 +202,7 @@ class ArService
 
     //
     // NGHIỆP VỤ CHIẾT KHẤU THANH TOÁN CHO KH: Giảm giá cho KH do thanh toán sớm hơn thời hạn
-    // Hạch toán: Nợ 635 (Chi phí tài chính) — Có 131
+    // Hạch toán: Nợ 6351 (Chi phí tài chính - Chiết khấu thanh toán) — Có 131
     // Tác động BC02: MS 23 (Chi phí tài chính) tăng → lợi nhuận giảm
     // Phân biệt: Chiết khấu thương mại (giảm giá hàng bán) qua 521 — chiết khấu thanh toán qua 635
     //
@@ -214,7 +214,7 @@ class ArService
             if ($discountAmount > $inv['balance']) throw new \InvalidArgumentException("Số tiền chiết khấu không được lớn hơn số dư còn lại của hóa đơn.");
 
             $txn = $this->journal->postEntry("AR settlement discount: {$inv['invoice_number']}", "DISC-{$invoiceId}", [
-                ['account_code' => '635', 'amount' => $discountAmount, 'is_debit' => true],
+                ['account_code' => '6351', 'amount' => $discountAmount, 'is_debit' => true],
                 ['account_code' => '131', 'amount' => $discountAmount, 'is_debit' => false],
             ], $createdBy);
 

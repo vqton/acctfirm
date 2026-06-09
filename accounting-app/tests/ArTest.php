@@ -90,15 +90,15 @@ assertTrue($ret['amount'] > 0, 'Return recorded');
 $deduction = $accountRepo->findByCode('521')->getBalance();
 assertTrue($deduction != 0, 'Revenue deduction (521) recorded (contra-revenue, debit-normal)');
 
-// Nghiệp vụ: Chiết khấu thanh toán cho khách hàng — ghi vào TK 635 (Chi phí tài chính)
+// Nghiệp vụ: Chiết khấu thanh toán cho khách hàng — ghi vào TK 6351 (Chi phí tài chính - Chiết khấu thanh toán)
 // Nếu fail → chiết khấu không được ghi nhận đúng → sai chi phí tài chính
 echo "\n=== Test 6: Settlement discount ===\n";
 $discInv = $ar->recordInvoice($cid, 'SI-DISC-001', '2026-07-01', '2026-08-01', 3000000, 300000, 10, 'Discount test', 'tester');
 $disc = $ar->recordSettlementDiscount($discInv['invoice_id'], 200000, 'tester');
 assertTrue($disc['amount'] > 0, 'Discount recorded');
 
-$fc = $accountRepo->findByCode('635')->getBalance();
-assertTrue($fc > 0, 'Finance cost (635) recorded for discount');
+$fc = $accountRepo->findByCode('6351')->getBalance();
+assertTrue($fc > 0, 'Finance cost (6351) recorded for discount');
 
 // Nghiệp vụ: Xóa sổ công nợ phải thu khó đòi
 // Chỉ áp dụng với hóa đơn quá hạn lâu ngày, được phê duyệt đặc biệt

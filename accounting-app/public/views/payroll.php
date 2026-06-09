@@ -16,7 +16,7 @@ function loadDashboard(){
   $.get('/api/payroll/periods').done(function(r){
     var open=0,closed=0;if(r.data){r.data.forEach(function(p){if(p.status==='open')open++;if(p.status==='closed')closed++;});}
     $('#kpiOpenPeriods').text(open);
-    var h='';if(r.data){r.data.slice(0,5).forEach(function(p){h+='<div class="d-flex justify-content-between py-1 border-bottom"><span>'+esc(p.period_code)+' - '+esc(p.name)+'</span><span class="badge-status '+(p.status==='open'?'badge-active':p.status==='closed'?'badge-danger':'badge-warning')+'">'+(p.status==='open'?'Đang mở':p.status==='closed'?'Đã đóng':'Đang XL')+'</span></div>';});}$('#recentPeriods').html(h||'<div class="text-muted">Chưa có kỳ lương</div>');
+    var h='';if(r.data){r.data.slice(0,5).forEach(function(p){h+='<div class="d-flex justify-content-between py-1 border-bottom"><span>'+esc(p.period_code)+' - '+esc(p.name)+'</span>'+statusBadge(p.status)+'</div>';});}$('#recentPeriods').html(h||'<div class="text-muted">Chưa có kỳ lương</div>');
   }).fail(function(){});
   $.get('/api/payroll/entries').done(function(r){
     var draft=0,posted=0,totalGross=0,totalNet=0,recent=r.data?r.data.slice(0,5):[];

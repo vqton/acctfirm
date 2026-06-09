@@ -102,33 +102,10 @@ function updateLineTotal() {
     document.getElementById('lineTotal').textContent = total.toLocaleString() + ' VND';
 }
 
-function statusBadge(s) {
-    switch (s) {
-        case 'draft': return 'badge-warning';
-        case 'pending': return 'badge-type';
-        case 'approved': return 'badge-active';
-        case 'rejected': return 'badge-danger';
-        case 'fulfilled': return 'badge-inactive';
-        default: return 'badge-inactive';
-    }
-}
-
-function statusLabel(s) {
-    switch (s) {
-        case 'draft': return 'Nháp';
-        case 'pending': return 'Chờ duyệt';
-        case 'approved': return 'Đã duyệt';
-        case 'rejected': return 'Từ chối';
-        case 'fulfilled': return 'Đã đặt hàng';
-        default: return s;
-    }
-}
-
 function renderRows(data) {
     var tbody = document.getElementById('dataBody');
     document.getElementById('recordCount').textContent = '(' + data.length + ' bản ghi)';
     tbody.innerHTML = data.map(function(r) {
-        var badge = statusBadge(r.status);
         var total = parseFloat(r.total_amount || 0).toLocaleString();
         var actions = '<button class="btn-action me-1" onclick="viewDetail(\'' + r.id + '\')" title="Xem"><i class="bi bi-eye"></i></button>';
         if (r.status === 'pending') {
@@ -140,7 +117,7 @@ function renderRows(data) {
             '<td>' + esc(r.department_name || r.department_id) + '</td>' +
             '<td class="text-end font-monospace">' + total + '</td>' +
             '<td>' + (r.delivery_date || '') + '</td>' +
-            '<td><span class="badge-status ' + badge + '">' + statusLabel(r.status) + '</span></td>' +
+            '<td>' + statusBadge(r.status) + '</td>' +
             '<td class="text-center">' + actions + '</td>' +
         '</tr>';
     }).join('');
@@ -183,7 +160,7 @@ function viewDetail(id) {
         msg += '<strong>Phòng ban:</strong> ' + esc(r.department_name || r.department_id) + '<br>';
         msg += '<strong>Ngày giao:</strong> ' + (r.delivery_date || '') + '<br>';
         if (r.note) msg += '<strong>Ghi chú:</strong> ' + esc(r.note) + '<br>';
-        msg += '<strong>Trạng thái:</strong> <span class="badge-status ' + statusBadge(r.status) + '">' + statusLabel(r.status) + '</span><br>';
+        msg += '<strong>Trạng thái:</strong> ' + statusBadge(r.status) + '<br>';
         msg += '<hr><h6>Chi tiết hàng hóa</h6>';
         if (r.lines && r.lines.length) {
             msg += '<table class="table table-sm"><thead><tr><th>Hàng hóa</th><th class="text-end">SL</th><th class="text-end">Đơn giá</th><th class="text-end">Thành tiền</th></tr></thead><tbody>';

@@ -34,8 +34,7 @@ function loadData() {
     $.get('/api/users', function(data) {
         var tbody=$('#dataBody'); tbody.empty();
         data.forEach(function(u){
-            var badge = u.status==='active'?'badge-active':'badge-danger';
-            tbody.append('<tr><td>'+esc(u.username)+'</td><td>'+esc(u.full_name)+'</td><td>'+esc(u.email||'')+'</td><td>'+esc(u.role_names||'')+'</td><td><span class="badge-status '+badge+'">'+esc(u.status)+'</span></td><td style="font-size:12px">'+esc(u.last_login||'')+'</td><td><button class="btn btn-sm btn-outline-primary me-1" onclick="editUser(\''+esc(u.id)+'\')">Sửa</button><button class="btn btn-sm btn-outline-danger" onclick="confirmDelete(\''+esc(u.id)+'\',\'/api/users\',\''+esc(u.full_name)+'\')">Xóa</button></td></tr>');
+            tbody.append('<tr><td>'+esc(u.username)+'</td><td>'+esc(u.full_name)+'</td><td>'+esc(u.email||'')+'</td><td>'+esc(u.role_names||'')+'</td><td>'+statusBadge(u.status)+'</td><td style="font-size:12px">'+esc(u.last_login||'')+'</td><td><button class="btn btn-sm btn-outline-primary me-1" onclick="editUser(\''+esc(u.id)+'\')">Sửa</button><button class="btn btn-sm btn-outline-danger" onclick="confirmDelete(\''+esc(u.id)+'\',\'/api/users\',\''+esc(u.full_name)+'\')">Xóa</button></td></tr>');
         });
     });
 }

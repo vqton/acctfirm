@@ -67,10 +67,9 @@ function loadData() {
     $.get('/api/vat/declarations', function(data) {
         var tbody = $('#dataBody').empty();
         data.forEach(function(r) {
-            var badge = r.status === 'finalised' ? 'badge-active' : (r.status === 'draft' ? 'badge-warning' : 'badge-inactive');
             var payable = r.vat_payable;
             var payableCls = payable >= 0 ? '' : 'text-success';
-            tbody.append('<tr><td>' + r.period + '</td><td class="text-end font-monospace">' + parseInt(r.total_vat_input).toLocaleString() + '</td><td class="text-end font-monospace">' + parseInt(r.total_vat_output).toLocaleString() + '</td><td class="text-end font-monospace ' + payableCls + '">' + parseInt(payable).toLocaleString() + '</td><td class="text-end">' + r.invoice_count_input + '</td><td class="text-end">' + r.invoice_count_output + '</td><td><span class="badge-status ' + badge + '">' + esc(r.status) + '</span></td><td><button class="btn btn-sm btn-outline-primary" onclick="viewDetail(\'' + r.id + '\')"><i class="bi bi-eye"></i></button></td></tr>');
+            tbody.append('<tr><td>' + r.period + '</td><td class="text-end font-monospace">' + parseInt(r.total_vat_input).toLocaleString() + '</td><td class="text-end font-monospace">' + parseInt(r.total_vat_output).toLocaleString() + '</td><td class="text-end font-monospace ' + payableCls + '">' + parseInt(payable).toLocaleString() + '</td><td class="text-end">' + r.invoice_count_input + '</td><td class="text-end">' + r.invoice_count_output + '</td><td>' + statusBadge(r.status) + '</td><td><button class="btn btn-sm btn-outline-primary" onclick="viewDetail(\'' + r.id + '\')"><i class="bi bi-eye"></i></button></td></tr>');
         });
     });
 }

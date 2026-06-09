@@ -42,8 +42,7 @@ function loadData() {
         var f=data.filter(function(i){return !q||i.name.toLowerCase().includes(q)||i.code.toLowerCase().includes(q);});
         document.getElementById('recordCount').textContent='('+f.length+'/'+data.length+' bản ghi)';
         var rows=f.map(function(i){
-            var sc=i.status?'badge-active':'badge-inactive';var st=i.status?'Hoạt động':'Ngừng';
-            return '<tr><td>'+esc(i.code)+'</td><td>'+esc(i.name)+'</td><td>'+esc(i.address||'')+'</td><td><span class="badge badge-status '+sc+'">'+st+'</span></td>'+
+            return '<tr><td>'+esc(i.code)+'</td><td>'+esc(i.name)+'</td><td>'+esc(i.address||'')+'</td><td>'+statusBadge(i.status?'active':'inactive')+'</td>'+
                 '<td class="text-center"><a href="#" class="btn-action me-1" onclick="openEdit(\''+i.id+'\')"><i class="bi bi-pencil"></i></a>'+
                 '<a href="#" class="btn-action btn-action-danger" onclick="confirmDelete(\''+i.id+'\',\''+API+'\',\''+esc(i.name)+'\')"><i class="bi bi-trash"></i></a></td></tr>';
         }).join('');

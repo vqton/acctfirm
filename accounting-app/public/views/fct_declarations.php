@@ -108,8 +108,7 @@ function loadContracts() {
         var tbody = $('#contractBody').empty();
         d.forEach(function(r) {
             var cls = r.service_type ? 'st-' + r.service_type : '';
-            var badge = r.status === 'posted' ? 'badge-active' : (r.status === 'draft' ? 'badge-warning' : 'badge-inactive');
-            tbody.append('<tr><td>' + esc(r.contract_no) + '</td><td>' + esc(r.contractor_name) + '</td><td>' + esc(r.contractor_country) + '</td><td><span class="service-type-badge ' + cls + '">' + esc(r.service_type) + '</span></td><td class="text-end font-monospace">' + parseInt(r.contract_value).toLocaleString() + '</td><td class="text-end font-monospace">' + parseInt(r.vat_withholding).toLocaleString() + '</td><td class="text-end font-monospace">' + parseInt(r.cit_withholding).toLocaleString() + '</td><td class="text-end font-monospace">' + parseInt(r.net_payment).toLocaleString() + '</td><td><span class="badge-status ' + badge + '">' + esc(r.status) + '</span></td><td>' + (r.status === 'draft' ? '<button class="btn btn-sm btn-outline-danger" onclick="cancelContract(\'' + r.id + '\')"><i class="bi bi-x-circle"></i></button>' : '') + '</td></tr>');
+            tbody.append('<tr><td>' + esc(r.contract_no) + '</td><td>' + esc(r.contractor_name) + '</td><td>' + esc(r.contractor_country) + '</td><td><span class="service-type-badge ' + cls + '">' + esc(r.service_type) + '</span></td><td class="text-end font-monospace">' + parseInt(r.contract_value).toLocaleString() + '</td><td class="text-end font-monospace">' + parseInt(r.vat_withholding).toLocaleString() + '</td><td class="text-end font-monospace">' + parseInt(r.cit_withholding).toLocaleString() + '</td><td class="text-end font-monospace">' + parseInt(r.net_payment).toLocaleString() + '</td><td>' + statusBadge(r.status) + '</td><td>' + (r.status === 'draft' ? '<button class="btn btn-sm btn-outline-danger" onclick="cancelContract(\'' + r.id + '\')"><i class="bi bi-x-circle"></i></button>' : '') + '</td></tr>');
         });
     });
 }
@@ -118,8 +117,7 @@ function loadDeclarations() {
     $.get('/api/fct/declarations', function(d) {
         var tbody = $('#declBody').empty();
         d.forEach(function(r) {
-            var badge = r.status === 'finalised' ? 'badge-active' : (r.status === 'draft' ? 'badge-warning' : 'badge-inactive');
-            tbody.append('<tr><td>' + r.period + '</td><td class="text-end font-monospace">' + parseInt(r.total_contract_value).toLocaleString() + '</td><td class="text-end font-monospace">' + parseInt(r.total_vat_withholding).toLocaleString() + '</td><td class="text-end font-monospace">' + parseInt(r.total_cit_withholding).toLocaleString() + '</td><td class="text-end">' + r.contract_count + '</td><td><span class="badge-status ' + badge + '">' + esc(r.status) + '</span></td><td><button class="btn btn-sm btn-outline-primary" onclick="viewFctDetail(\'' + r.id + '\')"><i class="bi bi-eye"></i></button> <button class="btn btn-sm btn-outline-success" onclick="exportFctCsv(\'' + r.id + '\')"><i class="bi bi-download"></i></button></td></tr>');
+            tbody.append('<tr><td>' + r.period + '</td><td class="text-end font-monospace">' + parseInt(r.total_contract_value).toLocaleString() + '</td><td class="text-end font-monospace">' + parseInt(r.total_vat_withholding).toLocaleString() + '</td><td class="text-end font-monospace">' + parseInt(r.total_cit_withholding).toLocaleString() + '</td><td class="text-end">' + r.contract_count + '</td><td>' + statusBadge(r.status) + '</td><td><button class="btn btn-sm btn-outline-primary" onclick="viewFctDetail(\'' + r.id + '\')"><i class="bi bi-eye"></i></button> <button class="btn btn-sm btn-outline-success" onclick="exportFctCsv(\'' + r.id + '\')"><i class="bi bi-download"></i></button></td></tr>');
         });
     });
 }

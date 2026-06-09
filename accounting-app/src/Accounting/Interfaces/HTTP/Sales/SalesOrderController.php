@@ -203,19 +203,13 @@ class SalesOrderController
     public function viewIndex(): void
     {
         Auth::requirePermission('sales', 'read');
-        ob_start();
-        require __DIR__ . '/../../../../public/views/sales-orders.php';
-        $content = ob_get_clean();
-        require __DIR__ . '/../../../../public/views/layout.php';
+        require __DIR__ . '/../../../../../public/views/sales-orders.php';
     }
 
     public function viewForm(?string $id = null): void
     {
         Auth::requirePermission('sales', 'read');
         $order = $id ? $this->soRepo->findById($id) : null;
-        ob_start();
-        require __DIR__ . '/../../../../public/views/sales-order-form.php';
-        $content = ob_get_clean();
-        require __DIR__ . '/../../../../public/views/layout.php';
+        require __DIR__ . '/../../../../../public/views/sales-order-form.php';
     }
 }

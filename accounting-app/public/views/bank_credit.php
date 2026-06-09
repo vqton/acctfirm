@@ -44,7 +44,7 @@ function loadData(){
         var tbody=$('#dataBody'); tbody.empty();
         data.forEach(function(r){
             var label=r.type==='bank_receipt'?'Thu qua NH':(r.type==='interest'?'Lãi NH':'Khác');
-            tbody.append('<tr><td>'+esc(r.reference)+'</td><td>'+esc(label)+'</td><td>'+esc(r.description)+'</td><td class="text-end font-monospace">'+(r.amount?parseFloat(r.amount).toLocaleString():'')+'</td><td style="font-size:12px">'+esc(r.created_at)+'</td><td><span class="badge-status badge-active">'+esc(r.status)+'</span></td></tr>');
+            tbody.append('<tr><td>'+esc(r.reference)+'</td><td>'+esc(label)+'</td><td>'+esc(r.description)+'</td><td class="text-end font-monospace">'+(r.amount?parseFloat(r.amount).toLocaleString():'')+'</td><td style="font-size:12px">'+esc(r.created_at)+'</td><td>'+statusBadge(r.status)+'</td></tr>');
         });
     });
 }

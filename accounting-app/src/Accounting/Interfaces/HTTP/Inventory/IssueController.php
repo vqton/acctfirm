@@ -3,6 +3,7 @@ namespace Accounting\Interfaces\HTTP\Inventory;
 
 use Accounting\Domain\Contract\InventoryServiceInterface;
 use Accounting\Domain\Repository\ItemRepositoryInterface;
+use Accounting\Domain\Service\GoodsIssueService;
 use Accounting\Infrastructure\JsonResponse;
 use Accounting\Infrastructure\Auth;
 
@@ -35,12 +36,18 @@ class IssueController
     private InventoryServiceInterface $inventory;
     private ItemRepositoryInterface $itemRepo;
     private \PDO $pdo;
+    private ?GoodsIssueService $goodsIssueService;
 
-    public function __construct(InventoryServiceInterface $inventory, ItemRepositoryInterface $itemRepo, \PDO $pdo)
-    {
+    public function __construct(
+        InventoryServiceInterface $inventory,
+        ItemRepositoryInterface $itemRepo,
+        \PDO $pdo,
+        ?GoodsIssueService $goodsIssueService = null
+    ) {
         $this->inventory = $inventory;
         $this->itemRepo = $itemRepo;
         $this->pdo = $pdo;
+        $this->goodsIssueService = $goodsIssueService;
     }
 
     public function list(): void
@@ -89,5 +96,96 @@ class IssueController
     public function items(): void
     {
         JsonResponse::ok(array_map(fn($x) => $x->toArray(), $this->itemRepo->findAll()));
+    }
+
+    // NGHIỆP VỤ: Tạo PXK dạng nháp (multi-line) — Mẫu 02-VT
+    // Input: { issue_date, warehouse_id, receiver_name, receiver_department, issue_reason,
+    //          issue_type, lines: [{ item_id, requested_qty, actual_qty }], notes }
+    // Output: GoodsIssue với status=draft
+    public function createDraft(): void
+    {
+        Auth::checkCsrf();
+        Auth::requirePermission('inventory', 'create');
+        if (!$this->goodsIssueService) {
+            JsonResponse::error('GoodsIssueService not available');
+            return;
+        }
+        $data = json_decode(file_get_contents('php://input'), true);
+        if (!$data || empty($data['lines'])) {
+            JsonResponse::error('Vui lòng nhập danh sách vật tư cần xuất');
+            return;
+        }
+        $data['created_by'] = $_SESSION['user_id'] ?? 'system';
+        try {
+            $result = $this->goodsIssueService->createDraft($data);
+            JsonResponse::ok($result, 201);
+        } catch (\InvalidArgumentException $e) {
+            JsonResponse::error($e->getMessage());
+        }
+    }
+
+    // NGHIỆP VỤ: Ghi sổ PXK (từ draft → posted, tạo bút toán + giảm tồn kho)
+    public function postDraft(string $id): void
+    {
+        Auth::checkCsrf();
+        Auth::requirePermission('inventory', 'create');
+        if (!$this->goodsIssueService) {
+            JsonResponse::error('GoodsIssueService not available');
+            return;
+        }
+        $createdBy = $_SESSION['user_id'] ?? 'system';
+        try {
+            $result = $this->goodsIssueService->postIssue($id, $createdBy);
+            JsonResponse::ok($result);
+        } catch (\InvalidArgumentException $e) {
+            JsonResponse::error($e->getMessage());
+        }
+    }
+
+    // NGHIỆP VỤ: Hủy PXK (chỉ khi draft)
+    public function cancelDraft(string $id): void
+    {
+        Auth::checkCsrf();
+        Auth::requirePermission('inventory', 'create');
+        if (!$this->goodsIssueService) {
+            JsonResponse::error('GoodsIssueService not available');
+            return;
+        }
+        $cancelledBy = $_SESSION['user_id'] ?? 'system';
+        try {
+            $result = $this->goodsIssueService->cancelIssue($id, $cancelledBy);
+            JsonResponse::ok($result);
+        } catch (\InvalidArgumentException $e) {
+            JsonResponse::error($e->getMessage());
+        }
+    }
+
+    // NGHIỆP VỤ: Lấy chi tiết PXK (kèm line items)
+    public function getDetail(string $id): void
+    {
+        Auth::requirePermission('inventory', 'read');
+        if (!$this->goodsIssueService) {
+            JsonResponse::error('GoodsIssueService not available');
+            return;
+        }
+        try {
+            $result = $this->goodsIssueService->getIssue($id);
+            JsonResponse::ok($result);
+        } catch (\InvalidArgumentException $e) {
+            JsonResponse::error($e->getMessage());
+        }
+    }
+
+    // NGHIỆP VỤ: Danh sách PXK từ GoodsIssueService (Mẫu 02-VT)
+    public function listIssues(): void
+    {
+        Auth::requirePermission('inventory', 'read');
+        if (!$this->goodsIssueService) {
+            JsonResponse::error('GoodsIssueService not available');
+            return;
+        }
+        $status = $_GET['status'] ?? null;
+        $limit = (int)($_GET['limit'] ?? 50);
+        JsonResponse::ok($this->goodsIssueService->listIssues($status, $limit));
     }
 }

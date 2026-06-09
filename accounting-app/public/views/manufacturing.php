@@ -21,7 +21,7 @@
         <div class="col"><div class="card bg-danger text-white p-2 text-center"><small>Chi phí</small><strong id="sCost">0</strong></div></div>
       </div>
       <div class="card"><div class="table-responsive"><table class="table table-sm table-hover mb-0"><thead class="table-light"><tr>
-        <th>Mã lệnh</th><th>Sản phẩm</th><th>SL</th><th>Hoàn thành</th><th>CP NVL</th><th>Tổng CP</th><th>Đơn giá</th><th>Trạng thái</th><th></th>
+        <th>Mã lệnh</th><th>Sản phẩm</th><th class="text-end">SL</th><th class="text-end">Hoàn thành</th><th class="text-end">CP NVL</th><th class="text-end">Tổng CP</th><th class="text-end">Đơn giá</th><th>Trạng thái</th><th></th>
       </tr></thead><tbody id="poTable"></tbody></table></div></div>
     </div>
     <div class="tab-pane" id="bom">
@@ -37,7 +37,7 @@
 <div class="modal-body" id="orderBody"></div></div></div></div>
 
 <script>
-function fmt(n){return new Intl.NumberFormat('vi-VN').format(n||0)}
+// Uses global fmt() from layout
 
 function loadDashboard(){
   $.getJSON('/api/san-xuat/dashboard',function(r){
@@ -49,16 +49,14 @@ function loadDashboard(){
     }
     const tbody=$('#poTable').empty();
     (d.orders||[]).forEach(function(o){
-      const bgs={draft:'secondary',released:'warning',completed:'info',costed:'success',closed:'dark'};
-      const b = (s) => '<span class="badge bg-'+(bgs[s]||'secondary')+'">'+s+'</span>';
       tbody.append($('<tr>').append(
         $('<td>').html('<a href="#" onclick="showOrder(\''+o.id+'\');return false">'+o.reference+'</a>'),
         $('<td>').text(o.product_code+' - '+o.product_name),
-        $('<td>').text(o.qty),$('<td>').text(o.completed_qty),
-        $('<td class="text-end">').text(fmt(o.material_cost)),
-        $('<td class="text-end">').text(fmt(o.total_cost)),
-        $('<td class="text-end">').text(fmt(o.unit_cost)),
-        $('<td>').html(b(o.status)),
+        $('<td class="text-end vas-number">').text(o.qty),$('<td class="text-end vas-number">').text(o.completed_qty),
+        $('<td class="text-end vas-number">').text(fmt(o.material_cost)),
+        $('<td class="text-end vas-number">').text(fmt(o.total_cost)),
+        $('<td class="text-end vas-number">').text(fmt(o.unit_cost)),
+        $('<td>').html(statusBadge(o.status)),
         $('<td>').html(
           '<div class="dropdown"><button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">...</button><ul class="dropdown-menu">'+
           '<li><a class="dropdown-item" href="#" onclick="showOrder(\''+o.id+'\');return false"><i class="bi bi-eye"></i> Chi tiết</a></li>'+
@@ -111,79 +109,154 @@ function showOrder(id){
 }
 
 function showCreateOrder(){
-  const pid=prompt('Mã sản phẩm (item ID):');if(!pid)return;
-  const qty=parseFloat(prompt('Số lượng:','1')||'1');
-  const sd=prompt('Ngày bắt đầu (YYYY-MM-DD):')||new Date().toISOString().slice(0,10);
-  const dd=prompt('Ngày đến hạn (YYYY-MM-DD):');
-  const bom=prompt('BOM ID (nếu có):')||null;
-  $.post('/api/san-xuat',JSON.stringify({product_id:pid,qty:qty,start_date:sd,due_date:dd,bom_id:bom}),
-    function(r){loadDashboard();alert('Đã tạo lệnh SX');}).fail(function(x){alert(x.responseJSON?.error||'Lỗi');});
+  var today=new Date().toISOString().slice(0,10);
+  FormModal.create({
+    id:'createOrderModal',title:'Lệnh SX mới',size:'md',
+    body:'<div class="mb-2"><label>Mã sản phẩm (item ID)</label><input class="form-control" id="poProductId" data-v-required="Mã sản phẩm"></div>'+
+      '<div class="mb-2"><label>Số lượng</label><input type="number" class="form-control" id="poQty" value="1" data-v-required="Số lượng" data-v-number="Số lượng"></div>'+
+      '<div class="mb-2"><label>Ngày bắt đầu</label><input type="date" class="form-control" id="poStartDate" value="'+today+'"></div>'+
+      '<div class="mb-2"><label>Ngày đến hạn</label><input type="date" class="form-control" id="poDueDate"></div>'+
+      '<div class="mb-2"><label>BOM ID (nếu có)</label><input class="form-control" id="poBomId"></div>',
+    onSave:function(modal){
+      var v=FormValidation.validate('#createOrderModal');if(!v.valid)return false;
+      var pid=$('#poProductId').val();if(!pid)return false;
+      var qty=parseFloat($('#poQty').val())||1;
+      var sd=$('#poStartDate').val()||today;
+      var dd=$('#poDueDate').val()||null;
+      var bom=$('#poBomId').val()||null;
+      return $.post('/api/san-xuat',JSON.stringify({product_id:pid,qty:qty,start_date:sd,due_date:dd,bom_id:bom}),
+        function(){FormModal.close('createOrderModal');loadDashboard();FormToast.success('Đã tạo lệnh SX');})
+        .fail(function(x){FormToast.error(x.responseJSON?.error||'Lỗi');});
+    }
+  });
+  setTimeout(function(){FormValidation.setup('#createOrderModal');},100);
 }
 
 function releaseOrder(id){
-  if(!confirm('Release lệnh SX?'))return;
-  $.post('/api/san-xuat/'+id+'/release','{}',function(r){loadDashboard();alert('Đã release');}).fail(function(x){alert(x.responseJSON?.error||'Lỗi');});
+  FormConfirm.confirm('Release lệnh SX','Xác nhận release lệnh SX?',function(ok){
+    if(!ok)return;
+    $.post('/api/san-xuat/'+id+'/release','{}',function(){loadDashboard();FormToast.success('Đã release');}).fail(function(x){FormToast.error(x.responseJSON?.error||'Lỗi');});
+  });
 }
 
 function issueMaterial(id){
-  const mid=prompt('Mã vật tư (item ID):');if(!mid)return;
-  const qty=parseFloat(prompt('Số lượng:','1')||'1');
-  const uc=parseFloat(prompt('Đơn giá:','0')||'0');
-  $.post('/api/san-xuat/'+id+'/issue-material',JSON.stringify({material_id:mid,qty:qty,unit_cost:uc}),
-    function(r){loadDashboard();alert('Đã xuất NVL');}).fail(function(x){alert(x.responseJSON?.error||'Lỗi');});
+  FormModal.create({
+    id:'issueMatModal',title:'Xuất NVL cho lệnh SX',size:'sm',
+    body:'<div class="mb-2"><label>Mã vật tư (item ID)</label><input class="form-control" id="imMaterialId" data-v-required="Mã vật tư"></div>'+
+      '<div class="mb-2"><label>Số lượng</label><input type="number" class="form-control" id="imQty" value="1" step="0.01" data-v-required="Số lượng" data-v-number="Số lượng"></div>'+
+      '<div class="mb-2"><label>Đơn giá</label><input type="number" class="form-control" id="imUnitCost" value="0" step="1000" data-v-required="Đơn giá" data-v-number="Đơn giá"></div>',
+    onSave:function(){
+      var v=FormValidation.validate('#issueMatModal');if(!v.valid)return false;
+      var mid=$('#imMaterialId').val();if(!mid)return false;
+      var qty=parseFloat($('#imQty').val())||1;
+      var uc=parseFloat($('#imUnitCost').val())||0;
+      return $.post('/api/san-xuat/'+id+'/issue-material',JSON.stringify({material_id:mid,qty:qty,unit_cost:uc}),
+        function(){FormModal.close('issueMatModal');loadDashboard();FormToast.success('Đã xuất NVL');}).fail(function(x){FormToast.error(x.responseJSON?.error||'Lỗi');});
+    }
+  });
+  setTimeout(function(){FormValidation.setup('#issueMatModal');},100);
 }
 
 function addLabor(id){
-  const hrs=parseFloat(prompt('Số giờ:','0')||'0');
-  const rate=parseFloat(prompt('Đơn giá/giờ:','0')||'0');
-  const type=prompt('Loại (direct/indirect):','direct');
-  $.post('/api/san-xuat/'+id+'/labor',JSON.stringify({hours:hrs,rate:rate,labor_type:type}),
-    function(r){loadDashboard();alert('Đã ghi nhận NC');}).fail(function(x){alert(x.responseJSON?.error||'Lỗi');});
+  FormModal.create({
+    id:'laborModal',title:'Nhân công lệnh SX',size:'sm',
+    body:'<div class="mb-2"><label>Số giờ</label><input type="number" class="form-control" id="labHours" step="0.5" data-v-required="Số giờ" data-v-number="Số giờ"></div>'+
+      '<div class="mb-2"><label>Đơn giá/giờ</label><input type="number" class="form-control" id="labRate" step="1000" data-v-required="Đơn giá" data-v-number="Đơn giá"></div>'+
+      '<div class="mb-2"><label>Loại</label><select class="form-select" id="labType"><option value="direct">Direct</option><option value="indirect">Indirect</option></select></div>',
+    onSave:function(){
+      var v=FormValidation.validate('#laborModal');if(!v.valid)return false;
+      var hrs=parseFloat($('#labHours').val())||0;
+      var rate=parseFloat($('#labRate').val())||0;
+      var type=$('#labType').val();
+      return $.post('/api/san-xuat/'+id+'/labor',JSON.stringify({hours:hrs,rate:rate,labor_type:type}),
+        function(){FormModal.close('laborModal');loadDashboard();FormToast.success('Đã ghi nhận NC');}).fail(function(x){FormToast.error(x.responseJSON?.error||'Lỗi');});
+    }
+  });
+  setTimeout(function(){FormValidation.setup('#laborModal');},100);
 }
 
 function addOverhead(id){
-  const type=prompt('Loại (electricity/water/depreciation/other):');
-  if(!type)return;
-  const base=parseFloat(prompt('Cơ sở phân bổ:','0')||'0');
-  const rate=parseFloat(prompt('Tỷ lệ:','0')||'0');
-  $.post('/api/san-xuat/'+id+'/overhead',JSON.stringify({type:type,base:base,rate:rate}),
-    function(r){loadDashboard();alert('Đã ghi nhận CPSXC');}).fail(function(x){alert(x.responseJSON?.error||'Lỗi');});
+  FormModal.create({
+    id:'overheadModal',title:'CPSXC lệnh SX',size:'sm',
+    body:'<div class="mb-2"><label>Loại</label><select class="form-select" id="ohType"><option value="electricity">Electricity</option><option value="water">Water</option><option value="depreciation">Depreciation</option><option value="other">Other</option></select></div>'+
+      '<div class="mb-2"><label>Cơ sở phân bổ</label><input type="number" class="form-control" id="ohBase" step="1000" data-v-required="Cơ sở phân bổ" data-v-number="Cơ sở phân bổ"></div>'+
+      '<div class="mb-2"><label>Tỷ lệ</label><input type="number" class="form-control" id="ohRate" step="0.01" data-v-required="Tỷ lệ" data-v-number="Tỷ lệ"></div>',
+    onSave:function(){
+      var v=FormValidation.validate('#overheadModal');if(!v.valid)return false;
+      var type=$('#ohType').val();
+      var base=parseFloat($('#ohBase').val())||0;
+      var rate=parseFloat($('#ohRate').val())||0;
+      return $.post('/api/san-xuat/'+id+'/overhead',JSON.stringify({type:type,base:base,rate:rate}),
+        function(){FormModal.close('overheadModal');loadDashboard();FormToast.success('Đã ghi nhận CPSXC');}).fail(function(x){FormToast.error(x.responseJSON?.error||'Lỗi');});
+    }
+  });
+  setTimeout(function(){FormValidation.setup('#overheadModal');},100);
 }
 
 function completePo(id){
-  const qty=parseFloat(prompt('Số lượng hoàn thành:','0')||'0');
-  const ed=prompt('Ngày kết thúc:')||new Date().toISOString().slice(0,10);
-  $.post('/api/san-xuat/'+id+'/complete',JSON.stringify({completed_qty:qty,end_date:ed}),
-    function(r){loadDashboard();alert('Đã hoàn thành');}).fail(function(x){alert(x.responseJSON?.error||'Lỗi');});
+  var today=new Date().toISOString().slice(0,10);
+  FormModal.create({
+    id:'completeModal',title:'Hoàn thành lệnh SX',size:'sm',
+    body:'<div class="mb-2"><label>Số lượng hoàn thành</label><input type="number" class="form-control" id="cpQty" step="1" data-v-required="Số lượng" data-v-number="Số lượng"></div>'+
+      '<div class="mb-2"><label>Ngày kết thúc</label><input type="date" class="form-control" id="cpEndDate" value="'+today+'"></div>',
+    onSave:function(){
+      var v=FormValidation.validate('#completeModal');if(!v.valid)return false;
+      var qty=parseFloat($('#cpQty').val())||0;
+      var ed=$('#cpEndDate').val()||today;
+      return $.post('/api/san-xuat/'+id+'/complete',JSON.stringify({completed_qty:qty,end_date:ed}),
+        function(){FormModal.close('completeModal');loadDashboard();FormToast.success('Đã hoàn thành');}).fail(function(x){FormToast.error(x.responseJSON?.error||'Lỗi');});
+    }
+  });
+  setTimeout(function(){FormValidation.setup('#completeModal');},100);
 }
 
 function calcCost(id){
-  if(!confirm('Tính giá thành cho lệnh SX?'))return;
-  $.post('/api/san-xuat/'+id+'/calculate-cost','{}',function(r){const d=r.data||r;loadDashboard();alert('Giá thành: ĐVG='+fmt(d.unit_cost)+', Tổng='+fmt(d.total_cost));}).fail(function(x){alert(x.responseJSON?.error||'Lỗi');});
+  FormConfirm.confirm('Tính giá thành','Tính giá thành cho lệnh SX?',function(ok){
+    if(!ok)return;
+    $.post('/api/san-xuat/'+id+'/calculate-cost','{}',function(r){const d=r.data||r;loadDashboard();FormConfirm.alert('Giá thành','ĐVG: '+fmt(d.unit_cost)+', Tổng: '+fmt(d.total_cost));}).fail(function(x){FormToast.error(x.responseJSON?.error||'Lỗi');});
+  });
 }
 
 function closeOrder(id){
-  if(!confirm('Đóng lệnh SX?'))return;
-  $.post('/api/san-xuat/'+id+'/close','{}',function(r){loadDashboard();alert('Đã đóng');}).fail(function(x){alert(x.responseJSON?.error||'Lỗi');});
+  FormConfirm.confirm('Đóng lệnh SX','Xác nhận đóng lệnh SX?',function(ok){
+    if(!ok)return;
+    $.post('/api/san-xuat/'+id+'/close','{}',function(){loadDashboard();FormToast.success('Đã đóng lệnh SX');}).fail(function(x){FormToast.error(x.responseJSON?.error||'Lỗi');});
+  });
 }
 
 function showCreateBom(){
-  const pid=prompt('Mã sản phẩm (item ID):');if(!pid)return;
-  const ed=prompt('Ngày hiệu lực:')||new Date().toISOString().slice(0,10);
-  const nvl=parseInt(prompt('Số loại NVL:','1')||'1');
-  const lines=[];
-  for(let i=0;i<nvl;i++){
-    const mid=prompt('Vật tư '+(i+1)+' (item ID):');if(!mid)return;
-    const qty=parseFloat(prompt('Số lượng cho 1 SP:','1')||'1');
-    lines.push({id:'l_'+Date.now()+'_'+i,material_id:mid,qty_per_unit:qty,wastage_pct:0,unit:'cai'});
-  }
-  $.post('/api/san-xuat/bom',JSON.stringify({product_id:pid,effective_date:ed,lines:lines}),
-    function(r){loadDashboard();alert('Đã tạo BOM');}).fail(function(x){alert(x.responseJSON?.error||'Lỗi');});
+  var today=new Date().toISOString().slice(0,10);
+  FormModal.create({
+    id:'bomModal',title:'BOM mới',size:'lg',
+    body:'<div class="row g-2 mb-2"><div class="col-6"><label>Mã sản phẩm (item ID)</label><input class="form-control" id="bomProductId" data-v-required="Mã SP"></div>'+
+      '<div class="col-6"><label>Ngày hiệu lực</label><input type="date" class="form-control" id="bomEffDate" value="'+today+'"></div></div>'+
+      '<label class="fw-bold">Định mức NVL</label><div id="bomLinesContainer"></div>',
+    onSave:function(){
+      var pid=$('#bomProductId').val();if(!pid){FormToast.error('Nhập mã sản phẩm');return false;}
+      var lines=bomGrid.getData().filter(function(l){return l.material_id&&l.material_id.trim();}).map(function(l,i){
+        return {id:'l_'+Date.now()+'_'+i,material_id:l.material_id,qty_per_unit:parseFloat(l.qty)||1,wastage_pct:0,unit:'cai'};
+      });
+      if(lines.length===0){FormToast.error('Thêm ít nhất 1 dòng NVL');return false;}
+      return $.post('/api/san-xuat/bom',JSON.stringify({product_id:pid,effective_date:$('#bomEffDate').val(),lines:lines}),
+        function(){FormModal.close('bomModal');loadDashboard();FormToast.success('Đã tạo BOM');}).fail(function(x){FormToast.error(x.responseJSON?.error||'Lỗi');});
+    }
+  });
+  var bomGrid=FormGrid.create('#bomLinesContainer',{
+    columns:[
+      {key:'material_id',label:'Mã NVL',type:'text',width:200},
+      {key:'qty',label:'SL/1 SP',type:'number',width:100}
+    ],
+    addRowText:'Thêm NVL',
+    data:[{material_id:'',qty:1}]
+  });
+  setTimeout(function(){FormValidation.setup('#bomModal');},100);
 }
 
 function activateBom(id){
-  if(!confirm('Kích hoạt BOM?'))return;
-  $.post('/api/san-xuat/bom/'+id+'/activate','{}',function(r){loadDashboard();alert('Đã kích hoạt');}).fail(function(x){alert(x.responseJSON?.error||'Lỗi');});
+  FormConfirm.confirm('Kích hoạt BOM','Kích hoạt BOM này?',function(ok){
+    if(!ok)return;
+    $.post('/api/san-xuat/bom/'+id+'/activate','{}',function(){loadDashboard();FormToast.success('Đã kích hoạt BOM');}).fail(function(x){FormToast.error(x.responseJSON?.error||'Lỗi');});
+  });
 }
 
 $(loadDashboard);

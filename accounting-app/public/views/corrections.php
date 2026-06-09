@@ -42,7 +42,7 @@ ob_start(); ?>
                     </div>
                     <div class="mb-2">
                         <label>Lý do điều chỉnh <span class="text-danger">*</span></label>
-                        <textarea class="form-control form-control-sm" id="reason" rows="2" placeholder="Tối thiểu 10 ký tự..."></textarea>
+                        <textarea class="form-control form-control-sm" id="reason" rows="2" placeholder="Tối thiểu 10 ký tự..." data-v-required="Lý do điều chỉnh"></textarea>
                     </div>
                     <div id="linesSection" class="mb-2">
                         <label class="d-flex justify-content-between">
@@ -83,7 +83,7 @@ function loadTransactions() {
                 <td>${t.reference || ''}</td>
                 <td>${e(t.description || '')}</td>
                 <td>${t.date ? t.date.slice(0,10) : ''}</td>
-                <td><span class="badge bg-success">posted</span></td>
+                <td>${statusBadge('posted')}</td>
                 <td><button class="btn btn-outline-warning btn-sm" onclick="selectTxn('${t.id}','${e(t.description||'')}','${t.reference||''}')">Điều chỉnh</button>
                     <button class="btn btn-outline-info btn-sm" onclick="showHistory('${t.id}')">LS</button></td>
             </tr>
@@ -132,7 +132,7 @@ function updateCorrDrCr() {
     } else {
         status.className = 'text-danger fw-bold small';
     }
-    status.textContent = `Nợ: ${dr.toLocaleString()} — Có: ${cr.toLocaleString()} (Chênh: ${(dr-cr).toLocaleString()})`;
+    status.textContent = `Nợ: ${VAS.fmt(dr)} — Có: ${VAS.fmt(cr)} (Chênh: ${VAS.fmt(dr-cr)})`;
 }
 
 document.addEventListener('change', function(e) {
@@ -145,11 +145,12 @@ document.addEventListener('input', function(e) {
 
 document.getElementById('correctionForm').addEventListener('submit', function(e) {
     e.preventDefault();
+    var v=FormValidation.validate('#correctionForm');if(!v.valid)return;
     const id = document.getElementById('originalTxnId').value;
     const reason = document.getElementById('reason').value.trim();
     const method = document.getElementById('methodType').value;
 
-    if (!reason || reason.length < 10) { alert('Vui lòng nhập lý do điều chỉnh (tối thiểu 10 ký tự)'); return; }
+    if (!reason || reason.length < 10) { FormConfirm.alert('Lỗi','Lý do điều chỉnh phải có tối thiểu 10 ký tự.'); return; }
 
     const lineEls = document.querySelectorAll('.corr-line');
     const lines = [];
@@ -171,14 +172,14 @@ document.getElementById('correctionForm').addEventListener('submit', function(e)
 
     fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || '' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
         body: JSON.stringify(payload)
     }).then(r => r.json()).then(d => {
-        if (d.error) { alert(d.error); return; }
-        alert('Điều chỉnh thành công. Mã CT: ' + (d.data?.reference || d.reference || ''));
+        if (d.error) { FormConfirm.alert('Lỗi', d.error); return; }
+        FormToast.success('Điều chỉnh thành công. Mã CT: ' + (d.data?.reference || d.reference || ''));
         loadTransactions();
         document.getElementById('correctionPanel').classList.add('d-none');
-    }).catch(err => alert('Lỗi: ' + err.message));
+    }).catch(err => FormToast.error('Lỗi: ' + err.message));
 });
 
 function showHistory(id) {
@@ -188,7 +189,7 @@ function showHistory(id) {
         if (data.length === 0) { body.innerHTML = '<p class="text-muted">Chưa có điều chỉnh nào.</p>'; }
         else {
             body.innerHTML = '<table class="table table-sm"><thead><tr><th>Mã CT</th><th>Ngày</th><th>Phương pháp</th><th>Lý do</th><th>Trạng thái</th></tr></thead><tbody>' +
-                data.map(h => `<tr><td>${h.reference||''}</td><td>${h.date||''}</td><td>${h.correction_type||''}</td><td>${e(h.correction_reason||'')}</td><td>${h.status||''}</td></tr>`).join('') +
+                data.map(h => `<tr><td>${h.reference||''}</td><td>${h.date||''}</td><td>${h.correction_type||''}</td><td>${e(h.correction_reason||'')}</td><td>${statusBadge(h.status)}</td></tr>`).join('') +
                 '</tbody></table>';
         }
         new bootstrap.Modal(document.getElementById('historyModal')).show();
@@ -197,5 +198,6 @@ function showHistory(id) {
 
 loadAccounts();
 loadTransactions();
+FormValidation.setup('#correctionForm');
 </script>
 <?php $content = ob_get_clean(); require __DIR__ . '/layout.php'; ?>

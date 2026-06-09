@@ -65,6 +65,7 @@ use Accounting\Interfaces\HTTP\MasterData\ValuationMethodController;
 use Accounting\Interfaces\HTTP\MasterData\WarehouseController;
 use Accounting\Interfaces\HTTP\Payroll\PayrollController;
 use Accounting\Interfaces\HTTP\Purchase\ProcurementController;
+use Accounting\Interfaces\HTTP\DashboardController;
 
 // === LỚP CONTROLLER: Tiếp nhận request từ Router, gọi Service ===
 // Controller KHÔNG chứa business logic — chỉ validate input + format response
@@ -123,7 +124,7 @@ $roleController = new RoleController($pdo);
 $supplierController = new SupplierController($supplierRepository);
 $taxRateController = new TaxRateController($taxRateRepository);
 $receiptController = new ReceiptController($inventoryService, $itemRepository, $pdo);
-$issueController = new IssueController($inventoryService, $itemRepository, $pdo);
+$issueController = new IssueController($inventoryService, $itemRepository, $pdo, $goodsIssueService);
 $customerReturnController = new CustomerReturnController($inventoryService, $itemRepository, $pdo);
 $transferController = new TransferController($inventoryService, $itemRepository, $warehouseRepository, $pdo);
 $uomController = new UomController($uomRepository);
@@ -148,3 +149,6 @@ $fsNotesController = new FsNotesController($fsNotesService);
 // Endpoint duy nhất POST /api/export — nhận format, title, headers, rows, options
 // Xuất file với Content-Type và Content-Disposition phù hợp
 $exportController = new ExportController($exportService);
+
+// === DASHBOARD CONTROLLER ===
+$dashboardController = new DashboardController($dashboardService);

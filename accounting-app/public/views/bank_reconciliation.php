@@ -58,8 +58,7 @@ function loadSession() {
         $('#statementBalance').text(parseFloat(d.statement_balance).toLocaleString());
         var diff = parseFloat(d.statement_balance) - parseFloat(d.book_balance);
         $('#diffBalance').text(diff.toLocaleString());
-        var badge = d.status === 'completed' ? 'badge-active' : 'badge-warning';
-        $('#statusDisplay').html('<span class="badge-status ' + badge + '">' + d.status + '</span>');
+        $('#statusDisplay').html(statusBadge(d.status));
     });
 }
 
@@ -135,8 +134,7 @@ function loadData(){
         var tbody=$('#dataBody'); tbody.empty();
         data.forEach(function(r){
             var diff=parseFloat(r.statement_balance)-parseFloat(r.book_balance);
-            var badge=r.status==='completed'?'badge-active':(r.status==='in_progress'?'badge-warning':'badge-inactive');
-            tbody.append('<tr><td>'+esc(r.bank_account_code)+'</td><td>'+esc(r.statement_date)+'</td><td class="text-end font-monospace">'+parseFloat(r.statement_balance).toLocaleString()+'</td><td class="text-end font-monospace">'+parseFloat(r.book_balance).toLocaleString()+'</td><td class="text-end font-monospace">'+diff.toLocaleString()+'</td><td><span class="badge-status '+badge+'">'+esc(r.status)+'</span></td><td>'+(r.status==='in_progress'?'<button class="btn btn-sm btn-outline-primary" onclick="viewSession('+r.id+')"><i class="bi bi-eye"></i></button>':'')+'</td></tr>');
+            tbody.append('<tr><td>'+esc(r.bank_account_code)+'</td><td>'+esc(r.statement_date)+'</td><td class="text-end font-monospace">'+parseFloat(r.statement_balance).toLocaleString()+'</td><td class="text-end font-monospace">'+parseFloat(r.book_balance).toLocaleString()+'</td><td class="text-end font-monospace">'+diff.toLocaleString()+'</td><td>'+statusBadge(r.status)+'</td><td>'+(r.status==='in_progress'?'<button class="btn btn-sm btn-outline-primary" onclick="viewSession('+r.id+')"><i class="bi bi-eye"></i></button>':'')+'</td></tr>');
         });
     });
 }

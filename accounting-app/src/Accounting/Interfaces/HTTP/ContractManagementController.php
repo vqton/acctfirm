@@ -145,9 +145,6 @@ class ContractManagementController
     public function viewIndex(): void
     {
         Auth::requirePermission('contract', 'read');
-        ob_start();
-require __DIR__ . '/../../../../public/views/contracts.php';
-        ob_get_clean();
-        require __DIR__ . '/../../../../public/views/layout.php';
+        require __DIR__ . '/../../../../public/views/contracts.php';
     }
 }

@@ -13,7 +13,7 @@ $title = 'Phiếu chi'; $activeMenu = 'cash_payments'; ob_start(); ?>
     </div>
 </div>
 <div class="card-table"><table class="table table-hover">
-    <thead><tr><th>Số CT</th><th>Người nhận</th><th>Diễn giải</th><th>Số tiền</th><th>TK Nợ</th><th>Ngày</th><th>Trạng thái</th></tr></thead>
+    <thead><tr><th>Số CT</th><th>Người nhận</th><th>Diễn giải</th><th class="text-end">Số tiền</th><th>TK Nợ</th><th>Ngày</th><th>Trạng thái</th></tr></thead>
     <tbody id="dataBody"></tbody>
 </table></div>
 
@@ -22,12 +22,12 @@ $title = 'Phiếu chi'; $activeMenu = 'cash_payments'; ob_start(); ?>
 <div class="modal-header"><h5 class="modal-title">Phiếu chi tiền mặt</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
 <div class="modal-body">
     <div class="row g-2">
-        <div class="col-4 mb-2"><label>Ngày</label><input type="date" class="form-control" id="txnDate"></div>
-        <div class="col-4 mb-2"><label>Loại chi</label><select class="form-select" id="paymentType"><option value="">-- Chọn loại --</option></select></div>
-        <div class="col-4 mb-2"><label>TK Nợ (đối ứng)</label><select class="form-select" id="debitAccount" required></select></div>
+        <div class="col-4 mb-2"><label>Ngày</label><input type="date" class="form-control" id="txnDate" data-v-required="Ngày" data-v-date="Ngày chứng từ"></div>
+        <div class="col-4 mb-2"><label>Loại chi</label><select class="form-select" id="paymentType" data-v-required="Loại chi"><option value="">-- Chọn loại --</option></select></div>
+        <div class="col-4 mb-2"><label>TK Nợ (đối ứng)</label><select class="form-select" id="debitAccount" data-v-required="TK Nợ" required></select></div>
     </div>
     <div class="row g-2">
-        <div class="col-4 mb-2"><label>Số tiền</label><input type="number" class="form-control" id="amount" step="1" min="1" required></div>
+        <div class="col-4 mb-2"><label>Số tiền</label><input type="number" class="form-control" id="amount" step="1" min="1" data-v-required="Số tiền" data-v-number="Số tiền" required></div>
         <div class="col-2 mb-2" id="vatRateGroup" style="display:none"><label>VAT %</label><select class="form-select" id="vatRate"></select></div>
         <div class="col-2 mb-2" id="vatAmountGroup" style="display:none"><label>Tiền VAT</label><input type="number" class="form-control" id="vatAmount" readonly step="1" style="background:#f5f5f5"></div>
         <div class="col-4 mb-2" id="netAmountGroup" style="display:none"><label>Tiền chưa thuế</label><input type="number" class="form-control" id="netAmount" readonly step="1" style="background:#f5f5f5"></div>
@@ -56,7 +56,7 @@ function loadData(){
         data.forEach(function(r){
             var payer=esc(r.payer_name||'');
             var date=esc((r.transaction_date||r.created_at||'').substring(0,10));
-            tbody.append('<tr><td>'+esc(r.reference)+'</td><td>'+payer+'</td><td>'+esc(r.description)+'</td><td class="text-end font-monospace">'+(r.amount?parseFloat(r.amount).toLocaleString():'')+'</td><td>'+esc(r.debit_account||'')+'</td><td style="font-size:12px">'+date+'</td><td><span class="badge-status '+(r.status==='posted'?'badge-active':'badge-warning')+'">'+esc(r.status)+'</span></td></tr>');
+            tbody.append('<tr><td>'+esc(r.reference)+'</td><td>'+payer+'</td><td>'+esc(r.description)+'</td><td class="text-end font-monospace">'+fmtZero(r.amount)+'</td><td>'+esc(r.debit_account||'')+'</td><td style="font-size:12px">'+date+'</td><td>'+statusBadge(r.status)+'</td></tr>');
         });
     }});
 }
@@ -67,7 +67,7 @@ function loadTemplates(){
     });
     $.get('/api/cash/accounts?for=payment&_='+Date.now(),function(l){
         var o='<option value="">-- Chọn tài khoản --</option>';
-        l.forEach(function(a){o+='<option value="'+esc(a.code)+'">'+esc(a.code)+' - '+esc(a.name)+' ('+parseFloat(a.balance).toLocaleString()+' VND)</option>';});
+        l.forEach(function(a){o+='<option value="'+esc(a.code)+'">'+esc(a.code)+' - '+esc(a.name)+' ('+VAS.fmt(a.balance)+')</option>';});
         $('#debitAccount').html(o);
         $('#loadStatus').text('OK: '+l.length+' tài khoản').css('color','');
     }).fail(function(x){$('#debitAccount').html('<option>Lỗi: '+x.status+'</option>');$('#loadStatus').text('LỖI: '+x.status).css('color','red');});
@@ -124,6 +124,7 @@ $(document).on('click',function(e){if(!$(e.target).closest('#payerSearch,#payerR
 // Nếu có VAT: Nợ 1331 (thuế GTGT đầu vào được khấu trừ)
 // RỦI RO: Chi tiền cho NCC phải ghi nhận đúng supplier_id để theo dõi công nợ 331
 $('#paymentForm').submit(function(e){e.preventDefault();
+    var v=FormValidation.validate('#paymentForm');if(!v.valid)return;
     var data={
         amount: parseFloat($('#amount').val()),
         debit_account_code: $('#debitAccount').val(),
@@ -136,10 +137,10 @@ $('#paymentForm').submit(function(e){e.preventDefault();
         vat_rate: $('#vatRateGroup').is(':visible')?parseInt($('#vatRate').val())||0:0,
     };
     $.ajax({url:'/api/cash/payments',method:'POST',contentType:'application/json',headers:{'X-CSRF-Token':csrf},data:JSON.stringify(data),
-        success:function(){$('#paymentModal').modal('hide');$('#paymentForm')[0].reset();showToast('Đã tạo phiếu chi thành công.','success');loadData();},
-        error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}
+        success:function(){$('#paymentModal').modal('hide');$('#paymentForm')[0].reset();FormToast.success('Đã tạo phiếu chi thành công.');loadData();},
+        error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}FormToast.error(m);}
     });
 });
-$(document).ready(function(){loadTemplates();loadData();$('#txnDate').val(new Date().toISOString().substring(0,10));loadVatRates('#vatRate',10);});
+$(document).ready(function(){loadTemplates();loadData();$('#txnDate').val(new Date().toISOString().substring(0,10));loadVatRates('#vatRate',10);FormValidation.setup('#paymentForm');});
 </script>
 <?php $content = ob_get_clean(); require __DIR__ . '/layout.php'; ?>

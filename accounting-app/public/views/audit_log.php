@@ -44,7 +44,7 @@ function loadData() {
         res.data.forEach(function(r){
             var oldV = r.old_values ? JSON.parse(r.old_values) : null;
             var newV = r.new_values ? JSON.parse(r.new_values) : null;
-            tbody.append('<tr><td>'+r.id+'</td><td><span class="badge-status badge-active">'+esc(r.action)+'</span></td><td>'+esc(r.resource_type)+'</td><td>'+esc(r.resource_id||'')+'</td><td>'+esc(r.actor_id||'')+'</td><td>'+esc(r.ip_address||'')+'</td><td>'+esc(r.created_at)+'</td><td><button class="btn btn-sm btn-outline-info" onclick="showDetail('+r.id+')">Xem</button></td></tr>');
+            tbody.append('<tr><td>'+r.id+'</td><td>'+statusBadge(r.action)+'</td><td>'+esc(r.resource_type)+'</td><td>'+esc(r.resource_id||'')+'</td><td>'+esc(r.actor_id||'')+'</td><td>'+esc(r.ip_address||'')+'</td><td>'+esc(r.created_at)+'</td><td><button class="btn btn-sm btn-outline-info" onclick="showDetail('+r.id+')">Xem</button></td></tr>');
         });
         var totalPages = Math.ceil(res.total / res.per_page);
         var pg = $('#pagination'); pg.empty();

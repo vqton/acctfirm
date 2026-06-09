@@ -12,9 +12,16 @@ $router->get('/api/inventory/receipts', function() use ($c) { $c['ReceiptControl
 $router->get('/api/inventory/receive/items', function() use ($c) { $c['ReceiptController']->items(); });
 
 // === ISSUE (Xuất kho) ===
+// Backward compat: single-item quick issue
 $router->post('/api/inventory/issue', function() use ($c) { $c['IssueController']->issue(); });
 $router->get('/api/inventory/issues', function() use ($c) { $c['IssueController']->list(); });
 $router->get('/api/inventory/issue/items', function() use ($c) { $c['IssueController']->items(); });
+// Mẫu 02-VT: multi-line batch PXK với header fields
+$router->post('/api/inventory/issues/draft', function() use ($c) { $c['IssueController']->createDraft(); });
+$router->post('/api/inventory/issues/{id}/post', function($id) use ($c) { $c['IssueController']->postDraft($id); });
+$router->post('/api/inventory/issues/{id}/cancel', function($id) use ($c) { $c['IssueController']->cancelDraft($id); });
+$router->get('/api/inventory/issues/{id}', function($id) use ($c) { $c['IssueController']->getDetail($id); });
+$router->get('/api/inventory/issues/list', function() use ($c) { $c['IssueController']->listIssues(); });
 
 // === CUSTOMER RETURN ===
 $router->post('/api/inventory/customer-return', function() use ($c) { $c['CustomerReturnController']->return(); });

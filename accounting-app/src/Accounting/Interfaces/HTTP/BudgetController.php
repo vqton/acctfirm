@@ -91,9 +91,6 @@ class BudgetController
     public function viewIndex(): void
     {
         Auth::requirePermission('budget', 'read');
-        ob_start();
-require __DIR__ . '/../../../../public/views/budget.php';
-        ob_get_clean();
-        require __DIR__ . '/../../../../public/views/layout.php';
+        require __DIR__ . '/../../../../public/views/budget.php';
     }
 }

@@ -1,5 +1,5 @@
 <?php // Màn hình: Quản lý công nợ phải trả nhà cung cấp (TK 331)
-// API: GET /api/ap/suppliers, GET /api/ap/invoices, POST /api/ap/invoices, POST /api/ap/invoices/{id}/pay, POST /api/ap/prepay
+// API: GET /api/ap/suppliers, GET /api/ap/invoices, POST /api/ap/invoices, POST /api/ap/invoices/{id}/pay, POST /api/ap/invoices/{id}/discount, POST /api/ap/prepay
 // Nghiệp vụ: Ghi nhận hóa đơn mua hàng (Nợ 156/152/211 + 1331/Có 331), thanh toán (Nợ 331/Có 1111/1121), tạm ứng (Nợ 331/Có 1111)
 // Rủi ro: Chọn sai inventory_account sẽ sai tài khoản hàng tồn kho và sai BC01
 $title = 'Công nợ phải trả'; $activeMenu = 'ap_invoices'; ob_start(); ?>
@@ -48,10 +48,10 @@ $title = 'Công nợ phải trả'; $activeMenu = 'ap_invoices'; ob_start(); ?>
 <form id="invForm">
 <div class="modal-header"><h5 class="modal-title">Ghi nhận hóa đơn mua hàng</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
 <div class="modal-body">
-    <div class="mb-2"><label>Nhà cung cấp</label><select class="form-select" id="supplierId" required></select></div>
-    <div class="row g-2"><div class="col-6 mb-2"><label>Số hóa đơn</label><input class="form-control" id="invoiceNumber" required></div><div class="col-6 mb-2"><label>TK kho</label><select class="form-select" id="invAccount"><option value="152">152 - NVL</option><option value="156">156 - Hàng hóa</option><option value="153">153 - CCDC</option><option value="211">211 - TSCĐ</option><option value="642">642 - CP QLDN</option></select></div></div>
-    <div class="row g-2"><div class="col-4 mb-2"><label>Ngày HĐ</label><input type="date" class="form-control" id="invDate" value="<?=date('Y-m-d')?>"></div><div class="col-4 mb-2"><label>Hạn thanh toán</label><input type="date" class="form-control" id="dueDate" value="<?=date('Y-m-d', strtotime('+30 days'))?>"></div><div class="col-4 mb-2"><label>Thuế GTGT</label><select class="form-select" id="vatRate"></select></div></div>
-    <div class="row g-2"><div class="col-6 mb-2"><label>Tiền hàng (chưa VAT)</label><input type="number" class="form-control" id="netAmount" step="1000" min="1" required></div><div class="col-6 mb-2"><label>Tiền VAT</label><input type="number" class="form-control" id="vatAmount" step="1000" min="0"></div></div>
+    <div class="mb-2"><label>Nhà cung cấp</label><select class="form-select" id="supplierId" data-v-required="Nhà cung cấp" required></select></div>
+    <div class="row g-2"><div class="col-6 mb-2"><label>Số hóa đơn</label><input class="form-control" id="invoiceNumber" data-v-required="Số hóa đơn" required></div><div class="col-6 mb-2"><label>TK kho</label><select class="form-select" id="invAccount"><option value="152">152 - NVL</option><option value="156">156 - Hàng hóa</option><option value="153">153 - CCDC</option><option value="211">211 - TSCĐ</option><option value="642">642 - CP QLDN</option></select></div></div>
+    <div class="row g-2"><div class="col-4 mb-2"><label>Ngày HĐ</label><input type="date" class="form-control" id="invDate" data-v-required="Ngày hóa đơn" data-v-date="Ngày hóa đơn"></div><div class="col-4 mb-2"><label>Hạn thanh toán</label><input type="date" class="form-control" id="dueDate"></div><div class="col-4 mb-2"><label>Thuế GTGT</label><select class="form-select" id="vatRate"></select></div></div>
+    <div class="row g-2"><div class="col-6 mb-2"><label>Tiền hàng (chưa VAT)</label><input type="number" class="form-control" id="netAmount" step="1000" min="1" data-v-required="Tiền hàng" data-v-number="Tiền hàng" required></div><div class="col-6 mb-2"><label>Tiền VAT</label><input type="number" class="form-control" id="vatAmount" step="1000" min="0"></div></div>
     <div class="mb-2"><label>Diễn giải</label><input class="form-control" id="invDesc"></div>
 </div>
 <div class="modal-footer"><button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Hủy</button><button type="submit" class="btn btn-sm btn-primary">Ghi nhận</button></div>
@@ -62,8 +62,8 @@ $title = 'Công nợ phải trả'; $activeMenu = 'ap_invoices'; ob_start(); ?>
 <form id="prepayForm">
 <div class="modal-header"><h5 class="modal-title">Tạm ứng cho nhà cung cấp</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
 <div class="modal-body">
-    <div class="mb-2"><label>Nhà cung cấp</label><select class="form-select" id="prepaySupplier" required></select></div>
-    <div class="mb-2"><label>Số tiền</label><input type="number" class="form-control" id="prepayAmount" step="1000" min="1" required></div>
+    <div class="mb-2"><label>Nhà cung cấp</label><select class="form-select" id="prepaySupplier" data-v-required="Nhà cung cấp" required></select></div>
+    <div class="mb-2"><label>Số tiền</label><input type="number" class="form-control" id="prepayAmount" step="1000" min="1" data-v-required="Số tiền" data-v-number="Số tiền tạm ứng" required></div>
     <div class="mb-2"><label>Diễn giải</label><input class="form-control" id="prepayDesc" placeholder="Tạm ứng theo hợp đồng..."></div>
 </div>
 <div class="modal-footer"><button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Hủy</button><button type="submit" class="btn btn-sm btn-primary">Tạm ứng</button></div>
@@ -76,9 +76,22 @@ $title = 'Công nợ phải trả'; $activeMenu = 'ap_invoices'; ob_start(); ?>
 <div class="modal-body">
     <input type="hidden" id="payInvId">
     <p class="text-muted">Còn phải trả: <strong id="payBalance"></strong></p>
-    <div class="mb-2"><label>Số tiền thanh toán</label><input type="number" class="form-control" id="payAmount" step="1000" min="1" required></div>
+    <div class="mb-2"><label>Số tiền thanh toán</label><input type="number" class="form-control" id="payAmount" step="1000" min="1" data-v-required="Số tiền" data-v-number="Số tiền thanh toán" required></div>
 </div>
 <div class="modal-footer"><button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Hủy</button><button type="submit" class="btn btn-sm btn-success">Thanh toán</button></div>
+</form>
+</div></div></div>
+
+<div class="modal fade" id="discountModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
+<form id="discountForm">
+<div class="modal-header"><h5 class="modal-title">Chiết khấu thanh toán được hưởng</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+<div class="modal-body">
+    <input type="hidden" id="discountInvId">
+    <p class="text-muted">Công nợ còn lại: <strong id="discountBalance"></strong></p>
+    <p class="text-muted" style="font-size:12px">Hạch toán: Nợ 331 / Có 515 (Doanh thu HĐTC)</p>
+    <div class="mb-2"><label>Số tiền chiết khấu</label><input type="number" class="form-control" id="discountAmount" step="1000" min="1" data-v-required="Số tiền" data-v-number="Số tiền chiết khấu" required></div>
+</div>
+<div class="modal-footer"><button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Hủy</button><button type="submit" class="btn btn-sm btn-warning">Xác nhận chiết khấu</button></div>
 </form>
 </div></div></div>
 
@@ -88,7 +101,7 @@ function loadSuppliers(cb){
     $.get('/api/ap/suppliers', function(list){
         var opts='',fopts='<option value="">Tất cả NCC</option>';
         list.forEach(function(s){
-            opts+='<option value="'+esc(s.id)+'">'+esc(s.name)+' ('+parseFloat(s.balance).toLocaleString()+' VND)</option>';
+            opts+='<option value="'+esc(s.id)+'">'+esc(s.name)+' ('+fmt(s.balance)+')</option>';
             fopts+='<option value="'+esc(s.id)+'">'+esc(s.name)+'</option>';
         });
         $('#supplierId, #prepaySupplier').html(opts);
@@ -106,7 +119,6 @@ function calcAgingDays(dueDate){
 function renderRows(data){
     var tbody=$('#dataBody');tbody.empty();
     data.forEach(function(r){
-        var badge=r.status==='paid'?'badge-active':(r.status==='written_off'?'badge-inactive':'badge-warning');
         var actions='';
         var aging=calcAgingDays(r.due_date);
         var rowClass='';
@@ -114,10 +126,11 @@ function renderRows(data){
         else if(aging>30){rowClass=' class="table-warning"';}
         if(r.status!=='paid'&&r.status!=='written_off'&&r.balance>1){
             actions+='<button class="btn btn-sm btn-outline-success me-1" onclick="openPay('+r.id+','+r.balance+')"><i class="bi bi-cash"></i></button>';
+            actions+='<button class="btn btn-sm btn-outline-warning me-1" onclick="openDiscount('+r.id+','+r.balance+')" title="Chiết khấu thanh toán"><i class="bi bi-percent"></i></button>';
         }
         actions+='<button class="btn btn-sm btn-outline-info me-1" onclick="printInvoice(\''+r.id+'\')" title="In hóa đơn"><i class="bi bi-printer"></i></button>';
         var agingLabel=aging>0?aging+' ngày':'';
-        tbody.append('<tr'+rowClass+'><td>'+esc(r.invoice_number)+'</td><td>'+esc(r.supplier_name)+'</td><td style="font-size:12px">'+esc(r.invoice_date)+'</td><td style="font-size:12px">'+esc(r.due_date)+'</td><td class="text-end font-monospace">'+parseFloat(r.gross_amount).toLocaleString()+'</td><td class="text-end font-monospace">'+parseFloat(r.paid_amount).toLocaleString()+'</td><td class="text-end font-monospace">'+parseFloat(r.balance).toLocaleString()+'</td><td class="text-end font-monospace" style="font-size:11px">'+agingLabel+'</td><td><span class="badge-status '+badge+'">'+esc(r.status)+'</span></td><td>'+actions+'</td></tr>');
+        tbody.append('<tr'+rowClass+'><td>'+esc(r.invoice_number)+'</td><td>'+esc(r.supplier_name)+'</td><td style="font-size:12px">'+esc(r.invoice_date)+'</td><td style="font-size:12px">'+esc(r.due_date)+'</td><td class="text-end vas-number">'+fmt(r.gross_amount)+'</td><td class="text-end vas-number">'+fmt(r.paid_amount)+'</td><td class="text-end vas-number">'+fmt(r.balance)+'</td><td class="text-end vas-number" style="font-size:11px">'+agingLabel+'</td><td>'+statusBadge(r.status)+'</td><td>'+actions+'</td></tr>');
     });
     if(!data.length) tbody.append('<tr><td colspan="10" class="empty-state"><i class="bi bi-inbox"></i> Không có hóa đơn nào</td></tr>');
 }
@@ -168,47 +181,58 @@ function exportCSV(){
     var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='ap_invoices_'+new Date().toISOString().slice(0,10)+'.csv';
     document.body.appendChild(a);a.click();document.body.removeChild(a);
 }
-function openPay(id,bal){$('#payInvId').val(id);$('#payBalance').text(parseFloat(bal).toLocaleString());$('#payAmount').val(bal);$('#payModal').modal('show');}
+function openPay(id,bal){$('#payInvId').val(id);$('#payBalance').text(fmt(bal));$('#payAmount').val(bal);$('#payModal').modal('show');}
+function openDiscount(id,bal){$('#discountInvId').val(id);$('#discountBalance').text(fmt(bal));$('#discountAmount').val(Math.round(bal*0.5/1000)*1000);$('#discountModal').modal('show');}
 async function printInvoice(id){
     try {
         const tplRes = await fetch('/api/print/templates?type=ap_invoice', { headers: { 'X-CSRF-Token': csrf } });
         const tplJson = await tplRes.json();
         const defTpl = (tplJson.data || []).find(t => t.is_default) || (tplJson.data || [])[0];
-        if (!defTpl) { showToast('Chưa có mẫu in nào cho hóa đơn mua', 'error'); return; }
+        if (!defTpl) { FormToast.error('Chưa có mẫu in nào cho hóa đơn mua'); return; }
         const res = await fetch('/api/print/templates/' + defTpl.id + '/render', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
             body: JSON.stringify({ resource_type: 'ap_invoice', resource_id: id })
         });
         const json = await res.json();
-        if (!res.ok) { showToast(json.error || 'Lỗi in', 'error'); return; }
+        if (!res.ok) { FormToast.error(json.error || 'Lỗi in'); return; }
         const w = window.open('', '_blank');
         w.document.write('<html><head><title>In hóa đơn ' + id + '</title><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"></head><body class="p-4">' + json.html + '</body></html>');
         w.document.close();
         setTimeout(() => w.print(), 300);
-    } catch(e) { showToast('Lỗi: ' + e.message, 'error'); }
+    } catch(e) { FormToast.error('Lỗi: ' + e.message); }
 }
 function calcVat(){var net=parseFloat($('#netAmount').val())||0;var rate=parseFloat($('#vatRate').val())||0;$('#vatAmount').val(Math.round(net*rate/100));}
 $('#netAmount,#vatRate').on('input',calcVat);
 $('#invForm').submit(function(e){e.preventDefault();
+    var v=FormValidation.validate('#invForm');if(!v.valid)return;
     var data={supplier_id:$('#supplierId').val(),invoice_number:$('#invoiceNumber').val(),net_amount:parseFloat($('#netAmount').val()),vat_amount:parseFloat($('#vatAmount').val()),vat_rate:parseFloat($('#vatRate').val()),invoice_date:$('#invDate').val(),due_date:$('#dueDate').val(),inventory_account:$('#invAccount').val(),description:$('#invDesc').val()};
     $.ajax({url:'/api/ap/invoices',method:'POST',contentType:'application/json',data:JSON.stringify(data),
-        success:function(){$('#invModal').modal('hide');$('#invForm')[0].reset();showToast('Ghi nhận hóa đơn thành công','success');loadData();},
-        error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}
+        success:function(){$('#invModal').modal('hide');$('#invForm')[0].reset();FormToast.success('Ghi nhận hóa đơn thành công');loadData();},
+        error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}FormToast.error(m);}
     });
 });
 $('#payForm').submit(function(e){e.preventDefault();
+    var v=FormValidation.validate('#payForm');if(!v.valid)return;
     $.ajax({url:'/api/ap/invoices/'+$('#payInvId').val()+'/pay',method:'POST',contentType:'application/json',data:JSON.stringify({amount:parseFloat($('#payAmount').val())}),
-        success:function(){$('#payModal').modal('hide');showToast('Thanh toán thành công','success');loadData();},
-        error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}
+        success:function(){$('#payModal').modal('hide');FormToast.success('Thanh toán thành công');loadData();},
+        error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}FormToast.error(m);}
     });
 });
 $('#prepayForm').submit(function(e){e.preventDefault();
+    var v=FormValidation.validate('#prepayForm');if(!v.valid)return;
     $.ajax({url:'/api/ap/prepay',method:'POST',contentType:'application/json',data:JSON.stringify({supplier_id:$('#prepaySupplier').val(),amount:parseFloat($('#prepayAmount').val()),description:$('#prepayDesc').val()}),
-        success:function(){$('#prepayModal').modal('hide');$('#prepayForm')[0].reset();showToast('Tạm ứng thành công','success');loadData();},
-        error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}
+        success:function(){$('#prepayModal').modal('hide');$('#prepayForm')[0].reset();FormToast.success('Tạm ứng thành công');loadData();},
+        error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}FormToast.error(m);}
     });
 });
-$(document).ready(function(){loadSuppliers();loadData();loadVatRates('#vatRate',10);});
+$('#discountForm').submit(function(e){e.preventDefault();
+    var v=FormValidation.validate('#discountForm');if(!v.valid)return;
+    $.ajax({url:'/api/ap/invoices/'+$('#discountInvId').val()+'/discount',method:'POST',contentType:'application/json',data:JSON.stringify({amount:parseFloat($('#discountAmount').val())}),
+        success:function(){$('#discountModal').modal('hide');FormToast.success('Ghi nhận chiết khấu thành công');loadData();},
+        error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}FormToast.error(m);}
+    });
+});
+$(document).ready(function(){loadSuppliers();loadData();loadVatRates('#vatRate',10);FormValidation.setup('#invForm');FormValidation.setup('#payForm');FormValidation.setup('#prepayForm');FormValidation.setup('#discountForm');});
 </script>
 <?php $content = ob_get_clean(); require __DIR__ . '/layout.php'; ?>

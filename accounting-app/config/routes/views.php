@@ -48,6 +48,7 @@ $router->get('/kho/hang-mua-tra-lai', function() { require __DIR__ . '/../../pub
 $router->get('/kho/xuat-huy', function() { require __DIR__ . '/../../public/views/write_off.php'; });
 $router->get('/kho/kiem-ke-dinh-ky', function() { require __DIR__ . '/../../public/views/periodic.php'; });
 $router->get('/kho/hang-dang-di-duong', function() { require __DIR__ . '/../../public/views/transit.php'; });
+$router->get('/kho/xu-ly-chenh-lech-kiem-ke', function() { require __DIR__ . '/../../public/views/inventory_diff.php'; });
 
 // === THU / CHI (Tiền mặt & Ngân hàng) ===
 $router->get('/thu/quy-tien-mat', function() { require __DIR__ . '/../../public/views/cash_receipts.php'; });
@@ -57,6 +58,7 @@ $router->get('/chi/giao-bao-no', function() { require __DIR__ . '/../../public/v
 $router->get('/thu/tien-dang-chuyen', function() { require __DIR__ . '/../../public/views/cash_transit.php'; });
 $router->get('/thu/so-quy-tien-mat', function() { require __DIR__ . '/../../public/views/cash_book.php'; });
 $router->get('/thu/tam-ung', function() { require __DIR__ . '/../../public/views/petty_cash.php'; });
+$router->get('/thu/de-nghi-tam-ung', function() { require __DIR__ . '/../../public/views/advance_payment_request.php'; });
 $router->get('/thu/doi-chieu-ngan-hang', function() { require __DIR__ . '/../../public/views/bank_reconciliation.php'; });
 $router->get('/thu/bao-cao-von-bang-tien', function() { require __DIR__ . '/../../public/views/cash_reports.php'; });
 $router->get('/thu/danh-gia-lai-ngoai-te', function() { require __DIR__ . '/../../public/views/fx_revaluation.php'; });
@@ -68,8 +70,11 @@ $router->get('/tai-san-co-dinh/thanh-ly', function() { require __DIR__ . '/../..
 // === TỔNG HỢP (Journal, Approvals, Reports) ===
 $router->get('/tong-hop/chung-tu-ghi-so', function() { require __DIR__ . '/../../public/views/journal.php'; });
 $router->get('/tong-hop/phe-duyet', function() { require __DIR__ . '/../../public/views/approvals.php'; });
+$router->get('/tong-hop/ket-chuyen', function() { require __DIR__ . '/../../public/views/period_close.php'; });
 $router->get('/tong-hop/bang-can-doi-so-phat-sinh', function() { require __DIR__ . '/../../public/views/trial_balance.php'; });
 $router->get('/tong-hop/khoa-so-cuoi-ky', function() { require __DIR__ . '/../../public/views/period_close.php'; });
+$router->get('/tong-hop/phan-bo-chi-phi-tra-truoc', function() { require __DIR__ . '/../../public/views/prepaid_expense.php'; });
+$router->get('/tong-hop/dieu-chinh-hoi-to', function() { require __DIR__ . '/../../public/views/prior_period_adjustment.php'; });
 
 // === BÁO CÁO TỰ THIẾT KẾ ===
 $router->get('/bao-cao/tu-thiet-ke', function() use ($c) { $c['ReportBuilderController']->viewIndex(); });
@@ -86,6 +91,10 @@ $router->get('/bao-cao/ty-gia', function() use ($c) { $c['FxController']->view()
 $router->get('/bao-cao/nhat-ky-chung', function() use ($c) { $c['JournalBookController']->view(); });
 
 // === HỆ THỐNG ===
+$router->get('/he-thong/nguoi-dung', function() { require __DIR__ . '/../../public/views/users.php'; });
+$router->get('/he-thong/vai-tro', function() { require __DIR__ . '/../../public/views/roles.php'; });
+$router->get('/he-thong/cau-hinh', function() { require __DIR__ . '/../../public/views/system_config.php'; });
+$router->get('/he-thong/so-du-dau-ky', function() use ($c) { $c['OpeningBalanceController']->view(); });
 $router->get('/he-thong/quan-ly-ky', function() { require __DIR__ . '/../../public/views/periods.php'; });
 $router->get('/tong-hop/so-sanh-ky', function() { require __DIR__ . '/../../public/views/period_compare.php'; });
 $router->get('/he-thong/thong-bao', function() { require __DIR__ . '/../../public/views/notifications.php'; });
@@ -93,17 +102,29 @@ $router->get('/he-thong/thiet-ke-mau-in', function() { require __DIR__ . '/../..
 $router->get('/he-thong/kiem-tra-truoc-khi-khoa-so', function() { require __DIR__ . '/../../public/views/pre_close_checklist.php'; });
 $router->get('/he-thong/noi-bo', function() use ($c) { $c['IntercompanyController']->view(); });
 $router->get('/he-thong/nhat-ky-hoat-dong', function() { require __DIR__ . '/../../public/views/audit_log.php'; });
+$router->get('/he-thong/sao-luu', function() { require __DIR__ . '/../../public/views/backup_restore.php'; });
 
 // === THUẾ ===
 $router->get('/thue/ke-khai-gtgt', function() use ($c) { $c['VatController']->view(); });
+$router->get('/thue/bang-ke', function() use ($c) { require __DIR__ . '/../../public/views/vat_schedules.php'; });
+$router->get('/thue/quyet-toan-gtgt', function() use ($c) { $c['VatController']->view(); });
 $router->get('/thue/quyet-toan-tndn', function() use ($c) { $c['CitController']->view(); });
+$router->get('/thue/quyet-toan-tncn', function() { require __DIR__ . '/../../public/views/payroll_tax.php'; });
 $router->get('/thue/nha-thau-nuoc-ngoai', function() use ($c) { $c['FctController']->view(); });
+$router->get('/hoa-don-dien-tu', function() { require __DIR__ . '/../../public/views/einvoice.php'; });
+$router->get('/thue/gui-nop-thue', function() { require __DIR__ . '/../../public/views/tax_submission.php'; });
 
 // === ĐIỀU CHỈNH BÚT TOÁN ===
 $router->get('/dieu-chinh-but-toan', function() use ($c) { $c['CorrectionController']->view(); });
 
 // === CCDC ===
 $router->get('/ccdc/phan-bo', function() use ($c) { $c['CcdcAllocationController']->view(); });
+
+// === TSCĐ — Điều chuyển ===
+$router->get('/tai-san-co-dinh/dieu-chuyen', function() { require __DIR__ . '/../../public/views/fixed_assets.php'; });
+
+// === BÁO CÁO QUẢN TRỊ ===
+$router->get('/bao-cao/quan-tri', function() use ($c) { $c['BudgetController']->viewIndex(); });
 
 // === TIỀN LƯƠNG ===
 $router->get('/tien-luong', function() { require __DIR__ . '/../../public/views/payroll.php'; });

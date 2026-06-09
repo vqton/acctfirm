@@ -63,9 +63,8 @@ function loadData() {
             var f=data.filter(function(i){return !q||i.name.toLowerCase().includes(q)||i.code.toLowerCase().includes(q)||(i.phone||'').toLowerCase().includes(q);});
             document.getElementById('recordCount').textContent='('+f.length+'/'+data.length+' bản ghi)';
             var rows=f.map(function(i){
-                var sc=i.status?'badge-active':'badge-inactive';var st=i.status?'Hoạt động':'Ngừng';
                 var dept=i.department_id&&deptMap[i.department_id]?esc(deptMap[i.department_id].name):'';
-                return '<tr><td>'+esc(i.code)+'</td><td>'+esc(i.name)+'</td><td>'+dept+'</td><td>'+esc(i.position||'')+'</td><td>'+esc(i.phone||'')+'</td><td><span class="badge badge-status '+sc+'">'+st+'</span></td>'+
+                return '<tr><td>'+esc(i.code)+'</td><td>'+esc(i.name)+'</td><td>'+dept+'</td><td>'+esc(i.position||'')+'</td><td>'+esc(i.phone||'')+'</td><td>'+statusBadge(i.status?'active':'inactive')+'</td>'+
                     '<td class="text-center"><a href="#" class="btn-action me-1" onclick="openEdit(\''+i.id+'\')"><i class="bi bi-pencil"></i></a>'+
                     '<a href="#" class="btn-action btn-action-danger" onclick="confirmDelete(\''+i.id+'\',\''+API+'\',\''+esc(i.name)+'\')"><i class="bi bi-trash"></i></a></td></tr>';
             }).join('');

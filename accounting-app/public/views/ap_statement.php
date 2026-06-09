@@ -27,8 +27,7 @@ function loadData(){
         stmtData=data;
         var tbody=$('#dataBody'); tbody.empty();
         data.forEach(function(r){
-            var badge=r.status==='paid'?'badge-active':(r.status==='prepayment'?'badge-inactive':'badge-warning');
-            tbody.append('<tr><td>'+esc(r.invoice_number)+'</td><td>'+esc(r.invoice_date)+'</td><td>'+esc(r.due_date)+'</td><td class="text-end font-monospace">'+parseFloat(r.gross_amount).toLocaleString()+'</td><td class="text-end font-monospace">'+parseFloat(r.paid_amount).toLocaleString()+'</td><td class="text-end font-monospace">'+parseFloat(r.balance).toLocaleString()+'</td><td><span class="badge-status '+badge+'">'+esc(r.status)+'</span></td></tr>');
+            tbody.append('<tr><td>'+esc(r.invoice_number)+'</td><td>'+esc(r.invoice_date)+'</td><td>'+esc(r.due_date)+'</td><td class="text-end font-monospace">'+parseFloat(r.gross_amount).toLocaleString()+'</td><td class="text-end font-monospace">'+parseFloat(r.paid_amount).toLocaleString()+'</td><td class="text-end font-monospace">'+parseFloat(r.balance).toLocaleString()+'</td><td>'+statusBadge(r.status)+'</td></tr>');
         });
     });
 }

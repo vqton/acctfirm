@@ -118,30 +118,6 @@ function updatePoLineTotals() {
     document.getElementById('poTotal').textContent = grandTotal.toLocaleString() + ' VND';
 }
 
-function statusBadge(s) {
-    switch (s) {
-        case 'draft': return 'badge-warning';
-        case 'pending_approval': return 'badge-type';
-        case 'sent': return 'badge-active';
-        case 'partially_received': return 'badge-info';
-        case 'completed': return 'badge-active';
-        case 'cancelled': return 'badge-danger';
-        default: return 'badge-inactive';
-    }
-}
-
-function statusLabel(s) {
-    switch (s) {
-        case 'draft': return 'Nháp';
-        case 'pending_approval': return 'Chờ duyệt';
-        case 'sent': return 'Đã gửi NCC';
-        case 'partially_received': return 'Nhận một phần';
-        case 'completed': return 'Hoàn thành';
-        case 'cancelled': return 'Đã hủy';
-        default: return s;
-    }
-}
-
 function loadSuppliers() {
     fetch('/api/suppliers')
     .then(function(r) { return r.json(); })
@@ -163,7 +139,6 @@ function renderRows(data) {
     var tbody = document.getElementById('dataBody');
     document.getElementById('recordCount').textContent = '(' + data.length + ' bản ghi)';
     tbody.innerHTML = data.map(function(r) {
-        var badge = statusBadge(r.status);
         var total = parseFloat(r.total_amount || 0).toLocaleString();
         var supplierName = r.supplier_name || '';
         if (!supplierName && r.supplier_id) {
@@ -175,7 +150,7 @@ function renderRows(data) {
             '<td>' + esc(supplierName) + '</td>' +
             '<td class="text-end font-monospace">' + total + '</td>' +
             '<td>' + (r.expected_delivery || r.delivery_date || '') + '</td>' +
-            '<td><span class="badge-status ' + badge + '">' + statusLabel(r.status) + '</span></td>' +
+            '<td>' + statusBadge(r.status) + '</td>' +
             '<td class="text-center"><button class="btn-action" onclick="event.stopPropagation();viewDetail(\'' + r.id + '\')"><i class="bi bi-eye"></i></button></td>' +
         '</tr>';
     }).join('');
@@ -224,7 +199,7 @@ function viewDetail(id) {
         var html = '<div class="row g-2 mb-3">' +
             '<div class="col-4"><strong>Số PO:</strong> ' + esc(r.reference || r.id) + '</div>' +
             '<div class="col-4"><strong>Nhà cung cấp:</strong> ' + esc(supplierName) + '</div>' +
-            '<div class="col-4"><strong>Trạng thái:</strong> <span class="badge-status ' + statusBadge(r.status) + '">' + statusLabel(r.status) + '</span></div>' +
+            '<div class="col-4"><strong>Trạng thái:</strong> ' + statusBadge(r.status) + '</div>' +
             '<div class="col-4"><strong>PR liên quan:</strong> ' + (r.pr_reference || r.pr_id || '—') + '</div>' +
             '<div class="col-4"><strong>Ngày giao:</strong> ' + (r.expected_delivery || r.delivery_date || '') + '</div>' +
             '<div class="col-4"><strong>Thanh toán:</strong> ' + esc(r.payment_terms || '') + '</div>' +

@@ -79,7 +79,6 @@ function loadData() {
     $.get('/api/cit/calculations', function(data) {
         var tbody = $('#dataBody').empty();
         data.forEach(function(r) {
-            var badge = r.status === 'finalised' ? 'badge-active' : (r.status === 'draft' ? 'badge-warning' : 'badge-inactive');
             tbody.append('<tr>' +
                 '<td>' + r.period + '</td>' +
                 '<td class="text-end font-monospace">' + parseInt(r.revenue).toLocaleString() + '</td>' +
@@ -88,7 +87,7 @@ function loadData() {
                 '<td class="text-end font-monospace">' + parseInt(r.selling_expense).toLocaleString() + '</td>' +
                 '<td class="text-end font-monospace">' + parseInt(r.taxable_income).toLocaleString() + '</td>' +
                 '<td class="text-end font-monospace">' + parseInt(r.cit_amount).toLocaleString() + '</td>' +
-                '<td><span class="badge-status ' + badge + '">' + esc(r.status) + '</span></td>' +
+                '<td>' + statusBadge(r.status) + '</td>' +
                 '<td><button class="btn btn-sm btn-outline-primary" onclick="viewDetail(\'' + r.id + '\')"><i class="bi bi-eye"></i></button></td>' +
                 '</tr>');
         });

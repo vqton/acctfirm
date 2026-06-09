@@ -16,7 +16,7 @@
 </div></div></div>
 <script>
 function fmt(n){return new Intl.NumberFormat('vi-VN').format(n||0)}
-function periodBadge(s){if(s==='closed')return'<span class="badge-status badge-danger">Đã đóng</span>';if(s==='processing')return'<span class="badge-status badge-warning">Đang xử lý</span>';return'<span class="badge-status badge-active">Đang mở</span>';}
+function periodBadge(s){return statusBadge(s);}
 function loadPeriods(){$.get('/api/payroll/periods').done(function(r){var h='';if(r.data){r.data.forEach(function(p){h+='<tr><td>'+esc(p.period_code)+'</td><td>'+esc(p.name)+'</td><td>'+p.start_date+'</td><td>'+p.end_date+'</td><td>'+periodBadge(p.status)+'</td><td>'+esc(p.created_by||'')+'</td>';h+='<td>';if(p.status==='open')h+='<button class="btn-action btn-action-danger" onclick="closePeriod(\''+p.id+'\')">Đóng</button>';h+='</td></tr>';});}$('#periodBody').html(h||'<tr><td colspan="7" class="text-muted text-center">Không có kỳ lương</td></tr>');$('#periodCount').text(r.data?r.data.length:0);}).fail(function(){});}
 function showCreatePeriod(){$('#periodModal').modal('show');}
 $('#periodForm').submit(function(e){e.preventDefault();$.post('/api/payroll/periods',JSON.stringify({period_code:$('#periodForm [name=period_code]').val()})).done(function(){showToast('Đã tạo kỳ lương thành công.','success');$('#periodModal').modal('hide');loadPeriods();}).fail(function(x){showToast(x.responseJSON?.error||'Lỗi tạo kỳ lương','error');});});

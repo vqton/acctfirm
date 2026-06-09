@@ -50,7 +50,7 @@ function loadData() {
     $.get('/api/physical-count/sessions', function(data) {
         var tbody = $('#sessionBody'); tbody.empty();
         if (data.length===0){tbody.append('<tr><td colspan="5" class="text-center text-muted py-4">Chưa có phiên kiểm kê</td></tr>');return;}
-        data.forEach(function(s){tbody.append('<tr><td>'+esc(s.reference)+'</td><td>'+esc(s.session_date)+'</td><td>'+s.total_items+'</td><td>'+parseFloat(s.total_diff).toLocaleString()+'</td><td><span class="badge-status badge-active">'+esc(s.status)+'</span></td></tr>');});
+        data.forEach(function(s){tbody.append('<tr><td>'+esc(s.reference)+'</td><td>'+esc(s.session_date)+'</td><td>'+s.total_items+'</td><td>'+parseFloat(s.total_diff).toLocaleString()+'</td><td>'+statusBadge(s.status)+'</td></tr>');});
     });
 }
 function addSessionLine() {

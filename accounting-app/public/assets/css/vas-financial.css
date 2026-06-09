@@ -1,0 +1,168 @@
+/**
+ * VAS Financial UI Stylesheet — Vietnamese Accounting Standards
+ *
+ * Implements TT99/2025 visual requirements:
+ *   — Tabular-nums for financial column alignment
+ *   — Minimal line-height 1.6 for Vietnamese diacritics
+ *   — Semantic colors (Crimson debit, Emerald credit)
+ *   — Zero-placeholder hyphen
+ */
+
+/* === BASE TYPOGRAPHY === */
+.vas-body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  line-height: 1.6;
+}
+
+/* === FINANCIAL NUMBER STYLING === */
+.vas-number {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  -webkit-font-feature-settings: 'tnum' 1;
+  white-space: nowrap;
+}
+
+.vas-number,
+.vas-amount {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* === ZERO PLACEHOLDER === */
+.vas-zero {
+  color: #adb5bd;
+  font-weight: 300;
+  letter-spacing: 0.05em;
+}
+
+/* === SEMANTIC FINANCIAL COLORS === */
+.vas-credit,
+.vas-positive,
+.vas-revenue {
+  color: #107C41;
+}
+
+.vas-debit,
+.vas-negative,
+.vas-expense {
+  color: #A80000;
+}
+
+/* === VAS TABLE === */
+.vas-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.vas-table th {
+  background: #f8f9fc;
+  border-bottom: 2px solid #e2e6ef;
+  font-weight: 600;
+  color: #1a2a3a;
+  padding: 10px 12px;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.vas-table th.text-end {
+  text-align: right;
+}
+
+.vas-table th.text-center {
+  text-align: center;
+}
+
+.vas-table td {
+  padding: 8px 12px;
+  vertical-align: middle;
+  border-bottom: 1px solid #f0f0f5;
+}
+
+.vas-table tbody tr:hover {
+  background: #f5f7ff;
+}
+
+.vas-table tbody tr:last-child td {
+  border-bottom: 1px solid #e2e6ef;
+}
+
+.vas-table tbody tr.fw-bold td {
+  font-weight: 600;
+  background: #fafbfc;
+}
+
+/* Financial columns get tabular-nums */
+.vas-table td.text-end {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* === MÃ SỐ COLUMN === */
+.vas-maso {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  color: #5a6a7a;
+  font-size: 12px;
+}
+
+/* === TOOLBAR === */
+.vas-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.vas-toolbar h5 {
+  margin: 0;
+  font-weight: 600;
+  color: #1a2a3a;
+}
+
+.vas-toolbar .badge {
+  font-size: 12px;
+  padding: 4px 12px;
+}
+
+/* === PRINT === */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  .vas-table td {
+    border-bottom: 1px solid #ddd;
+  }
+  .vas-table th {
+    background: #eee !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+/* === RESPONSIVE WRAPPER === */
+.vas-table-wrap {
+  overflow-x: auto;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+/* === WCAG AA: ensure contrast on all states === */
+.vas-debit {
+  color: #A80000;
+}
+.vas-debit:hover,
+.vas-debit:focus {
+  color: #800000;
+}
+.vas-credit {
+  color: #107C41;
+}
+.vas-credit:hover,
+.vas-credit:focus {
+  color: #0a5c2f;
+}

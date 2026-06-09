@@ -56,9 +56,8 @@ function loadData(){
     $.get('/api/petty-cash/funds',function(data){
         var tbody=$('#dataBody'); tbody.empty();
         data.forEach(function(r){
-            var badge=r.status==='active'?'badge-active':(r.status==='closed'?'badge-inactive':'badge-warning');
             var acts=r.status==='active'?'<button class="btn btn-sm btn-outline-danger" onclick="closeFund('+r.id+')"><i class="bi bi-lock"></i></button>':'';
-            tbody.append('<tr><td>'+esc(r.fund_name||r.id)+'</td><td>'+esc(r.employee_name||'')+'</td><td class="text-end font-monospace">'+parseFloat(r.total_amount).toLocaleString()+'</td><td class="text-end font-monospace">'+parseFloat(r.balance).toLocaleString()+'</td><td style="font-size:12px">'+esc(r.created_at)+'</td><td><span class="badge-status '+badge+'">'+esc(r.status)+'</span></td><td>'+acts+'</td></tr>');
+            tbody.append('<tr><td>'+esc(r.fund_name||r.id)+'</td><td>'+esc(r.employee_name||'')+'</td><td class="text-end font-monospace">'+parseFloat(r.total_amount).toLocaleString()+'</td><td class="text-end font-monospace">'+parseFloat(r.balance).toLocaleString()+'</td><td style="font-size:12px">'+esc(r.created_at)+'</td><td>'+statusBadge(r.status)+'</td><td>'+acts+'</td></tr>');
         });
     });
 }

@@ -28,10 +28,9 @@ function loadData(){
     $.get('/api/cash/transit',function(data){
         var tbody=$('#dataBody'); tbody.empty();
         data.forEach(function(r){
-            var badge=r.status==='confirmed'?'badge-active':(r.status==='reversed'?'badge-danger':'badge-warning');
             var acts='';
             if(r.status==='pending') acts+='<button class="btn btn-sm btn-outline-success me-1" onclick="confirmTransit('+r.id+')"><i class="bi bi-check-lg"></i></button><button class="btn btn-sm btn-outline-danger" onclick="reverseTransit('+r.id+')"><i class="bi bi-x-lg"></i></button>';
-            tbody.append('<tr><td>'+esc(r.id)+'</td><td class="text-end font-monospace">'+parseFloat(r.amount).toLocaleString()+'</td><td>'+esc(r.description)+'</td><td style="font-size:12px">'+esc(r.created_at)+'</td><td><span class="badge-status '+badge+'">'+esc(r.status)+'</span></td><td>'+acts+'</td></tr>');
+            tbody.append('<tr><td>'+esc(r.id)+'</td><td class="text-end font-monospace">'+parseFloat(r.amount).toLocaleString()+'</td><td>'+esc(r.description)+'</td><td style="font-size:12px">'+esc(r.created_at)+'</td><td>'+statusBadge(r.status)+'</td><td>'+acts+'</td></tr>');
         });
     });
 }

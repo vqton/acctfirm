@@ -38,7 +38,7 @@ function loadData() {
         var tbody=$('#dataBody'); tbody.empty();
         if(data.length===0){tbody.append('<tr><td colspan="8" class="text-center text-muted py-4">Chưa có kỳ kế toán</td></tr>');return;}
         data.forEach(function(p){
-            var badge = p.status==='open'?'badge-active':'<span class="badge-status badge-inactive">'+esc(p.status)+'</span>';
+            var badge = statusBadge(p.status);
             var actions = '';
             if(p.status==='open'){
                 actions += '<button class="btn btn-sm btn-outline-success me-1" onclick="closePeriod('+p.id+')"><i class="bi bi-lock"></i> Khóa sổ</button>';

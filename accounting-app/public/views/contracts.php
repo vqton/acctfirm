@@ -30,7 +30,7 @@
 
   <div class="card mt-2">
     <div class="table-responsive"><table class="table table-sm table-hover mb-0" id="contractTable"><thead class="table-light"><tr>
-      <th>Số HĐ</th><th>Loại</th><th>Đối tác</th><th>Ngày ký</th><th>Giá trị</th><th>Đã thực hiện</th><th>%</th><th>Trạng thái</th><th>Ngày KT</th><th></th>
+      <th>Số HĐ</th><th>Loại</th><th>Đối tác</th><th>Ngày ký</th><th class="text-end">Giá trị</th><th class="text-end">Đã thực hiện</th><th class="text-end">%</th><th>Trạng thái</th><th>Ngày KT</th><th></th>
     </tr></thead><tbody></tbody></table></div>
   </div>
 </div>
@@ -39,7 +39,7 @@
 <div class="modal-body" id="detailBody"></div></div></div></div>
 
 <script>
-function fmt(n){return new Intl.NumberFormat('vi-VN').format(n||0)}
+// Uses global fmt() from layout
 function pct(a,b){return b>0?(a/b*100).toFixed(1):'0.0'}
 
 function loadContracts(){
@@ -55,7 +55,7 @@ function loadContracts(){
         $('<td class="text-end">').text(fmt(c.total_amount)),
         $('<td class="text-end">').text(fmt(c.fulfilled_amount)),
         $('<td class="text-end">').text(pct(c.fulfilled_amount,c.total_amount)+'%'),
-        $('<td>').append($('<span class="badge bg-'+({active:'success',draft:'secondary',completed:'info',liquidated:'warning',cancelled:'danger'}[c.status]||'secondary')+'">').text(c.status)),
+        $('<td>').html(statusBadge(c.status)),
         $('<td>').text(c.end_date||''),
         $('<td class="text-end">').append(
           c.status==='active'?$('<div class="dropdown"><button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">...</button><ul class="dropdown-menu">'+
@@ -89,7 +89,7 @@ function showDetail(id){
     if(d.payment_schedules&&d.payment_schedules.length>0){
       html+='<h6 class="mt-2">Lịch thanh toán</h6><table class="table table-sm"><tr><th>Hạn</th><th class="text-end">Số tiền</th><th class="text-end">Đã TT</th><th>Cọc mốc</th><th>Trạng thái</th></tr>';
       d.payment_schedules.forEach(function(s){
-        html+='<tr><td>'+s.due_date+'</td><td class="text-end">'+fmt(s.amount)+'</td><td class="text-end">'+fmt(s.paid_amount)+'</td><td>'+(s.milestone||'')+'</td><td><span class="badge bg-'+(s.status==='paid'?'success':s.status==='partial'?'warning':'secondary')+'">'+s.status+'</span></td></tr>';
+        html+='<tr><td>'+s.due_date+'</td><td class="text-end vas-number">'+fmt(s.amount)+'</td><td class="text-end vas-number">'+fmt(s.paid_amount)+'</td><td>'+(s.milestone||'')+'</td><td>'+statusBadge(s.status)+'</td></tr>';
       });
       html+='</table>';
     }
@@ -116,36 +116,54 @@ function showDetail(id){
 }
 
 function linkTxn(id){
-  const type=prompt('Loại chứng từ (invoice/receipt/payment/transaction):');
-  if(!type)return;
-  const linkedId=prompt('ID chứng từ:');
-  if(!linkedId)return;
-  const amt=parseFloat(prompt('Số tiền:','0')||'0');
-  const desc=prompt('Mô tả:','');
-  $.post('/api/contracts/'+id+'/link',JSON.stringify({linked_type:type,linked_id:linkedId,amount:amt,description:desc}),function(r){loadContracts();alert('Đã liên kết');}).fail(function(x){alert(x.responseJSON?.error||'Lỗi');});
+  FormConfirm.prompt('Liên kết chứng từ','Loại chứng từ (invoice/receipt/payment/transaction):',function(type){
+    if(!type)return;
+    FormConfirm.prompt('Liên kết chứng từ','ID chứng từ:',function(linkedId){
+      if(!linkedId)return;
+      FormConfirm.prompt('Liên kết chứng từ','Số tiền:','0',function(amts){
+        var amt=parseFloat(amts||'0');
+        FormConfirm.prompt('Liên kết chứng từ','Mô tả:','',function(desc){
+          $.post('/api/contracts/'+id+'/link',JSON.stringify({linked_type:type,linked_id:linkedId,amount:amt,description:desc}),function(){loadContracts();FormToast.success('Đã liên kết');}).fail(function(x){FormToast.error(x.responseJSON?.error||'Lỗi');});
+        });
+      });
+    });
+  });
 }
 
 function addSchedule(id){
-  const date=prompt('Ngày đến hạn (YYYY-MM-DD):');
-  if(!date)return;
-  const amt=parseFloat(prompt('Số tiền:','0')||'0');
-  const milestone=prompt('Cọc mốc:','');
-  $.post('/api/contracts/'+id+'/payment-schedule',JSON.stringify({due_date:date,amount:amt,milestone:milestone}),function(r){loadContracts();alert('Đã thêm');}).fail(function(x){alert(x.responseJSON?.error||'Lỗi');});
+  FormConfirm.prompt('Thêm lịch thanh toán','Ngày đến hạn (YYYY-MM-DD):',function(date){
+    if(!date)return;
+    FormConfirm.prompt('Thêm lịch thanh toán','Số tiền:','0',function(amts){
+      var amt=parseFloat(amts||'0');
+      FormConfirm.prompt('Thêm lịch thanh toán','Cọc mốc:','',function(milestone){
+        $.post('/api/contracts/'+id+'/payment-schedule',JSON.stringify({due_date:date,amount:amt,milestone:milestone}),function(){loadContracts();FormToast.success('Đã thêm lịch thanh toán');}).fail(function(x){FormToast.error(x.responseJSON?.error||'Lỗi');});
+      });
+    });
+  });
 }
 
 function addAmendment(id){
-  const no=prompt('Số phụ lục:');
-  if(!no)return;
-  const date=prompt('Ngày:')||new Date().toISOString().slice(0,10);
-  const type=prompt('Loại (increase/decrease):','increase');
-  const amt=parseFloat(prompt('Số tiền thay đổi:','0')||'0');
-  const desc=prompt('Nội dung:','');
-  $.post('/api/contracts/'+id+'/amendment',JSON.stringify({amendment_no:no,date:date,type:type,amount_change:amt,description:desc}),function(r){loadContracts();alert('Đã thêm phụ lục');}).fail(function(x){alert('Lỗi: '+(x.responseJSON?.error||'Unknown'));});
+  FormConfirm.prompt('Thêm phụ lục','Số phụ lục:',function(no){
+    if(!no)return;
+    FormConfirm.prompt('Thêm phụ lục','Ngày:','',function(date){
+      date=date||new Date().toISOString().slice(0,10);
+      FormConfirm.prompt('Thêm phụ lục','Loại (increase/decrease):','increase',function(type){
+        FormConfirm.prompt('Thêm phụ lục','Số tiền thay đổi:','0',function(amts){
+          var amt=parseFloat(amts||'0');
+          FormConfirm.prompt('Thêm phụ lục','Nội dung:','',function(desc){
+            $.post('/api/contracts/'+id+'/amendment',JSON.stringify({amendment_no:no,date:date,type:type,amount_change:amt,description:desc}),function(){loadContracts();FormToast.success('Đã thêm phụ lục');}).fail(function(x){FormToast.error(x.responseJSON?.error||'Lỗi');});
+          });
+        });
+      });
+    });
+  });
 }
 
 function liquidate(id){
-  if(!confirm('Xác nhận thanh lý hợp đồng?'))return;
-  $.post('/api/contracts/'+id+'/liquidate','{}',function(r){loadContracts();alert('Đã thanh lý');}).fail(function(x){alert(x.responseJSON?.error||'Lỗi');});
+  FormConfirm.confirm('Thanh lý hợp đồng','Xác nhận thanh lý hợp đồng này?',function(ok){
+    if(!ok)return;
+    $.post('/api/contracts/'+id+'/liquidate','{}',function(){loadContracts();FormToast.success('Đã thanh lý hợp đồng');}).fail(function(x){FormToast.error(x.responseJSON?.error||'Lỗi');});
+  });
 }
 
 $(function(){

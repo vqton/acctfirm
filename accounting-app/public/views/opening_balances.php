@@ -70,8 +70,6 @@ function loadData() {
     $.get(url, function(data) {
         var tbody = $('#dataBody').empty();
         data.forEach(function(r) {
-            var badge = r.is_verified ? 'badge-active' : 'badge-warning';
-            var statusText = r.is_verified ? 'Đã đối chiếu' : 'Chưa đối chiếu';
             var db = parseFloat(r.debit_balance);
             var cb = parseFloat(r.credit_balance);
             tbody.append('<tr>' +
@@ -80,7 +78,7 @@ function loadData() {
                 '<td>' + esc(r.account_type) + '</td>' +
                 '<td class="text-end font-monospace">' + (db > 0 ? parseInt(db).toLocaleString() : '-') + '</td>' +
                 '<td class="text-end font-monospace">' + (cb > 0 ? parseInt(cb).toLocaleString() : '-') + '</td>' +
-                '<td><span class="badge-status ' + badge + '">' + statusText + '</span></td>' +
+                '<td>' + statusBadge(r.is_verified ? 'verified' : 'unverified') + '</td>' +
                 '<td>' +
                     (r.is_verified ? '' : '<button class="btn btn-sm btn-outline-success me-1" onclick="verifyOB(\'' + esc(r.account_code) + '\',\'' + esc(r.period) + '\')"><i class="bi bi-check-lg"></i></button>') +
                     '<button class="btn btn-sm btn-outline-secondary" onclick="editOB(\'' + esc(r.account_code) + '\',\'' + esc(r.period) + '\',' + db + ',' + cb + ')"><i class="bi bi-pencil"></i></button>' +

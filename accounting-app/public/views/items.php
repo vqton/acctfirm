@@ -88,8 +88,6 @@ function loadMethods(){fetch("/api/valuation-methods").then(function(r){return r
         var filtered = data.filter(function(i){return !q||i.name.toLowerCase().includes(q)||i.code.toLowerCase().includes(q);});
         document.getElementById('recordCount').textContent = '('+filtered.length+'/'+data.length+' bản ghi)';
         var rows = filtered.map(function(i){
-            var sc = i.status ? 'badge-active' : 'badge-inactive';
-            var st = i.status ? 'Hoạt động' : 'Ngừng';
             return '<tr>' +
                 '<td>'+esc(i.code)+'</td><td>'+esc(i.name)+'</td>' +
                 '<td><span class="badge badge-status badge-type">'+esc(i.item_type)+'</span></td>' +
@@ -97,7 +95,7 @@ function loadMethods(){fetch("/api/valuation-methods").then(function(r){return r
                 '<td class="text-end">'+(i.purchase_price||0).toLocaleString()+'</td>' +
                 '<td class="text-end">'+(i.sale_price||0).toLocaleString()+'</td>' +
                 '<td class="text-end">'+i.stock_qty+'</td>' +
-                '<td><span class="badge badge-status '+sc+'">'+st+'</span></td>' +
+                '<td>' + statusBadge(i.status?'active':'inactive') + '</td>' +
                 '<td class="text-center">' +
                     '<a href="#" class="btn-action me-1" onclick="openEdit(\''+i.id+'\')"><i class="bi bi-pencil"></i></a>' +
                     '<a href="#" class="btn-action btn-action-danger" onclick="confirmDelete(\''+i.id+'\',\''+API+'\',\''+esc(i.name)+'\')"><i class="bi bi-trash"></i></a>' +

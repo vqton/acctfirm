@@ -34,7 +34,7 @@
 <div class="modal-body" id="budgetBody"></div></div></div></div>
 
 <script>
-function fmt(n){return new Intl.NumberFormat('vi-VN').format(n||0)}
+// Uses global fmt() from layout
 
 function loadDashboard(){
   const year=$('#yearSelect').val();
@@ -42,7 +42,7 @@ function loadDashboard(){
     const list=(r.data||r||[]);
     let html='<div class="card"><table class="table table-sm table-hover mb-0"><thead class="table-light"><tr><th>Tên</th><th>Năm</th><th>Loại</th><th>Trạng thái</th><th></th></tr></thead><tbody>';
     list.forEach(function(s){
-      html+='<tr><td>'+s.name+'</td><td>'+s.year+'</td><td>'+s.type+'</td><td><span class="badge bg-'+(s.status==='active'?'success':'secondary')+'">'+s.status+'</span></td>'+
+      html+='<tr><td>'+s.name+'</td><td>'+s.year+'</td><td>'+s.type+'</td><td>'+statusBadge(s.status)+'</td>'+
         '<td><div class="dropdown"><button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">...</button><ul class="dropdown-menu">'+
         '<li><a class="dropdown-item" href="#" onclick="showBudget(\''+s.id+'\');return false"><i class="bi bi-eye"></i> Dự toán</a></li>'+
         '<li><a class="dropdown-item" href="#" onclick="showVariance(\''+s.id+'\');return false"><i class="bi bi-bar-chart"></i> So sánh</a></li>'+
@@ -56,16 +56,29 @@ function loadDashboard(){
 }
 
 function createScenario(){
-  const name=prompt('Tên kịch bản:');if(!name)return;
-  const year=parseInt(prompt('Năm:')||String(new Date().getFullYear()));
-  const type=prompt('Loại (operating/capital):','operating');
-  $.post('/api/ngan-sach',JSON.stringify({name:name,year:year,type:type}),
-    function(r){loadDashboard();alert('Đã tạo kịch bản');}).fail(function(x){alert(x.responseJSON?.error||'Lỗi');});
+  var today=new Date().getFullYear();
+  FormModal.create({
+    id:'scenarioModal',title:'Kịch bản mới',size:'sm',
+    body:'<div class="mb-2"><label>Tên kịch bản</label><input class="form-control" id="scName" data-v-required="Tên kịch bản"></div>'+
+      '<div class="mb-2"><label>Năm</label><input type="number" class="form-control" id="scYear" value="'+today+'"></div>'+
+      '<div class="mb-2"><label>Loại</label><select class="form-select" id="scType"><option value="operating">Operating</option><option value="capital">Capital</option></select></div>',
+    onSave:function(){
+      var v=FormValidation.validate('#scenarioModal');if(!v.valid)return false;
+      var name=$('#scName').val();if(!name)return false;
+      var year=parseInt($('#scYear').val())||today;
+      var type=$('#scType').val();
+      return $.post('/api/ngan-sach',JSON.stringify({name:name,year:year,type:type}),
+        function(){FormModal.close('scenarioModal');loadDashboard();FormToast.success('Đã tạo kịch bản');}).fail(function(x){FormToast.error(x.responseJSON?.error||'Lỗi');});
+    }
+  });
+  setTimeout(function(){FormValidation.setup('#scenarioModal');},100);
 }
 
 function activate(id){
-  if(!confirm('Kích hoạt kịch bản này?'))return;
-  $.post('/api/ngan-sach/'+id+'/activate','{}',function(r){loadDashboard();alert('Đã kích hoạt');}).fail(function(x){alert(x.responseJSON?.error||'Lỗi');});
+  FormConfirm.confirm('Kích hoạt','Kích hoạt kịch bản này?',function(ok){
+    if(!ok)return;
+    $.post('/api/ngan-sach/'+id+'/activate','{}',function(){loadDashboard();FormToast.success('Đã kích hoạt');}).fail(function(x){FormToast.error(x.responseJSON?.error||'Lỗi');});
+  });
 }
 
 function showBudget(id){
@@ -97,12 +110,23 @@ function showVariance(id){
 }
 
 function addBudgetLine(id){
-  const period=prompt('Kỳ (YYYY-MM):');if(!period)return;
-  const acc=prompt('TK:');if(!acc)return;
-  const amt=parseFloat(prompt('Số tiền:','0')||'0');
-  const notes=prompt('Ghi chú:','');
-  $.post('/api/ngan-sach/'+id+'/lines',JSON.stringify({period_code:period,account_code:acc,amount:amt,notes:notes}),
-    function(r){alert('Đã thêm dự toán');}).fail(function(x){alert(x.responseJSON?.error||'Lỗi');});
+  FormModal.create({
+    id:'budgetLineModal',title:'Thêm dòng dự toán',size:'sm',
+    body:'<div class="mb-2"><label>Kỳ (YYYY-MM)</label><input class="form-control" id="blPeriod" placeholder="VD: 2025-06" data-v-required="Kỳ"></div>'+
+      '<div class="mb-2"><label>Tài khoản</label><input class="form-control" id="blAccount" data-v-required="TK" data-v-account="TK"></div>'+
+      '<div class="mb-2"><label>Số tiền</label><input type="number" class="form-control" id="blAmount" step="100000" data-v-required="Số tiền" data-v-number="Số tiền"></div>'+
+      '<div class="mb-2"><label>Ghi chú</label><input class="form-control" id="blNotes"></div>',
+    onSave:function(){
+      var v=FormValidation.validate('#budgetLineModal');if(!v.valid)return false;
+      var period=$('#blPeriod').val();if(!period)return false;
+      var acc=$('#blAccount').val();if(!acc)return false;
+      var amt=parseFloat($('#blAmount').val())||0;
+      var notes=$('#blNotes').val()||'';
+      return $.post('/api/ngan-sach/'+id+'/lines',JSON.stringify({period_code:period,account_code:acc,amount:amt,notes:notes}),
+        function(){FormModal.close('budgetLineModal');loadDashboard();FormToast.success('Đã thêm dòng dự toán');}).fail(function(x){FormToast.error(x.responseJSON?.error||'Lỗi');});
+    }
+  });
+  setTimeout(function(){FormValidation.setup('#budgetLineModal');},100);
 }
 
 $(loadDashboard);

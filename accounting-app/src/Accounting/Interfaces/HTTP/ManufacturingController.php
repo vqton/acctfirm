@@ -244,9 +244,6 @@ class ManufacturingController
     public function viewIndex(): void
     {
         Auth::requirePermission('manufacturing', 'read');
-        ob_start();
-require __DIR__ . '/../../../../public/views/manufacturing.php';
-        ob_get_clean();
-        require __DIR__ . '/../../../../public/views/layout.php';
+        require __DIR__ . '/../../../../public/views/manufacturing.php';
     }
 }

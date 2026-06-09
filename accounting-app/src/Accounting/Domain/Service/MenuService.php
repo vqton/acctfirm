@@ -80,6 +80,19 @@ class MenuService
             }
         }
 
+        // Sắp xếp section theo sort_order của heading (hoặc item đầu tiên)
+        uasort($grouped, function ($a, $b) {
+            $orderA = $a['heading'] ? $a['heading']->getSortOrder() : 9999;
+            $orderB = $b['heading'] ? $b['heading']->getSortOrder() : 9999;
+            if (empty($a['heading']) && !empty($a['items'])) {
+                $orderA = $a['items'][0]->getSortOrder();
+            }
+            if (empty($b['heading']) && !empty($b['items'])) {
+                $orderB = $b['items'][0]->getSortOrder();
+            }
+            return $orderA <=> $orderB;
+        });
+
         foreach ($grouped as $section => $data) {
             $heading = $data['heading'];
             $children = $data['items'];
@@ -117,18 +130,16 @@ class MenuService
     {
         $labels = [
             'dashboard' => 'Tổng quan',
-            'cash' => 'Tiền mặt & Ngân hàng',
-            'ap' => 'Mua hàng & Công nợ phải trả',
-            'ar' => 'Bán hàng & Công nợ phải thu',
-            'inventory' => 'Hàng tồn kho',
-            'ccdc' => 'CCDC & Công cụ dụng cụ',
-            'fa' => 'TSCĐ',
+            'cash_bank' => 'Tiền mặt & Ngân hàng',
+            'purchase_ap' => 'Mua hàng & Công nợ phải trả',
+            'sales_ar' => 'Bán hàng & Công nợ phải thu',
+            'inventory_ccdc' => 'Kho & CCDC',
+            'fixed_asset' => 'TSCĐ',
             'manufacturing' => 'Sản xuất & Giá thành',
-            'projects' => 'Dự án',
+            'projects_contracts' => 'Dự án & Hợp đồng',
             'payroll' => 'Tiền lương & Nhân sự',
-            'tax' => 'Thuế',
-            'gl' => 'Kế toán tổng hợp',
-            'fs' => 'Báo cáo tài chính',
+            'tax' => 'Thuế & Hóa đơn',
+            'gl_report' => 'Kế toán tổng hợp',
             'system' => 'Hệ thống',
         ];
         return $labels[$section] ?? $section;
@@ -147,11 +158,11 @@ class MenuService
     public function getOverdueCounts(): array
     {
         $ap = $this->pdo->query(
-            "SELECT COUNT(*) FROM ap_transactions WHERE due_date < CURDATE() AND status = 'unpaid'"
+            "SELECT COUNT(*) FROM ap_invoices WHERE due_date < CURDATE() AND status = 'unpaid'"
         )->fetchColumn();
 
         $ar = $this->pdo->query(
-            "SELECT COUNT(*) FROM ar_transactions WHERE due_date < CURDATE() AND status = 'unpaid'"
+            "SELECT COUNT(*) FROM ar_invoices WHERE due_date < CURDATE() AND status = 'unpaid'"
         )->fetchColumn();
 
         return ['ap' => (int)$ap, 'ar' => (int)$ar];

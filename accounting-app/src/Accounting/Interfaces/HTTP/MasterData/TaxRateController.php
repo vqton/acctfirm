@@ -4,6 +4,7 @@ namespace Accounting\Interfaces\HTTP\MasterData;
 use Accounting\Domain\Model\TaxRate;
 use Accounting\Domain\Repository\TaxRateRepositoryInterface;
 
+use Accounting\Infrastructure\JsonResponse;
 use \Accounting\Interfaces\HTTP\CrudControllerTrait;
 
 /**

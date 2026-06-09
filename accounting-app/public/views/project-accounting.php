@@ -18,7 +18,7 @@
 
   <div class="card">
     <div class="table-responsive"><table class="table table-sm table-hover mb-0" id="projectTable"><thead class="table-light"><tr>
-      <th>Mã</th><th>Tên</th><th>Khách hàng</th><th>Ngân sách</th><th>Chi phí</th><th>%</th><th>Trạng thái</th><th></th>
+      <th>Mã</th><th>Tên</th><th>Khách hàng</th><th class="text-end">Ngân sách</th><th class="text-end">Chi phí</th><th class="text-end">%</th><th>Trạng thái</th><th></th>
     </tr></thead><tbody></tbody></table></div>
   </div>
 </div>
@@ -27,7 +27,7 @@
 <div class="modal-body" id="reportBody"></div></div></div></div>
 
 <script>
-function fmt(n){return new Intl.NumberFormat('vi-VN').format(n||0)}
+// Uses global fmt() from layout
 function loadProjects(){
   $.getJSON('/api/projects/dashboard',function(r){
     const d=r.data||r;
@@ -45,7 +45,7 @@ function loadProjects(){
         $('<td class="text-end">').text(fmt(p.budget)),
         $('<td class="text-end">').text(fmt(p.actual_cost)),
         $('<td><div class="progress" style="height:6px"><div class="progress-bar" style="width:'+pct+'%"></div></div><small class="text-muted">'+pct+'%</small></td>'),
-        $('<td>').append($('<span class="badge bg-'+(p.status==='active'?'success':p.status==='completed'?'info':'secondary')+'">').text(p.status)),
+        $('<td>').html(statusBadge(p.status)),
         $('<td>').append(
           '<div class="dropdown"><button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">...</button><ul class="dropdown-menu">'+
           '<li><a class="dropdown-item" href="#" onclick="showReport(\''+p.id+'\');return false"><i class="bi bi-eye"></i> Chi tiết</a></li>'+
@@ -89,43 +89,76 @@ function showReport(id){
 }
 
 function allocateCost(id){
-  const tid=prompt('ID chứng từ:');
-  if(!tid)return;
-  const acc=prompt('Tài khoản (VD: 621, 622):');
-  if(!acc)return;
-  const amt=parseFloat(prompt('Số tiền:','0')||'0');
-  const dr=confirm('Là bên Nợ? OK=Nợ, Cancel=Có')?1:0;
-  $.post('/api/projects/'+id+'/allocate-cost',JSON.stringify({transaction_id:tid,account_code:acc,amount:amt,is_debit:dr}),
-    function(r){loadProjects();alert('Đã phân bổ');}).fail(function(x){alert(x.responseJSON?.error||'Lỗi');});
+  FormModal.create({
+    id:'allocModal',title:'Phân bổ chi phí',size:'sm',
+    body:'<div class="mb-2"><label>ID chứng từ</label><input class="form-control" id="alTxnId" data-v-required="ID chứng từ"></div>'+
+      '<div class="mb-2"><label>Tài khoản (VD: 621, 622)</label><input class="form-control" id="alAccount" data-v-required="TK" data-v-account="TK"></div>'+
+      '<div class="mb-2"><label>Số tiền</label><input type="number" class="form-control" id="alAmount" step="1000" data-v-required="Số tiền" data-v-number="Số tiền"></div>'+
+      '<div class="mb-2"><label>Bên Nợ?</label><select class="form-select" id="alDr"><option value="1">Nợ</option><option value="0">Có</option></select></div>',
+    onSave:function(){
+      var v=FormValidation.validate('#allocModal');if(!v.valid)return false;
+      var tid=$('#alTxnId').val();if(!tid)return false;
+      var acc=$('#alAccount').val();if(!acc)return false;
+      var amt=parseFloat($('#alAmount').val())||0;
+      var dr=parseInt($('#alDr').val());
+      return $.post('/api/projects/'+id+'/allocate-cost',JSON.stringify({transaction_id:tid,account_code:acc,amount:amt,is_debit:dr}),
+        function(){FormModal.close('allocModal');loadProjects();FormToast.success('Đã phân bổ');}).fail(function(x){FormToast.error(x.responseJSON?.error||'Lỗi');});
+    }
+  });
+  setTimeout(function(){FormValidation.setup('#allocModal');},100);
 }
 
 function createBilling(id){
-  const date=prompt('Ngày (YYYY-MM-DD):');
-  if(!date)return;
-  const amt=parseFloat(prompt('Số tiền:','0')||'0');
-  const pct=parseFloat(prompt('% hoàn thành:','0')||'0');
-  const desc=prompt('Mô tả:','');
-  $.post('/api/projects/'+id+'/billing',JSON.stringify({billing_date:date,amount:amt,pct_complete:pct,description:desc}),
-    function(r){loadProjects();alert('Đã tạo yêu cầu TT');}).fail(function(x){alert(x.responseJSON?.error||'Lỗi');});
+  var today=new Date().toISOString().slice(0,10);
+  FormModal.create({
+    id:'billingModal',title:'Yêu cầu thanh toán',size:'sm',
+    body:'<div class="mb-2"><label>Ngày</label><input type="date" class="form-control" id="blDate" value="'+today+'" data-v-required="Ngày" data-v-date="Ngày"></div>'+
+      '<div class="mb-2"><label>Số tiền</label><input type="number" class="form-control" id="blAmount" step="1000000" data-v-required="Số tiền" data-v-number="Số tiền"></div>'+
+      '<div class="mb-2"><label>% hoàn thành</label><input type="number" class="form-control" id="blPct" step="5" max="100"></div>'+
+      '<div class="mb-2"><label>Mô tả</label><input class="form-control" id="blDesc"></div>',
+    onSave:function(){
+      var v=FormValidation.validate('#billingModal');if(!v.valid)return false;
+      var date=$('#blDate').val()||today;
+      var amt=parseFloat($('#blAmount').val())||0;
+      var pct=parseFloat($('#blPct').val())||0;
+      var desc=$('#blDesc').val()||'';
+      return $.post('/api/projects/'+id+'/billing',JSON.stringify({billing_date:date,amount:amt,pct_complete:pct,description:desc}),
+        function(){FormModal.close('billingModal');loadProjects();FormToast.success('Đã tạo yêu cầu thanh toán');}).fail(function(x){FormToast.error(x.responseJSON?.error||'Lỗi');});
+    }
+  });
+  setTimeout(function(){FormValidation.setup('#billingModal');},100);
 }
 
 function recognizeRevenue(id){
-  if(!confirm('Ghi nhận doanh thu theo POC?'))return;
-  $.post('/api/projects/'+id+'/recognize-revenue','{}',function(r){const d=r.data||r;loadProjects();alert('DT: '+fmt(d.revenue));}).fail(function(x){alert(x.responseJSON?.error||'Lỗi');});
+  FormConfirm.confirm('Ghi nhận DT','Ghi nhận doanh thu theo POC?',function(ok){
+    if(!ok)return;
+    $.post('/api/projects/'+id+'/recognize-revenue','{}',function(r){const d=r.data||r;loadProjects();FormConfirm.alert('Doanh thu','DT ghi nhận: '+fmt(d.revenue));}).fail(function(x){FormToast.error(x.responseJSON?.error||'Lỗi');});
+  });
 }
 
 function setBudget(id){
-  const acc=prompt('Tài khoản:');
-  if(!acc)return;
-  const amt=parseFloat(prompt('Số tiền ngân sách:','0')||'0');
-  const notes=prompt('Ghi chú:','');
-  $.post('/api/projects/'+id+'/budget',JSON.stringify({account_code:acc,amount:amt,notes:notes}),
-    function(r){loadProjects();alert('Đã thiết lập ngân sách');}).fail(function(x){alert(x.responseJSON?.error||'Lỗi');});
+  FormModal.create({
+    id:'budgetModal',title:'Ngân sách dự án',size:'sm',
+    body:'<div class="mb-2"><label>Tài khoản</label><input class="form-control" id="bgAccount" data-v-required="TK" data-v-account="TK"></div>'+
+      '<div class="mb-2"><label>Số tiền ngân sách</label><input type="number" class="form-control" id="bgAmount" step="1000000" data-v-required="Số tiền" data-v-number="Số tiền"></div>'+
+      '<div class="mb-2"><label>Ghi chú</label><input class="form-control" id="bgNotes"></div>',
+    onSave:function(){
+      var v=FormValidation.validate('#budgetModal');if(!v.valid)return false;
+      var acc=$('#bgAccount').val();if(!acc)return false;
+      var amt=parseFloat($('#bgAmount').val())||0;
+      var notes=$('#bgNotes').val()||'';
+      return $.post('/api/projects/'+id+'/budget',JSON.stringify({account_code:acc,amount:amt,notes:notes}),
+        function(){FormModal.close('budgetModal');loadProjects();FormToast.success('Đã thiết lập ngân sách');}).fail(function(x){FormToast.error(x.responseJSON?.error||'Lỗi');});
+    }
+  });
+  setTimeout(function(){FormValidation.setup('#budgetModal');},100);
 }
 
 function finalize(id){
-  if(!confirm('Kết thúc dự án?'))return;
-  $.post('/api/projects/'+id+'/finalize','{}',function(r){loadProjects();alert('Đã kết thúc');}).fail(function(x){alert(x.responseJSON?.error||'Lỗi');});
+  FormConfirm.confirm('Kết thúc dự án','Kết thúc dự án này?',function(ok){
+    if(!ok)return;
+    $.post('/api/projects/'+id+'/finalize','{}',function(){loadProjects();FormToast.success('Đã kết thúc dự án');}).fail(function(x){FormToast.error(x.responseJSON?.error||'Lỗi');});
+  });
 }
 
 $(loadProjects);

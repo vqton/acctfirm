@@ -49,13 +49,16 @@ class FsService
     //
     // BC02 — Báo cáo Kết quả hoạt động kinh doanh
     // Phản ánh doanh thu, chi phí và kết quả kinh doanh phát sinh trong kỳ
-    // Cấu trúc: MS 01-20 (Doanh thu, giảm trừ), MS 21-29 (Chi phí), MS 30 (LN gộp),
-    //   MS 40 (LN từ HĐTC+thu nhập khác), MS 50 (LN trước thuế), MS 60 (LN sau thuế)
+    // Cấu trúc: MS 01-20 (Doanh thu/Giá vốn → LN gộp), MS 21 (Lãi/lỗ BĐS ĐT),
+    //   MS 22-26 (Doanh thu TC, Chi phí TC, CP đi vay, CP BH, CP QLDN),
+    //   MS 30 (LN thuần từ HĐKD), MS 31-40 (Thu nhập/Chi phí khác → LN khác),
+    //   MS 50 (LN trước thuế), MS 51-52 (Thuế TNDN), MS 60 (LN sau thuế),
+    //   MS 70-71 (EPS)
     // Số liệu = số phát sinh lũy kế từ đầu kỳ đến ngày kết thúc kỳ (không phải số dư)
     //
-    public function generateBC02(?string $periodCode = null): array
+    public function generateBC02(?string $periodCode = null, array $manualValues = []): array
     {
-        return $this->generateStatement('BC02', $periodCode);
+        return $this->generateStatement('BC02', $periodCode, $manualValues);
     }
 
     //
@@ -66,7 +69,7 @@ class FsService
     // Công thức cốt lõi: account_delta = chênh lệch số dư cuối kỳ - đầu kỳ của TK liên quan
     // Rủi ro: Nếu thiếu chỉ tiêu → BC03 không khớp với BC01 MS 110 (Tiền cuối kỳ)
     //
-    public function generateBC03(?string $periodCode = null): array
+    public function generateBC03(?string $periodCode = null, array $manualValues = []): array
     {
         $periodCode = $periodCode ?? date('Y');
         $prevPeriod = (string)((int)$periodCode - 1);
@@ -218,7 +221,7 @@ class FsService
 
                 case 'manual':
                 default:
-                    $values[$maSo] = 0;
+                    $values[$maSo] = $manualValues[$maSo] ?? 0;
                     break;
             }
         }
@@ -235,6 +238,7 @@ class FsService
                 'value' => $val,
                 'is_control' => (bool)$item['is_control'],
                 'is_total' => (bool)$item['is_total'],
+                'is_manual' => $item['formula_type'] === 'manual',
                 'display_order' => (int)$item['display_order'],
             ];
         }
@@ -432,9 +436,10 @@ class FsService
                 'ma_so' => $maSo,
                 'parent_ma_so' => $item['parent_ma_so'],
                 'name_vi' => $item['name_vi'],
-                'value' => round($values[$maSo] ?? 0),
+                'value' => $values[$maSo] ?? 0,
                 'is_control' => (bool)$item['is_control'],
                 'is_total' => (bool)$item['is_total'],
+                'is_manual' => false,
                 'display_order' => (int)$item['display_order'],
             ];
         }
@@ -466,7 +471,7 @@ class FsService
         return $errors;
     }
 
-    private function generateStatement(string $statement, ?string $periodCode = null): array
+    private function generateStatement(string $statement, ?string $periodCode = null, array $manualValues = []): array
     {
         $periodCode = $periodCode ?? date('Y');
         $items = $this->getLineItems($statement);
@@ -519,7 +524,7 @@ class FsService
                     break;
 
                 case 'manual':
-                    $values[$maSo] = 0;
+                    $values[$maSo] = (float)($manualValues[$maSo] ?? 0);
                     break;
             }
         }
@@ -559,6 +564,38 @@ class FsService
             $_SESSION['user']['username'] ?? 'system');
 
         return $result;
+    }
+
+    //
+    // Lưu giá trị nhập tay cho chỉ tiêu BC (VD: MS 21, 70, 71 của BC02)
+    // Dùng business_config table với key = {statement}.manual.{periodCode}
+    // Trả về mảng [ma_so => value] hoặc mảng rỗng nếu chưa có
+    //
+    public function getManualValues(string $statement, string $periodCode): array
+    {
+        $stmt = $this->pdo->prepare("SELECT config_value FROM business_config WHERE config_key = ?");
+        $stmt->execute(["{$statement}.manual.{$periodCode}"]);
+        $row = $stmt->fetchColumn();
+        return $row ? json_decode($row, true) : [];
+    }
+
+    //
+    // Lưu giá trị nhập tay cho chỉ tiêu BC
+    // $values = [ma_so => value] (VD: ['21' => 500000, '70' => 2000])
+    // Idempotent: INSERT ON DUPLICATE KEY UPDATE
+    //
+    public function saveManualValues(string $statement, string $periodCode, array $values, string $updatedBy): void
+    {
+        $this->pdo->prepare(
+            "INSERT INTO business_config (config_key, config_value, config_type, description, is_active, updated_by)
+             VALUES (?, ?, 'json', ?, 1, ?)
+             ON DUPLICATE KEY UPDATE config_value = VALUES(config_value), updated_by = VALUES(updated_by), updated_at = NOW()"
+        )->execute([
+            "{$statement}.manual.{$periodCode}",
+            json_encode($values),
+            "Giá trị nhập tay {$statement} kỳ {$periodCode}",
+            $updatedBy,
+        ]);
     }
 
     public function getPriorPeriodValues(string $statement, string $currentPeriodCode): ?array
@@ -628,7 +665,8 @@ class FsService
 
     //
     // Kiểm tra cấu trúc BC02 theo Thông tư 99:
-    // MS 50 (LN trước thuế) = MS 30 (LN gộp từ HĐKD) + MS 40 (LN từ HĐTC + thu nhập khác)
+    // MS 30 (LN thuần từ HĐKD) = MS 20 (LN gộp) + MS 21 (Lãi/lỗ BĐS ĐT) + MS 22 (DT TC) - (MS 23 (CP TC) + MS 25 (CP BH) + MS 26 (CP QLDN))
+    // MS 50 (LN trước thuế) = MS 30 (LN từ HĐKD) + MS 40 (LN khác)
     // MS 60 (LN sau thuế) = MS 50 - MS 51 (Thuế TNDN hiện hành) - MS 52 (Thuế TNDN hoãn lại)
     // Sai lệch > 1 → rà soát lại số phát sinh các TK doanh thu, chi phí, thuế
     //
@@ -649,6 +687,30 @@ class FsService
             $errors[] = "Lợi nhuận sau thuế (60) phải là {$calc60}, hiện tại là {$values[60]}";
         }
         return $errors;
+    }
+
+    //
+    // Kiểm tra các cảnh báo nghiệp vụ BC02:
+    // BR18: Nếu có doanh thu (MS 01 > 0) nhưng giá vốn > doanh thu (MS 11 > MS 01) → cảnh báo lỗ gộp
+    // BR19: Nếu MS 50 (LN trước thuế) < 0 → cảnh báo lỗ
+    //
+    public function getBC02Warnings(array $bc02Data): array
+    {
+        $values = [];
+        foreach ($bc02Data as $r) $values[$r['ma_so']] = $r['value'];
+
+        $warnings = [];
+        // BR18: Gross loss — giá vốn > doanh thu
+        $ms01 = $values['01'] ?? 0;
+        $ms11 = $values['11'] ?? 0;
+        if (abs($ms01) > 1 && $ms11 > $ms01) {
+            $warnings[] = "CẢNH BÁO: Giá vốn hàng bán ({$ms11}) lớn hơn doanh thu thuần ({$ms01}). Doanh nghiệp đang lỗ gộp — cần rà soát chính sách giá và giá vốn.";
+        }
+        // BR19: Lỗ 2 năm (chỉ check year hiện tại)
+        if (($values['50'] ?? 0) < -1) {
+            $warnings[] = "Lưu ý: Lợi nhuận trước thuế âm ({$values[50]}). Doanh nghiệp đang lỗ, cần theo dõi khả năng hoạt động liên tục.";
+        }
+        return $warnings;
     }
 
     private function evaluateExpression(string $expr, array $values): float

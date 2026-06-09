@@ -247,4 +247,65 @@ echo "\n=== Test 16: BC03 direct — snapshot saved ===\n";
 $snapDir = $pdo->query("SELECT COUNT(*) FROM fs_snapshots WHERE statement = 'BC03D'")->fetchColumn();
 assertTrue($snapDir >= 1, 'BC03_DIRECT snapshot saved');
 
+// ════════════════════════════════════════════════════════
+// BC03 — GIÁ TRỊ NHẬP TAY (Manual Values)
+// ════════════════════════════════════════════════════════
+
+echo "\n=== Test 17: BC03 is_manual flag present ===\n";
+$manualItems = [];
+foreach ($bc03 as $r) {
+    if (!empty($r['is_manual'])) $manualItems[] = $r['ma_so'];
+}
+assertTrue(count($manualItems) >= 10, 'BC03 has 10+ manual items — found ' . count($manualItems) . ': ' . implode(',', $manualItems));
+
+echo "\n=== Test 18: BC03 manual values via param ===\n";
+$manualValues = ['02' => 120000000, '04' => -15000000, '14' => -250000000];
+$bc03Manual = $fs->generateBC03('2026', $manualValues);
+$ms02 = 0; $ms04 = 0; $ms14 = 0; $ms20 = 0;
+foreach ($bc03Manual as $r) {
+    if ($r['ma_so'] === '02') $ms02 = $r['value'];
+    if ($r['ma_so'] === '04') $ms04 = $r['value'];
+    if ($r['ma_so'] === '14') $ms14 = $r['value'];
+    if ($r['ma_so'] === '20') $ms20 = $r['value'];
+}
+assertFloatEq(120000000, $ms02, 'Manual MS 02 (khấu hao) = 120M');
+assertFloatEq(-15000000, $ms04, 'Manual MS 04 (lãi/lỗ TG) = -15M');
+assertFloatEq(-250000000, $ms14, 'Manual MS 14 (CP đi vay đã trả) = -250M');
+assertTrue(abs($ms20) > 0, 'MS 20 (LCTT thuan HĐKD) updated with manual values');
+
+echo "\n=== Test 19: BC03 save & load manual values via service ===\n";
+$saveValues = ['02' => 50000000, '07' => 10000000, '61' => -2000000];
+$fs->saveManualValues('BC03', '2026', $saveValues, 'tester');
+$loaded = $fs->getManualValues('BC03', '2026');
+assertTrue(count($loaded) >= 3, 'Loaded 3+ manual values');
+assertFloatEq(50000000, $loaded['02'], 'Loaded MS 02 = 50M');
+assertFloatEq(10000000, $loaded['07'], 'Loaded MS 07 = 10M');
+assertFloatEq(-2000000, $loaded['61'], 'Loaded MS 61 = -2M');
+
+echo "\n=== Test 20: BC03 generate uses saved manual values ===\n";
+$bc03Loaded = $fs->generateBC03('2026', $loaded); // load from business_config (simulating controller)
+$ms02b = 0; $ms07b = 0; $ms61b = 0;
+foreach ($bc03Loaded as $r) {
+    if ($r['ma_so'] === '02') $ms02b = $r['value'];
+    if ($r['ma_so'] === '07') $ms07b = $r['value'];
+    if ($r['ma_so'] === '61') $ms61b = $r['value'];
+}
+assertFloatEq(50000000, $ms02b, 'Auto-loaded MS 02 = 50M (from business_config)');
+assertFloatEq(10000000, $ms07b, 'Auto-loaded MS 07 = 10M (from business_config)');
+assertFloatEq(-2000000, $ms61b, 'Auto-loaded MS 61 = -2M (from business_config)');
+
+echo "\n=== Test 21: BC03 validation passes with manual values ===\n";
+$errorsManual = $fs->validateBC03($bc03Loaded);
+assertTrue(count($errorsManual) === 0, 'BC03 validation passes with manual values: ' . implode('; ', $errorsManual));
+
+echo "\n=== Test 22: BC03 manual values period-scoped ===\n";
+$otherManual = $fs->getManualValues('BC03', '2025');
+assertTrue(empty($otherManual), 'No manual values for period 2025');
+$bc03Other = $fs->generateBC03('2025', $otherManual);
+$ms02c = 0;
+foreach ($bc03Other as $r) {
+    if ($r['ma_so'] === '02') $ms02c = $r['value'];
+}
+assertFloatEq(0, $ms02c, 'MS 02 = 0 for period 2025 (no manual values)');
+
 results();

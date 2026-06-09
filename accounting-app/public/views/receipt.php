@@ -80,7 +80,7 @@ function loadData() {
             return;
         }
         filtered.forEach(function(r) {
-            tbody.append('<tr><td>' + esc(r.reference) + '</td><td>' + esc(r.description) + '</td><td><span class="badge-status badge-active">' + esc(r.status) + '</span></td><td>' + esc(r.created_at) + '</td></tr>');
+            tbody.append('<tr><td>' + esc(r.reference) + '</td><td>' + esc(r.description) + '</td><td>' + statusBadge(r.status) + '</td><td>' + esc(r.created_at) + '</td></tr>');
         });
     });
 }

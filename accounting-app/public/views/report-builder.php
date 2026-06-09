@@ -28,7 +28,7 @@
 </div>
 
 <script>
-function fmt(n){return new Intl.NumberFormat('vi-VN').format(n||0)}
+// Uses global fmt() from layout
 let tables={};
 
 function loadSaved(){
@@ -68,7 +68,7 @@ function updateAdhocFields(){
 
 function runAdhoc(){
   const table=$('#adhocTable').val();
-  if(!table){alert('Chọn bảng');return;}
+  if(!table){FormConfirm.alert('Lỗi','Chọn bảng trước khi chạy');return;}
   const fields=$('#adhocFields').val()||['*'];
   $.post('/api/report-builder/adhoc',JSON.stringify({source_table:table,fields:fields}),
     function(r){
@@ -84,13 +84,13 @@ function runAdhoc(){
       });
       html+='</tbody></table><small class="text-muted">'+d.count+' dòng</small></div>';
       $('#adhocResult').html(html);
-    }).fail(function(x){alert(x.responseJSON?.error||'Lỗi');});
+    }).fail(function(x){FormToast.error(x.responseJSON?.error||'Lỗi');});
 }
 
 function runReport(id){
   $.getJSON('/api/report-builder/'+id+'/run',function(r){
     const d=r.data||r;
-    if(!d.data||d.data.length===0){alert('Không có dữ liệu');return;}
+    if(!d.data||d.data.length===0){FormConfirm.alert('Báo cáo','Không có dữ liệu');return;}
     let html='<div class="table-responsive"><table class="table table-sm table-hover"><thead class="table-light"><tr>';
     Object.keys(d.data[0]).forEach(function(k){html+='<th>'+k+'</th>';});
     html+='</tr></thead><tbody>';
@@ -101,29 +101,38 @@ function runReport(id){
     });
     html+='</tbody></table><small class="text-muted">'+d.count+' dòng</small></div>';
     showModal('Kết quả: '+(d.definition?.name||''),html);
-  }).fail(function(x){alert(x.responseJSON?.error||'Lỗi');});
+  }).fail(function(x){FormToast.error(x.responseJSON?.error||'Lỗi');});
 }
 
 function showNewReport(){
-  const name=prompt('Tên báo cáo:');if(!name)return;
-  const table=prompt('Bảng ('+Object.keys(tables).join(', ')+'):');
-  if(!table||!tables[table]){alert('Bảng không hợp lệ');return;}
-  const fieldsStr=prompt('Trường (cách nhau bằng dấu phẩy):',tables[table].slice(0,4).join(','));
-  const fields=fieldsStr?fieldsStr.split(',').map(function(s){return s.trim();}):['*'];
-  $.post('/api/report-builder',JSON.stringify({name:name,source_table:table,fields:fields,type:'list'}),
-    function(r){loadSaved();alert('Đã lưu báo cáo');}).fail(function(x){alert(x.responseJSON?.error||'Lỗi');});
+  var tblKeys=Object.keys(tables).join(', ');
+  FormModal.create({
+    id:'reportModal',title:'Báo cáo mới',size:'sm',
+    body:'<div class="mb-2"><label>Tên báo cáo</label><input class="form-control" id="rptName" data-v-required="Tên báo cáo"></div>'+
+      '<div class="mb-2"><label>Bảng ('+tblKeys+')</label><input class="form-control" id="rptTable" data-v-required="Bảng"></div>'+
+      '<div class="mb-2"><label>Trường (cách nhau bằng dấu phẩy)</label><input class="form-control" id="rptFields" placeholder="VD: id, name, amount"></div>',
+    onSave:function(){
+      var v=FormValidation.validate('#reportModal');if(!v.valid)return false;
+      var name=$('#rptName').val();if(!name)return false;
+      var table=$('#rptTable').val();if(!table||!tables[table]){FormToast.error('Bảng không hợp lệ');return false;}
+      var fieldsStr=$('#rptFields').val();
+      var fields=fieldsStr?fieldsStr.split(',').map(function(s){return s.trim();}):['*'];
+      return $.post('/api/report-builder',JSON.stringify({name:name,source_table:table,fields:fields,type:'list'}),
+        function(){FormModal.close('reportModal');loadSaved();FormToast.success('Đã lưu báo cáo');}).fail(function(x){FormToast.error(x.responseJSON?.error||'Lỗi');});
+    }
+  });
+  setTimeout(function(){FormValidation.setup('#reportModal');},100);
 }
 
 function deleteReport(id){
-  if(!confirm('Xóa báo cáo?'))return;
-  $.ajax({url:'/api/report-builder/'+id,method:'DELETE',success:function(){loadSaved();alert('Đã xóa');}});
+  FormConfirm.confirmDelete('/api/report-builder/'+id,'báo cáo này',function(){loadSaved();});
 }
 
 function showModal(title,body){
-  const m=$('<div class="modal fade"><div class="modal-dialog modal-xl"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">'+title+'</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body">'+body+'</div></div></div></div>');
-  $('body').append(m);
-  m.modal('show');
-  m.on('hidden.bs.modal',function(){m.remove();});
+  FormModal.create({
+    id:'rptResultModal',title:title,size:'xl',footer:'',
+    body:body,keyboard:true,backdrop:true
+  });
 }
 
 $(function(){loadSaved();loadTables();});
