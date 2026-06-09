@@ -40,14 +40,7 @@ $currentUri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
 <link href="/assets/css/vas-financial.css" rel="stylesheet">
 <script src="/assets/js/jquery-3.7.1.min.js"></script>
 <script src="/assets/js/bootstrap.bundle.min.js"></script>
-<script src="/assets/js/components/form-toast.js"></script>
-<script src="/assets/js/components/form-confirm.js"></script>
-<script src="/assets/js/components/form-modal.js"></script>
-<script src="/assets/js/components/form-validation.js"></script>
-<script src="/assets/js/components/form-grid.js"></script>
-<script src="/assets/js/components/account-picker.js"></script>
-<script src="/assets/js/components/partner-picker.js"></script>
-<script src="/assets/js/vas-financial.js"></script>
+<script src="/assets/js/app.bundle.js?<?= filemtime(__DIR__ . '/../assets/js/app.bundle.js') ?>"></script>
 <style>
 body { background:#f5f6fa; font-family:'Segoe UI',system-ui,sans-serif; line-height:1.6; }
 .sidebar { width:250px; background:#1e2a3a; color:#b4bcc8; position:fixed; top:0; left:0; height:100vh; z-index:1000; display:flex; flex-direction:column; }
