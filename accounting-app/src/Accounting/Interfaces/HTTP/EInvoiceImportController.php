@@ -170,6 +170,34 @@ class EInvoiceImportController
         }
     }
 
+    // POST /api/einvoice/import/{id}/allocate — Liên kết hóa đơn với lệnh sản xuất
+    public function allocate(string $id): void
+    {
+        Auth::requirePermission('einvoice', 'create');
+        Auth::checkCsrf();
+        $input = json_decode(file_get_contents('php://input'), true);
+        $poId = trim($input['production_order_id'] ?? '');
+        $category = trim($input['cost_category'] ?? 'raw_material');
+        if (!$poId) {
+            JsonResponse::error('Vui lòng nhập mã lệnh sản xuất.', 400);
+            return;
+        }
+        if (!in_array($category, ['raw_material', 'overhead', 'other'], true)) {
+            JsonResponse::error('Loại chi phí không hợp lệ.', 400);
+            return;
+        }
+        try {
+            $result = $this->importService->allocateToProduction(
+                $id, $poId, $category, $_SESSION['user_id'] ?? 'system'
+            );
+            JsonResponse::ok($result);
+        } catch (\InvalidArgumentException $e) {
+            JsonResponse::error($e->getMessage(), 422);
+        } catch (\Throwable $e) {
+            JsonResponse::error('Lỗi: ' . $e->getMessage(), 500);
+        }
+    }
+
     // POST /api/einvoice/import/{id}/pay — Ghi nhận thanh toán hóa đơn đã import
     public function pay(string $id): void
     {

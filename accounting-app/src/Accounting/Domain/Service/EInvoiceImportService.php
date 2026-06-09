@@ -448,6 +448,34 @@ class EInvoiceImportService
         ];
     }
 
+    // Liên kết hóa đơn import với lệnh sản xuất
+    public function allocateToProduction(string $importId, string $productionOrderId, string $category = 'raw_material', string $createdBy = 'system'): array
+    {
+        $import = $this->getImport($importId);
+        if (!$import) {
+            throw new \InvalidArgumentException('Không tìm thấy import: ' . $importId);
+        }
+        $stmt = $this->pdo->prepare(
+            "UPDATE einvoice_imports SET production_order_id = ?, cost_category = ? WHERE id = ?"
+        );
+        $stmt->execute([$productionOrderId, $category, $importId]);
+
+        $this->auditLogger->log(
+            'einvoice.allocate',
+            'einvoice_import',
+            $importId,
+            null,
+            ['production_order_id' => $productionOrderId, 'cost_category' => $category],
+            $createdBy
+        );
+
+        return [
+            'import_id' => $importId,
+            'production_order_id' => $productionOrderId,
+            'cost_category' => $category,
+        ];
+    }
+
     // Kiểm tra trùng lặp
     public function checkDuplicate(string $fkey): bool
     {
@@ -460,7 +488,8 @@ class EInvoiceImportService
         $stmt = $this->pdo->query(
             "SELECT id, invoice_number, invoice_date, supplier_tax_code, supplier_name,
                     total_before_vat, total_vat, grand_total, status, transaction_id,
-                    payment_status, paid_amount, prepay_amount, prepay_transaction_id, goods_receipt_id,
+                    payment_status, paid_amount, prepay_amount, prepay_transaction_id,
+                    production_order_id, cost_category, goods_receipt_id,
                     created_by, created_at, processed_at
              FROM einvoice_imports
              ORDER BY created_at DESC LIMIT $limit"
