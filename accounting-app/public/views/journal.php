@@ -91,19 +91,50 @@ function loadData(){
             var drStr=drLines.map(function(l){return l.account_code;}).join(', ');
             var crStr=crLines.map(function(l){return l.account_code;}).join(', ');
             var total=r.lines.reduce(function(s,l){return s+parseFloat(l.amount);},0)/2;
-            var actions='';
-            if(r.status==='pending')actions='<button class="btn btn-sm btn-outline-success" onclick="approveEntry(\''+esc(r.id)+'\')"><i class="bi bi-check-lg"></i> Duyệt</button>';
-            else if(r.status==='posted')actions='<button class="btn btn-sm btn-outline-warning" onclick="reverseEntry(\''+esc(r.id)+'\')"><i class="bi bi-arrow-counterclockwise"></i> Đảo ngược</button>';
-            tbody.append('<tr><td>'+esc(r.reference)+'</td><td>'+esc(r.description)+'</td><td style="font-size:12px">'+esc(r.date)+'</td><td>'+esc(drStr)+'</td><td>'+esc(crStr)+'</td><td class="text-end vas-number">'+fmtZero(total)+'</td><td>'+statusBadge(r.status)+'</td><td>'+actions+'</td></tr>');
+            var actions='<a href="/journal/print/'+esc(r.id)+'" class="btn btn-sm btn-outline-secondary" style="font-size:11px;padding:1px 6px;" target="_blank" title="In chứng từ"><i class="bi bi-printer"></i></a> ';
+            if(r.status==='pending')actions+='<button class="btn btn-sm btn-outline-primary" style="font-size:11px;padding:1px 6px;" onclick="submitEntry(\''+esc(r.id)+'\')"><i class="bi bi-send"></i> Gửi</button> ';
+            else if(r.status==='submitted')actions+='<button class="btn btn-sm btn-outline-success" style="font-size:11px;padding:1px 6px;" onclick="approveEntry(\''+esc(r.id)+'\')"><i class="bi bi-check-lg"></i> Duyệt</button> <button class="btn btn-sm btn-outline-danger" style="font-size:11px;padding:1px 6px;" onclick="rejectEntry(\''+esc(r.id)+'\')"><i class="bi bi-x-lg"></i> Từ chối</button> ';
+            else if(r.status==='approved')actions+='<button class="btn btn-sm btn-outline-dark" style="font-size:11px;padding:1px 6px;" onclick="postEntry(\''+esc(r.id)+'\')"><i class="bi bi-journal-check"></i> Ghi sổ</button> ';
+            else if(r.status==='posted')actions+='<button class="btn btn-sm btn-outline-warning" style="font-size:11px;padding:1px 6px;" onclick="reverseEntry(\''+esc(r.id)+'\')"><i class="bi bi-arrow-counterclockwise"></i> Đảo ngược</button> ';
+            tbody.append('<tr><td>'+esc(r.reference)+'</td><td>'+esc(r.description)+'</td><td style="font-size:12px">'+esc(r.date)+'</td><td>'+esc(drStr)+'</td><td>'+esc(crStr)+'</td><td class="text-end vas-number">'+fmtZero(total)+'</td><td>'+statusBadge(r.status)+'</td><td style="white-space:nowrap;">'+actions+'</td></tr>');
         });
     });
 }
 // Duyệt và ghi sổ bút toán — gọi POST /api/journal/approve/{id}
 // RỦI RO: Sau khi duyệt, bút toán không thể sửa/xóa — cần xác nhận trước
+function submitEntry(id){
+    FormConfirm.confirm('Gửi duyệt bút toán','Bút toán sẽ được gửi lên Kế toán trưởng duyệt. Tiếp tục?',function(ok){
+        if(!ok)return;
+        $.ajax({url:'/api/journal/submit/'+id,method:'POST',headers:{'X-CSRF-Token':csrf},
+            success:function(){FormToast.success('Đã gửi duyệt bút toán.');loadData();},
+            error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}FormToast.error(m);}
+        });
+    });
+}
 function approveEntry(id){
-    FormConfirm.confirm('Duyệt bút toán','Bút toán này sẽ được ghi sổ và không thể sửa/xóa. Tiếp tục?',function(ok){
+    FormConfirm.confirm('Duyệt bút toán','Bút toán sẽ chuyển sang trạng thái đã duyệt. Tiếp tục?',function(ok){
         if(!ok)return;
         $.ajax({url:'/api/journal/approve/'+id,method:'POST',headers:{'X-CSRF-Token':csrf},
+            success:function(){FormToast.success('Đã duyệt bút toán.');loadData();},
+            error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}FormToast.error(m);}
+        });
+    });
+}
+function rejectEntry(id){
+    FormConfirm.prompt('Từ chối bút toán','Lý do từ chối (bắt buộc):',function(reason){
+        if(!reason||!reason.trim())return;
+        $.ajax({url:'/api/journal/reject/'+id,method:'POST',headers:{'X-CSRF-Token':csrf},
+            contentType:'application/json',
+            data:JSON.stringify({reason:reason.trim()}),
+            success:function(){FormToast.success('Đã từ chối bút toán.');loadData();},
+            error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}FormToast.error(m);}
+        });
+    });
+}
+function postEntry(id){
+    FormConfirm.confirm('Ghi sổ bút toán','Bút toán sẽ được ghi sổ và không thể sửa/xóa. Tiếp tục?',function(ok){
+        if(!ok)return;
+        $.ajax({url:'/api/journal/post/'+id,method:'POST',headers:{'X-CSRF-Token':csrf},
             success:function(){FormToast.success('Đã ghi sổ bút toán thành công.');loadData();},
             error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}FormToast.error(m);}
         });

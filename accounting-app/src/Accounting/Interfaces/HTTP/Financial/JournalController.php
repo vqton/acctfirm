@@ -171,6 +171,80 @@ class JournalController
         }
     }
 
+    public function submitEntry(string $id): void
+    {
+        Auth::checkCsrf();
+        Auth::requirePermission('journal', 'create');
+        try {
+            $txn = $this->journal->submitEntry($id, $_SESSION['user']['username'] ?? 'system');
+            JsonResponse::ok(['id' => $txn->getId(), 'reference' => $txn->getReference(), 'status' => $txn->getStatus()]);
+        } catch (\InvalidArgumentException | \RuntimeException $e) {
+            JsonResponse::error($e->getMessage(), 400);
+        }
+    }
+
+    public function rejectEntry(string $id): void
+    {
+        Auth::checkCsrf();
+        Auth::requirePermission('journal', 'approve');
+        $data = json_decode(file_get_contents('php://input'), true);
+        $reason = $data['reason'] ?? '';
+        if (!$reason) { JsonResponse::error('Vui lòng nhập lý do từ chối', 400); return; }
+        try {
+            $txn = $this->journal->rejectEntry($id, $_SESSION['user']['username'] ?? 'system', $reason);
+            JsonResponse::ok(['id' => $txn->getId(), 'status' => $txn->getStatus()]);
+        } catch (\InvalidArgumentException | \RuntimeException $e) {
+            JsonResponse::error($e->getMessage(), 400);
+        }
+    }
+
+    public function returnEntry(string $id): void
+    {
+        Auth::checkCsrf();
+        Auth::requirePermission('journal', 'approve');
+        try {
+            $txn = $this->journal->returnEntry($id, $_SESSION['user']['username'] ?? 'system');
+            JsonResponse::ok(['id' => $txn->getId(), 'status' => $txn->getStatus()]);
+        } catch (\InvalidArgumentException | \RuntimeException $e) {
+            JsonResponse::error($e->getMessage(), 400);
+        }
+    }
+
+    public function postApproved(string $id): void
+    {
+        Auth::checkCsrf();
+        Auth::requirePermission('journal', 'post');
+        $pdo = $GLOBALS['container']['pdo'];
+        try {
+            $txn = $this->txnRepo->findById($id);
+            if (!$txn) { JsonResponse::error('Không tìm thấy bút toán', 404); return; }
+            if ($txn->getStatus() !== 'approved') {
+                JsonResponse::error('Bút toán chưa được duyệt hoặc đã ghi sổ', 400); return;
+            }
+            // Apply balance updates (same logic as approveDraft for pending entries)
+            $pdo->beginTransaction();
+            foreach ($txn->getLedgerEntries() as $entry) {
+                $account = $this->accountRepo->findById($entry->getAccountId());
+                if (!$account) continue;
+                if ($entry->isDebit()) {
+                    if (in_array($account->getType(), ['asset', 'expense'])) $account->credit($entry->getAmount());
+                    else $account->debit($entry->getAmount());
+                } else {
+                    if (in_array($account->getType(), ['liability', 'equity', 'revenue'])) $account->credit($entry->getAmount());
+                    else $account->debit($entry->getAmount());
+                }
+                $this->accountRepo->save($account);
+            }
+            $txn->post($_SESSION['user']['username'] ?? 'system');
+            $this->txnRepo->save($txn);
+            $pdo->commit();
+            JsonResponse::ok(['id' => $id, 'status' => 'posted']);
+        } catch (\Exception $e) {
+            $pdo->rollBack();
+            JsonResponse::error($e->getMessage(), 400);
+        }
+    }
+
     // NGHIỆP VỤ: Ghi sổ bút toán trực tiếp (post ngay, không qua draft) — CORE OPERATION
     // Input: { description?, reference?, lines: [{account_code, amount, is_debit}], created_by? }
     // Output: { id, reference, status: 'posted', date, description, lines } — 201 Created

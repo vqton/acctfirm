@@ -6,13 +6,23 @@ use Accounting\Infrastructure\JsonResponse;
 $router->post('/api/journal', function() use ($c) { $c['JournalController']->postEntry(); });
 $router->post('/api/journal/draft', function() use ($c) { $c['JournalController']->createDraft(); });
 $router->post('/api/journal/approve/:id', function($id) use ($c) { $c['JournalController']->approveDraft($id); });
+$router->post('/api/journal/post/:id', function($id) use ($c) { $c['JournalController']->postApproved($id); });
 $router->post('/api/journal/duplicate/:id', function($id) use ($c) { $c['JournalController']->duplicate($id); });
 $router->post('/api/journal/:id/delete', function($id) use ($c) { $c['JournalController']->softDelete($id); });
 $router->post('/api/journal/:id/restore', function($id) use ($c) { $c['JournalController']->restore($id); });
+$router->post('/api/journal/submit/:id', function($id) use ($c) { $c['JournalController']->submitEntry($id); });
+$router->post('/api/journal/reject/:id', function($id) use ($c) { $c['JournalController']->rejectEntry($id); });
+$router->post('/api/journal/return/:id', function($id) use ($c) { $c['JournalController']->returnEntry($id); });
 $router->post('/api/journal/bulk-post', function() use ($c) { $c['JournalController']->bulkPost(); });
 $router->get('/api/transactions', function() use ($c) { $c['JournalController']->list(); });
 $router->get('/api/transactions/:id', function($id) use ($c) { $c['JournalController']->get($id); });
 $router->get('/api/trial-balance', function() use ($c) { $c['JournalController']->trialBalance(); });
+
+// === JOURNAL PRINT ===
+$router->get('/journal/print/:id', function($id) {
+    $_GET['id'] = $id;
+    require __DIR__ . '/../../../public/views/journal_print.php';
+});
 
 // === APPROVALS ===
 $router->get('/api/approvals/pending', function() use ($c) { $c['ApprovalController']->getPending(); });
@@ -57,8 +67,10 @@ $router->get('/api/ar/customers/:id/statement', function($id) use ($c) { $c['ArC
 // === FS (Báo cáo tài chính) ===
 $router->get('/api/fs/bc01', function() use ($c) { $c['FsController']->bc01(); });
 $router->get('/api/fs/bc02', function() use ($c) { $c['FsController']->bc02(); });
+$router->post('/api/fs/bc02/manual-values', function() use ($c) { $c['FsController']->saveManualValues(); });
 $router->get('/api/fs/tt99', function() use ($c) { $c['FsController']->tt99(); });
 $router->get('/api/fs/bc03', function() use ($c) { $c['FsController']->bc03(); });
+$router->post('/api/fs/bc03/manual-values', function() use ($c) { $c['FsController']->saveManualValues(); });
 $router->get('/api/fs/bc03-direct', function() use ($c) { $c['FsController']->bc03Direct(); });
 
 // === XBRL EXPORT (GDT submission format) ===
@@ -110,7 +122,7 @@ $router->get('/api/audit-log', function() use ($c) { $c['AuditLogController']->l
 $router->get('/api/audit-log/:id', function($id) use ($c) { $c['AuditLogController']->get($id); });
 
 // === DASHBOARD ===
-$router->get('/api/dashboard', function() use ($c) { $c['CashReportController']->kpis(); });
+$router->get('/api/dashboard', function() use ($c) { $c['DashboardController']->index(); });
 
 // === CORRECTIONS ===
 $router->post('/api/corrections/supplementary', function() use ($c) { $c['CorrectionController']->supplementary(); });
