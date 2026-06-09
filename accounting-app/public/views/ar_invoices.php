@@ -1,5 +1,5 @@
 <?php // Màn hình: Quản lý công nợ phải thu khách hàng (TK 131)
-// API: GET /api/ar/customers, GET /api/ar/invoices, POST /api/ar/invoices, POST /api/ar/invoices/{id}/pay, POST /api/ar/invoices/{id}/discount, POST /api/ar/prepay
+// API: GET /api/ar/customers, GET /api/ar/invoices, POST /api/ar/invoices, POST /api/ar/invoices/{id}/pay, POST /api/ar/invoices/{id}/discount, POST /api/ar/invoices/{id}/return, POST /api/ar/invoices/{id}/write-off, POST /api/ar/prepay
 // Nghiệp vụ: Ghi nhận hóa đơn bán hàng (Nợ 131/Có 511+3331), thu tiền (Nợ 1111/Có 131), nhận tạm ứng (Nợ 1111/Có 131)
 // Rủi ro: Thu tiền vượt quá số dư phải thu sẽ dẫn đến số dư âm TK 131
 $title = 'Công nợ phải thu'; $activeMenu = 'ar_invoices'; ob_start(); ?>
@@ -94,6 +94,19 @@ $title = 'Công nợ phải thu'; $activeMenu = 'ar_invoices'; ob_start(); ?>
 </form>
 </div></div></div>
 
+<div class="modal fade" id="returnModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
+<form id="returnForm">
+<div class="modal-header"><h5 class="modal-title">Hàng bán bị trả lại</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+<div class="modal-body">
+    <input type="hidden" id="returnInvId">
+    <p class="text-muted">Công nợ còn lại: <strong id="returnBalance"></strong></p>
+    <p class="text-muted" style="font-size:12px">Hạch toán: Nợ 511 (giảm doanh thu) / Nợ 3331 (thuế GTGT) / Có 131</p>
+    <div class="mb-2"><label>Số tiền trả lại</label><input type="number" class="form-control" id="returnAmount" step="1000" min="1" data-v-required="Số tiền" data-v-number="Số tiền trả lại" required></div>
+</div>
+<div class="modal-footer"><button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Hủy</button><button type="submit" class="btn btn-sm btn-secondary">Xác nhận trả lại</button></div>
+</form>
+</div></div></div>
+
 <script>
 var allData=[];
 function loadCustomers(cb){
@@ -126,6 +139,8 @@ function renderRows(data){
         if(r.status!=='paid'&&r.status!=='written_off'&&r.balance>1){
             acts+='<button class="btn btn-sm btn-outline-success me-1" onclick="openPay('+r.id+','+r.balance+')"><i class="bi bi-cash"></i></button>';
             acts+='<button class="btn btn-sm btn-outline-warning me-1" onclick="openDiscount('+r.id+','+r.balance+')" title="Chiết khấu thanh toán"><i class="bi bi-percent"></i></button>';
+            acts+='<button class="btn btn-sm btn-outline-secondary me-1" onclick="openReturn('+r.id+','+r.balance+')" title="Hàng bán trả lại"><i class="bi bi-arrow-return-left"></i></button>';
+            acts+='<button class="btn btn-sm btn-outline-danger me-1" onclick="openWriteOff('+r.id+')" title="Xóa sổ công nợ"><i class="bi bi-trash3"></i></button>';
         }
         var agingLabel=aging>0?aging+' ngày':'';
         tbody.append('<tr'+rowClass+'><td>'+esc(r.invoice_number)+'</td><td>'+esc(r.customer_name)+'</td><td style="font-size:12px">'+esc(r.invoice_date)+'</td><td style="font-size:12px">'+esc(r.due_date)+'</td><td class="text-end vas-number">'+fmt(r.gross_amount)+'</td><td class="text-end vas-number">'+fmt(r.paid_amount)+'</td><td class="text-end vas-number">'+fmt(r.balance)+'</td><td class="text-end vas-number" style="font-size:11px">'+agingLabel+'</td><td>'+statusBadge(r.status)+'</td><td>'+acts+'</td></tr>');
@@ -181,6 +196,8 @@ function exportCSV(){
 }
 function openPay(id,bal){$('#payInvId').val(id);$('#payBalance').text(fmt(bal));$('#payAmount').val(bal);$('#payModal').modal('show');}
 function openDiscount(id,bal){$('#discountInvId').val(id);$('#discountBalance').text(fmt(bal));$('#discountAmount').val(Math.round(bal*0.5/1000)*1000);$('#discountModal').modal('show');}
+function openReturn(id,bal){$('#returnInvId').val(id);$('#returnBalance').text(fmt(bal));$('#returnAmount').val(bal);$('#returnModal').modal('show');}
+function openWriteOff(id){if(!confirm('Bạn có chắc chắn xóa sổ công nợ này? Thao tác này sẽ tạo bút toán Nợ 642 / Có 131 và không thể hoàn tác.'))return;$.ajax({url:'/api/ar/invoices/'+id+'/write-off',method:'POST',contentType:'application/json',success:function(){FormToast.success('Xóa sổ công nợ thành công');loadData();},error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}FormToast.error(m);}});}
 function calcVat(){var n=parseFloat($('#netAmount').val())||0;var r=parseFloat($('#vatRate').val())||0;$('#vatAmount').val(Math.round(n*r/100));}
 $('#netAmount,#vatRate').on('input',calcVat);
 $('#invForm').submit(function(e){e.preventDefault();
@@ -211,6 +228,13 @@ $('#discountForm').submit(function(e){e.preventDefault();
         error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}FormToast.error(m);}
     });
 });
-$(document).ready(function(){loadCustomers();loadData();loadVatRates('#vatRate',10);FormValidation.setup('#invForm');FormValidation.setup('#payForm');FormValidation.setup('#prepayForm');FormValidation.setup('#discountForm');});
+$('#returnForm').submit(function(e){e.preventDefault();
+    var v=FormValidation.validate('#returnForm');if(!v.valid)return;
+    $.ajax({url:'/api/ar/invoices/'+$('#returnInvId').val()+'/return',method:'POST',contentType:'application/json',data:JSON.stringify({amount:parseFloat($('#returnAmount').val())}),
+        success:function(){$('#returnModal').modal('hide');FormToast.success('Ghi nhận hàng trả lại thành công');loadData();},
+        error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}FormToast.error(m);}
+    });
+});
+$(document).ready(function(){loadCustomers();loadData();loadVatRates('#vatRate',10);FormValidation.setup('#invForm');FormValidation.setup('#payForm');FormValidation.setup('#prepayForm');FormValidation.setup('#discountForm');FormValidation.setup('#returnForm');});
 </script>
 <?php $content = ob_get_clean(); require __DIR__ . '/layout.php'; ?>
