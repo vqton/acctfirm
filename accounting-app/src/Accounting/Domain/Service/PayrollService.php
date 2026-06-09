@@ -665,4 +665,36 @@ class PayrollService
     {
         return $this->payrollPeriodRepo->findOpen();
     }
+
+    // --- 10. NOP BHXH ---
+    // NGHIEP VU: Nop tien BHXH, BHYT, BHTN cho co quan bao hiem xa hoi
+    // Hach toan: No 3383 (BHXH, BHYT, BHTN phai nop) / Co 111, 112 (tien mat, tien gui NH)
+    // Yeu cau: Chi thuc hien sau khi bang luong da ghi so
+    // Rui ro: Nop thieu -> phat cham nop. Nop thua -> du 3383 ben No -> can bu tru ky sau
+    public function payInsurance(string $periodId, float $amount, string $bankAccount, string $createdBy): array
+    {
+        if (!$this->journalService) {
+            throw new \RuntimeException('JournalService chua duoc cau hinh');
+        }
+        if ($amount <= 0) {
+            throw new \InvalidArgumentException('So tien nop BHXH phai lon hon 0');
+        }
+        $txn = $this->journalService->postEntry(
+            "Nop BHXH ky {$periodId}",
+            '',
+            [
+                ['account_code' => '3383', 'is_debit' => true, 'amount' => $amount],
+                ['account_code' => $bankAccount, 'is_debit' => false, 'amount' => $amount],
+            ],
+            $createdBy, false, 'payroll', null, 'PMT', 'payroll'
+        );
+        $this->auditLogger?->log('payroll.insurance.pay', 'payroll_insurance', "period:{$periodId}",
+            null, ['amount' => $amount, 'bank_account' => $bankAccount, 'transaction_id' => $txn->getId()], $createdBy);
+        return [
+            'transaction_id' => $txn->getId(),
+            'amount' => $amount,
+            'bank_account' => $bankAccount,
+            'status' => 'posted',
+        ];
+    }
 }

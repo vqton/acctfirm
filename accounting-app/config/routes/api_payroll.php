@@ -25,6 +25,9 @@ $router->post('/api/payroll/entries/:id/approve', function($id) use ($c) { $c['P
 $router->post('/api/payroll/entries/:id/post', function($id) use ($c) { $c['PayrollController']->postEntry($id); });
 $router->post('/api/payroll/entries/:id/adjust', function($id) use ($c) { $c['PayrollController']->adjustEntry($id); });
 
+// Nộp BHXH
+$router->post('/api/payroll/insurance/pay', function() use ($c) { $c['PayrollController']->payInsurance(); });
+
 // Nhân viên
 $router->get('/api/payroll/employees', function() use ($c) { $c['PayrollController']->listPayrollEmployees(); });
 

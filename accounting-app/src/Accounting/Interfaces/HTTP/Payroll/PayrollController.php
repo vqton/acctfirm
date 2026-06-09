@@ -205,4 +205,31 @@ class PayrollController
         $pending = array_filter($entries, fn($e) => $e->getStatus() === 'draft' || $e->getStatus() === 'approved');
         JsonResponse::ok(array_map(fn($e) => $e->toArray(), array_values($pending)));
     }
+
+    // NGHIEP VU: Nop tien BHXH, BHYT, BHTN cho co quan BHXH
+    // Input: { period_id, amount, bank_account?, created_by? }
+    // Output: { transaction_id, amount, status }
+    // Hach toan: No 3383 / Co 111,112
+    // Service: PayrollService.payInsurance() -> JournalService.postEntry
+    public function payInsurance(): void
+    {
+        Auth::checkCsrf();
+        Auth::requirePermission('payroll', 'post');
+        $data = json_decode(file_get_contents('php://input'), true) ?? [];
+        if (!isset($data['period_id'], $data['amount'])) {
+            JsonResponse::error('Vui lòng nhập kỳ lương và số tiền nộp BHXH', 400);
+            return;
+        }
+        try {
+            $result = $this->payrollService->payInsurance(
+                $data['period_id'],
+                (float)$data['amount'],
+                $data['bank_account'] ?? '1121',
+                $_SESSION['user_id'] ?? 'system'
+            );
+            JsonResponse::ok($result, 201);
+        } catch (\Throwable $e) {
+            JsonResponse::error($e->getMessage());
+        }
+    }
 }
