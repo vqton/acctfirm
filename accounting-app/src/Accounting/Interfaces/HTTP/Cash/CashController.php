@@ -56,6 +56,7 @@ class CashController
         $stmt = $pdo->query("SELECT t.id, t.description, t.reference, t.status,
             t.created_at, t.created_by,
             t.transaction_date, t.payer_name, t.payer_type, t.payer_id,
+            t.payer_address, t.book_number,
             (SELECT SUM(le.amount) FROM ledger_entries le WHERE le.transaction_id = t.id AND le.is_debit = 1) as amount,
             (SELECT a.code FROM ledger_entries le JOIN accounts a ON a.id = le.account_id WHERE le.transaction_id = t.id AND le.is_debit = 0 LIMIT 1) as credit_account
             FROM transactions t WHERE t.description LIKE 'Cash receipt:%'
@@ -124,6 +125,7 @@ class CashController
         $stmt = $pdo->query("SELECT t.id, t.description, t.reference, t.status,
             t.created_at, t.created_by,
             t.transaction_date, t.payer_name, t.payer_type, t.payer_id,
+            t.payer_address, t.book_number,
             (SELECT SUM(le.amount) FROM ledger_entries le WHERE le.transaction_id = t.id AND le.is_debit = 0) as amount,
             (SELECT a.code FROM ledger_entries le JOIN accounts a ON a.id = le.account_id WHERE le.transaction_id = t.id AND le.is_debit = 1 LIMIT 1) as debit_account
             FROM transactions t WHERE t.description LIKE 'Cash payment:%'
@@ -139,6 +141,34 @@ class CashController
     // Permission: CSRF check
     // Rủi ro: R005 — debit_account_code phải là TK con (không phải control account 111)
     // Số CT tự động: Helpers::nextVoucherNo('PC') với SELECT FOR UPDATE
+    // NGHIỆP VỤ: Chi tiết phiếu chi — dùng cho in Mẫu 02-TT
+    // Trả về thông tin giao dịch + các bút toán chi tiết
+    public function getPayment(string $id): void
+    {
+        Auth::requirePermission('cash', 'view');
+        $stmt = $this->pdo->prepare(
+            "SELECT t.*,
+                (SELECT SUM(le.amount) FROM ledger_entries le WHERE le.transaction_id = t.id AND le.is_debit = 0) as amount,
+                (SELECT a.code FROM ledger_entries le JOIN accounts a ON a.id = le.account_id WHERE le.transaction_id = t.id AND le.is_debit = 1 LIMIT 1) as debit_account
+             FROM transactions t WHERE t.id = ? AND t.description LIKE 'Cash payment:%'"
+        );
+        $stmt->execute([$id]);
+        $txn = $stmt->fetch(\PDO::FETCH_ASSOC);
+        if (!$txn) {
+            JsonResponse::error('Không tìm thấy phiếu chi', 404);
+            return;
+        }
+        // Lấy các bút toán chi tiết (hiển thị Có 1111)
+        $stmt = $this->pdo->prepare(
+            "SELECT le.*, a.code AS account_code, a.name AS account_name
+             FROM ledger_entries le JOIN accounts a ON a.id = le.account_id
+             WHERE le.transaction_id = ? ORDER BY le.line_order"
+        );
+        $stmt->execute([$id]);
+        $txn['lines'] = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+        JsonResponse::ok($txn);
+    }
+
     public function createPayment(): void
     {
         Auth::checkCsrf();
@@ -158,19 +188,21 @@ class CashController
                 $vatAmount, $vatRate
             );
             $txnId = $result['transaction_id'] ?? null;
-            if ($txnId && ($data['payer_name'] ?? null)) {
+            if ($txnId) {
                 $pdo = $this->getPdo();
-                $pdo->prepare('UPDATE transactions SET
-                    transaction_date = COALESCE(?, transaction_date),
-                    payer_name = ?, payer_type = ?, payer_id = ?
-                    WHERE id = ?')
-                    ->execute([
-                        $data['transaction_date'] ?? null,
-                        $data['payer_name'] ?? null,
-                        $data['payer_type'] ?? null,
-                        $data['payer_id'] ?? null,
-                        $txnId
-                    ]);
+                $fields = [];
+                $params = [];
+                foreach (['transaction_date', 'payer_name', 'payer_type', 'payer_id', 'payer_address', 'book_number'] as $f) {
+                    if (isset($data[$f])) {
+                        $fields[] = "$f = ?";
+                        $params[] = $data[$f];
+                    }
+                }
+                if ($fields) {
+                    $params[] = $txnId;
+                    $pdo->prepare('UPDATE transactions SET ' . implode(', ', $fields) . ' WHERE id = ?')
+                        ->execute($params);
+                }
             }
             JsonResponse::ok($result, 201);
         } catch (\InvalidArgumentException $e) {

@@ -23,6 +23,7 @@ $router->get('/api/payers/search', function() {
 $router->get('/api/cash/receipts', function() use ($c) { $c['CashController']->receipts(); });
 $router->post('/api/cash/receipts', function() use ($c) { $c['CashController']->createReceipt(); });
 $router->get('/api/cash/payments', function() use ($c) { $c['CashController']->payments(); });
+$router->get('/api/cash/payments/:id', function($id) use ($c) { $c['CashController']->getPayment($id); });
 $router->post('/api/cash/payments', function() use ($c) { $c['CashController']->createPayment(); });
 $router->get('/api/cash/templates', function() use ($c) { $c['CashController']->transactionTemplates(); });
 $router->get('/api/cash/accounts', function() use ($c) { $c['CashController']->accounts(); });

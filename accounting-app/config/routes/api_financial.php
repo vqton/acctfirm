@@ -23,6 +23,10 @@ $router->get('/journal/print/:id', function($id) {
     $_GET['id'] = $id;
     require __DIR__ . '/../../../public/views/journal_print.php';
 });
+$router->get('/print/cash-payment/:id', function($id) {
+    $_GET['id'] = $id;
+    require __DIR__ . '/../../../public/views/print_cash_payment.php';
+});
 
 // === APPROVALS ===
 $router->get('/api/approvals/pending', function() use ($c) { $c['ApprovalController']->getPending(); });

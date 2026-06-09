@@ -23,9 +23,10 @@ $title = 'Phiếu chi'; $activeMenu = 'cash_payments'; ob_start(); ?>
 <div class="modal-header"><h5 class="modal-title">Phiếu chi tiền mặt</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
 <div class="modal-body">
     <div class="row g-2">
-        <div class="col-4 mb-2"><label>Ngày</label><input type="date" class="form-control" id="txnDate" data-v-required="Ngày" data-v-date="Ngày chứng từ"></div>
-        <div class="col-4 mb-2"><label>Loại chi</label><select class="form-select" id="paymentType" data-v-required="Loại chi"><option value="">-- Chọn loại --</option></select></div>
-        <div class="col-4 mb-2"><label>TK Nợ (đối ứng)</label><select class="form-select" id="debitAccount" data-v-required="TK Nợ" required></select></div>
+        <div class="col-3 mb-2"><label>Ngày</label><input type="date" class="form-control" id="txnDate" data-v-required="Ngày" data-v-date="Ngày chứng từ"></div>
+        <div class="col-3 mb-2"><label>Quyển số</label><input class="form-control" id="bookNumber" placeholder="VD: PC-01"></div>
+        <div class="col-3 mb-2"><label>Loại chi</label><select class="form-select" id="paymentType" data-v-required="Loại chi"><option value="">-- Chọn loại --</option></select></div>
+        <div class="col-3 mb-2"><label>TK Nợ (đối ứng)</label><select class="form-select" id="debitAccount" data-v-required="TK Nợ" required></select></div>
     </div>
     <div class="row g-2">
         <div class="col-4 mb-2"><label>Số tiền</label><input type="number" class="form-control" id="amount" step="1" min="1" data-v-required="Số tiền" data-v-number="Số tiền" required></div>
@@ -42,6 +43,7 @@ $title = 'Phiếu chi'; $activeMenu = 'cash_payments'; ob_start(); ?>
         <input type="hidden" id="payerId" value="">
         <input type="hidden" id="payerType" value="">
     </div>
+    <div class="mb-2"><label>Địa chỉ</label><input class="form-control" id="payerAddress" placeholder="Địa chỉ người nhận..."></div>
     <div class="mb-2"><label>Diễn giải</label><input class="form-control" id="description" placeholder="Chi tiền..."></div>
 </div>
 <div class="modal-footer"><button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Hủy</button><button type="submit" class="btn btn-sm btn-primary">Ghi nhận</button></div>
@@ -57,7 +59,8 @@ function loadData(){
         data.forEach(function(r){
             var payer=esc(r.payer_name||'');
             var date=esc((r.transaction_date||r.created_at||'').substring(0,10));
-            tbody.append('<tr><td>'+esc(r.reference)+'</td><td>'+payer+'</td><td>'+esc(r.description)+'</td><td class="text-end font-monospace">'+fmtZero(r.amount)+'</td><td>'+esc(r.debit_account||'')+'</td><td style="font-size:12px">'+date+'</td><td>'+statusBadge(r.status)+'</td><td><a href="#" class="btn-action me-1" onclick="printTransaction(\'Phiếu chi\',\'/api/cash/payments/\'+r.id,{reference:\'Số CT\',transaction_date:\'Ngày\',description:\'Diễn giải\',amount:\'Số tiền\',status:\'Trạng thái\'})" title="In chứng từ"><i class="bi bi-printer"></i></a></td></tr>');
+            var printUrl = '/print/cash-payment/' + r.id;
+            tbody.append('<tr><td>'+esc(r.reference)+'</td><td>'+payer+'</td><td>'+esc(r.description)+'</td><td class="text-end font-monospace">'+fmtZero(r.amount)+'</td><td>'+esc(r.debit_account||'')+'</td><td style="font-size:12px">'+date+'</td><td>'+statusBadge(r.status)+'</td><td><a href="'+printUrl+'" target="_blank" class="btn-action me-1" title="In Mẫu 02-TT"><i class="bi bi-printer"></i></a></td></tr>');
         });
     }});
 }
@@ -134,6 +137,8 @@ $('#paymentForm').submit(function(e){e.preventDefault();
         payer_name: $('#payerSearch').val()||null,
         payer_type: $('#payerType').val()||null,
         payer_id: $('#payerId').val()||null,
+        payer_address: $('#payerAddress').val()||null,
+        book_number: $('#bookNumber').val()||null,
         vat_amount: $('#vatRateGroup').is(':visible')?parseInt($('#vatAmount').val())||0:0,
         vat_rate: $('#vatRateGroup').is(':visible')?parseInt($('#vatRate').val())||0:0,
     };
