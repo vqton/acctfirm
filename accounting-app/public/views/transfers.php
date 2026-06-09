@@ -9,6 +9,7 @@ $title = 'Điều chuyển kho'; $activeMenu = 'transfers'; ob_start(); ?>
         <select class="form-select form-select-sm d-inline-block w-auto me-2" id="filterItem">
             <option value="">-- Tất cả vật tư --</option>
         </select>
+        <button class="btn btn-outline-success btn-sm me-1" onclick="exportCSV('#dataBody', 'chuyen-kho')"><i class="bi bi-file-earmark-excel"></i> Xuất Excel</button>
         <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#transferModal"><i class="bi bi-plus-lg"></i> Tạo phiếu điều chuyển</button>
     </div>
 </div>

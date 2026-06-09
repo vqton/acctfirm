@@ -5,11 +5,12 @@
 $title = 'Giấy báo Có'; $activeMenu = 'bank_credit'; ob_start(); ?>
 <div class="toolbar">
     <h5>Giấy báo Có ngân hàng <span class="stats">(TK 112)</span></h5>
+    <button class="btn btn-outline-success btn-sm me-1" onclick="exportCSV('#dataBody', 'bao-co')"><i class="bi bi-file-earmark-excel"></i> Xuất Excel</button>
     <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#creditModal"><i class="bi bi-plus-lg"></i> Báo Có</button>
     <button class="btn btn-outline-primary btn-sm ms-1" data-bs-toggle="modal" data-bs-target="#interestModal"><i class="bi bi-piggy-bank"></i> Lãi NH</button>
 </div>
 <div class="card-table"><table class="table table-hover">
-    <thead><tr><th>Số CT</th><th>Loại</th><th>Diễn giải</th><th>Số tiền</th><th>Ngày</th><th>Trạng thái</th></tr></thead>
+    <thead><tr><th>Số CT</th><th>Loại</th><th>Diễn giải</th><th>Số tiền</th><th>Ngày</th><th>Trạng thái</th><th></th></tr></thead>
     <tbody id="dataBody"></tbody>
 </table></div>
 
@@ -44,7 +45,7 @@ function loadData(){
         var tbody=$('#dataBody'); tbody.empty();
         data.forEach(function(r){
             var label=r.type==='bank_receipt'?'Thu qua NH':(r.type==='interest'?'Lãi NH':'Khác');
-            tbody.append('<tr><td>'+esc(r.reference)+'</td><td>'+esc(label)+'</td><td>'+esc(r.description)+'</td><td class="text-end font-monospace">'+(r.amount?parseFloat(r.amount).toLocaleString():'')+'</td><td style="font-size:12px">'+esc(r.created_at)+'</td><td>'+statusBadge(r.status)+'</td></tr>');
+            tbody.append('<tr><td>'+esc(r.reference)+'</td><td>'+esc(label)+'</td><td>'+esc(r.description)+'</td><td class="text-end font-monospace">'+(r.amount?parseFloat(r.amount).toLocaleString():'')+'</td><td style="font-size:12px">'+esc(r.created_at)+'</td><td>'+statusBadge(r.status)+'</td><td><a href="#" class="btn-action me-1" onclick="printTransaction(\'Báo Có\',\'/api/cash/bank/credits/\'+r.id,{reference:\'Số CT\',transaction_date:\'Ngày\',description:\'Diễn giải\',amount:\'Số tiền\',bank_account:\'TK NH\'})" title="In chứng từ"><i class="bi bi-printer"></i></a></td></tr>');
         });
     });
 }

@@ -378,8 +378,22 @@ class FixedAssetService
     //   - THIẾU phân biệt: 641 (bán hàng), 642 (QLDN) cho TSCĐ bộ phận gián tiếp
     //   - Ảnh hưởng: Nếu TSCĐ của phòng kế toán mà vào 627 → sai chỉ tiêu BC02
     //
-    // TODO: Cần mapping fa_category → cost_account (có thể từ fixed_asset_categories)
-    //   Ví dụ: category 'admin' → 642, 'sales' → 641, 'production' → 627
+    // Tra cứu TK chi phí theo phòng ban từ fa_department_accounts
+    // Nếu asset không có department hoặc chưa mapping → default 627 (SXC)
+    private function resolveCostAccount(FixedAsset $asset): string
+    {
+        $deptId = $asset->getDepartmentId();
+        if ($deptId && $this->pdo) {
+            $stmt = $this->pdo->prepare(
+                "SELECT debit_account FROM fa_department_accounts WHERE department_id = ?"
+            );
+            $stmt->execute([$deptId]);
+            $account = $stmt->fetchColumn();
+            if ($account) return $account;
+        }
+        return '627';
+    }
+
     private function resolveDepreciationAccount(FixedAsset $asset): array
     {
         $category = $asset->getFaCategory() ?? 'tangible';
@@ -389,7 +403,7 @@ class FixedAssetService
             'intangible' => '2143',
             default => '2141',
         };
-        return ['cost' => '627', 'accum' => $accum];
+        return ['cost' => $this->resolveCostAccount($asset), 'accum' => $accum];
     }
 
     private function saveDepreciationRecord(

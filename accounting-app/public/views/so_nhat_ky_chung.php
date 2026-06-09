@@ -7,6 +7,7 @@ $title = 'Sổ Nhật ký chung'; $activeMenu = 'general_journal'; ob_start(); ?
 <div class="toolbar">
     <h5>Sổ Nhật ký chung <span class="stats">(General Journal — Mẫu S03a-DN)</span></h5>
     <div class="d-flex gap-2">
+        <button class="btn btn-outline-success btn-sm me-1" onclick="exportCSV('#dataBody', 'so-nhat-ky-chung')"><i class="bi bi-file-earmark-excel"></i> Xuất Excel</button>
         <button class="btn btn-outline-primary btn-sm" onclick="printLedger()"><i class="bi bi-printer"></i> In sổ</button>
     </div>
 </div>

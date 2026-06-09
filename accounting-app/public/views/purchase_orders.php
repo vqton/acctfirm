@@ -8,6 +8,7 @@ $title = 'Đơn đặt hàng'; $activeMenu = 'purchase_po'; ob_start(); ?>
 <div class="toolbar">
     <h5>Đơn đặt hàng <span class="stats" id="recordCount"></span></h5>
     <div>
+        <button class="btn btn-outline-success btn-sm me-1" onclick="exportCSV('#dataBody', 'danh-sach-don-mua-hang')"><i class="bi bi-file-earmark-excel"></i> Xuất Excel</button>
         <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#poModal"><i class="bi bi-plus-lg"></i> Tạo đơn hàng</button>
     </div>
 </div>

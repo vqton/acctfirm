@@ -97,6 +97,8 @@ $employeeController = new EmployeeController($employeeRepository);
 $exchangeRateController = new ExchangeRateController($exchangeRateRepository);
 $fixedAssetController = new FixedAssetController($fixedAssetRepository);
 $fixedAssetLifecycleController = new FixedAssetLifecycleController($fixedAssetService, $accountRepository, $pdo);
+use Accounting\Interfaces\HTTP\FixedAsset\DepreciationReportController;
+$depreciationReportController = new DepreciationReportController($fixedAssetService, $depreciationBatchService, $pdo);
 $fsController = new FsController($fsService, $xbrlGenerator);
 $importController = new ImportController($importService, $pdo);
 $currencyController = new CurrencyController($currencyDisplayService);

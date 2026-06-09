@@ -128,12 +128,27 @@ assertTrue(count($searchTamUng) > 0, 'Search finds Tạm ứng');
 $searchBHXH = $repo->search('Báo cáo BHXH');
 assertTrue(count($searchBHXH) > 0, 'Search finds Báo cáo BHXH');
 
-// === Test 23: Section count OK (max 12 items per section, non-heading) ===
+// === Test 23: Section count OK (max items per section, non-heading) ===
 foreach (['cash_bank', 'inventory_ccdc', 'gl_report'] as $sec) {
     $items = $repo->findBySection($sec);
     $nonHeadings = array_filter($items, fn($i) => !$i->isHeading());
-    assertTrue(count($nonHeadings) <= 24, "$sec has ≤24 items (got " . count($nonHeadings) . ")");
+    assertTrue(count($nonHeadings) <= 30, "$sec has ≤30 items (got " . count($nonHeadings) . ")");
 }
+
+// === Test 24: COA moved from system to gl_report ===
+$sysItems = $repo->findBySection('system');
+$sysLabels = array_map(fn($i) => $i->getLabel(), $sysItems);
+assertTrue(!in_array('Hệ thống tài khoản', $sysLabels), 'COA removed from system');
+assertTrue(!in_array('Số dư đầu kỳ', $sysLabels), 'Số dư đầu kỳ removed from system');
+assertTrue(!in_array('Quản lý kỳ', $sysLabels), 'Quản lý kỳ removed from system');
+assertTrue(!in_array('Giao dịch nội bộ', $sysLabels), 'Giao dịch nội bộ removed from system');
+
+$glItems = $repo->findBySection('gl_report');
+$glLabels = array_map(fn($i) => $i->getLabel(), $glItems);
+assertTrue(in_array('Hệ thống tài khoản', $glLabels), 'COA moved to gl_report');
+assertTrue(in_array('Số dư đầu kỳ', $glLabels), 'Số dư đầu kỳ moved to gl_report');
+assertTrue(in_array('Quản lý kỳ', $glLabels), 'Quản lý kỳ moved to gl_report');
+assertTrue(in_array('Giao dịch nội bộ', $glLabels), 'Giao dịch nội bộ moved to gl_report');
 
 // Cleanup
 results();

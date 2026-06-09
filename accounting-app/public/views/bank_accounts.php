@@ -2,6 +2,7 @@
 $title = 'TK ngân hàng'; $activeMenu = 'bank_accounts'; ob_start(); ?>
 <div class="toolbar">
     <h5>Tài khoản ngân hàng</h5>
+    <button class="btn btn-outline-success btn-sm me-1" onclick="exportCSV('#dataBody', 'danh-sach-tai-khoan-ngan-hang')"><i class="bi bi-file-earmark-excel"></i> Xuất Excel</button>
     <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#baModal"><i class="bi bi-plus-lg"></i> Thêm</button>
 </div>
 <div class="card-table"><table class="table table-hover">

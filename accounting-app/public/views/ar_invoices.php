@@ -131,7 +131,7 @@ function calcAgingDays(dueDate){
 function renderRows(data){
     var tbody=$('#dataBody');tbody.empty();
     data.forEach(function(r){
-        var acts='';
+        var acts='';acts+='<a href="#" class="btn-action me-1" onclick="printTransaction(\'Hóa đơn bán hàng\',\'/api/ar/invoices/\'+r.id,{invoice_no:\'Số HĐ\',invoice_date:\'Ngày\',customer_name:\'Khách hàng\',total_amount:\'Tổng tiền\',vat_amount:\'Thuế GTGT\',grand_total:\'Tổng thanh toán\'})" title="In chứng từ"><i class="bi bi-printer"></i></a>';
         var aging=calcAgingDays(r.due_date);
         var rowClass='';
         if(aging>90){rowClass=' class="table-danger"';}

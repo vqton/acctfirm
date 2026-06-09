@@ -38,6 +38,7 @@ $title = 'Giấy đề nghị tạm ứng'; $activeMenu = 'advance_payment'; ob_
 <div class="toolbar toolbar-top no-print">
     <h5>Giấy đề nghị tạm ứng <span class="stats">(Mẫu 03-TT)</span></h5>
     <div>
+        <button class="btn btn-outline-success btn-sm me-1" onclick="exportCSV('#dataBody', 'tam-ung')"><i class="bi bi-file-earmark-excel"></i> Xuất Excel</button>
         <button class="btn btn-primary btn-sm" id="btnNew"><i class="bi bi-plus-lg"></i> Tạo mới</button>
         <button class="btn btn-outline-success btn-sm ms-1" id="btnSubmit" style="display:none"><i class="bi bi-send"></i> Gửi duyệt</button>
         <button class="btn btn-outline-primary btn-sm ms-1" id="btnApprove" style="display:none"><i class="bi bi-check-lg"></i> Duyệt</button>
@@ -349,7 +350,7 @@ function loadList(status) {
                 '<td class="text-end font-monospace">'+fmt(r.amount)+'</td>' +
                 '<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(r.reason||'')+'</td>' +
                 '<td>'+statusBadge(r.status)+'</td>' +
-                '<td><button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation();openDetail(\''+r.id+'\')"><i class="bi bi-eye"></i></button></td>' +
+                '<td><a href="#" class="btn-action me-1" onclick="event.stopPropagation();printTransaction(\'Giấy đề nghị tạm ứng\',\'/api/advance-payment-requests/\'+r.id,{request_code:\'Số\',request_date:\'Ngày\',employee_name:\'Người nhận\',amount:\'Số tiền\',purpose:\'Mục đích\'})" title="In chứng từ"><i class="bi bi-printer"></i></a><button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation();openDetail(\''+r.id+'\')"><i class="bi bi-eye"></i></button></td>' +
             '</tr>');
         });
     });

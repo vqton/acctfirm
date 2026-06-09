@@ -8,6 +8,7 @@ $title = 'Đề nghị mua hàng'; $activeMenu = 'purchase_pr'; ob_start(); ?>
 <div class="toolbar">
     <h5>Đề nghị mua hàng <span class="stats" id="recordCount"></span></h5>
     <div>
+        <button class="btn btn-outline-success btn-sm me-1" onclick="exportCSV('#dataBody', 'de-nghi-mua-hang')"><i class="bi bi-file-earmark-excel"></i> Xuất Excel</button>
         <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#prModal"><i class="bi bi-plus-lg"></i> Tạo đề nghị</button>
     </div>
 </div>

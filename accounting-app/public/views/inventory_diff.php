@@ -8,6 +8,7 @@ $title = 'Xử lý chênh lệch kiểm kê'; $activeMenu = 'inventory_diff'; ob
 <div class="toolbar">
     <h5>Xử lý chênh lệch kiểm kê</h5>
     <div>
+        <button class="btn btn-outline-success btn-sm me-1" onclick="exportCSV('#dataBody', 'chenh-lech-ton-kho')"><i class="bi bi-file-earmark-excel"></i> Xuất Excel</button>
         <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#adjustModal"><i class="bi bi-pencil"></i> Điều chỉnh tồn kho</button>
         <button class="btn btn-outline-primary btn-sm" onclick="loadData()"><i class="bi bi-arrow-clockwise"></i> Làm mới</button>
     </div>

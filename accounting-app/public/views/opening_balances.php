@@ -10,6 +10,8 @@ ob_start();
             <option value="">-- Tất cả kỳ --</option>
             <option value="<?= date('Y-m') ?>" selected><?= date('Y-m') ?></option>
         </select>
+        <button class="btn btn-outline-success btn-sm me-1" onclick="exportCSV('#dataBody', 'so-du-dau-ky')"><i class="bi bi-file-earmark-excel"></i> Xuất Excel</button>
+        <button class="btn btn-outline-primary btn-sm me-1" onclick="importFromExcel('opening_balance')"><i class="bi bi-upload"></i> Nhập Excel</button>
         <button class="btn btn-primary btn-sm" id="btnAdd"><i class="bi bi-plus-circle"></i> Thêm số dư</button>
         <button class="btn btn-success btn-sm" id="btnConvert"><i class="bi bi-journal-check"></i> Chuyển thành bút toán mở sổ</button>
     </div>

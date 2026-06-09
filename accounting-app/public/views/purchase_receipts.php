@@ -8,6 +8,7 @@ $title = 'Nhập kho theo PO'; $activeMenu = 'purchase_gr'; ob_start(); ?>
 <div class="toolbar">
     <h5>Nhập kho theo đơn đặt hàng <span class="stats" id="recordCount"></span></h5>
     <div>
+        <button class="btn btn-outline-success btn-sm me-1" onclick="exportCSV('#dataBody', 'phieu-nhap-kho')"><i class="bi bi-file-earmark-excel"></i> Xuất Excel</button>
         <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#grModal"><i class="bi bi-plus-lg"></i> Nhập kho</button>
     </div>
 </div>

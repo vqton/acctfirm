@@ -10,6 +10,7 @@ $title = 'Giao dịch nội bộ'; $activeMenu = 'intercompany'; ob_start(); ?>
         <select class="form-select form-select-sm d-inline-block w-auto" id="entitySelect">
             <option value="">-- Chọn đơn vị --</option>
         </select>
+        <button class="btn btn-outline-success btn-sm me-1" onclick="exportCSV('#dataBody', 'giao-dich-noi-bo')"><i class="bi bi-file-earmark-excel"></i> Xuất Excel</button>
         <button class="btn btn-primary btn-sm" onclick="loadMatch()"><i class="bi bi-search"></i> Đối chiếu</button>
         <button class="btn btn-warning btn-sm" onclick="eliminateAll()"><i class="bi bi-trash"></i> Loại trừ IC</button>
         <button class="btn btn-outline-info btn-sm" onclick="loadConsolidated()"><i class="bi bi-globe"></i> Tổng hợp</button>

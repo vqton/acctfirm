@@ -7,6 +7,7 @@ $title = 'Kiểm kê kho'; $activeMenu = 'physical_count'; ob_start(); ?>
 <div class="toolbar">
     <h5>Kiểm kê kho</h5>
     <div>
+        <button class="btn btn-outline-success btn-sm me-1" onclick="exportCSV('#dataBody', 'kiem-ke')"><i class="bi bi-file-earmark-excel"></i> Xuất Excel</button>
         <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#adjustModal"><i class="bi bi-pencil"></i> Điều chỉnh tồn kho</button>
         <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#sessionModal"><i class="bi bi-plus-lg"></i> Tạo phiên kiểm kê</button>
     </div>

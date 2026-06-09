@@ -5,6 +5,9 @@ ob_start();
 ?>
 <div class="toolbar">
     <div><h5><?= $title ?></h5></div>
+    <div>
+        <button class="btn btn-outline-success btn-sm me-1" onclick="exportCSV('#dataBody', 'giam-tscd')"><i class="bi bi-file-earmark-excel"></i> Xuất Excel</button>
+    </div>
 </div>
 <div class="row g-3">
 <div class="col-md-7">

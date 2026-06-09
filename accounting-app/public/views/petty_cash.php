@@ -7,6 +7,7 @@ $title = 'Tạm ứng'; $activeMenu = 'petty_cash'; ob_start(); ?>
 <div class="toolbar">
     <h5>Tạm ứng <span class="stats">(TK 141)</span></h5>
     <div>
+        <button class="btn btn-outline-success btn-sm me-1" onclick="exportCSV('#dataBody', 'tam-ung')"><i class="bi bi-file-earmark-excel"></i> Xuất Excel</button>
         <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#fundModal"><i class="bi bi-plus-lg"></i> Lập quỹ</button>
         <button class="btn btn-outline-success btn-sm ms-1" data-bs-toggle="modal" data-bs-target="#disburseModal"><i class="bi bi-cash"></i> Tạm ứng</button>
         <button class="btn btn-outline-warning btn-sm ms-1" data-bs-toggle="modal" data-bs-target="#repModal"><i class="bi bi-arrow-repeat"></i> Hoàn ứng</button>
@@ -56,7 +57,7 @@ function loadData(){
     $.get('/api/petty-cash/funds',function(data){
         var tbody=$('#dataBody'); tbody.empty();
         data.forEach(function(r){
-            var acts=r.status==='active'?'<button class="btn btn-sm btn-outline-danger" onclick="closeFund('+r.id+')"><i class="bi bi-lock"></i></button>':'';
+            var acts=r.status==='active'?'<button class="btn btn-sm btn-outline-danger" onclick="closeFund('+r.id+')"><i class="bi bi-lock"></i></button>':'';acts+='<a href="#" class="btn-action me-1" onclick="printTransaction(\'Phiếu tạm ứng\',\'/api/petty-cash/\'+r.id,{reference:\'Số CT\',transaction_date:\'Ngày\',description:\'Diễn giải\',amount:\'Số tiền\',fund_name:\'Quỹ\'})" title="In chứng từ"><i class="bi bi-printer"></i></a>';
             tbody.append('<tr><td>'+esc(r.fund_name||r.id)+'</td><td>'+esc(r.employee_name||'')+'</td><td class="text-end font-monospace">'+parseFloat(r.total_amount).toLocaleString()+'</td><td class="text-end font-monospace">'+parseFloat(r.balance).toLocaleString()+'</td><td style="font-size:12px">'+esc(r.created_at)+'</td><td>'+statusBadge(r.status)+'</td><td>'+acts+'</td></tr>');
         });
     });

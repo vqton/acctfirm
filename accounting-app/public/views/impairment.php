@@ -7,6 +7,7 @@ $title = 'Dự phòng giảm giá hàng tồn kho'; $activeMenu = 'impairment'; 
 <div class="toolbar">
     <h5>Dự phòng giảm giá HTK <span class="stats">(TK 229)</span></h5>
     <div>
+        <button class="btn btn-outline-success btn-sm me-1" onclick="exportCSV('#dataBody', 'danh-gia-giam-gia')"><i class="bi bi-file-earmark-excel"></i> Xuất Excel</button>
         <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#impairModal"><i class="bi bi-plus-lg"></i> Ghi nhận dự phòng</button>
     </div>
 </div>

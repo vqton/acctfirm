@@ -6,7 +6,7 @@ ob_start();
 ?>
 <div class="toolbar">
     <div><h5><?= $title ?> <span class="stats" id="recordCount"></span></h5></div>
-    <div><button class="btn btn-primary btn-sm" onclick="openCreate()"><i class="bi bi-plus-lg"></i> Thêm mới</button></div>
+    <div><button class="btn btn-outline-success btn-sm me-1" onclick="exportCSV('#dataBody', 'danh-sach-ty-gia')"><i class="bi bi-file-earmark-excel"></i> Xuất Excel</button><button class="btn btn-primary btn-sm" onclick="openCreate()"><i class="bi bi-plus-lg"></i> Thêm mới</button></div>
 </div>
 <div class="card-table">
     <div class="card-header-x"><i class="bi bi-search text-muted"></i><input type="text" id="searchInput" placeholder="Tìm kiếm..."></div>

@@ -18,6 +18,9 @@ ob_start();
                 <div class="col-auto">
                     <button class="btn btn-outline-secondary" id="btnPreview"><i class="bi bi-eye"></i> Xem trước</button>
                 </div>
+                <div class="col-auto">
+                    <button class="btn btn-outline-success" onclick="exportCSV('#resultTable', 'phan-bo-cong-cu-dung-cu')"><i class="bi bi-file-earmark-excel"></i> Xuất Excel</button>
+                </div>
             </div>
         </div>
     </div>

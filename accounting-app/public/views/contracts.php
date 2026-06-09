@@ -3,6 +3,7 @@
   <div class="d-flex justify-content-between align-items-center mb-3">
     <h4><i class="bi bi-file-earmark-text"></i> Quản lý Hợp đồng</h4>
     <div>
+      <button class="btn btn-outline-success btn-sm me-1" onclick="exportCSV('#dataBody', 'danh-sach-hop-dong')"><i class="bi bi-file-earmark-excel"></i> Xuất Excel</button>
       <a href="/contracts/form" class="btn btn-primary btn-sm"><i class="bi bi-plus"></i> Thêm hợp đồng</a>
       <button class="btn btn-outline-secondary btn-sm" onclick="location.href='/api/contracts/export?format=csv'"><i class="bi bi-download"></i> Xuất CSV</button>
     </div>

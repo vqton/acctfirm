@@ -9,6 +9,7 @@ $title = 'Chứng từ ghi sổ'; $activeMenu = 'journal'; ob_start(); ?>
         <select class="form-select form-select-sm d-inline-block w-auto me-2" id="periodFilter">
             <option value="">-- Chọn kỳ --</option>
         </select>
+        <button class="btn btn-outline-success btn-sm me-1" onclick="exportCSV('#dataBody', 'chung-tu-ghi-so')"><i class="bi bi-file-earmark-excel"></i> Xuất Excel</button>
         <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#entryModal"><i class="bi bi-plus-lg"></i> Nhập bút toán</button>
     </div>
 </div>
@@ -191,11 +192,11 @@ function recalcTotal(){
     var diff=Math.abs(totalDr-totalCr);
     var bal=Math.max(totalDr,totalCr);
     if(diff<10){
-        $('#drCrStatus').text('✓ Nợ = Có ('+VAS.fmt(bal)+')').removeClass().addClass('text-success fw-bold');
+        $('#drCrStatus').text('✓ Nợ = Có ('+ (bal > 0 ? VAS.fmt(bal) : '0') +')').removeClass().addClass('text-success fw-bold');
     }else{
         $('#drCrStatus').html('✗ CHÊNH LỆCH: Nợ '+VAS.fmt(totalDr)+' / Có '+VAS.fmt(totalCr)).removeClass().addClass('text-danger fw-bold');
     }
-    $('#totalAmount').text(VAS.fmt(bal));
+    $('#totalAmount').text(bal > 0 ? VAS.fmt(bal) : '0');
     updateAmountInWords(bal);
     // VAT info display
     if(vat1331>0||vat3331>0){

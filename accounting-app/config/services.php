@@ -265,6 +265,8 @@ function createContainer(): array
         'glService' => $glService,
         'journalBookService' => $journalBookService,
         'fixedAssetService' => $fixedAssetService,
+        'depreciationBatchService' => $depreciationBatchService,
+        'DepreciationReportController' => $depreciationReportController,
         'citService' => $citService,
         'openingBalanceService' => $openingBalanceService,
 

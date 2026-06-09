@@ -14,6 +14,7 @@ ob_start(); ?>
     <h5>Điều chỉnh bút toán</h5>
     <div>
         <input class="form-control form-control-sm d-inline-block w-auto me-2" id="searchTxn" placeholder="Tìm bút toán gốc (mã CT, diễn giải)" style="width:250px">
+        <button class="btn btn-outline-success btn-sm me-1" onclick="exportCSV('#dataBody', 'but-toan-dieu-chinh')"><i class="bi bi-file-earmark-excel"></i> Xuất Excel</button>
         <button class="btn btn-primary btn-sm" onclick="loadTransactions()"><i class="bi bi-search"></i> Tìm</button>
     </div>
 </div>
@@ -84,7 +85,7 @@ function loadTransactions() {
                 <td>${e(t.description || '')}</td>
                 <td>${t.date ? t.date.slice(0,10) : ''}</td>
                 <td>${statusBadge('posted')}</td>
-                <td><button class="btn btn-outline-warning btn-sm" onclick="selectTxn('${t.id}','${e(t.description||'')}','${t.reference||''}')">Điều chỉnh</button>
+                <td><a href="#" class="btn-action me-1" onclick="printTransaction('Bút toán điều chỉnh','/api/corrections/'+t.id,{reference:'Số CT',transaction_date:'Ngày',description:'Diễn giải',amount:'Số tiền'})" title="In chứng từ"><i class="bi bi-printer"></i></a><button class="btn btn-outline-warning btn-sm" onclick="selectTxn('${t.id}','${e(t.description||'')}','${t.reference||''}')">Điều chỉnh</button>
                     <button class="btn btn-outline-info btn-sm" onclick="showHistory('${t.id}')">LS</button></td>
             </tr>
         `).join('');
@@ -132,7 +133,8 @@ function updateCorrDrCr() {
     } else {
         status.className = 'text-danger fw-bold small';
     }
-    status.textContent = `Nợ: ${VAS.fmt(dr)} — Có: ${VAS.fmt(cr)} (Chênh: ${VAS.fmt(dr-cr)})`;
+    var f = function(v) { return v === 0 ? '0' : VAS.fmt(v); };
+    status.textContent = `Nợ: ${f(dr)} — Có: ${f(cr)} (Chênh: ${f(dr-cr)})`;
 }
 
 document.addEventListener('change', function(e) {

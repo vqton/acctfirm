@@ -135,6 +135,20 @@ $router->post('/api/fixed-assets', function() use ($c) { $c['FixedAssetControlle
 $router->put('/api/fixed-assets/:id', function($id) use ($c) { $c['FixedAssetController']->update($id); });
 $router->delete('/api/fixed-assets/:id', function($id) use ($c) { $c['FixedAssetController']->delete($id); });
 
+// Mẫu 06-TSCĐ: Bảng tính và phân bổ khấu hao TSCĐ
+$router->get('/api/fixed-assets/depreciation/report/:period', function($period) use ($c) {
+    $c['DepreciationReportController']->report($period);
+});
+$router->post('/api/fixed-assets/depreciation/save-batch', function() use ($c) {
+    $c['DepreciationReportController']->saveBatch();
+});
+$router->get('/api/fixed-assets/depreciation/batch/:period', function($period) use ($c) {
+    $c['DepreciationReportController']->getBatch($period);
+});
+$router->get('/api/fixed-assets/depreciation/batches', function() use ($c) {
+    $c['DepreciationReportController']->listBatches();
+});
+
 // Fixed Asset Depreciation
 $router->post('/api/fixed-assets/depreciate', function() use ($c) {
     $input = json_decode(file_get_contents('php://input'), true);

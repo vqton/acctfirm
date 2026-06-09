@@ -5,6 +5,7 @@
 $title = 'Bảng cân đối số phát sinh'; $activeMenu = 'trial_balance'; ob_start(); ?>
 <div class="toolbar">
     <h5>Bảng cân đối số phát sinh</h5>
+    <a href="/api/export/csv/trial-balance" class="btn btn-outline-success btn-sm me-1"><i class="bi bi-file-earmark-excel"></i> Xuất Excel</a>
     <button class="btn btn-outline-primary btn-sm" onclick="loadData()"><i class="bi bi-arrow-clockwise"></i> Làm mới</button>
 </div>
 <div class="card-table"><table class="table table-hover table-sm">

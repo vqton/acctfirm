@@ -39,6 +39,7 @@ ob_start(); ?>
             <option value="posted">Đã ghi sổ</option>
             <option value="cancelled">Đã hủy</option>
         </select>
+        <button class="btn btn-outline-success btn-sm me-1" onclick="exportCSV('#dataBody', 'phieu-xuat-kho')"><i class="bi bi-file-earmark-excel"></i> Xuất Excel</button>
         <button class="btn btn-primary btn-sm" onclick="showCreateForm()"><i class="bi bi-plus-lg"></i> Tạo PXK mới</button>
     </div>
 </div>

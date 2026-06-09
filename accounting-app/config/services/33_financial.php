@@ -32,6 +32,8 @@ $arService = new ArService($pdo, $accountRepository, $journalService, $auditLogg
 $glService = new GlService($pdo, $accountRepository);
 $journalBookService = new JournalBookService($pdo);
 $fixedAssetService = new FixedAssetService($fixedAssetRepository, $accountRepository, $transactionRepository, $journalService, $pdo, $auditLogger);
+use Accounting\Domain\Service\DepreciationBatchService;
+$depreciationBatchService = new DepreciationBatchService($pdo, $fixedAssetRepository);
 $vatService = new VatService($pdo, $auditLogger);
 $citService = new CitService($pdo, $auditLogger);
 $citDeclarationEngine = new \Accounting\Domain\Service\CitDeclarationEngine($pdo);

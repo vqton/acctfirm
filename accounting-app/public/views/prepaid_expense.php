@@ -14,6 +14,7 @@ $title = 'Phân bổ chi phí trả trước'; $activeMenu = 'prepaid_expense'; 
                     <h6 class="card-title">Kỳ phân bổ</h6>
                     <div class="input-group">
                         <input type="month" id="period" class="form-control" value="<?= date('Y-m') ?>">
+                        <button class="btn btn-outline-success me-1" onclick="exportCSV('#dataBody', 'chi-phi-tra-truoc')"><i class="bi bi-file-earmark-excel"></i> Xuất Excel</button>
                         <button class="btn btn-primary" id="btnRun"><i class="bi bi-play"></i> Chạy</button>
                         <button class="btn btn-outline-secondary" id="btnPreview"><i class="bi bi-eye"></i> Xem trước</button>
                     </div>

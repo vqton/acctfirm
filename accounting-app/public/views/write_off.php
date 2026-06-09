@@ -4,7 +4,10 @@ $title = 'Xuất hủy hàng'; $activeMenu = 'write_off'; ob_start(); ?>
 <div class="card-table">
     <div class="card-header-x d-flex justify-content-between">
         <input type="text" id="search" placeholder="Tìm kiếm..." onkeyup="filterTable()">
-        <button class="btn btn-sm btn-primary" onclick="showWriteOffModal()"><i class="bi bi-plus-lg"></i> Xuất hủy</button>
+        <div>
+            <button class="btn btn-outline-success btn-sm me-1" onclick="exportCSV('#dataBody', 'xoa-so')"><i class="bi bi-file-earmark-excel"></i> Xuất Excel</button>
+            <button class="btn btn-sm btn-primary" onclick="showWriteOffModal()"><i class="bi bi-plus-lg"></i> Xuất hủy</button>
+        </div>
     </div>
     <table class="table" id="writeOffTable">
         <thead><tr><th>Mã</th><th>Hàng hóa</th><th>Số lượng</th><th>Đơn giá</th><th>Thành tiền</th><th>Lý do</th><th>Chứng từ</th><th>Ngày</th></tr></thead>

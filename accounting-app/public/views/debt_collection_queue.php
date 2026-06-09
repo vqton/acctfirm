@@ -3,6 +3,7 @@ $title = 'Hàng đợi thu hồi nợ'; $activeMenu = 'debt_collection'; ob_star
 <div class="toolbar">
     <h5>Hàng đợi thu hồi nợ</h5>
     <div>
+        <button class="btn btn-outline-success btn-sm me-1" onclick="exportCSV('#dataBody', 'no-thu')"><i class="bi bi-file-earmark-excel"></i> Xuất Excel</button>
         <button class="btn btn-outline-primary btn-sm" onclick="generateQueue()"><i class="bi bi-arrow-repeat"></i> Sinh hàng đợi</button>
         <a href="/thu-hoi-cong-no" class="btn btn-outline-secondary btn-sm ms-1"><i class="bi bi-speedometer2"></i> Dashboard</a>
     </div>

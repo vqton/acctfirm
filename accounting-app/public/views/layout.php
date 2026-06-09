@@ -284,9 +284,297 @@ $scActive = $scRoute !== '#' && ($currentUri === $scRoute || $currentUri === $sc
     </div>
 </div>
 
+<!-- === IMPORT MODAL === -->
+<div class="modal fade" id="importModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+    <div class="modal-header">
+        <h6 class="modal-title" id="importModalLabel">Nhập dữ liệu từ Excel</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+        <div class="mb-3">
+            <label class="form-label">1. Tải file mẫu</label>
+            <div><a id="importTemplateBtn" class="btn btn-sm btn-outline-primary d-none" download><i class="bi bi-download"></i> Tải template CSV</a></div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">2. Chọn file CSV</label>
+            <input type="file" id="importFileInput" class="form-control form-control-sm" accept=".csv,.txt" onchange="importValidate()">
+            <div class="form-text">File CSV có BOM (UTF-8), dấu phẩy phân cách</div>
+        </div>
+        <div id="importResult" class="d-none"></div>
+    </div>
+    <div class="modal-footer">
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Đóng</button>
+        <button class="btn btn-sm btn-primary" id="importSubmitBtn" onclick="importCommit()" disabled><i class="bi bi-upload"></i> Nhập dữ liệu</button>
+    </div>
+</div></div></div>
+
 <script>
 var csrf=<?= json_encode(Auth::csrfToken()) ?>;
 function esc(s){return String(s).replace(/[&<>"']/g,function(m){if(m==='&')return'&amp;';if(m==='<')return'&lt;';if(m==='>')return'&gt;';if(m==='"')return'&quot;';return'&#39;';});}
+
+// === XUẤT EXCEL — chuyển HTML table → CSV với BOM ===
+function exportCSV(tableSelector, filename) {
+    var tbl = typeof tableSelector === 'string' ? document.querySelector(tableSelector) : tableSelector;
+    if (!tbl) { showToast('Không tìm thấy dữ liệu để xuất', 'error'); return; }
+    var rows = tbl.querySelectorAll('tr');
+    if (!rows.length) { showToast('Bảng không có dữ liệu', 'error'); return; }
+    var csv = '\uFEFF';
+    rows.forEach(function(tr){
+        var cells = tr.querySelectorAll('th,td');
+        var vals = [];
+        cells.forEach(function(td){
+            var txt = td.textContent.trim().replace(/"/g, '""');
+            // Bỏ icon, badge HTML tags
+            txt = txt.replace(/\s+/g, ' ');
+            vals.push('"' + txt + '"');
+        });
+        csv += vals.join(',') + '\n';
+    });
+    var blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    var link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename + '.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+    showToast('Đã xuất file: ' + filename + '.csv', 'success');
+}
+
+// === IN CHỨNG TỪ — mở cửa sổ in với định dạng A4 ===
+// Dùng printForm(title, bodyHtml) khi đã có HTML sẵn
+// Dùng printTransaction(title, apiUrl, fieldMap) khi cần fetch từ API
+function printForm(title, bodyHtml) {
+    var w = window.open('', '_blank', 'width=900,height=700');
+    w.document.write('<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8">');
+    w.document.write('<title>' + esc(title) + '</title>');
+    w.document.write('<style>');
+    w.document.write('@page { size:A4; margin:15mm 20mm; }');
+    w.document.write('body { font-family:"Times New Roman",serif; font-size:12pt; line-height:1.6; color:#000; padding:20px; }');
+    w.document.write('.print-header { text-align:center; margin-bottom:20px; }');
+    w.document.write('.print-header h3 { margin:0 0 4px; font-size:14pt; font-weight:700; }');
+    w.document.write('.print-header .sub { font-size:10pt; color:#555; }');
+    w.document.write('table { width:100%; border-collapse:collapse; font-size:11pt; }');
+    w.document.write('table th, table td { border:1px solid #333; padding:4px 8px; text-align:left; vertical-align:top; }');
+    w.document.write('table th { background:#f0f0f0; font-weight:600; }');
+    w.document.write('.text-end { text-align:right; }');
+    w.document.write('.text-center { text-align:center; }');
+    w.document.write('.signature { display:flex; justify-content:space-between; margin-top:40px; }');
+    w.document.write('.signature div { text-align:center; width:30%; }');
+    w.document.write('.signature div p { margin:0; }');
+    w.document.write('.signature .name { margin-top:40px; }');
+    w.document.write('@media print { .no-print { display:none !important; } }');
+    w.document.write('.no-print { text-align:center; margin-bottom:12px; }');
+    w.document.write('</style></head><body>');
+    w.document.write('<div class="no-print"><button onclick="window.print()" style="padding:6px 24px;font-size:14px;cursor:pointer;">In</button>');
+    w.document.write(' <button onclick="window.close()" style="padding:6px 24px;font-size:14px;cursor:pointer;">Đóng</button></div>');
+    w.document.write(bodyHtml);
+    w.document.write('</body></html>');
+    w.document.close();
+    return w;
+}
+
+// In chứng từ từ API — generic, dùng fieldMap để ánh xạ key → nhãn
+// fieldMap = { responseKey: 'Nhãn', ... }
+// linesField: tên field chứa mảng dòng chi tiết
+// lineFields: map cho từng dòng { key: 'Nhãn' }
+// partnerField: tên field chứa đối tác (nếu có)
+function printTransaction(title, apiUrl, fieldMap, linesField, lineFields, partnerField) {
+    showToast('Đang tải dữ liệu in...', 'info');
+    fetch(apiUrl).then(function(r){
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+    }).then(function(d){
+        var data = d.data || d;
+        var h = '<div class="print-header"><h3>' + esc(title) + '</h3>';
+        h += '<div class="sub">Mẫu số: ' + esc(title) + '</div>';
+        h += '<div class="sub">Ban hành theo TT 99/2025/TT-BTC</div></div>';
+
+        // Key fields
+        h += '<table><tbody>';
+        for (var key in fieldMap) {
+            var val = data[key];
+            if (val === null || val === undefined) val = '';
+            if (typeof val === 'number') val = val.toLocaleString();
+            h += '<tr><td style="width:140px;font-weight:600;">' + esc(fieldMap[key]) + '</td><td>' + esc(String(val)) + '</td></tr>';
+        }
+        h += '</tbody></table>';
+
+        // Partner info
+        if (partnerField && data[partnerField]) {
+            h += '<h4 style="margin-top:16px;font-size:11pt;">Thông tin đối tác</h4><table><tbody>';
+            var partner = data[partnerField];
+            for (var pk in partner) {
+                if (typeof partner[pk] === 'object') continue;
+                h += '<tr><td style="width:140px;font-weight:600;">' + esc(pk) + '</td><td>' + esc(String(partner[pk])) + '</td></tr>';
+            }
+            h += '</tbody></table>';
+        }
+
+        // Lines
+        if (linesField && data[linesField] && data[linesField].length) {
+            h += '<h4 style="margin-top:16px;font-size:11pt;">Chi tiết</h4><table><thead><tr>';
+            var colKeys = [];
+            for (var lk in lineFields) {
+                colKeys.push(lk);
+                h += '<th>' + esc(lineFields[lk]) + '</th>';
+            }
+            h += '</tr></thead><tbody>';
+            data[linesField].forEach(function(line){
+                h += '<tr>';
+                colKeys.forEach(function(k){
+                    var v = line[k];
+                    if (v === null || v === undefined) v = '';
+                    if (typeof v === 'number') v = v.toLocaleString();
+                    h += '<td>' + esc(String(v)) + '</td>';
+                });
+                h += '</tr>';
+            });
+            h += '</tbody></table>';
+        }
+
+        // Description
+        if (data.description) {
+            h += '<div style="margin-top:12px;"><strong>Diễn giải:</strong> ' + esc(data.description) + '</div>';
+        }
+
+        // Amount
+        if (data.amount) {
+            h += '<div style="margin-top:8px;text-align:right;font-size:13pt;font-weight:700;">Số tiền: ' + esc(Number(data.amount).toLocaleString()) + ' VNĐ</div>';
+        }
+
+        // Signatures
+        h += '<div class="signature"><div><p><strong>Người lập</strong></p><p class="name">(Ký, họ tên)</p></div>';
+        h += '<div><p><strong>Kế toán trưởng</strong></p><p class="name">(Ký, họ tên)</p></div>';
+        h += '<div><p><strong>Thủ quỹ/Giám đốc</strong></p><p class="name">(Ký, họ tên)</p></div></div>';
+
+        printForm(title, h);
+    }).catch(function(e){
+        showToast('Lỗi tải dữ liệu in: ' + e.message, 'error');
+    });
+}
+
+// In từ dữ liệu đã có sẵn (từ modal/form hiện tại)
+function printFromData(title, data, fieldMap, linesField, lineFields) {
+    var h = '<div class="print-header"><h3>' + esc(title) + '</h3>';
+    h += '<div class="sub">Ban hành theo TT 99/2025/TT-BTC</div></div>';
+    h += '<table><tbody>';
+    for (var key in fieldMap) {
+        var val = data[key];
+        if (val === null || val === undefined) val = '';
+        if (typeof val === 'number') val = val.toLocaleString();
+        h += '<tr><td style="width:140px;font-weight:600;">' + esc(fieldMap[key]) + '</td><td>' + esc(String(val)) + '</td></tr>';
+    }
+    h += '</tbody></table>';
+    if (linesField && data[linesField] && data[linesField].length) {
+        h += '<h4 style="margin-top:16px;font-size:11pt;">Chi tiết</h4><table><thead><tr>';
+        var colKeys = [];
+        for (var lk in lineFields) { colKeys.push(lk); h += '<th>' + esc(lineFields[lk]) + '</th>'; }
+        h += '</tr></thead><tbody>';
+        data[linesField].forEach(function(line){
+            h += '<tr>';
+            colKeys.forEach(function(k){
+                var v = line[k];
+                if (v === null || v === undefined) v = '';
+                if (typeof v === 'number') v = v.toLocaleString();
+                h += '<td>' + esc(String(v)) + '</td>';
+            });
+            h += '</tr>';
+        });
+        h += '</tbody></table>';
+    }
+    if (data.description) h += '<div style="margin-top:12px;"><strong>Diễn giải:</strong> ' + esc(data.description) + '</div>';
+    if (data.amount) h += '<div style="margin-top:8px;text-align:right;font-size:13pt;font-weight:700;">Số tiền: ' + esc(Number(data.amount).toLocaleString()) + ' VNĐ</div>';
+    h += '<div class="signature"><div><p><strong>Người lập</strong></p><p class="name">(Ký, họ tên)</p></div>';
+    h += '<div><p><strong>Kế toán trưởng</strong></p><p class="name">(Ký, họ tên)</p></div>';
+    h += '<div><p><strong>Thủ quỹ/Giám đốc</strong></p><p class="name">(Ký, họ tên)</p></div></div>';
+    printForm(title, h);
+}
+
+// === NHẬP EXCEL — mở modal import cho entity type ===
+// HTML modal được render trong layout, hàm này chỉ mở modal
+var importConfig = {};
+
+var importLabels = {
+    items: 'vật tư, hàng hóa',
+    customers: 'khách hàng',
+    suppliers: 'nhà cung cấp',
+    coa: 'hệ thống tài khoản',
+    opening_balance: 'số dư đầu kỳ',
+    employees: 'nhân viên',
+    fixed_assets: 'tài sản cố định'
+};
+function importFromExcel(entityType) {
+    importConfig.entity = entityType;
+    var lbl = importLabels[entityType] || entityType;
+    $('#importModalLabel').text('Nhập dữ liệu ' + lbl);
+    $('#importFileInput').val('');
+    $('#importResult').addClass('d-none');
+    $('#importSubmitBtn').prop('disabled', true);
+    // Tải template mẫu
+    fetch('/api/import/template/' + entityType).then(function(r){
+        if (r.ok) {
+            $('#importTemplateBtn').removeClass('d-none').attr('href', '/api/import/template/' + entityType);
+        } else {
+            $('#importTemplateBtn').addClass('d-none');
+        }
+    }).catch(function(){ $('#importTemplateBtn').addClass('d-none'); });
+}
+
+function importValidate() {
+    var file = document.getElementById('importFileInput').files[0];
+    if (!file) return;
+    var fd = new FormData();
+    fd.append('file', file);
+    $('#importResult').removeClass('d-none').html('<div class="text-center py-3"><i class="bi bi-arrow-repeat spinner"></i> Đang kiểm tra...</div>');
+    $('#importSubmitBtn').prop('disabled', true);
+    fetch('/api/import/dry-run/' + importConfig.entity, {method:'POST', body:fd})
+    .then(function(r){return r.json();}).then(function(d){
+        if (d.error) {
+            $('#importResult').html('<div class="alert alert-danger mb-0">' + esc(d.error) + '</div>');
+            return;
+        }
+        var h = '<div class="mb-2">Tổng: ' + d.total_rows + ' dòng, Hợp lệ: ' + d.valid_rows + ', Lỗi: ' + d.error_rows + '</div>';
+        if (d.errors && d.errors.length) {
+            h += '<div style="max-height:200px;overflow-y:auto;font-size:12px;">';
+            d.errors.forEach(function(e){ h += '<div class="text-danger">• ' + esc(e) + '</div>'; });
+            h += '</div>';
+        }
+        if (d.headers) h += '<div class="text-muted mt-1" style="font-size:11px;">Cột: ' + esc(d.headers.join(', ')) + '</div>';
+        $('#importResult').html(h);
+        if (d.error_rows === 0 && d.valid_rows > 0) $('#importSubmitBtn').prop('disabled', false);
+    }).catch(function(e){
+        $('#importResult').html('<div class="alert alert-danger mb-0">Lỗi: ' + esc(e.message) + '</div>');
+    });
+}
+
+function importCommit() {
+    var file = document.getElementById('importFileInput').files[0];
+    if (!file) return;
+    if (!confirm('Xác nhận nhập ' + file.name + ' vào hệ thống?')) return;
+    var fd = new FormData();
+    fd.append('file', file);
+    $('#importResult').html('<div class="text-center py-3"><i class="bi bi-arrow-repeat spinner"></i> Đang nhập dữ liệu...</div>');
+    $('#importSubmitBtn').prop('disabled', true);
+    fetch('/api/import/commit/' + importConfig.entity, {method:'POST', body:fd})
+    .then(function(r){return r.json();}).then(function(d){
+        if (d.error) {
+            $('#importResult').html('<div class="alert alert-danger mb-0">' + esc(d.error) + '</div>');
+            $('#importSubmitBtn').prop('disabled', false);
+            return;
+        }
+        $('#importResult').html('<div class="alert alert-success mb-0">Đã nhập ' + d.inserted_rows + ' dòng thành công. Batch: ' + esc(d.batch_id) + '</div>');
+        $('#importSubmitBtn').prop('disabled', true);
+        if (typeof loadData === 'function') setTimeout(loadData, 500);
+    }).catch(function(e){
+        $('#importResult').html('<div class="alert alert-danger mb-0">Lỗi: ' + esc(e.message) + '</div>');
+        $('#importSubmitBtn').prop('disabled', false);
+    });
+}
+
+function downloadTemplate(entityType) {
+    window.open('/api/import/template/' + entityType, '_blank');
+}
 
 // === VAS FINANCIAL HELPERS ===
 // Global shorthands for VAS.fmt — available in ALL views

@@ -7,8 +7,8 @@ $title = 'Sổ cái'; $activeMenu = 'so_cai'; ob_start(); ?>
 <div class="toolbar">
     <h5>Sổ cái <span class="stats">(General Ledger — Mẫu S05-DN)</span></h5>
     <div class="d-flex gap-2">
+        <a href="/api/export/csv/ledger" class="btn btn-outline-success btn-sm me-1"><i class="bi bi-file-earmark-excel"></i> Xuất Excel</a>
         <button class="btn btn-outline-primary btn-sm" onclick="printLedger()"><i class="bi bi-printer"></i> In sổ</button>
-        <button class="btn btn-outline-success btn-sm" onclick="exportCsv()"><i class="bi bi-file-earmark-excel"></i> CSV</button>
     </div>
 </div>
 <div class="card p-3 mb-3 border-0 shadow-sm">

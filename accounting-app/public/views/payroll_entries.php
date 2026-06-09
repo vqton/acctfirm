@@ -2,6 +2,7 @@
 <div class="toolbar">
   <div><h5>Bảng lương</h5></div>
   <div>
+    <button class="btn btn-outline-success btn-sm me-1" onclick="exportCSV('#dataBody', 'bang-luong')"><i class="bi bi-file-earmark-excel"></i> Xuất Excel</button>
     <button class="btn btn-sm btn-primary" onclick="showCreatePeriod()"><i class="bi bi-plus"></i> Tạo kỳ lương</button>
     <button class="btn btn-sm btn-success" onclick="showProcess()"><i class="bi bi-calculator"></i> Tính lương</button>
   </div>

@@ -10,6 +10,7 @@ $title = 'Đánh giá lại ngoại tệ'; $activeMenu = 'fx_revaluation'; ob_st
         <select class="form-select form-select-sm d-inline-block w-auto" id="periodSelect">
             <option value="">-- Chọn kỳ --</option>
         </select>
+        <button class="btn btn-outline-success btn-sm me-1" onclick="exportCSV('#dataBody', 'danh-gia-lai-ngoai-te')"><i class="bi bi-file-earmark-excel"></i> Xuất Excel</button>
         <button class="btn btn-primary btn-sm" onclick="loadReport()"><i class="bi bi-search"></i> Xem báo cáo</button>
         <button class="btn btn-warning btn-sm" onclick="executeRevaluation()"><i class="bi bi-currency-exchange"></i> Thực hiện đánh giá lại</button>
     </div>

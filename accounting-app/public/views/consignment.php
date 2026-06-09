@@ -3,6 +3,7 @@ $title = 'Hàng gửi đi bán'; $activeMenu = 'consignment'; ob_start(); ?>
 <div class="toolbar">
     <h5>Hàng gửi đi bán <span class="stats">(TK 157)</span></h5>
     <div>
+        <button class="btn btn-outline-success btn-sm me-1" onclick="exportCSV('#dataBody', 'danh-sach-hang-gui-di-ban')"><i class="bi bi-file-earmark-excel"></i> Xuất Excel</button>
         <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#consignModal"><i class="bi bi-plus-lg"></i> Gửi hàng</button>
     </div>
 </div>

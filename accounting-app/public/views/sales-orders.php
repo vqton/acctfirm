@@ -2,6 +2,7 @@
 <div class="toolbar">
     <h5>Đơn đặt hàng <span class="stats">(Order-to-Cash)</span></h5>
     <div>
+        <button class="btn btn-outline-success btn-sm me-1" onclick="exportCSV('#dataBody', 'danh-sach-don-dat-hang')"><i class="bi bi-file-earmark-excel"></i> Xuất Excel</button>
         <button class="btn btn-outline-secondary btn-sm" onclick="location.href='/ban/don-dat-hang/them'"><i class="bi bi-plus-lg"></i> Tạo đơn hàng</button>
         <button class="btn btn-outline-secondary btn-sm ms-1" onclick="exportOrders()"><i class="bi bi-download"></i> Xuất CSV</button>
     </div>

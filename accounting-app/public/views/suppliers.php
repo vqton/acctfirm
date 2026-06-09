@@ -9,6 +9,8 @@ ob_start();
         <h5><?= $title ?> <span class="stats" id="recordCount"></span></h5>
     </div>
     <div>
+        <button class="btn btn-outline-success btn-sm me-1" onclick="exportCSV('#dataBody', 'danh-sach-nha-cung-cap')"><i class="bi bi-file-earmark-excel"></i> Xuất Excel</button>
+        <button class="btn btn-outline-primary btn-sm me-1" onclick="importFromExcel('suppliers')"><i class="bi bi-upload"></i> Nhập Excel</button>
         <button class="btn btn-primary btn-sm" onclick="openCreate()"><i class="bi bi-plus-lg"></i> Thêm mới</button>
     </div>
 </div>

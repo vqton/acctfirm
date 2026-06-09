@@ -9,11 +9,12 @@ $title = 'Phiếu thu'; $activeMenu = 'cash_receipts'; ob_start(); ?>
     <h5>Phiếu thu tiền mặt <span class="stats">(TK 111)</span></h5>
     <div>
         <span id="loadStatus" class="badge bg-secondary">Đang tải...</span>
+        <button class="btn btn-outline-success btn-sm me-1" onclick="exportCSV('#dataBody', 'phieu-thu')"><i class="bi bi-file-earmark-excel"></i> Xuất Excel</button>
         <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#receiptModal"><i class="bi bi-plus-lg"></i> Phiếu thu</button>
     </div>
 </div>
 <div class="card-table"><table class="table table-hover">
-    <thead><tr><th>Số CT</th><th>Người nộp</th><th>Diễn giải</th><th class="text-end">Số tiền</th><th>TK Có</th><th>Ngày</th><th>Trạng thái</th></tr></thead>
+    <thead><tr><th>Số CT</th><th>Người nộp</th><th>Diễn giải</th><th class="text-end">Số tiền</th><th>TK Có</th><th>Ngày</th><th>Trạng thái</th><th></th></tr></thead>
     <tbody id="dataBody"></tbody>
 </table></div>
 
@@ -56,7 +57,7 @@ function loadData(){
         data.forEach(function(r){
             var payer=esc(r.payer_name||'');
             var date=esc((r.transaction_date||r.created_at||'').substring(0,10));
-            tbody.append('<tr><td>'+esc(r.reference)+'</td><td>'+payer+'</td><td>'+esc(r.description)+'</td><td class="text-end font-monospace">'+fmtZero(r.amount)+'</td><td>'+esc(r.credit_account||'')+'</td><td style="font-size:12px">'+date+'</td><td>'+statusBadge(r.status)+'</td></tr>');
+            tbody.append('<tr><td>'+esc(r.reference)+'</td><td>'+payer+'</td><td>'+esc(r.description)+'</td><td class="text-end font-monospace">'+fmtZero(r.amount)+'</td><td>'+esc(r.credit_account||'')+'</td><td style="font-size:12px">'+date+'</td><td>'+statusBadge(r.status)+'</td><td><a href="#" class="btn-action me-1" onclick="printTransaction(\'Phiếu thu\',\'/api/cash/receipts/\'+r.id,{reference:\'Số CT\',transaction_date:\'Ngày\',description:\'Diễn giải\',amount:\'Số tiền\',status:\'Trạng thái\'})" title="In chứng từ"><i class="bi bi-printer"></i></a></td></tr>');
         });
     }});
 }

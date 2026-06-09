@@ -33,6 +33,7 @@ ob_start(); ?>
             <option value="posted">Đã ghi sổ</option>
             <option value="cancelled">Đã hủy</option>
         </select>
+        <button class="btn btn-outline-success btn-sm me-1" onclick="exportCSV('#dataBody', 'phieu-nhap-kho')"><i class="bi bi-file-earmark-excel"></i> Xuất Excel</button>
         <button class="btn btn-primary btn-sm" onclick="showCreateForm()"><i class="bi bi-plus-lg"></i> Tạo PNK mới</button>
     </div>
 </div>
@@ -350,7 +351,7 @@ function addLine(data) {
         '<td><input type="text" class="form-control form-control-sm item-uom" value="' + esc(data.uom || '') + '" readonly style="min-width:50px"></td>' +
         '<td><input type="number" class="form-control form-control-sm line-qty" data-idx="' + idx + '" value="' + (data.qty_received || '') + '" step="1" min="0" oninput="recalcLine(' + idx + ')" placeholder="SL" style="min-width:80px"></td>' +
         '<td><input type="number" class="form-control form-control-sm line-price" data-idx="' + idx + '" value="' + (data.unit_price || '') + '" step="1000" min="0" oninput="recalcLine(' + idx + ')" placeholder="ĐG" style="min-width:80px"></td>' +
-        '<td><input type="text" class="form-control form-control-sm line-total" readonly value="' + fmt(data.total) + '" style="min-width:80px;font-weight:bold"></td>' +
+        '<td><input type="text" class="form-control form-control-sm line-total" readonly value="' + (data.total > 0 ? fmt(data.total) : '0') + '" style="min-width:80px;font-weight:bold"></td>' +
         '<td><input type="text" class="form-control form-control-sm" value="' + esc(data.batch_no || '') + '" placeholder="Lô" style="min-width:80px"></td>' +
         '<td><span class="line-remove" onclick="removeLine(' + idx + ')">&times;</span></td>' +
     '</tr>';
