@@ -6,6 +6,23 @@ use Accounting\Domain\Contract\JournalServiceInterface;
 use Accounting\Domain\Repository\AccountRepositoryInterface;
 use Accounting\Domain\Repository\TransactionRepositoryInterface;
 
+/**
+ * Quản lý thu chi tiền mặt và tiền gửi ngân hàng.
+ *
+ * NGHIỆP VỤ:
+ *   - Thu tiền mặt (recordReceipt): Nợ 111 / Có TK đối ứng
+ *   - Chi tiền mặt (recordPayment): Nợ TK đối ứng / Có 111
+ *   - Thu tiền gửi NH (recordBankReceipt): Nợ 112 / Có TK đối ứng
+ *   - Chi tiền gửi NH (recordBankPayment): Nợ TK đối ứng / Có 112
+ *   - Phí ngân hàng (recordBankCharge): Nợ 642 / Có 112
+ *   - Lãi tiền gửi (recordBankInterest): Nợ 112 / Có 515
+ *
+ * Tất cả giao dịch đều đi qua JournalService để đảm bảo Dr=Cr và posting rules.
+ * Hỗ trợ tách VAT: vatAmount>0 → tự động tạo dòng VAT (133/3331).
+ * RỦI RO: Quy trình thu chi phải có chứng từ gốc đầy đủ (phiếu thu/chi, UNC, séc).
+ *
+ * @package Accounting\Domain\Service
+ */
 class CashService implements CashServiceInterface
 {
     private AccountRepositoryInterface $accountRepo;
@@ -25,18 +42,29 @@ class CashService implements CashServiceInterface
         $this->pdo = $pdo;
     }
 
-    // ── Cash Receipt ──
-    //
-    // NGHIỆP VỤ THU TIỀN MẶT:
-    // - Nợ 111 (Tiền mặt Việt Nam): tăng tiền mặt tại quỹ
-    // - Có TK đối ứng (theo creditAccountCode): giảm công nợ phải thu (131), thu hồi
-    //   tạm ứng (141), ghi nhận doanh thu (511), vay nợ (341), nhận vốn góp (411),...
-    //
-    // Ảnh hưởng BC01: chỉ tiêu "Tiền mặt" (Mã số 111) tăng.
-    // RỦI RO: Nếu creditAccountCode là 511 hoặc 515, bắt buộc đã xuất hóa đơn GTGT
-    // trước khi ghi nhận (Điều 8 Thông tư 219/2013/TT-BTC).
-    // Audit trail: Số chứng từ bắt buộc có tiền tố PT (Phiếu thu), kèm chứng từ gốc.
-
+    /**
+     * THU TIỀN MẶT — Nợ 111 / Có TK đối ứng.
+     *
+     * NGHIỆP VỤ: Ghi nhận khoản thu tiền mặt tại quỹ.
+     * - Nợ 111 (Tiền mặt Việt Nam): tăng tiền mặt tại quỹ
+     * - Có TK đối ứng (theo creditAccountCode): giảm công nợ phải thu (131), thu hồi
+     *   tạm ứng (141), ghi nhận doanh thu (511), vay nợ (341), nhận vốn góp (411),...
+     *
+     * Ảnh hưởng BC01: chỉ tiêu "Tiền mặt" (Mã số 111) tăng.
+     * RỦI RO: Nếu creditAccountCode là 511 hoặc 515, bắt buộc đã xuất hóa đơn GTGT
+     * trước khi ghi nhận (Điều 8 Thông tư 219/2013/TT-BTC).
+     * Audit trail: Số chứng từ bắt buộc có tiền tố PT (Phiếu thu), kèm chứng từ gốc.
+     *
+     * @param float $amount Số tiền thu (>0)
+     * @param string $creditAccountCode TK Có (đối ứng)
+     * @param string $description Nội dung thu
+     * @param string $reference Số chứng từ (PTYYYY-NNNNNN)
+     * @param string $createdBy ID người tạo
+     * @param float $vatAmount Số tiền VAT (0 nếu không có)
+     * @param float $vatRate Thuế suất VAT (%)
+     * @return array{transaction_id:string, reference:string, total_amount:float, lines:array}
+     * @throws \InvalidArgumentException Nếu amount<=0 hoặc sai tài khoản
+     */
     public function recordReceipt(float $amount, string $creditAccountCode, string $description, string $reference, string $createdBy, float $vatAmount = 0, float $vatRate = 0): array
     {
         if ($amount <= 0) throw new \InvalidArgumentException('Số tiền phải lớn hơn 0.');
@@ -66,19 +94,30 @@ class CashService implements CashServiceInterface
         return ['transaction_id' => $txn->getId(), 'amount' => $amount, 'vat_amount' => $vatAmount, 'type' => 'receipt'];
     }
 
-    // ── Cash Payment ──
-    //
-    // NGHIỆP VỤ CHI TIỀN MẶT:
-    // - Nợ TK đối ứng: chi phí quản lý (642), mua hàng (156/152), tạm ứng (141),
-    //   đầu tư TSCĐ (211/241), thanh toán nợ (331),...
-    // - Có 111 (Tiền mặt Việt Nam): giảm tiền mặt tại quỹ
-    //
-    // Kiểm tra số dư: Bắt buộc đảm bảo quỹ tiền mặt đủ chi trước khi hạch toán
-    // (theo nguyên tắc thận trọng kế toán — Điều 5 Thông tư 99).
-    // RỦI RO: Khoản chi tiền mặt > 20 triệu VND phải thực hiện qua chuyển khoản
-    // (theo quy định giao dịch thanh toán của NHNN).
-    // Audit trail: Số chứng từ bắt buộc có tiền tố PC (Phiếu chi), kèm chứng từ gốc.
-
+    /**
+     * CHI TIỀN MẶT — Nợ TK đối ứng / Có 111.
+     *
+     * NGHIỆP VỤ: Ghi nhận khoản chi tiền mặt từ quỹ.
+     * - Nợ TK đối ứng: chi phí quản lý (642), mua hàng (156/152), tạm ứng (141),
+     *   đầu tư TSCĐ (211/241), thanh toán nợ (331),...
+     * - Có 111 (Tiền mặt Việt Nam): giảm tiền mặt tại quỹ
+     *
+     * Kiểm tra số dư: Bắt buộc đảm bảo quỹ tiền mặt đủ chi trước khi hạch toán
+     * (theo nguyên tắc thận trọng kế toán — Điều 5 Thông tư 99).
+     * RỦI RO: Khoản chi tiền mặt > 20 triệu VND phải thực hiện qua chuyển khoản
+     * (theo quy định giao dịch thanh toán của NHNN).
+     * Audit trail: Số chứng từ bắt buộc có tiền tố PC (Phiếu chi), kèm chứng từ gốc.
+     *
+     * @param float $amount Số tiền chi (>0)
+     * @param string $debitAccountCode TK Nợ (đối ứng)
+     * @param string $description Nội dung chi
+     * @param string $reference Số phiếu chi (PCYYYY-NNNNNN)
+     * @param string $createdBy ID người tạo
+     * @param float $vatAmount Số tiền VAT (0 nếu không có)
+     * @param float $vatRate Thuế suất VAT (%)
+     * @return array
+     * @throws \InvalidArgumentException Nếu amount<=0, sai TK, hoặc số dư không đủ
+     */
     public function recordPayment(float $amount, string $debitAccountCode, string $description, string $reference, string $createdBy, float $vatAmount = 0, float $vatRate = 0): array
     {
         if ($amount <= 0) throw new \InvalidArgumentException('Số tiền phải lớn hơn 0.');
@@ -120,16 +159,23 @@ class CashService implements CashServiceInterface
         return ['transaction_id' => $txn->getId(), 'amount' => $amount, 'vat_amount' => $vatAmount, 'type' => 'payment'];
     }
 
-    // ── Bank Deposit (Dr 112 — Cr 111) ──
-    //
-    // NGHIỆP VỤ NỘP TIỀN VÀO NGÂN HÀNG:
-    // - Nợ 112 (Tiền gửi ngân hàng): tăng số dư tài khoản ngân hàng
-    // - Có 111 (Tiền mặt): giảm tiền mặt tại quỹ
-    //
-    // Bản chất: Chuyển đổi hình thức nắm giữ tiền, không làm thay đổi tổng tài sản.
-    // Ảnh hưởng BC01: "Tiền mặt" giảm, "Tiền gửi NH" tăng cùng số tiền.
-    // RỦI RO: Cần đối chiếu với sao kê ngân hàng (bank statement) để phát hiện chênh lệch.
-
+    /**
+     * Nộp tiền mặt vào ngân hàng — Nợ 112 / Có 111.
+     *
+     * NGHIỆP VỤ: Chuyển đổi hình thức nắm giữ tiền, không làm thay đổi tổng tài sản.
+     * - Nợ 112 (Tiền gửi ngân hàng): tăng số dư tài khoản ngân hàng
+     * - Có 111 (Tiền mặt): giảm tiền mặt tại quỹ
+     *
+     * Ảnh hưởng BC01: "Tiền mặt" giảm, "Tiền gửi NH" tăng cùng số tiền.
+     * RỦI RO: Cần đối chiếu với sao kê ngân hàng (bank statement) để phát hiện chênh lệch.
+     *
+     * @param float $amount Số tiền nộp
+     * @param string $description Nội dung
+     * @param string $reference Số chứng từ
+     * @param string $createdBy ID người tạo
+     * @return array
+     * @throws \InvalidArgumentException Nếu số dư tiền mặt không đủ
+     */
     public function recordBankDeposit(float $amount, string $description, string $reference, string $createdBy): array
     {
         if ($amount <= 0) throw new \InvalidArgumentException('Số tiền phải lớn hơn 0.');
@@ -148,15 +194,21 @@ class CashService implements CashServiceInterface
         return ['transaction_id' => $txn->getId(), 'amount' => $amount, 'type' => 'bank_deposit'];
     }
 
-    // ── Bank Withdrawal (Dr 111 — Cr 112) ──
-    //
-    // NGHIỆP VỤ RÚT TIỀN NGÂN HÀNG VỀ QUỸ:
-    // - Nợ 111 (Tiền mặt): tăng tiền mặt tại quỹ
-    // - Có 112 (Tiền gửi ngân hàng): giảm số dư tài khoản ngân hàng
-    //
-    // Bản chất: Chuyển đổi hình thức nắm giữ tiền, không làm thay đổi tổng tài sản.
-    // RỦI RO: Cần kiểm tra hạn mức rút tiền và chữ ký ủy quyền theo quy định ngân hàng.
-
+    /**
+     * Rút tiền ngân hàng về quỹ — Nợ 111 / Có 112.
+     *
+     * NGHIỆP VỤ: Chuyển đổi hình thức nắm giữ tiền, không làm thay đổi tổng tài sản.
+     * - Nợ 111 (Tiền mặt): tăng tiền mặt tại quỹ
+     * - Có 112 (Tiền gửi ngân hàng): giảm số dư tài khoản ngân hàng
+     *
+     * RỦI RO: Cần kiểm tra hạn mức rút tiền và chữ ký ủy quyền theo quy định ngân hàng.
+     *
+     * @param float $amount Số tiền rút
+     * @param string $description Nội dung
+     * @param string $reference Số chứng từ
+     * @param string $createdBy ID người tạo
+     * @return array
+     */
     public function recordBankWithdrawal(float $amount, string $description, string $reference, string $createdBy): array
     {
         if ($amount <= 0) throw new \InvalidArgumentException('Số tiền phải lớn hơn 0.');
@@ -175,15 +227,25 @@ class CashService implements CashServiceInterface
         return ['transaction_id' => $txn->getId(), 'amount' => $amount, 'type' => 'bank_withdrawal'];
     }
 
-    // ── Bank Receipt (Dr 112 — Cr counterparty, e.g. customer pays to bank) ──
-    //
-    // NGHIỆP VỤ THU TIỀN QUA NGÂN HÀNG:
-    // - Nợ 112 (Tiền gửi ngân hàng): khách hàng trả tiền qua chuyển khoản
-    // - Có TK đối ứng: giảm công nợ phải thu (131) hoặc ghi nhận doanh thu (511)
-    //
-    // Ảnh hưởng BC01: "Tiền gửi NH" tăng.
-    // Audit trail: Bắt buộc đối chiếu với sao kê ngân hàng, lưu giấy báo Có.
-
+    /**
+     * THU TIỀN QUA NGÂN HÀNG — Nợ 112 / Có TK đối ứng.
+     *
+     * NGHIỆP VỤ: Khách hàng trả tiền qua chuyển khoản.
+     * - Nợ 112 (Tiền gửi ngân hàng): tăng số dư tài khoản ngân hàng
+     * - Có TK đối ứng: giảm công nợ phải thu (131) hoặc ghi nhận doanh thu (511)
+     *
+     * Ảnh hưởng BC01: "Tiền gửi NH" tăng.
+     * Audit trail: Bắt buộc đối chiếu với sao kê ngân hàng, lưu giấy báo Có.
+     *
+     * @param float $amount Số tiền thu
+     * @param string $creditAccountCode TK Có (đối ứng)
+     * @param string $description Nội dung
+     * @param string $reference Số chứng từ
+     * @param string $createdBy ID người tạo
+     * @param float $vatAmount Số tiền VAT (0 nếu không có)
+     * @param float $vatRate Thuế suất VAT (%)
+     * @return array
+     */
     public function recordBankReceipt(float $amount, string $creditAccountCode, string $description, string $reference, string $createdBy, float $vatAmount = 0, float $vatRate = 0): array
     {
         if ($amount <= 0) throw new \InvalidArgumentException('Số tiền phải lớn hơn 0.');
@@ -209,16 +271,26 @@ class CashService implements CashServiceInterface
         return ['transaction_id' => $txn->getId(), 'amount' => $amount, 'vat_amount' => $vatAmount, 'type' => 'bank_receipt'];
     }
 
-    // ── Bank Payment (Dr counterparty — Cr 112, e.g. supplier paid from bank) ──
-    //
-    // NGHIỆP VỤ CHI TIỀN QUA NGÂN HÀNG:
-    // - Nợ TK đối ứng: thanh toán nhà cung cấp (331), chi phí (642), mua TSCĐ (211),...
-    // - Có 112 (Tiền gửi ngân hàng): giảm số dư tài khoản ngân hàng
-    //
-    // Ảnh hưởng BC01: "Tiền gửi NH" giảm.
-    // RỦI RO: Kiểm tra thụ hưởng và tài khoản đích để tránh chuyển nhầm.
-    // Audit trail: Bắt buộc lưu ủy nhiệm chi / lệnh chuyển tiền.
-
+    /**
+     * CHI TIỀN QUA NGÂN HÀNG — Nợ TK đối ứng / Có 112.
+     *
+     * NGHIỆP VỤ: Thanh toán nhà cung cấp (331), chi phí (642), mua TSCĐ (211),...
+     * - Nợ TK đối ứng: giảm công nợ hoặc ghi nhận chi phí
+     * - Có 112 (Tiền gửi ngân hàng): giảm số dư tài khoản ngân hàng
+     *
+     * Ảnh hưởng BC01: "Tiền gửi NH" giảm.
+     * RỦI RO: Kiểm tra thụ hưởng và tài khoản đích để tránh chuyển nhầm.
+     * Audit trail: Bắt buộc lưu ủy nhiệm chi / lệnh chuyển tiền.
+     *
+     * @param float $amount Số tiền chi
+     * @param string $debitAccountCode TK Nợ (đối ứng)
+     * @param string $description Nội dung
+     * @param string $reference Số chứng từ
+     * @param string $createdBy ID người tạo
+     * @param float $vatAmount Số tiền VAT (0 nếu không có)
+     * @param float $vatRate Thuế suất VAT (%)
+     * @return array
+     */
     public function recordBankPayment(float $amount, string $debitAccountCode, string $description, string $reference, string $createdBy, float $vatAmount = 0, float $vatRate = 0): array
     {
         if ($amount <= 0) throw new \InvalidArgumentException('Số tiền phải lớn hơn 0.');
@@ -249,16 +321,23 @@ class CashService implements CashServiceInterface
         return ['transaction_id' => $txn->getId(), 'amount' => $amount, 'vat_amount' => $vatAmount, 'type' => 'bank_payment'];
     }
 
-    // ── Bank Interest (Dr 112 — Cr 515) ──
-    //
-    // NGHIỆP VỤ HẠCH TOÁN LÃI NGÂN HÀNG:
-    // - Nợ 112 (Tiền gửi ngân hàng): tăng số dư do lãi nhập gốc
-    // - Có 515 (Doanh thu hoạt động tài chính): ghi nhận doanh thu lãi
-    //
-    // Ảnh hưởng BC02: chỉ tiêu "Doanh thu HĐTC" (Mã số 21) tăng.
-    // RỦI RO: Lãi ngân hàng thường có chứng từ là sao kê, không có hóa đơn GTGT.
-    // Không phải kê khai thuế GTGT đầu ra cho khoản lãi này.
-
+    /**
+     * Hạch toán lãi ngân hàng — Nợ 112 / Có 515.
+     *
+     * NGHIỆP VỤ: Ngân hàng trả lãi tiền gửi, lãi nhập gốc.
+     * - Nợ 112 (Tiền gửi ngân hàng): tăng số dư
+     * - Có 515 (Doanh thu hoạt động tài chính): ghi nhận doanh thu lãi
+     *
+     * Ảnh hưởng BC02: chỉ tiêu "Doanh thu HĐTC" (Mã số 21) tăng.
+     * RỦI RO: Lãi ngân hàng thường có chứng từ là sao kê, không có hóa đơn GTGT.
+     * Không phải kê khai thuế GTGT đầu ra cho khoản lãi này.
+     *
+     * @param float $amount Số tiền lãi
+     * @param string $description Nội dung
+     * @param string $reference Số chứng từ (sao kê NH)
+     * @param string $createdBy ID người tạo
+     * @return array
+     */
     public function recordBankInterest(float $amount, string $description, string $reference, string $createdBy): array
     {
         if ($amount <= 0) throw new \InvalidArgumentException('Số tiền phải lớn hơn 0.');
@@ -272,17 +351,25 @@ class CashService implements CashServiceInterface
         return ['transaction_id' => $txn->getId(), 'amount' => $amount, 'type' => 'bank_interest'];
     }
 
-    // ── Bank Charges (Dr 642 — Cr 112) ──
-    //
-    // NGHIỆP VỤ HẠCH TOÁN PHÍ NGÂN HÀNG:
-    // - Nợ 642 (Chi phí quản lý doanh nghiệp): chi tiết "Phí ngân hàng"
-    // - Có 112 (Tiền gửi ngân hàng): ngân hàng tự động trừ phí
-    //
-    // Ảnh hưởng BC02: "Chi phí QLDN" (Mã số 25) tăng → LNTT giảm → Thuế TNDN giảm.
-    // RỦI RO: Phí ngân hàng thường không có hóa đơn GTGT, nếu có hóa đơn thì phải
-    // hạch toán tách thuế: Nợ 642 (chưa thuế) / Nợ 1331 (thuế) / Có 112.
-    // Audit trail: Đối chiếu với sao kê ngân hàng hàng tháng.
-
+    /**
+     * Hạch toán phí ngân hàng — Nợ 642 / Có 112.
+     *
+     * NGHIỆP VỤ: Ngân hàng thu phí dịch vụ (duy trì tài khoản, chuyển tiền,...).
+     * - Nợ 642 (Chi phí quản lý doanh nghiệp): chi tiết "Phí ngân hàng"
+     * - Có 112 (Tiền gửi ngân hàng): ngân hàng tự động trừ phí
+     *
+     * Ảnh hưởng BC02: "Chi phí QLDN" (Mã số 25) tăng → LNTT giảm → Thuế TNDN giảm.
+     * RỦI RO: Phí ngân hàng thường không có hóa đơn GTGT, nếu có hóa đơn thì phải
+     * tách VAT đầu vào: Nợ 1331 / Có 112 (phần VAT).
+     *
+     * @param float $amount Số tiền phí
+     * @param string $description Nội dung
+     * @param string $reference Số chứng từ
+     * @param string $createdBy ID người tạo
+     * @param float $vatAmount Số tiền VAT (0 nếu không có)
+     * @param float $vatRate Thuế suất VAT (%)
+     * @return array
+     */
     public function recordBankCharge(float $amount, string $description, string $reference, string $createdBy, float $vatAmount = 0, float $vatRate = 0): array
     {
         if ($amount <= 0) throw new \InvalidArgumentException('Số tiền phải lớn hơn 0.');
@@ -310,18 +397,25 @@ class CashService implements CashServiceInterface
         return ['transaction_id' => $txn->getId(), 'amount' => $amount, 'vat_amount' => $vatAmount, 'type' => 'bank_charge'];
     }
 
-    // ── Cash in Transit (Dr 113 — Cr 111) ──
-    //
-    // NGHIỆP VỤ TIỀN ĐANG CHUYỂN:
-    // - Nợ 113 (Tiền đang chuyển): tiền đã rời quỹ nhưng chưa vào tài khoản NH
-    // - Có 111 (Tiền mặt): giảm tiền mặt tại quỹ
-    //
-    // Bản chất: Tài khoản trung gian để phản ánh khoản tiền đang trong quá trình luân chuyển.
-    // Sử dụng khi: nộp tiền mặt vào NH nhưng chưa có sao kê xác nhận,
-    // hoặc chuyển tiền giữa các NH chưa về tài khoản đích.
-    // Ảnh hưởng BC01: "Tiền mặt" giảm, "Tiền đang chuyển" (Mã số 112) tăng.
-    // RỦI RO: Nếu tiền đang chuyển tồn đọng lâu (> 3 ngày), cần kiểm tra thực tế.
-
+    /**
+     * Tiền đang chuyển — Nợ 113 / Có 111.
+     *
+     * NGHIỆP VỤ: Tiền đã rời quỹ nhưng chưa vào tài khoản ngân hàng.
+     * - Nợ 113 (Tiền đang chuyển): tăng số dư tiền đang chuyển
+     * - Có 111 (Tiền mặt): giảm tiền mặt tại quỹ
+     *
+     * Bản chất: Tài khoản trung gian để phản ánh khoản tiền đang trong quá trình luân chuyển.
+     * Sử dụng khi: nộp tiền mặt vào NH nhưng chưa có sao kê xác nhận,
+     * hoặc chuyển tiền giữa các NH chưa về tài khoản đích.
+     * Ảnh hưởng BC01: "Tiền mặt" giảm, "Tiền đang chuyển" (Mã số 112) tăng.
+     * RỦI RO: Nếu tiền đang chuyển tồn đọng lâu (> 3 ngày), cần kiểm tra thực tế.
+     *
+     * @param float $amount Số tiền
+     * @param string $description Nội dung
+     * @param string $reference Số chứng từ
+     * @param string $createdBy ID người tạo
+     * @return array
+     */
     public function recordTransit(float $amount, string $description, string $reference, string $createdBy): array
     {
         if ($amount <= 0) throw new \InvalidArgumentException('Số tiền phải lớn hơn 0.');
@@ -498,18 +592,28 @@ class CashService implements CashServiceInterface
         return $entries;
     }
 
-    // ── Foreign Currency ──
-    //
-    // NGHIỆP VỤ THU NGOẠI TỆ (NHẬP QUỸ NGOẠI TỆ HOẶC VỀ TÀI KHOẢN NGOẠI TỆ):
-    // - Nợ 112 (TK NH ngoại tệ) / Nợ 1112 (Tiền mặt ngoại tệ): theo VND quy đổi
-    // - Có TK đối ứng: theo VND quy đổi
-    //
-    // Nguyên tắc: Ghi nhận đồng thời nguyên tệ (fcAmount) và quy đổi ra VND
-    // theo tỷ giá thực tế tại thời điểm ghi nhận (Điều 38 Thông tư 99).
-    // RỦI RO: Tỷ giá quy đổi phải phù hợp với tỷ giá xuất/quy đổi của NH nơi giao dịch.
-    // Sai tỷ giá → ảnh hưởng số dư ngoại tệ và chênh lệch tỷ giá cuối kỳ.
-    // Audit trail: Lưu tỷ giá, nguyên tệ, VND để phục vụ đánh giá lại cuối kỳ.
-
+    /**
+     * THU NGOẠI TỆ — Nợ 112 (ngoại tệ) / Có TK đối ứng (VND quy đổi).
+     *
+     * NGHIỆP VỤ: Nhập quỹ ngoại tệ hoặc về tài khoản ngoại tệ.
+     * - Nợ 112 (TK NH ngoại tệ) / Nợ 1112 (Tiền mặt ngoại tệ): theo VND quy đổi
+     * - Có TK đối ứng: theo VND quy đổi
+     *
+     * Nguyên tắc: Ghi nhận đồng thời nguyên tệ (fcAmount) và quy đổi ra VND
+     * theo tỷ giá thực tế tại thời điểm ghi nhận (Điều 38 Thông tư 99).
+     * RỦI RO: Tỷ giá quy đổi phải phù hợp với tỷ giá xuất/quy đổi của NH nơi giao dịch.
+     * Sai tỷ giá → ảnh hưởng số dư ngoại tệ và chênh lệch tỷ giá cuối kỳ.
+     * Audit trail: Lưu tỷ giá, nguyên tệ, VND để phục vụ đánh giá lại cuối kỳ.
+     *
+     * @param float $fcAmount Số tiền nguyên tệ
+     * @param string $creditAccountCode TK Có (đối ứng)
+     * @param string $currencyCode Mã tiền tệ (USD, EUR,...)
+     * @param float $exchangeRate Tỷ giá quy đổi ra VND
+     * @param string $description Nội dung
+     * @param string $reference Số chứng từ
+     * @param string $createdBy ID người tạo
+     * @return array
+     */
     public function recordReceiptFC(float $fcAmount, string $creditAccountCode, string $currencyCode, float $exchangeRate, string $description, string $reference, string $createdBy): array
     {
         if ($fcAmount <= 0) throw new \InvalidArgumentException('Số tiền phải lớn hơn 0.');
@@ -531,16 +635,27 @@ class CashService implements CashServiceInterface
         return ['transaction_id' => $txn->getId(), 'fc_amount' => $fcAmount, 'vnd_amount' => $vndAmount, 'rate' => $exchangeRate, 'currency' => $currencyCode, 'type' => 'fc_receipt'];
     }
 
-    //
-    // NGHIỆP VỤ CHI NGOẠI TỆ (XUẤT QUỸ NGOẠI TỆ / CHUYỂN TIỀN NGOẠI TỆ):
-    // - Nợ TK đối ứng: theo VND quy đổi
-    // - Có 112 (TK NH ngoại tệ) / Có 1112 (Tiền mặt ngoại tệ): theo VND quy đổi
-    //
-    // Nguyên tắc: Ghi nhận song song nguyên tệ và VND, tỷ giá tại thời điểm chi.
-    // RỦI RO: Nếu chi ngoại tệ để thanh toán nhà cung cấp nước ngoài, cần kiểm tra
-    // tỷ giá ghi trên hợp đồng và tỷ giá thực tế tại ngân hàng.
-    // Ảnh hưởng: Phát sinh chênh lệch tỷ giá đã thực hiện (doanh thu 515/chi phí 635).
-
+    /**
+     * CHI NGOẠI TỆ — Nợ TK đối ứng (VND) / Có 112 (ngoại tệ VND quy đổi).
+     *
+     * NGHIỆP VỤ: Xuất quỹ ngoại tệ hoặc chuyển tiền ngoại tệ.
+     * - Nợ TK đối ứng: theo VND quy đổi
+     * - Có 112 (TK NH ngoại tệ) / Có 1112 (Tiền mặt ngoại tệ): theo VND quy đổi
+     *
+     * Nguyên tắc: Ghi nhận song song nguyên tệ và VND, tỷ giá tại thời điểm chi.
+     * RỦI RO: Nếu chi ngoại tệ để thanh toán nhà cung cấp nước ngoài, cần kiểm tra
+     * tỷ giá ghi trên hợp đồng và tỷ giá thực tế tại ngân hàng.
+     * Ảnh hưởng: Phát sinh chênh lệch tỷ giá đã thực hiện (doanh thu 515/chi phí 635).
+     *
+     * @param float $fcAmount Số tiền nguyên tệ
+     * @param string $debitAccountCode TK Nợ (đối ứng)
+     * @param string $currencyCode Mã tiền tệ (USD, EUR,...)
+     * @param float $exchangeRate Tỷ giá quy đổi ra VND
+     * @param string $description Nội dung
+     * @param string $reference Số chứng từ
+     * @param string $createdBy ID người tạo
+     * @return array
+     */
     public function recordPaymentFC(float $fcAmount, string $debitAccountCode, string $currencyCode, float $exchangeRate, string $description, string $reference, string $createdBy): array
     {
         if ($fcAmount <= 0) throw new \InvalidArgumentException('Số tiền phải lớn hơn 0.');
@@ -667,15 +782,26 @@ class CashService implements CashServiceInterface
         return ['transaction_id' => $txn->getId(), 'gain_loss' => $gainLoss, 'book_rate' => $bookRate, 'closing_rate' => $closingRate, 'fc_balance' => $fcBalance];
     }
 
-    //
-    // GHI NHẬN CHI TIẾT GIAO DỊCH NGOẠI TỆ VÀO BẢNG fc_transactions:
-    // Lưu vết tất cả thông tin nguyên tệ, tỷ giá, VND quy đổi phục vụ:
-    // - Theo dõi số dư ngoại tệ chi tiết theo từng loại tiền
-    // - Đánh giá lại cuối kỳ (tính tỷ giá bình quân gia quyền)
-    // - Kiểm toán và truy xuất nguồn gốc chênh lệch tỷ giá
-    // RỦI RO: Nếu bỏ qua bước này, số dư ngoại tệ sẽ không chính xác và
-    // việc đánh giá lại cuối kỳ sẽ sai.
-
+    /**
+     * Ghi nhận chi tiết giao dịch ngoại tệ vào bảng fc_transactions.
+     *
+     * Lưu vết tất cả thông tin nguyên tệ, tỷ giá, VND quy đổi phục vụ:
+     * - Theo dõi số dư ngoại tệ chi tiết theo từng loại tiền
+     * - Đánh giá lại cuối kỳ (tính tỷ giá bình quân gia quyền)
+     * - Kiểm toán và truy xuất nguồn gốc chênh lệch tỷ giá
+     * RỦI RO: Nếu bỏ qua bước này, số dư ngoại tệ sẽ không chính xác và
+     * việc đánh giá lại cuối kỳ sẽ sai.
+     *
+     * @param string $transactionId ID bút toán chính
+     * @param string $accountCode Tài khoản ngoại tệ (1112, 112)
+     * @param string $currencyCode Mã tiền tệ (USD, EUR,...)
+     * @param float $fcAmount Số tiền nguyên tệ
+     * @param float $exchangeRate Tỷ giá quy đổi
+     * @param float $vndAmount Số tiền VND quy đổi
+     * @param string $type Loại giao dịch (receipt, payment, revaluation)
+     * @param string $description Nội dung
+     * @return void
+     */
     private function recordFCTransaction(string $transactionId, string $accountCode, string $currencyCode, float $fcAmount, float $exchangeRate, float $vndAmount, string $type, string $description): void
     {
         if (!$this->pdo) return;
