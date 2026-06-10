@@ -9,10 +9,18 @@ use Accounting\Domain\Contract\AuditLoggerInterface;
 use Accounting\Domain\Repository\ItemRepositoryInterface;
 use Accounting\Domain\Service\PeriodService;
 
-// NGHIỆP VỤ: Quản lý Phiếu xuất kho (PXK) — Mẫu số 02-VT theo TT 99/2025/TT-BTC
-// Service này quản lý vòng đời PXK: Draft → Post (tạo bút toán + giảm tồn kho) → Cancelled
-// Backward compatible: vẫn có thể issue đơn lẻ qua InventoryService::issueGoods()
-// TÍCH HỢP: Sử dụng InventoryService::issueGoods() cho từng line item khi Post
+/**
+ * NGHIỆP VỤ: Quản lý Phiếu xuất kho (PXK) — Mẫu số 02-VT theo TT 99/2025/TT-BTC
+ *
+ * Service này quản lý vòng đời PXK: Draft → Post (tạo bút toán + giảm tồn kho) → Cancelled
+ * Backward compatible: vẫn có thể issue đơn lẻ qua InventoryService::issueGoods()
+ * TÍCH HỢP: Sử dụng InventoryService::issueGoods() cho từng line item khi Post
+ *
+ * Ảnh hưởng BC:
+ * - BC01: Hàng tồn kho (mã số 141) giảm khi Post
+ * - BC02: Giá vốn hàng bán (mã số 24) tăng khi Post
+ * - Rủi ro: Nếu Post rollback không hoàn toàn, tồn kho và bút toán lệch nhau
+ */
 class GoodsIssueService
 {
     private \PDO $pdo;
@@ -35,11 +43,23 @@ class GoodsIssueService
         $this->auditLogger = $auditLogger;
     }
 
-    // NGHIỆP VỤ: Tạo PXK dạng nháp (draft)
-    // Input: { issue_date, warehouse_id, receiver_name, receiver_department, issue_reason,
-    //          issue_type, lines: [{ item_id, requested_qty }], notes, created_by }
-    // Output: GoodsIssue với status=draft
-    // Lưu ý: Chưa tác động đến tồn kho hay bút toán
+    /**
+     * NGHIỆP VỤ: Tạo PXK dạng nháp (draft) — Mẫu 02-VT
+     *
+     * Input: { issue_date, warehouse_id, receiver_name, receiver_department, issue_reason,
+     *          issue_type, lines: [{ item_id, requested_qty }], notes, created_by }
+     * Output: GoodsIssue với status=draft
+     * Lưu ý: Chưa tác động đến tồn kho hay bút toán — chỉ ghi nhận thông tin xuất kho.
+     *
+     * RỦI RO: Nếu kỳ kế toán đã khóa, từ chối tạo PXK. Tất cả line items
+     * được validate (item tồn tại, actual_qty > 0) trong cùng một transaction.
+     *
+     * @param array $data Dữ liệu PXK gồm: issue_date, warehouse_id, receiver_name,
+     *                    receiver_department, issue_reason, issue_type,
+     *                    lines (mảng các item), notes, created_by, entity_id
+     * @return array Thông tin PXK dạng mảng (GoodsIssue->toArray()) với status=draft
+     * @throws \InvalidArgumentException Nếu kỳ đã khóa, item không tồn tại, hoặc số lượng <= 0
+     */
     public function createDraft(array $data): array
     {
         $id = uniqid('pxk_');
@@ -128,11 +148,25 @@ class GoodsIssueService
         }
     }
 
-    // NGHIỆP VỤ: Ghi sổ PXK — tạo bút toán kế toán + giảm tồn kho cho từng line
-    // Gọi InventoryService::issueGoods() cho mỗi line item trong transaction
-    // Cập nhật unit_price và total_amount sau khi tính giá
-    // RỦI RO: Nếu 1 line lỗi (tồn kho không đủ), toàn bộ rollback
-    // Chỉ post được PXK ở trạng thái draft
+    /**
+     * NGHIỆP VỤ: Ghi sổ PXK — tạo bút toán kế toán + giảm tồn kho cho từng line
+     *
+     * Gọi InventoryService::issueGoods() cho mỗi line item để tính giá xuất kho (bình quân gia
+     * quyền) và ghi nhận bút toán Nợ 632 (Giá vốn) / Có 156 (Hàng hóa).
+     * Cập nhật unit_price và total_amount sau khi tính giá.
+     *
+     * RỦI RO: Nếu 1 line lỗi (tồn kho không đủ), toàn bộ rollback do không có transaction
+     * wrap ở cấp này (mỗi issueGoods tự quản lý transaction riêng).
+     * Chỉ post được PXK ở trạng thái draft.
+     *
+     * Ảnh hưởng BC02: chỉ tiêu 24 (Giá vốn hàng bán) thay đổi.
+     * Audit trail bắt buộc: ghi nhận số lượng + đơn giá tại thời điểm xuất.
+     *
+     * @param string $issueId ID của PXK cần ghi sổ
+     * @param string $createdBy Người thực hiện ghi sổ
+     * @return array Thông tin PXK sau khi ghi sổ (status=posted, kèm total_amount)
+     * @throws \InvalidArgumentException Nếu PXK không ở trạng thái draft hoặc kỳ đã khóa
+     */
     public function postIssue(string $issueId, string $createdBy): array
     {
         $issue = $this->getIssue($issueId);
@@ -173,7 +207,20 @@ class GoodsIssueService
         return $this->getIssue($issueId);
     }
 
-    // NGHIỆP VỤ: Hủy PXK (chỉ khi đang ở draft)
+    /**
+     * NGHIỆP VỤ: Hủy PXK (chỉ khi đang ở trạng thái draft)
+     *
+     * Chỉ cho phép hủy PXK chưa ghi sổ. PXK đã posted phải dùng bút toán đảo ngược
+     * (reverse entry) để hủy — không được xóa hoặc hủy trực tiếp.
+     *
+     * RỦI RO: Hủy PXK trong kỳ đã khóa sẽ làm sai số liệu kỳ trước.
+     * Exception: prior period adjustment cần Kế toán trưởng duyệt.
+     *
+     * @param string $issueId ID của PXK cần hủy
+     * @param string $cancelledBy Người thực hiện hủy
+     * @return array Thông tin PXK sau khi hủy (status=cancelled)
+     * @throws \InvalidArgumentException Nếu PXK không ở trạng thái draft hoặc kỳ đã khóa
+     */
     public function cancelIssue(string $issueId, string $cancelledBy): array
     {
         $issue = $this->getIssue($issueId);
@@ -195,7 +242,17 @@ class GoodsIssueService
         return $this->getIssue($issueId);
     }
 
-    // NGHIỆP VỤ: Lấy chi tiết PXK kèm line items
+    /**
+     * NGHIỆP VỤ: Lấy chi tiết PXK kèm line items
+     *
+     * Trả về toàn bộ thông tin PXK header + danh sách các dòng hàng hóa xuất kho
+     * (sắp xếp theo line_number). Được sử dụng bởi các method postIssue, cancelIssue
+     * và API getDetail.
+     *
+     * @param string $id ID của PXK cần lấy
+     * @return array Thông tin PXK kèm mảng lines (mỗi line có item_id, actual_qty, unit_price, ...)
+     * @throws \InvalidArgumentException Nếu không tìm thấy PXK với id đã cho
+     */
     public function getIssue(string $id): array
     {
         $stmt = $this->pdo->prepare("SELECT * FROM inventory_issues WHERE id = ?");
@@ -227,7 +284,17 @@ class GoodsIssueService
         return $issue->toArray();
     }
 
-    // NGHIỆP VỤ: Danh sách PXK (không kèm line items)
+    /**
+     * NGHIỆP VỤ: Danh sách PXK (không kèm line items)
+     *
+     * Trả về danh sách tóm tắt PXK phục vụ hiển thị trong view danh sách.
+     * Không kèm line items để tối ưu hiệu năng — line items chỉ được lấy khi xem chi tiết.
+     * Có thể lọc theo status (draft/posted/cancelled).
+     *
+     * @param string|null $status Lọc theo trạng thái (null = tất cả)
+     * @param int $limit Số lượng tối đa bản ghi trả về (mặc định 50)
+     * @return array Mảng các PXK dạng tóm tắt (không có lines)
+     */
     public function listIssues(?string $status = null, int $limit = 50): array
     {
         $sql = "SELECT id, issue_number, issue_date, issue_type, status,
