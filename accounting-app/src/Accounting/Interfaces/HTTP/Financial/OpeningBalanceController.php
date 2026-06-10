@@ -5,89 +5,68 @@ use Accounting\Domain\Service\OpeningBalanceService;
 use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
 
-/**
- * MODULE: Số dư đầu kỳ (Opening Balance)
- *
- * Mục đích nghiệp vụ:
- *   - Quản lý số dư đầu kỳ cho từng tài khoản
- *   - Import số dư đầu kỳ từ kỳ trước hoặc file
- *   - Kiểm tra cân đối Dr = Cr của số dư đầu kỳ
- *
- * API endpoints:
- *   GET  /api/opening-balance/{periodId} — Số dư đầu kỳ
- *   POST /api/opening-balance/{periodId} — Thiết lập số dư
- *   POST /api/opening-balance/{periodId}/lock — Khoá số dư
- *
- * Rủi ro:
- *   - Số dư đầu kỳ không cân -> sai toàn bộ BC
- *   - Nhập sai số dư -> sai số liệu kỳ hiện tại
- *   - Không khoá sau khi nhập -> có thể bị sửa
- *
- * Tích hợp:
- *   - OpeningBalanceService đọc/ghi bảng opening_balances
- *   - PeriodService kiểm tra kỳ mở
- *   - AccountRepository cung cấp danh sách tài khoản
- */
 class OpeningBalanceController
 {
     private OpeningBalanceService $service;
 
     public function __construct(OpeningBalanceService $service) { $this->service = $service; }
 
-    /**
-     * Lấy số dư đầu kỳ cho một kỳ
-     *
-     * @param string $periodId ID kỳ kế toán
-     * @return void
-     */
-    public function get(string $periodId): void
+    public function list(): void
     {
-        Auth::requirePermission('master_data', 'read');
-        try {
-            JsonResponse::ok($this->service->getBalances((int)$periodId));
-        } catch (\InvalidArgumentException $e) {
-            JsonResponse::error($e->getMessage(), 404);
-        }
+        Auth::requirePermission('system', 'read');
+        $period = $_GET['period'] ?? null;
+        JsonResponse::ok($this->service->getOpeningBalances($period));
     }
 
-    /**
-     * Thiết lập số dư đầu kỳ
-     *
-     * @param string $periodId ID kỳ kế toán
-     * @return void
-     */
-    public function save(string $periodId): void
+    public function set(): void
     {
-        Auth::requirePermission('master_data', 'update');
+        Auth::requirePermission('system', 'create');
         Auth::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
-        if (!$data || !isset($data['balances'])) {
-            JsonResponse::error('Vui lòng nhập danh sách số dư', 400);
+        $accountCode = $data['account_code'] ?? '';
+        $period = $data['period'] ?? date('Y-m');
+        $debitBalance = (float)($data['debit_balance'] ?? 0);
+        $creditBalance = (float)($data['credit_balance'] ?? 0);
+        if (empty($accountCode)) {
+            JsonResponse::error('Vui lòng nhập mã tài khoản', 400);
             return;
         }
         try {
-            $this->service->saveBalances((int)$periodId, $data['balances'], $_SESSION['user_id'] ?? 'system');
-            JsonResponse::ok(['message' => 'Đã lưu số dư đầu kỳ']);
-        } catch (\InvalidArgumentException $e) {
-            JsonResponse::error($e->getMessage(), 422);
+            $result = $this->service->setOpeningBalance($accountCode, $period, $debitBalance, $creditBalance, $_SESSION['user_id'] ?? 'system');
+            JsonResponse::ok($result, 201);
+        } catch (\Throwable $e) {
+            JsonResponse::error($e->getMessage(), 400);
         }
     }
 
-    /**
-     * Khoá số dư đầu kỳ — sau khoá không sửa được
-     *
-     * @param string $periodId ID kỳ kế toán
-     * @return void
-     */
-    public function lock(string $periodId): void
+    public function verify(string $accountCode, string $period): void
     {
-        Auth::requirePermission('master_data', 'update');
+        Auth::requirePermission('system', 'update');
         Auth::checkCsrf();
         try {
-            $this->service->lockBalances((int)$periodId);
-            JsonResponse::ok(['message' => 'Đã khoá số dư đầu kỳ']);
-        } catch (\InvalidArgumentException $e) {
-            JsonResponse::error($e->getMessage(), 422);
+            $result = $this->service->verify($accountCode, $period, $_SESSION['user_id'] ?? 'system');
+            JsonResponse::ok($result);
+        } catch (\Throwable $e) {
+            JsonResponse::error($e->getMessage(), 400);
         }
+    }
+
+    public function convert(): void
+    {
+        Auth::requirePermission('system', 'create');
+        Auth::checkCsrf();
+        $data = json_decode(file_get_contents('php://input'), true);
+        $period = $data['period'] ?? date('Y-m');
+        try {
+            $result = $this->service->convertToJournalEntry($period, $_SESSION['user_id'] ?? 'system');
+            JsonResponse::ok($result);
+        } catch (\Throwable $e) {
+            JsonResponse::error($e->getMessage(), 400);
+        }
+    }
+
+    public function view(): void
+    {
+        require __DIR__ . '/../../../../../public/views/opening_balances.php';
     }
 }

@@ -1,107 +1,235 @@
 <?php
 namespace Accounting\Interfaces\HTTP\Payroll;
 
-use Accounting\Infrastructure\JsonResponse;
-use Accounting\Infrastructure\Auth;
 use Accounting\Domain\Service\PayrollService;
-use Accounting\Infrastructure\AuditLogger;
+use Accounting\Domain\Repository\EmployeeRepositoryInterface;
+use Accounting\Domain\Repository\PayrollPeriodRepositoryInterface;
+use Accounting\Domain\Repository\PayrollEntryRepositoryInterface;
+use Accounting\Infrastructure\Auth;
+use Accounting\Infrastructure\JsonResponse;
 
 /**
- * MODULE: Bảng lương (Payroll)
- *
- * Mục đích nghiệp vụ:
- *   - Tính lương nhân viên hàng kỳ
- *   - Quản lý bảng lương, các khoản trích theo lương
- *   - Hạch toán lương và các khoản trích (334, 3383, 3384)
- *   - Tuân thủ quy định BHXH, BHYT, BHTN, KPCĐ
+ * MODULE: Tien luong — API quan ly luong, BHXH, thue TNCN
  *
  * API endpoints:
- *   POST /api/payroll/calculate — Tính lương
- *   POST /api/payroll/post — Ghi sổ
- *   GET  /api/payroll/list — Danh sách
- *   GET  /api/payroll/{id} — Chi tiết
- *
- * Rủi ro:
- *   - Sai lương -> ảnh hưởng thuế TNCN, BHXH
- *   - Sai hạch toán 334/338 -> sai BC01
- *
- * Tích hợp:
- *   - JournalService hạch toán bút toán lương
- *   - EmployeeController quản lý nhân viên
- *   - DepartmentController quản lý phòng ban
+ *   Ky luong:      GET/POST /api/payroll/periods, GET /periods/open, POST /periods/:id/close
+ *   Bang luong:    GET /api/payroll/entries, GET /entries/:id, GET /entries/:id/details
+ *   Tinh luong:    POST /api/payroll/process, GET /calculate/employee
+ *   Duyet/Post:    POST /entries/:id/approve, POST /entries/:id/post
+ *   Dieu chinh:    POST /entries/:id/adjust
+ *   Tinh toan:     GET /calculate/insurance, GET /calculate/tax
  */
 class PayrollController
 {
-    private PayrollService $payroll;
+    private PayrollService $payrollService;
+    private EmployeeRepositoryInterface $employeeRepo;
+    private PayrollPeriodRepositoryInterface $payrollPeriodRepo;
+    private PayrollEntryRepositoryInterface $payrollEntryRepo;
 
-    public function __construct(PayrollService $payroll) { $this->payroll = $payroll; }
-
-    /**
-     * Tính lương cho kỳ chỉ định
-     *
-     * @return void
-     */
-    public function calculate(): void
-    {
-        Auth::requirePermission('payroll', 'create');
-        Auth::checkCsrf();
-        $data = json_decode(file_get_contents('php://input'), true);
-        $period = $data['period'] ?? date('Y-m');
-        try {
-            $result = $this->payroll->calculatePayroll($period, $_SESSION['user_id'] ?? 'system');
-            JsonResponse::ok($result, 201);
-        } catch (\InvalidArgumentException $e) {
-            JsonResponse::error($e->getMessage(), 400);
-        }
+    public function __construct(
+        PayrollService $payrollService,
+        EmployeeRepositoryInterface $employeeRepo,
+        PayrollPeriodRepositoryInterface $payrollPeriodRepo,
+        PayrollEntryRepositoryInterface $payrollEntryRepo
+    ) {
+        $this->payrollService = $payrollService;
+        $this->employeeRepo = $employeeRepo;
+        $this->payrollPeriodRepo = $payrollPeriodRepo;
+        $this->payrollEntryRepo = $payrollEntryRepo;
     }
 
-    /**
-     * Ghi sổ bảng lương đã tính
-     *
-     * @return void
-     */
-    public function post(): void
+    // --- KY LUONG ---
+
+    public function listPeriods(): void
     {
-        Auth::requirePermission('payroll', 'create');
+        Auth::requirePermission('payroll', 'read');
+        $periods = $this->payrollService->findAllPeriods();
+        JsonResponse::ok(array_map(fn($p) => $p->toArray(), $periods));
+    }
+
+    public function getPeriod(string $id): void
+    {
+        Auth::requirePermission('payroll', 'read');
+        $period = $this->payrollService->findPeriodById($id);
+        if (!$period) { JsonResponse::error('Không tìm thấy kỳ lương', 404); return; }
+        JsonResponse::ok($period->toArray());
+    }
+
+    public function createPeriod(): void
+    {
         Auth::checkCsrf();
+        Auth::requirePermission('payroll', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
-        if (!$data || !isset($data['period'])) {
-            JsonResponse::error('Vui lòng nhập kỳ lương', 400);
+        $yearMonth = $data['period_code'] ?? $data['year_month'] ?? date('Ym');
+        $period = $this->payrollService->createPayrollPeriod($yearMonth, $_SESSION['user_id'] ?? 'system');
+        JsonResponse::ok($period->toArray(), 201);
+    }
+
+    public function closePeriod(string $id): void
+    {
+        Auth::requirePermission('payroll', 'post');
+        $period = $this->payrollService->closePayroll($id, $_SESSION['user_id'] ?? 'system');
+        JsonResponse::ok($period->toArray());
+    }
+
+    public function listOpenPeriods(): void
+    {
+        Auth::requirePermission('payroll', 'read');
+        $periods = $this->payrollService->findOpenPeriods();
+        JsonResponse::ok(array_map(fn($p) => $p->toArray(), $periods));
+    }
+
+    // --- BANG LUONG ---
+
+    public function listEntries(): void
+    {
+        Auth::requirePermission('payroll', 'read');
+        $entries = $this->payrollService->findAllEntries();
+        JsonResponse::ok(array_map(fn($e) => $e->toArray(), $entries));
+    }
+
+    public function getEntry(string $id): void
+    {
+        Auth::requirePermission('payroll', 'read');
+        $entry = $this->payrollService->findEntryById($id);
+        if (!$entry) { JsonResponse::error('Không tìm thấy bảng lương', 404); return; }
+        JsonResponse::ok($entry->toArray());
+    }
+
+    public function getEntryDetails(string $id): void
+    {
+        Auth::requirePermission('payroll', 'read');
+        $entry = $this->payrollService->findEntryById($id);
+        if (!$entry) { JsonResponse::error('Không tìm thấy bảng lương', 404); return; }
+        $details = $this->payrollService->findDetailsByEntry($id);
+        JsonResponse::ok(['entry' => $entry->toArray(), 'details' => $details]);
+    }
+
+    // --- TINH LUONG ---
+
+    public function processPayroll(): void
+    {
+        Auth::checkCsrf();
+        Auth::requirePermission('payroll', 'create');
+        $data = json_decode(file_get_contents('php://input'), true);
+        $periodId = $data['period_id'] ?? '';
+        if (!$periodId) { JsonResponse::error('Vui lòng chọn kỳ lương', 400); return; }
+        $overrides = $data['employee_overrides'] ?? [];
+        $entry = $this->payrollService->processPayroll($periodId, $_SESSION['user_id'] ?? 'system', $overrides);
+        JsonResponse::ok($entry->toArray(), 201);
+    }
+
+    // --- DUYET & POST ---
+
+    public function approveEntry(string $id): void
+    {
+        Auth::checkCsrf();
+        Auth::requirePermission('payroll', 'post');
+        $entry = $this->payrollService->approvePayroll($id, $_SESSION['user_id'] ?? 'system');
+        JsonResponse::ok($entry->toArray());
+    }
+
+    public function postEntry(string $id): void
+    {
+        Auth::checkCsrf();
+        Auth::requirePermission('payroll', 'post');
+        $data = json_decode(file_get_contents('php://input'), true) ?? [];
+        $result = $this->payrollService->postPayroll($id, $_SESSION['user_id'] ?? 'system', $data['account_overrides'] ?? []);
+        JsonResponse::ok($result);
+    }
+
+    // --- DIEU CHINH ---
+
+    public function adjustEntry(string $id): void
+    {
+        Auth::checkCsrf();
+        Auth::requirePermission('payroll', 'create');
+        $data = json_decode(file_get_contents('php://input'), true);
+        if (!isset($data['adjustments']) || !is_array($data['adjustments'])) {
+            JsonResponse::error('Vui lòng nhập danh sách điều chỉnh', 400); return;
+        }
+        $entry = $this->payrollService->adjustPayroll($id, $_SESSION['user_id'] ?? 'system', $data['adjustments']);
+        JsonResponse::ok($entry->toArray(), 201);
+    }
+
+    // --- TINH TOAN ---
+
+    public function calculateInsurance(): void
+    {
+        Auth::requirePermission('payroll', 'read');
+        $gross = (float)($_GET['gross'] ?? 0);
+        $insuranceSalary = isset($_GET['insurance_salary']) ? (float)$_GET['insurance_salary'] : $gross;
+        $region = $_GET['region'] ?? 'IV';
+        $result = $this->payrollService->calculateInsurance($gross, $insuranceSalary, $region);
+        JsonResponse::ok($result);
+    }
+
+    public function calculateTax(): void
+    {
+        Auth::requirePermission('payroll', 'read');
+        $gross = (float)($_GET['gross'] ?? 0);
+        $insuranceEe = (float)($_GET['insurance_ee'] ?? 0);
+        $dependentCount = (int)($_GET['dependent_count'] ?? 0);
+        $tax = $this->payrollService->calculateTax($gross, $insuranceEe, $dependentCount);
+        JsonResponse::ok(['tax_amount' => $tax]);
+    }
+
+    public function calculateEmployeePay(): void
+    {
+        Auth::requirePermission('payroll', 'read');
+        $employeeId = $_GET['employee_id'] ?? '';
+        $employee = $this->employeeRepo->findById($employeeId);
+        if (!$employee) { JsonResponse::error('Không tìm thấy nhân viên', 404); return; }
+        $override = [];
+        if (isset($_GET['gross'])) $override['gross_salary'] = (float)$_GET['gross'];
+        $result = $this->payrollService->calculateEmployeePay($employee, $override);
+        JsonResponse::ok($result);
+    }
+
+    // --- DANH SACH NHAN VIEN CHO BANG LUONG ---
+
+    public function listPayrollEmployees(): void
+    {
+        Auth::requirePermission('payroll', 'read');
+        $employees = $this->employeeRepo->findAll();
+        $result = array_map(fn($e) => $e->toArray(), $employees);
+        JsonResponse::ok($result);
+    }
+
+    // --- BANG LUONG CHO DUYET ---
+
+    public function listPendingEntries(): void
+    {
+        Auth::requirePermission('payroll', 'read');
+        $entries = $this->payrollService->findAllEntries();
+        $pending = array_filter($entries, fn($e) => $e->getStatus() === 'draft' || $e->getStatus() === 'approved');
+        JsonResponse::ok(array_map(fn($e) => $e->toArray(), array_values($pending)));
+    }
+
+    // NGHIEP VU: Nop tien BHXH, BHYT, BHTN cho co quan BHXH
+    // Input: { period_id, amount, bank_account?, created_by? }
+    // Output: { transaction_id, amount, status }
+    // Hach toan: No 3383 / Co 111,112
+    // Service: PayrollService.payInsurance() -> JournalService.postEntry
+    public function payInsurance(): void
+    {
+        Auth::checkCsrf();
+        Auth::requirePermission('payroll', 'post');
+        $data = json_decode(file_get_contents('php://input'), true) ?? [];
+        if (!isset($data['period_id'], $data['amount'])) {
+            JsonResponse::error('Vui lòng nhập kỳ lương và số tiền nộp BHXH', 400);
             return;
         }
         try {
-            $result = $this->payroll->postPayroll($data['period'], $_SESSION['user_id'] ?? 'system');
-            JsonResponse::ok($result);
-        } catch (\InvalidArgumentException $e) {
-            JsonResponse::error($e->getMessage(), 400);
-        }
-    }
-
-    /**
-     * Danh sách bảng lương
-     *
-     * @return void
-     */
-    public function list(): void
-    {
-        Auth::requirePermission('payroll', 'read');
-        $period = $_GET['period'] ?? date('Y-m');
-        JsonResponse::ok($this->payroll->getPayrollList($period));
-    }
-
-    /**
-     * Chi tiết bảng lương
-     *
-     * @param string $id Mã bảng lương
-     * @return void
-     */
-    public function get(string $id): void
-    {
-        Auth::requirePermission('payroll', 'read');
-        try {
-            JsonResponse::ok($this->payroll->getPayrollDetail($id));
-        } catch (\InvalidArgumentException $e) {
-            JsonResponse::error($e->getMessage(), 404);
+            $result = $this->payrollService->payInsurance(
+                $data['period_id'],
+                (float)$data['amount'],
+                $data['bank_account'] ?? '1121',
+                $_SESSION['user_id'] ?? 'system'
+            );
+            JsonResponse::ok($result, 201);
+        } catch (\Throwable $e) {
+            JsonResponse::error($e->getMessage());
         }
     }
 }

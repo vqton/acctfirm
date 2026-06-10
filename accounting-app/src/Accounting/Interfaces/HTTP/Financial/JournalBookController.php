@@ -2,48 +2,59 @@
 namespace Accounting\Interfaces\HTTP\Financial;
 
 use Accounting\Domain\Service\JournalBookService;
-use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
 
 /**
- * MODULE: Sổ Nhật ký (Journal Book)
+ * MODULE: Sổ Nhật ký Chung (General Journal)
  *
  * Mục đích nghiệp vụ:
- *   - Hiển thị sổ nhật ký chung
- *   - Xem lịch sử bút toán theo thời gian
- *   - Xuất sổ nhật ký (CSV/HTML)
+ *   - Xuất sổ nhật ký chung theo khoảng thời gian
+ *   - Ghi nhận mọi bút toán theo trình tự thời gian
+ *   - Cơ sở để lập sổ cái và báo cáo tài chính
  *
  * API endpoints:
- *   GET /api/journal-book — Sổ nhật ký (params: from, to, account)
+ *   GET /api/journal-book       — Dữ liệu sổ nhật ký chung (params: from, to)
+ *   GET /api/journal-book/view  — View HTML
  *
  * Rủi ro:
- *   - Query nặng nếu nhiều bút toán trong kỳ
+ *   - Dữ liệu lớn nếu không filter → cần phân trang hoặc giới hạn thời gian
+ *   - Sổ nhật ký phải đầy đủ để kiểm toán viên đối chiếu
+ *   - Số thứ tự dòng (line number) phải liên tục
  *
  * Tích hợp:
  *   - JournalBookService đọc từ TransactionRepository
- *   - ExportService xuất file
+ *   - Kết quả được dùng làm đầu vào cho báo cáo thuế
+ *   - Kiểm toán viên sử dụng để kiểm tra tính đầy đủ của bút toán
  */
 class JournalBookController
 {
-    private JournalBookService $journalBook;
+    private JournalBookService $service;
 
-    public function __construct(JournalBookService $journalBook) { $this->journalBook = $journalBook; }
-
-    /**
-     * Sổ nhật ký chung
-     *
-     * @return void
-     */
-    public function index(): void
+    public function __construct(JournalBookService $service)
     {
-        Auth::requirePermission('report', 'read');
-        $from = $_GET['from'] ?? date('Y-m-01');
-        $to = $_GET['to'] ?? date('Y-m-t');
-        $account = $_GET['account'] ?? null;
+        $this->service = $service;
+    }
+
+    // NGHIỆP VỤ: Sổ Nhật ký Chung — mọi bút toán theo trình tự thời gian
+    // Input: GET ?from=2025-01-01&to=2025-01-31
+    // Output: { entries: [{date, reference, description, line_no, account_code, account_name, dr, cr}] }
+    // Service: JournalBookService.getGeneralJournal() — đọc từ TransactionRepository
+    // Rủi ro: Nếu dữ liệu quá lớn, cần phân trang hoặc giới hạn thời gian
+    // Mục đích: Cơ sở để kiểm toán viên đối chiếu, dùng để lập sổ cái và BC01/02/03
+    // Ràng buộc: Số dư Dr = Cr cho mỗi dòng. Số thứ tự dòng phải liên tục
+    public function journal(): void
+    {
+        $from = $_GET['from'] ?? date('Y-01-01');
+        $to = $_GET['to'] ?? date('Y-m-d');
         try {
-            JsonResponse::ok($this->journalBook->getJournalBook($from, $to, $account));
+            JsonResponse::ok($this->service->getGeneralJournal($from, $to));
         } catch (\InvalidArgumentException $e) {
             JsonResponse::error($e->getMessage(), 404);
         }
+    }
+
+    public function view(): void
+    {
+        require __DIR__ . '/../../../../../public/views/so_nhat_ky_chung.php';
     }
 }

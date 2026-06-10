@@ -70,7 +70,7 @@ use Accounting\Interfaces\HTTP\DashboardController;
 // === LỚP CONTROLLER: Tiếp nhận request từ Router, gọi Service ===
 // Controller KHÔNG chứa business logic — chỉ validate input + format response
 // Mỗi controller nhận dependency từ constructor — không dùng static/global trong controller
-$accountController = new AccountController($accountRepository);
+$accountController = new AccountController($accountService);
 $approvalController = new ApprovalController($journalService, $pdo, $approvalRoutingService);
 $apController = new ApController($apService);
 $arController = new ArController($arService);
@@ -83,7 +83,7 @@ $cashReportController = new CashReportController($cashReportService);
 $pettyCashController = new PettyCashController($pettyCashService);
 $ccdcController = new CcdcController($ccdcRepository);
 $ccdcAllocationController = new CcdcAllocationController($ccdcAllocationService);
-$vatController = new VatController($vatService, $vatDeclarationEngine, $vatRateService);
+$vatController = new VatController($vatService);
 $citController = new CitController($citService);
 $fctController = new FctController($fctService);
 $openingBalanceController = new OpeningBalanceController($openingBalanceService);

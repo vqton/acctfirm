@@ -2,88 +2,82 @@
 namespace Accounting\Interfaces\HTTP\Inventory;
 
 use Accounting\Domain\Contract\InventoryServiceInterface;
+use Accounting\Domain\Repository\ItemRepositoryInterface;
 use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
 
 /**
- * MODULE: Kiểm kê định kỳ (Periodic Inventory)
+ * MODULE: Kiểm kê Định kỳ (Periodic Inventory)
  *
  * Mục đích nghiệp vụ:
- *   - Thực hiện kiểm kê hàng tồn kho định kỳ
- *   - So sánh tồn kho thực tế vs sổ sách
- *   - Ghi nhận chênh lệch thừa/thiếu
+ *   - Ghi nhận kết quả kiểm kê định kỳ cuối tháng/cuối quý
+ *   - Điều chỉnh tồn kho thực tế so với sổ sách
+ *   - Cập nhật đơn giá tồn kho cuối kỳ (closing unit cost)
+ *   - Hỗ trợ phương pháp kiểm kê định kỳ (periodic inventory system)
  *
  * API endpoints:
- *   POST /api/inventory/periodic — Tạo phiên kiểm kê
- *   POST /api/inventory/periodic/{id}/confirm — Xác nhận kết quả
- *   GET  /api/inventory/periodic/{id} — Chi tiết
+ *   GET  /api/periodic-inventory       — Danh sách kiểm kê
+ *   POST /api/periodic-inventory       — Ghi nhận kết quả kiểm kê
  *
  * Rủi ro:
- *   - Không xử lý chênh lệch -> sai tồn kho
+ *   - Chênh lệch kiểm kê không được xử lý → sai tồn kho sổ sách
+ *   - Điều chỉnh sai → ảnh hưởng giá vốn (632) và BC02
+ *   - Cần phân biệt thừa/thiếu để xử lý khác nhau
  *
  * Tích hợp:
- *   - InventoryService ghi nhận điều chỉnh
+ *   - InventoryService.closePeriodicInventory xử lý chênh lệch
+ *   - PhysicalCountController quản lý phiên kiểm kê thực tế
+ *   - Kết quả kiểm kê là cơ sở để lập BC01 khoản mục hàng tồn kho
  */
 class PeriodicController
 {
     private InventoryServiceInterface $inventory;
+    private ItemRepositoryInterface $itemRepo;
+    private \PDO $pdo;
 
-    public function __construct(InventoryServiceInterface $inventory) { $this->inventory = $inventory; }
-
-    /**
-     * Tạo phiên kiểm kê mới
-     *
-     * @return void
-     */
-    public function create(): void
+    public function __construct(InventoryServiceInterface $inventory, ItemRepositoryInterface $itemRepo, \PDO $pdo)
     {
-        Auth::requirePermission('inventory', 'create');
+        $this->inventory = $inventory;
+        $this->itemRepo = $itemRepo;
+        $this->pdo = $pdo;
+    }
+
+    public function list(): void
+    {
+        $pdo = $this->getPdo();
+        $stmt = $pdo->query("SELECT p.*, i.code as item_code, i.name as item_name FROM periodic_inventory p JOIN items i ON i.id = p.item_id ORDER BY p.created_at DESC");
+        JsonResponse::ok($stmt->fetchAll(\PDO::FETCH_ASSOC));
+    }
+
+    // NGHIỆP VỤ: Kiểm kê định kỳ cuối kỳ — ghi nhận số lượng và đơn giá tồn cuối kỳ
+    // Input: { item_id, closing_qty, closing_unit_cost, reference?, created_by? }
+    // Output: { period_id, item_id, old_qty, closing_qty, difference_qty, adjustment_entry } — 201 Created
+    // Service: InventoryService.closePeriodicInventory() — so sánh sổ sách vs thực tế
+    // Hạch toán điều chỉnh: Thừa: Nợ 152,156 / Có 711. Thiếu: Nợ 632 / Có 152,156
+    // Rủi ro: Sai closing_unit_cost → sai định giá hàng tồn kho → sai BC01 và BC02
+    // Tích hợp: PhysicalCountController có thể cung cấp số liệu thực tế
+    public function close(): void
+    {
         Auth::checkCsrf();
+        Auth::requirePermission('inventory', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
-        if (!$data || !isset($data['warehouse_id'])) {
-            JsonResponse::error('Vui lòng nhập kho', 400);
+        if (!$data || !isset($data['item_id'], $data['closing_qty'], $data['closing_unit_cost'])) {
+            JsonResponse::error('Vui lòng nhập mã vật tư, số lượng tồn cuối và đơn giá cuối kỳ');
             return;
         }
         try {
-            $result = $this->inventory->startPeriodicCount($data, $_SESSION['user_id'] ?? 'system');
+            $result = $this->inventory->closePeriodicInventory(
+                $data['item_id'], (float)$data['closing_qty'], (float)$data['closing_unit_cost'],
+                $data['reference'] ?? uniqid('prd_'), $data['created_by'] ?? 'system'
+            );
             JsonResponse::ok($result, 201);
         } catch (\InvalidArgumentException $e) {
-            JsonResponse::error($e->getMessage(), 400);
+            JsonResponse::error($e->getMessage());
         }
     }
 
-    /**
-     * Xác nhận kết quả kiểm kê
-     *
-     * @param string $id ID phiên kiểm kê
-     * @return void
-     */
-    public function confirm(string $id): void
+    private function getPdo(): \PDO
     {
-        Auth::requirePermission('inventory', 'update');
-        Auth::checkCsrf();
-        $data = json_decode(file_get_contents('php://input'), true);
-        try {
-            $result = $this->inventory->confirmPeriodicCount($id, $data, $_SESSION['user_id'] ?? 'system');
-            JsonResponse::ok($result);
-        } catch (\InvalidArgumentException $e) {
-            JsonResponse::error($e->getMessage(), 400);
-        }
-    }
-
-    /**
-     * Chi tiết phiên kiểm kê
-     *
-     * @param string $id ID phiên kiểm kê
-     * @return void
-     */
-    public function get(string $id): void
-    {
-        Auth::requirePermission('inventory', 'read');
-        try {
-            JsonResponse::ok($this->inventory->getPeriodicCount($id));
-        } catch (\InvalidArgumentException $e) {
-            JsonResponse::error($e->getMessage(), 404);
-        }
+        return $this->pdo;
     }
 }
