@@ -8,18 +8,20 @@ use Accounting\Domain\Repository\ItemRepositoryInterface;
 use Accounting\Domain\Repository\TransactionRepositoryInterface;
 use Accounting\Domain\Repository\WarehouseRepositoryInterface;
 
+/**
+ * NGHIỆP VỤ KHO — Service xử lý toàn bộ nghiệp vụ nhập/xuất/tồn kho theo Thông tư 99/2025/TT-BTC.
+ *
+ * Nguyên tắc hạch toán:
+ * - Mọi biến động hàng tồn kho đều ghi nhận bút toán kép qua JournalService
+ * - Giá trị tồn kho theo dõi chi tiết qua cost layer (FIFO/Bình quân gia quyền/Specific ID)
+ * - Xuất kho → ghi nhận giá vốn (TK 632) → ảnh hưởng BC02 chỉ tiêu 24
+ *
+ * RỦI RO: Sai giá vốn → BC02 sai → Thuế TNDN sai → Phạt thuế
+ * RỦI RO: Mất dữ liệu cost layer → không trace được giá gốc xuất kho
+ * RỦI RO: Âm kho sai lệch số liệu kiểm kê → BC01 sai
+ */
 class InventoryService implements InventoryServiceInterface
 {
-    // NGHIỆP VỤ KHO: Service xử lý toàn bộ nghiệp vụ nhập/xuất/tồn kho theo Thông tư 99/2025/TT-BTC.
-    //
-    // Nguyên tắc hạch toán:
-    // - Mọi biến động hàng tồn kho đều ghi nhận bút toán kép qua JournalService
-    // - Giá trị tồn kho theo dõi chi tiết qua cost layer (FIFO/Bình quân gia quyền/Specific ID)
-    // - Xuất kho → ghi nhận giá vốn (TK 632) → ảnh hưởng BC02 chỉ tiêu 24
-    //
-    // RỦI RO: Sai giá vốn → BC02 sai → Thuế TNDN sai → Phạt thuế
-    // RỦI RO: Mất dữ liệu cost layer → không trace được giá gốc xuất kho
-    // RỦI RO: Âm kho sai lệch số liệu kiểm kê → BC01 sai
     private AccountRepositoryInterface $accountRepo;
     private TransactionRepositoryInterface $txnRepo;
     private ItemRepositoryInterface $itemRepo;
@@ -57,12 +59,20 @@ class InventoryService implements InventoryServiceInterface
         $this->pdo = $pdo;
     }
 
-    // BẢO VỆ TOÀN VẸN: Mọi nghiệp vụ kho đều chạy trong DB transaction.
-    // Nếu một bước thất bại (ví dụ: trừ kho nhưng post bút toán lỗi),
-    // toàn bộ thay đổi về số lượng lẫn giá trị đều được rollback.
-    //
-    // RỦI RO: Nếu không dùng transaction, trường hợp lỗi giữa chừng sẽ
-    // dẫn đến lệch số lượng kho với số dư tài khoản (không trace được).
+    /**
+     * Wrap nghiệp vụ kho trong DB transaction để đảm bảo toàn vẹn dữ liệu.
+     *
+     * BẢO VỆ TOÀN VẸN: Mọi nghiệp vụ kho đều chạy trong DB transaction.
+     * Nếu một bước thất bại (ví dụ: trừ kho nhưng post bút toán lỗi),
+     * toàn bộ thay đổi về số lượng lẫn giá trị đều được rollback.
+     *
+     * RỦI RO: Nếu không dùng transaction, trường hợp lỗi giữa chừng sẽ
+     * dẫn đến lệch số lượng kho với số dư tài khoản (không trace được).
+     *
+     * @param callable $fn Hàm nghiệp vụ cần wrap
+     * @return mixed Kết quả từ $fn
+     * @throws \Exception Rollback và ném lại lỗi
+     */
     private function wrapInTransaction(callable $fn): mixed
     {
         $this->pdo->beginTransaction();
@@ -76,9 +86,17 @@ class InventoryService implements InventoryServiceInterface
         }
     }
 
-    // KIỂM SOÁT KỲ: Không cho phép nhập/xuất vào kỳ kế toán đã đóng.
-    // Nếu kỳ đã đóng mà vẫn cho nhập/xuất → số dư đầu kỳ sau sai,
-    // báo cáo tài chính BC01/BC02 không khớp → audit fail.
+    /**
+     * Kiểm soát kỳ: Không cho phép nhập/xuất vào kỳ kế toán đã đóng.
+     *
+     * Nếu kỳ đã đóng mà vẫn cho nhập/xuất → số dư đầu kỳ sau sai,
+     * dẫn đến BC01/BC02/BC03 sai toàn bộ.
+     * LƯU Ý: Nếu date = null → dùng ngày hiện tại.
+     *
+     * @param string|null $date Ngày giao dịch (null = current date)
+     * @return void
+     * @throws \InvalidArgumentException Nếu kỳ đã đóng
+     */
     private function assertPeriodOpen(?string $date = null): void
     {
         $date ??= date('Y-m-d');
@@ -87,18 +105,31 @@ class InventoryService implements InventoryServiceInterface
         }
     }
 
-    // NGHIỆP VỤ: NHẬP KHO (Mua hàng)
-    // Hạch toán:
-    //   Nợ 15x (Giá trị hàng = SL × ĐG + Chi phí mua)
-    //   Có 331 (Phải trả người bán)
-    //
-    // Chi phí mua (vận chuyển, bốc xếp, bảo hiểm) được phân bổ vào giá gốc hàng nhập
-    // và ghi nhận vào addon_per_unit để tính giá xuất sau này.
-    // Cost layer được tạo để theo dõi giá gốc riêng cho từng lô nhập (FIFO).
-    //
-    // ẢNH HƯỞNG BCTC: Tăng giá trị hàng tồn kho (BC01), chưa ảnh hưởng BC02
-    //
-    // RỦI RO: Nếu không phân bổ chi phí mua → giá vốn sau này thấp hơn thực tế → lợi nhuận ảo
+    /**
+     * NHẬP KHO (Mua hàng) — Nợ 15x / Có 331.
+     *
+     * Hạch toán:
+     *   Nợ 15x (Giá trị hàng = SL × ĐG + Chi phí mua)
+     *   Có 331 (Phải trả người bán)
+     *
+     * Chi phí mua (vận chuyển, bốc xếp, bảo hiểm) được phân bổ vào giá gốc hàng nhập
+     * và ghi nhận vào addon_per_unit để tính giá xuất sau này.
+     * Cost layer được tạo để theo dõi giá gốc riêng cho từng lô nhập (FIFO).
+     *
+     * ẢNH HƯỞNG BCTC: Tăng giá trị hàng tồn kho (BC01), chưa ảnh hưởng BC02
+     *
+     * RỦI RO: Nếu không phân bổ chi phí mua → giá vốn sau này thấp hơn thực tế → lợi nhuận ảo
+     *
+     * @param string $itemId ID mặt hàng
+     * @param float $qty Số lượng nhập
+     * @param float $unitPrice Đơn giá chưa bao gồm chi phí mua
+     * @param array $addonCosts Chi phí mua kèm [['description'=>'','amount'=>float],...]
+     * @param string $reference Số chứng từ (PNK)
+     * @param string $createdBy ID người tạo
+     * @param string|null $batchCode Mã lô (FIFO tracking)
+     * @param string|null $expiryDate Hạn sử dụng (nếu có)
+     * @return array
+     */
     public function receiveGoods(string $itemId, float $qty, float $unitPrice,
         array $addonCosts, string $reference, string $createdBy,
         ?string $batchCode = null, ?string $expiryDate = null): array
@@ -137,20 +168,28 @@ class InventoryService implements InventoryServiceInterface
         });
     }
 
-    // NGHIỆP VỤ: XUẤT KHO
-    // Hạch toán:
-    //   Nợ 154/241/632 (tùy mục đích xuất)
-    //   Có 15x (Giá vốn = SL × ĐG xuất)
-    //
-    // issueType xác định bản chất xuất:
-    //   'production' (154): Xuất cho sản xuất → CPSXKD dở dang
-    //   'construction' (241): Xuất cho XDCB → XDCB dở dang
-    //   'sale' (632): Xuất bán → Giá vốn hàng bán (ảnh hưởng trực tiếp BC02 chỉ tiêu 24)
-    //
-    // Đơn giá xuất được tính từ consumeCostLayers() theo phương pháp FIFO/bình quân.
-    //
-    // RỦI RO: Sai phương pháp tính giá → sai giá vốn → BC02 sai → Thuế TNDN sai
-    // RỦI RO: Xuất nhầm loại (sale vs production) → sai chỉ tiêu BC01 và BC02
+    /**
+     * XUẤT KHO — Nợ 154/241/632 / Có 15x.
+     *
+     * Hạch toán: Nợ TK chi phí (theo issueType) / Có TK tồn kho.
+     *
+     * issueType xác định bản chất xuất:
+     *   'production' (154): Xuất cho sản xuất → CPSXKD dở dang
+     *   'construction' (241): Xuất cho XDCB → XDCB dở dang
+     *   'sale' (632): Xuất bán → Giá vốn hàng bán (ảnh hưởng trực tiếp BC02 chỉ tiêu 24)
+     *
+     * Đơn giá xuất được tính từ consumeCostLayers() theo phương pháp FIFO/bình quân.
+     *
+     * RỦI RO: Sai phương pháp tính giá → sai giá vốn → BC02 sai → Thuế TNDN sai
+     * RỦI RO: Xuất nhầm loại (sale vs production) → sai chỉ tiêu BC01 và BC02
+     *
+     * @param string $itemId ID mặt hàng
+     * @param float $qty Số lượng xuất
+     * @param string $issueType Loại xuất: production|construction|sale
+     * @param string $reference Số chứng từ (PXK)
+     * @param string $createdBy ID người tạo
+     * @return array
+     */
     public function issueGoods(string $itemId, float $qty, string $issueType,
         string $reference, string $createdBy): array
     {
