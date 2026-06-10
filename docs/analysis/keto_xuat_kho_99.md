@@ -63,6 +63,21 @@
 ## Save Result
 - File written to `docs/analysis/keto_xuat_kho_99.md`.
 
+## Production Incident Report — PHPDoc Mass Edit Round 2 (2026-06-10)
+
+**Round 2 audit:** Comprehensive automated scan of all 293 PHP files for 4 classes of corruption.
+
+**17 issues found: 12 real + 5 false positives**
+
+| # | Issue | Fix |
+|---|-------|-----|
+| 1-3 | DI hallucination: InventoryTransitController, PromotionalController, WriteOffController received extra args | Reduced to 1 arg each in `40_controllers.php` |
+| 4 | Container missing: GoodsReceiptController instantiated but not in `services.php` return array | Added `'GoodsReceiptController' => $goodsReceiptController` |
+| 5-9 | 5 DTO classes (PublishResult etc) reported missing from `Domain/Contract/` — **FALSE POSITIVE** | Already exist as secondary classes in `EInvoiceGatewayInterface.php`, autoloaded via `implements` clause |
+| 10-12 | 3 DI mismatches from Round 1 — already fixed | Already shipped in previous commit |
+
+**Result:** All routes clean. Test suite: 0 new failures.
+
 ## Production Incident Report — PHPDoc Mass Edit (2026-06-10)
 
 **Context:** Full PHPDoc sweep on 293/293 PHP files in `src/Accounting/`. Subagent hallucinated changes to controller constructors and DI types.
