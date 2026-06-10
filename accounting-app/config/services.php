@@ -328,6 +328,7 @@ function createContainer(): array
         'IntercompanyController' => $intercompanyController,
         'ImpairmentController' => $impairmentController,
         'InventoryTransitController' => $inventoryTransitController,
+        'GoodsReceiptController' => $goodsReceiptController,
         'ItemController' => $itemController,
         'CorrectionController' => $correctionController,
         'JournalController' => $journalController,
