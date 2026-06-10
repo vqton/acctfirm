@@ -12,9 +12,17 @@ use Accounting\Domain\Repository\EmployeeRepositoryInterface;
 use Accounting\Domain\Contract\AuditLoggerInterface;
 use Accounting\Domain\Contract\JournalServiceInterface;
 
-// DICH VU TINH LUONG — core engine cua module Tien luong.
-// THAM SO: lay tu business_config (migration 091). Xem business_config chi tiet.
-
+/**
+ * DỊCH VỤ TÍNH LƯƠNG — core engine của module Tiền lương.
+ *
+ * Nghiệp vụ: Tính toán bảng lương, bảo hiểm (BHXH, BHYT, BHTN), thuế TNCN,
+ * hạch toán bút toán lương vào sổ cái, quản lý kỳ lương, phê duyệt và điều chỉnh.
+ *
+ * Tham số lấy từ business_config (migration 091). Xem business_config chi tiết.
+ *
+ * Rủi ro: Sai số người phụ thuộc → sai thuế TNCN → bị phạt thuế.
+ * Sai trần BHXH → đóng thiếu BH → bị phạt.
+ */
 class PayrollService
 {
     private PayrollEntryRepositoryInterface $payrollEntryRepo;
@@ -26,6 +34,16 @@ class PayrollService
     private ?AuditLoggerInterface $auditLogger;
     private ?ConfigService $config;
 
+    /**
+     * @param PayrollEntryRepositoryInterface $payrollEntryRepo Repository bảng lương
+     * @param PayrollPeriodRepositoryInterface $payrollPeriodRepo Repository kỳ lương
+     * @param SalaryComponentRepositoryInterface $salaryComponentRepo Repository thành phần lương
+     * @param EmployeeRepositoryInterface $employeeRepo Repository nhân viên
+     * @param JournalServiceInterface|null $journalService Dịch vụ hạch toán bút toán (tùy chọn)
+     * @param \PDO|null $pdo Kết nối database cho transaction (tùy chọn)
+     * @param AuditLoggerInterface|null $auditLogger Ghi audit trail (tùy chọn)
+     * @param ConfigService|null $config Dịch vụ cấu hình business_config (tùy chọn)
+     */
     public function __construct(
         PayrollEntryRepositoryInterface $payrollEntryRepo,
         PayrollPeriodRepositoryInterface $payrollPeriodRepo,
@@ -46,26 +64,61 @@ class PayrollService
         $this->config = $config;
     }
 
+    /**
+     * Lấy giá trị cấu hình từ business_config với kiểu mixed.
+     *
+     * @param string $key Khóa cấu hình
+     * @param mixed $default Giá trị mặc định nếu không tìm thấy
+     * @return mixed Giá trị cấu hình
+     */
     private function cfg(string $key, mixed $default): mixed
     {
         return $this->config?->get($key, $default) ?? $default;
     }
 
+    /**
+     * Lấy giá trị cấu hình dạng phần trăm (float).
+     *
+     * @param string $key Khóa cấu hình
+     * @param float $default Giá trị mặc định
+     * @return float Giá trị phần trăm
+     */
     private function cfgPercent(string $key, float $default): float
     {
         return $this->config?->getPercent($key, $default) ?? $default;
     }
 
+    /**
+     * Lấy giá trị cấu hình dạng số nguyên.
+     *
+     * @param string $key Khóa cấu hình
+     * @param int $default Giá trị mặc định
+     * @return int Giá trị số nguyên
+     */
     private function cfgInt(string $key, int $default): int
     {
         return $this->config?->getInt($key, $default) ?? $default;
     }
 
+    /**
+     * Lấy giá trị cấu hình dạng mảng JSON.
+     *
+     * @param string $key Khóa cấu hình
+     * @param array $default Giá trị mặc định
+     * @return array Mảng dữ liệu cấu hình
+     */
     private function cfgJson(string $key, array $default): array
     {
         return $this->config?->getJson($key, $default) ?? $default;
     }
 
+    /**
+     * Lấy mức lương tối thiểu vùng theo quy định.
+     * Dùng cho tính trần BHXH, BHYT, BHTN.
+     *
+     * @param string|null $region Mã vùng (I, II, III, IV). Mặc định IV nếu null.
+     * @return int Mức lương tối thiểu vùng (VNĐ)
+     */
     private function getRegionMinWage(?string $region): int
     {
         $defaultWages = ['I' => 4960000, 'II' => 4410000, 'III' => 3860000, 'IV' => 3450000];
@@ -73,13 +126,25 @@ class PayrollService
         return $regionWages[$region ?? 'IV'] ?? $regionWages['IV'] ?? 3450000;
     }
 
-    // --- 1. TINH BAO HIEM ---
-    // NGHIEP VU: Tinh cac khoan BHXH, BHYT, BHTN cho nguoi lao dong va doanh nghiep.
-    // Dau vao: gross (luong gross), insuranceSalary (luong tham gia BH), region (vung)
-    // Dau ra: mang voi cac khoan BH (ee: nld, er: dn)
-    //
-    // RUI RO: Tran BHXH = 20 lan luong toi thieu vung. Neu insuranceSalary > tran,
-    // chi tinh BH tren tran. Sai tran -> dong thieu BH -> bi phat.
+    /**
+     * Tính các khoản bảo hiểm (BHXH, BHYT, BHTN) cho người lao động và doanh nghiệp.
+     *
+     * Nghiệp vụ: Tính các khoản BHXH, BHYT, BHTN cho người lao động và doanh nghiệp.
+     * Đầu vào: gross (lương gross), insuranceSalary (lương tham gia BH), region (vùng).
+     * Đầu ra: mảng với các khoản BH (ee: NLĐ, er: DN).
+     *
+     * Rủi ro: Trần BHXH = 20 lần lương tối thiểu vùng. Nếu insuranceSalary > trần,
+     * chỉ tính BH trên trần. Sai trần → đóng thiếu BH → bị phạt.
+     *
+     * @param float $gross Lương gross (VNĐ)
+     * @param float|null $insuranceSalary Lương tham gia bảo hiểm (VNĐ). Mặc định = gross nếu null.
+     * @param string|null $region Mã vùng lương tối thiểu (I, II, III, IV)
+     * @return array{
+     *   bhxh_ee: int, bhyt_ee: int, bhtn_ee: int,
+     *   bhxh_er: int, bhyt_er: int, bhtn_er: int,
+     *   total_ee: int, total_er: int
+     * } Mảng kết quả các khoản bảo hiểm
+     */
     public function calculateInsurance(float $gross, ?float $insuranceSalary, ?string $region = null): array
     {
         $base = $insuranceSalary ?? $gross;
@@ -126,16 +191,24 @@ class PayrollService
         ];
     }
 
-    // --- 2. TINH THUE TNCN ---
-    // NGHIEP VU: Tinh thue thu nhap ca nhan theo bieu luy tien tung phan 2026.
-    // Thue TNCN = (Tong thu nhap chiu thue - Giam tru) * Thue suat
-    //
-    // Cong thuc:
-    //   Thu nhap chiu thue = Gross - BHXH_e - BHYT_e - BHTN_e
-    //   Thu nhap tinh thue = Thu nhap chiu thue - Giam tru ban than - Giam tru NPT
-    //   Thue TNCN = Tinh theo tung bac cua thu nhap tinh thue
-    //
-    // RUI RO: Sai so nguoi phu thuoc -> sai thue TNCN -> bi phat thue.
+    /**
+     * Tính thuế TNCN theo biểu lũy tiến từng phần năm 2026.
+     *
+     * Nghiệp vụ: Tính thuế thu nhập cá nhân theo biểu lũy tiến từng phần.
+     * Thuế TNCN = (Tổng thu nhập chịu thuế - Giảm trừ) * Thuế suất
+     *
+     * Công thức:
+     *   Thu nhập chịu thuế = Gross - BHXH_e - BHYT_e - BHTN_e
+     *   Thu nhập tính thuế = Thu nhập chịu thuế - Giảm trừ bản thân - Giảm trừ NPT
+     *   Thuế TNCN = Tính theo từng bậc của thu nhập tính thuế
+     *
+     * Rủi ro: Sai số người phụ thuộc → sai thuế TNCN → bị phạt thuế.
+     *
+     * @param float $gross Lương gross (VNĐ)
+     * @param float $insuranceEe Tổng bảo hiểm NLĐ phải đóng (VNĐ)
+     * @param int $dependentCount Số người phụ thuộc
+     * @return float Số thuế TNCN phải nộp (VNĐ)
+     */
     public function calculateTax(float $gross, float $insuranceEe, int $dependentCount = 0): float
     {
         $personalDeduction = $this->cfgInt('pit.resident_deduction_monthly', 15500000);
@@ -167,13 +240,42 @@ class PayrollService
         return $tax;
     }
 
-    // --- 3. TINH LUONG CHO MOT NHAN VIEN ---
-    // NGHIEP VU: Tinh toan day du cac khoan luong cho mot nhan vien.
-    // Dau vao: Employee object + tuy chon ghi de
-    // Dau ra: mang chi tiet cac khoan tinh luong
-    //
-    // Luong net = Gross - BHXH_e - BHYT_e - BHTN_e - Thue TNCN
-    // Chi phi DN = Gross + BHXH_dn + BHYT_dn + BHTN_dn
+    /**
+     * Tính lương đầy đủ cho một nhân viên.
+     *
+     * Nghiệp vụ: Tính toán đầy đủ các khoản lương cho một nhân viên.
+     * Đầu vào: Employee object + tùy chọn ghi đè.
+     *
+     * Lương net = Gross - BHXH_e - BHYT_e - BHTN_e - Thuế TNCN
+     * Chi phí DN = Gross + BHXH_dn + BHYT_dn + BHTN_dn
+     *
+     * @param Employee $emp Đối tượng nhân viên
+     * @param array $override Mảng ghi đè các tham số tính lương (gross_salary, insurance_salary, region, dependent_count, contract_type, working_days, allowances, deductions, overtime)
+     * @return array{
+     *   employee_id: string,
+     *   employee_code: string,
+     *   employee_name: string,
+     *   department_id: ?string,
+     *   contract_type: string,
+     *   gross_salary: float,
+     *   allowances: float,
+     *   deductions: float,
+     *   overtime: float,
+     *   insurance_bhxh_ee: int,
+     *   insurance_bhyt_ee: int,
+     *   insurance_bhtn_ee: int,
+     *   insurance_total_ee: int,
+     *   insurance_bhxh_er: int,
+     *   insurance_bhyt_er: int,
+     *   insurance_bhtn_er: int,
+     *   insurance_total_er: int,
+     *   tax_amount: float,
+     *   net_pay: float,
+     *   total_cost: float,
+     *   working_days: int
+     * } Chi tiết lương nhân viên
+     * @throws \InvalidArgumentException
+     */
     public function calculateEmployeePay(Employee $emp, array $override = []): array
     {
         $gross = $override['gross_salary'] ?? $this->cfgInt('payroll.default_gross', 10000000);
@@ -226,7 +328,16 @@ class PayrollService
         ];
     }
 
-    // --- 4. TAO KY LUONG ---
+    /**
+     * Tạo kỳ lương mới cho một tháng.
+     *
+     * Nghiệp vụ: Tạo kỳ lương với trạng thái "open" cho tháng/năm được chỉ định.
+     * Ngày bắt đầu = ngày 01 của tháng, ngày kết thúc = ngày cuối tháng.
+     *
+     * @param string $yearMonth Mã kỳ lương định dạng YYYYMM (vd: "202606")
+     * @param string|null $createdBy ID người tạo
+     * @return PayrollPeriod Đối tượng kỳ lương đã tạo
+     */
     public function createPayrollPeriod(string $yearMonth, ?string $createdBy = null): PayrollPeriod
     {
         $year = (int)substr($yearMonth, 0, 4);
@@ -248,10 +359,20 @@ class PayrollService
         return $period;
     }
 
-    // --- 5. XU LY BANG LUONG ---
-    // NGHIEP VU: Tinh toan bang luong cho tat ca nhan vien trong mot ky.
-    // Tao payroll_entry + payroll_details cho tung nhan vien.
-    // Status ban dau la "draft" — cho duyet.
+    /**
+     * Xử lý bảng lương — tính toán cho tất cả nhân viên trong một kỳ.
+     *
+     * Nghiệp vụ: Tính toán bảng lương cho tất cả nhân viên trong một kỳ.
+     * Tạo payroll_entry + payroll_details cho từng nhân viên.
+     * Status ban đầu là "draft" — chờ duyệt.
+     *
+     * @param string $periodId ID kỳ lương
+     * @param string|null $createdBy ID người tạo
+     * @param array $employeeOverrides Mảng ghi đè tham số tính lương theo employee_id
+     * @return PayrollEntry Đối tượng bảng lương đã tạo
+     * @throws \InvalidArgumentException Nếu không tìm thấy kỳ lương hoặc kỳ lương không mở
+     * @throws \RuntimeException Nếu không có nhân viên đang hoạt động
+     */
     public function processPayroll(string $periodId, ?string $createdBy = null, array $employeeOverrides = []): PayrollEntry
     {
         $period = $this->payrollPeriodRepo->findById($periodId);
@@ -322,24 +443,35 @@ class PayrollService
         return $entry;
     }
 
-    // --- 6. POST BUT TOAN LUONG ---
-    // NGHIEP VU: Ghi nhan but toan luong vao so cai qua JournalService.
-    //
-    // But toan phat sinh:
-    //   1. Chi phi luong: No 641/642/622/627 / Co 334 (tong gross)
-    //   2. BHXH NLĐ: No 334 / Co 3383
-    //   3. BHYT NLĐ: No 334 / Co 3384
-    //   4. BHTN NLĐ: No 334 / Co 3386
-    //   5. BHXH DN: No 641/642/622/627 / Co 3383
-    //   6. BHYT DN: No 641/642/622/627 / Co 3384
-    //   7. BHTN DN: No 641/642/622/627 / Co 3386
-    //   8. Thue TNCN: No 334 / Co 3335
-    //
-    // RUI RO: Neu post that bai, toan bo transaction rollback.
-    // Khong co trang thai "post mot nua".
-    //
-    // YEU CAU: JournalService phai duoc cau hinh truoc khi goi postPayroll().
-    // Sai account code -> nen de tai khoan mac dinh co the tuy chinh.
+    /**
+     * Ghi nhận bút toán lương vào sổ cái qua JournalService.
+     *
+     * Nghiệp vụ: Ghi nhận bút toán lương vào sổ cái qua JournalService.
+     *
+     * Bút toán phát sinh:
+     *   1. Chi phí lương: Nợ 641/642/622/627 / Có 334 (tổng gross)
+     *   2. BHXH NLĐ: Nợ 334 / Có 3383
+     *   3. BHYT NLĐ: Nợ 334 / Có 3384
+     *   4. BHTN NLĐ: Nợ 334 / Có 3386
+     *   5. BHXH DN: Nợ 641/642/622/627 / Có 3383
+     *   6. BHYT DN: Nợ 641/642/622/627 / Có 3384
+     *   7. BHTN DN: Nợ 641/642/622/627 / Có 3386
+     *   8. Thuế TNCN: Nợ 334 / Có 3335
+     *
+     * Rủi ro: Nếu post thất bại, toàn bộ transaction rollback.
+     * Không có trạng thái "post một nửa".
+     *
+     * Yêu cầu: JournalService phải được cấu hình trước khi gọi postPayroll().
+     * Sai account code → nên để tài khoản mặc định có thể tùy chỉnh.
+     *
+     * @param string $entryId ID bảng lương
+     * @param string $postedBy ID người thực hiện
+     * @param array $accountOverrides Mảng ghi đè tài khoản kế toán (cost_account, payable_account, bhxh_payable, bhyt_payable, bhtn_payable, tax_payable)
+     * @return array{entry_id: string, total_gross: float, total_insurance_er: float, total_tax: float, status: string} Kết quả hạch toán
+     * @throws \RuntimeException Nếu JournalService hoặc PDO chưa được cấu hình
+     * @throws \InvalidArgumentException Nếu không tìm thấy bảng lương hoặc trạng thái không hợp lệ
+     * @throws \Exception Nếu có lỗi trong quá trình post (rollback tự động)
+     */
     public function postPayroll(string $entryId, string $postedBy, array $accountOverrides = []): array
     {
         if (!$this->journalService) {
@@ -515,8 +647,15 @@ class PayrollService
         }
     }
 
-    // Tach insurance tong thanh BHXH/BHYT/BHTN theo ty le mac dinh
-    // Khi payroll_detail chi co tong insurance_ee/er, tach theo ty le 8:1.5:1
+    /**
+     * Tách insurance tổng thành BHXH/BHYT/BHTN theo tỷ lệ mặc định.
+     *
+     * Khi payroll_detail chỉ có tổng insurance_ee/er, tách theo tỷ lệ 8:1.5:1.
+     *
+     * @param array $details Mảng chi tiết payroll (mỗi phần tử có insurance_ee, insurance_er)
+     * @param float $totalEe Tổng bảo hiểm NLĐ
+     * @return array{bhxh_ee: float, bhyt_ee: float, bhtn_ee: float, bhxh_er: float, bhyt_er: float, bhtn_er: float} Kết quả tách bảo hiểm
+     */
     private function splitInsuranceDetails(array $details, float $totalEe): array
     {
         $bhxhEe = 0; $bhytEe = 0; $bhtnEe = 0;
@@ -547,7 +686,17 @@ class PayrollService
         ];
     }
 
-    // --- 7. DUYET BANG LUONG ---
+    /**
+     * Phê duyệt bảng lương.
+     *
+     * Nghiệp vụ: Chuyển trạng thái bảng lương từ "draft" sang "approved".
+     * Chỉ áp dụng cho bảng lương ở trạng thái nháp.
+     *
+     * @param string $entryId ID bảng lương
+     * @param string $approvedBy ID người phê duyệt
+     * @return PayrollEntry Đối tượng bảng lương đã phê duyệt
+     * @throws \InvalidArgumentException Nếu không tìm thấy bảng lương hoặc không ở trạng thái nháp
+     */
     public function approvePayroll(string $entryId, string $approvedBy): PayrollEntry
     {
         $entry = $this->payrollEntryRepo->findById($entryId);
@@ -565,7 +714,17 @@ class PayrollService
         return $entry;
     }
 
-    // --- 8. DONG KY LUONG ---
+    /**
+     * Đóng kỳ lương.
+     *
+     * Nghiệp vụ: Chuyển trạng thái kỳ lương từ "open" sang "closed".
+     * Sau khi đóng, không thể tạo bảng lương mới cho kỳ này.
+     *
+     * @param string $periodId ID kỳ lương
+     * @param string $closedBy ID người đóng
+     * @return PayrollPeriod Đối tượng kỳ lương đã đóng
+     * @throws \InvalidArgumentException Nếu không tìm thấy kỳ lương hoặc không ở trạng thái mở
+     */
     public function closePayroll(string $periodId, string $closedBy): PayrollPeriod
     {
         $period = $this->payrollPeriodRepo->findById($periodId);
@@ -583,10 +742,19 @@ class PayrollService
         return $period;
     }
 
-    // --- 9. DIEU CHINH BANG LUONG ---
-    // NGHIEP VU: Dieu chinh bang luong da post (but toan bu tru).
-    // Tao mot payroll_entry moi voi so lieu dieu chinh.
-    // Chi ap dung cho bang luong da post.
+    /**
+     * Điều chỉnh bảng lương đã post (bút toán bù trừ).
+     *
+     * Nghiệp vụ: Điều chỉnh bảng lương đã post (bút toán bù trừ).
+     * Tạo một payroll_entry mới với số liệu điều chỉnh.
+     * Chỉ áp dụng cho bảng lương đã post.
+     *
+     * @param string $originalEntryId ID bảng lương gốc
+     * @param string $createdBy ID người tạo điều chỉnh
+     * @param array $adjustments Mảng các điều chỉnh (mỗi phần tử chứa employee_id, gross_salary, allowances, deductions, insurance_ee, insurance_er, tax_amount, net_pay, overtime, total_cost, working_days, notes)
+     * @return PayrollEntry Đối tượng bảng lương điều chỉnh
+     * @throws \InvalidArgumentException Nếu không tìm thấy bảng lương gốc hoặc chưa ghi sổ
+     */
     public function adjustPayroll(string $originalEntryId, string $createdBy, array $adjustments): PayrollEntry
     {
         $original = $this->payrollEntryRepo->findById($originalEntryId);
@@ -634,43 +802,85 @@ class PayrollService
         return $entry;
     }
 
-    // --- HELPERS ---
-
+    /**
+     * Tìm bảng lương theo ID.
+     *
+     * @param string $id ID bảng lương
+     * @return PayrollEntry|null Đối tượng bảng lương hoặc null nếu không tìm thấy
+     */
     public function findEntryById(string $id): ?PayrollEntry
     {
         return $this->payrollEntryRepo->findById($id);
     }
 
+    /**
+     * Tìm kỳ lương theo ID.
+     *
+     * @param string $id ID kỳ lương
+     * @return PayrollPeriod|null Đối tượng kỳ lương hoặc null nếu không tìm thấy
+     */
     public function findPeriodById(string $id): ?PayrollPeriod
     {
         return $this->payrollPeriodRepo->findById($id);
     }
 
+    /**
+     * Lấy danh sách tất cả bảng lương.
+     *
+     * @return PayrollEntry[] Mảng các bảng lương
+     */
     public function findAllEntries(): array
     {
         return $this->payrollEntryRepo->findAll();
     }
 
+    /**
+     * Lấy danh sách tất cả kỳ lương.
+     *
+     * @return PayrollPeriod[] Mảng các kỳ lương
+     */
     public function findAllPeriods(): array
     {
         return $this->payrollPeriodRepo->findAll();
     }
 
+    /**
+     * Lấy chi tiết bảng lương theo ID bảng lương.
+     *
+     * @param string $entryId ID bảng lương
+     * @return array Mảng các chi tiết bảng lương
+     */
     public function findDetailsByEntry(string $entryId): array
     {
         return $this->payrollEntryRepo->findDetailsByEntry($entryId);
     }
 
+    /**
+     * Lấy danh sách kỳ lương đang mở.
+     *
+     * @return PayrollPeriod[] Mảng các kỳ lương đang mở
+     */
     public function findOpenPeriods(): array
     {
         return $this->payrollPeriodRepo->findOpen();
     }
 
-    // --- 10. NOP BHXH ---
-    // NGHIEP VU: Nop tien BHXH, BHYT, BHTN cho co quan bao hiem xa hoi
-    // Hach toan: No 3383 (BHXH, BHYT, BHTN phai nop) / Co 111, 112 (tien mat, tien gui NH)
-    // Yeu cau: Chi thuc hien sau khi bang luong da ghi so
-    // Rui ro: Nop thieu -> phat cham nop. Nop thua -> du 3383 ben No -> can bu tru ky sau
+    /**
+     * Nộp tiền BHXH, BHYT, BHTN cho cơ quan bảo hiểm xã hội.
+     *
+     * Nghiệp vụ: Nộp tiền BHXH, BHYT, BHTN cho cơ quan bảo hiểm xã hội.
+     * Hạch toán: Nợ 3383 (BHXH, BHYT, BHTN phải nộp) / Có 111, 112 (tiền mặt, tiền gửi NH).
+     * Yêu cầu: Chỉ thực hiện sau khi bảng lương đã ghi sổ.
+     * Rủi ro: Nộp thiếu → phạt chậm nộp. Nộp thừa → dư 3383 bên Nợ → cần bù trừ kỳ sau.
+     *
+     * @param string $periodId ID kỳ lương
+     * @param float $amount Số tiền nộp (VNĐ)
+     * @param string $bankAccount Tài khoản ngân hàng hoặc tiền mặt (vd: "1111", "1121")
+     * @param string $createdBy ID người thực hiện
+     * @return array{transaction_id: string, amount: float, bank_account: string, status: string} Kết quả nộp BHXH
+     * @throws \RuntimeException Nếu JournalService chưa được cấu hình
+     * @throws \InvalidArgumentException Nếu số tiền <= 0
+     */
     public function payInsurance(string $periodId, float $amount, string $bankAccount, string $createdBy): array
     {
         if (!$this->journalService) {

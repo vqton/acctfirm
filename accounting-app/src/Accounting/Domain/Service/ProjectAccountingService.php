@@ -5,12 +5,41 @@ namespace Accounting\Domain\Service;
 use Accounting\Domain\Repository\ProjectRepositoryInterface;
 use PDO;
 
+// Quản lý kế toán dự án — theo dõi ngân sách, chi phí thực tế, doanh thu theo tiến độ
+// và xuất hóa đơn tạm ứng cho từng dự án.
+//
+// Nghiệp vụ chính:
+// - Phân bổ chi phí từ ledger_entries vào dự án (allocateCost)
+// - Ghi nhận doanh thu theo tỷ lệ hoàn thành (recognizeRevenue — percentage of completion)
+// - Quản lý ngân sách chi tiết theo tài khoản (setBudgetLine/updateBudgetSpent)
+// - Tạo chứng từ xuất hóa đơn theo tiến độ (createProgressBilling)
+// - Kết thúc dự án khi hoàn thành (finalizeProject)
+// - Báo cáo tổng hợp (getDashboardStats, getProjectReport, getActiveProjectsList)
+// - Xuất báo cáo CSV (exportProjectReport)
+//
+// Ảnh hưởng:
+// - TK 154 (CPSXKD dở dang) khi phân bổ chi phí
+// - TK 632 (Giá vốn) khi ghi nhận doanh thu
+// - BC01 chỉ tiêu "Chi phí SXKD dở dang" thay đổi
+// - BC02 chỉ tiêu "Doanh thu" và "Giá vốn" thay đổi
+//
+// RỦI RO: Nếu allocateCost không tìm thấy bút toán phù hợp → throw InvalidArgumentException
+// RỦI RO: Nếu finalizeProject khi dự án không active → throw InvalidArgumentException
+// RỦI RO: Nếu recognizeRevenue không tìm thấy dự án → throw InvalidArgumentException
+//
 class ProjectAccountingService
 {
     private ProjectRepositoryInterface $projectRepo;
     private PDO $pdo;
     private ReportExportService $export;
 
+    /**
+     * Khởi tạo ProjectAccountingService với các dependency
+     *
+     * @param ProjectRepositoryInterface $projectRepo Repository quản lý dự án — thao tác với bảng projects
+     * @param PDO $pdo Kết nối PDO đến MySQL — dùng cho truy vấn trực tiếp không qua repository
+     * @param ReportExportService $export Dịch vụ xuất báo cáo CSV/HTML — dùng trong exportProjectReport
+     */
     public function __construct(ProjectRepositoryInterface $projectRepo, PDO $pdo, ReportExportService $export)
     {
         $this->projectRepo = $projectRepo;
@@ -18,6 +47,22 @@ class ProjectAccountingService
         $this->export = $export;
     }
 
+    /**
+     * Lấy thống kê tổng quan cho dashboard dự án
+     *
+     * Nghiệp vụ: Tổng hợp số lượng dự án, ngân sách, chi phí và doanh thu đã xuất hóa đơn
+     * từ bảng projects. Dùng cho màn hình dashboard tổng quan.
+     *
+     * @return array{
+     *     total: int,
+     *     active: int,
+     *     completed: int,
+     *     total_budget: float,
+     *     total_cost: float,
+     *     total_billed: float
+     * } Mảng chứa tổng số dự án, số đang hoạt động, số hoàn thành, tổng ngân sách,
+     *   tổng chi phí thực tế và tổng đã xuất hóa đơn
+     */
     public function getDashboardStats(): array
     {
         return $this->pdo->query("
@@ -31,6 +76,26 @@ class ProjectAccountingService
         ")->fetch(PDO::FETCH_ASSOC);
     }
 
+    /**
+     * Lấy báo cáo chi tiết cho một dự án
+     *
+     * Nghiệp vụ: Tổng hợp tất cả thông tin dự án bao gồm thông tin chung, chi phí thực tế,
+     * chênh lệch ngân sách (variance), tỷ lệ hoàn thành, chi phí theo tài khoản,
+     * danh sách bút toán và chứng từ xuất hóa đơn theo tiến độ.
+     *
+     * @param string $projectId Mã định danh dự án (uniqid)
+     * @return array{
+     *     project: array,
+     *     actual_debit: float,
+     *     actual_credit: float,
+     *     variance: float,
+     *     completion_pct: float,
+     *     cost_summary: array,
+     *     transactions: array,
+     *     billings: array
+     * } Mảng chứa thông tin chi tiết và báo cáo tài chính của dự án
+     * @throws \InvalidArgumentException Nếu không tìm thấy dự án với projectId đã cho
+     */
     public function getProjectReport(string $projectId): array
     {
         $project = $this->projectRepo->findById($projectId);
@@ -50,6 +115,25 @@ class ProjectAccountingService
         ];
     }
 
+    /**
+     * Phân bổ chi phí từ bút toán vào dự án
+     *
+     * Nghiệp vụ: Gán project_id cho một ledger_entry cụ thể dựa trên transaction_id,
+     * account_code, chiều Nợ/Có và số tiền. Nếu là bút toán Nợ, cập nhật actual_cost
+     * của dự án tương ứng.
+     *
+     * RỦI RO: Transaction wrap + rollback nếu bất kỳ bước nào lỗi.
+     * Nếu không tìm thấy bút toán phù hợp → throw với mã lỗi rõ ràng.
+     *
+     * @param string $projectId Mã định danh dự án cần phân bổ chi phí
+     * @param string $transactionId Mã định danh bút toán chứa ledger_entry cần phân bổ
+     * @param string $accountCode Mã tài khoản kế toán (ví dụ: 621, 622, 627)
+     * @param float $amount Số tiền cần phân bổ — phải khớp chính xác với amount trong ledger_entry
+     * @param bool $isDebit True nếu phân bổ cho bên Nợ, False nếu phân bổ cho bên Có
+     * @return void
+     * @throws \InvalidArgumentException Nếu không tìm thấy bút toán phù hợp để phân bổ
+     * @throws \Exception Nếu transaction database thất bại — rollback tự động
+     */
     public function allocateCost(string $projectId, string $transactionId, string $accountCode, float $amount, bool $isDebit): void
     {
         $this->pdo->beginTransaction();
@@ -75,6 +159,21 @@ class ProjectAccountingService
         }
     }
 
+    /**
+     * Tạo chứng từ xuất hóa đơn theo tiến độ dự án
+     *
+     * Nghiệp vụ: Tạo bản ghi project_progress_billing với trạng thái "draft"
+     * để theo dõi các lần xuất hóa đơn tạm ứng/theo tiến độ cho khách hàng.
+     * Chứng từ ở trạng thái draft — chưa ảnh hưởng đến doanh thu.
+     *
+     * @param string $projectId Mã định danh dự án
+     * @param string $billingDate Ngày xuất hóa đơn (định dạng YYYY-MM-DD)
+     * @param float $amount Số tiền xuất hóa đơn (VNĐ)
+     * @param float $pctComplete Tỷ lệ hoàn thành tại thời điểm xuất hóa đơn (0-100)
+     * @param string $description Diễn giải nội dung xuất hóa đơn
+     * @param string $createdBy Mã định danh người tạo chứng từ (user_id)
+     * @return string Mã định danh của chứng từ vừa tạo (uniqid với prefix "bill_")
+     */
     public function createProgressBilling(string $projectId, string $billingDate, float $amount, float $pctComplete, string $description, string $createdBy): string
     {
         $id = uniqid('bill_');
@@ -86,6 +185,21 @@ class ProjectAccountingService
         return $id;
     }
 
+    /**
+     * Ghi nhận doanh thu theo tỷ lệ hoàn thành (Percentage of Completion)
+     *
+     * Nghiệp vụ: Tính doanh thu cần ghi nhận dựa trên chi phí thực tế / ngân sách.
+     * Công thức: Doanh thu = Ngân sách × min(Tổng chi phí / Ngân sách, 1.0)
+     * Cập nhật revenue_recognized và estimated_completion_pct trong bảng projects.
+     *
+     * RỦI RO: Nếu dự án không tồn tại → throw InvalidArgumentException
+     * RỦI RO: Nếu budget = 0 → completion_pct = 0%, revenue = 0 (không chia cho 0)
+     *
+     * @param string $projectId Mã định danh dự án
+     * @param string $userId Mã định danh người thực hiện ghi nhận
+     * @return float Số tiền doanh thu đã ghi nhận
+     * @throws \InvalidArgumentException Nếu không tìm thấy dự án
+     */
     public function recognizeRevenue(string $projectId, string $userId): float
     {
         $project = $this->projectRepo->findById($projectId);
@@ -101,6 +215,19 @@ class ProjectAccountingService
         return $revenue;
     }
 
+    /**
+     * Kết thúc dự án — chuyển trạng thái sang "completed"
+     *
+     * Nghiệp vụ: Đánh dấu dự án hoàn thành với tỷ lệ 100%.
+     * Chỉ cho phép kết thúc dự án đang ở trạng thái "active".
+     *
+     * RỦI RO: Nếu dự án không tồn tại → throw InvalidArgumentException
+     * RỦI RO: Nếu dự án không ở trạng thái active → throw InvalidArgumentException
+     *
+     * @param string $projectId Mã định danh dự án cần kết thúc
+     * @return void
+     * @throws \InvalidArgumentException Nếu không tìm thấy dự án hoặc dự án không ở trạng thái active
+     */
     public function finalizeProject(string $projectId): void
     {
         $project = $this->projectRepo->findById($projectId);
@@ -111,6 +238,20 @@ class ProjectAccountingService
             ->execute([$projectId]);
     }
 
+    /**
+     * Thiết lập hoặc cập nhật dòng ngân sách cho một tài khoản của dự án
+     *
+     * Nghiệp vụ: Tạo hoặc cập nhật (upsert) một dòng ngân sách chi tiết
+     * theo tài khoản kế toán. Dùng ON DUPLICATE KEY UPDATE để đảm bảo
+     * idempotent — nếu đã tồn tại cặp (project_id, account_code) thì cập nhật
+     * budget_amount và notes, nếu chưa có thì thêm mới.
+     *
+     * @param string $projectId Mã định danh dự án
+     * @param string $accountCode Mã tài khoản kế toán (ví dụ: 621, 622, 627)
+     * @param float $amount Số tiền ngân sách dự kiến cho tài khoản này
+     * @param string|null $notes Ghi chú bổ sung cho dòng ngân sách (có thể null)
+     * @return void
+     */
     public function setBudgetLine(string $projectId, string $accountCode, float $amount, ?string $notes = null): void
     {
         $stmt = $this->pdo->prepare(
@@ -121,6 +262,16 @@ class ProjectAccountingService
         $stmt->execute([$projectId, $accountCode, $amount, $notes]);
     }
 
+    /**
+     * Cập nhật số tiền đã chi thực tế cho từng dòng ngân sách
+     *
+     * Nghiệp vụ: Tính tổng phát sinh Nợ từ ledger_entries theo từng tài khoản
+     * và cập nhật spent_amount tương ứng trong bảng project_budgets.
+     * Chỉ tính các bút toán Nợ (is_debit = 1) đã được gán project_id.
+     *
+     * @param string $projectId Mã định danh dự án cần cập nhật
+     * @return void
+     */
     public function updateBudgetSpent(string $projectId): void
     {
         $stmt = $this->pdo->prepare("
@@ -138,6 +289,16 @@ class ProjectAccountingService
         $stmt->execute([$projectId, $projectId]);
     }
 
+    /**
+     * Lấy danh sách dự án đang hoạt động kèm chi phí thực tế
+     *
+     * Nghiệp vụ: Truy vấn tất cả dự án active, kết hợp thông tin khách hàng
+     * và tổng chi phí thực tế từ ledger_entries (bút toán Nợ).
+     * Sắp xếp theo mã dự án (code).
+     *
+     * @return array Danh sách dự án active với các trường:
+     *               p.*, customer_name, actual_cost (tổng chi phí thực tế)
+     */
     public function getActiveProjectsList(): array
     {
         $stmt = $this->pdo->query("
@@ -153,6 +314,22 @@ class ProjectAccountingService
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
+    /**
+     * Xuất báo cáo dự án ra file CSV
+     *
+     * Nghiệp vụ: Tạo báo cáo tổng hợp dự án gồm thông tin chung
+     * (mã, tên, ngân sách, chi phí, doanh thu, tỷ lệ hoàn thành)
+     * và chi tiết số dư theo từng tài khoản kế toán.
+     * Kết quả trả về mảng để controller set header + echo.
+     *
+     * @param string $format Định dạng xuất (hiện tại chỉ hỗ trợ 'csv')
+     * @param string $projectId Mã định danh dự án cần xuất báo cáo
+     * @return array{
+     *     content: string,
+     *     filename: string,
+     *     mime: string
+     * } Mảng chứa nội dung CSV, tên file và MIME type
+     */
     public function exportProjectReport(string $format, string $projectId): array
     {
         $report = $this->getProjectReport($projectId);
@@ -171,6 +348,18 @@ class ProjectAccountingService
         return $this->export->exportCsv($headers, $data, 'du_an_' . $p['code'] . '_' . date('Ymd') . '.csv');
     }
 
+    /**
+     * Lấy tổng phát sinh Nợ và Có thực tế cho dự án
+     *
+     * Nghiệp vụ: Tính tổng số tiền bên Nợ và bên Có từ ledger_entries
+     * đã được gán project_id. Dùng để tính chi phí thực tế, variance
+     * và tỷ lệ hoàn thành trong báo cáo dự án.
+     *
+     * @param string $projectId Mã định danh dự án
+     * @return array{0: float, 1: float} Mảng hai phần tử:
+     *               [0] = tổng phát sinh Nợ (debit),
+     *               [1] = tổng phát sinh Có (credit)
+     */
     private function getActualTotals(string $projectId): array
     {
         $stmt = $this->pdo->prepare("
