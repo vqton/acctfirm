@@ -7,6 +7,17 @@ use Accounting\Domain\Contract\InventoryServiceInterface;
 use Accounting\Domain\Repository\AccountRepositoryInterface;
 use Accounting\Domain\Repository\TransactionRepositoryInterface;
 
+/**
+ * DỊCH VỤ KỲ KẾ TOÁN: Quản lý vòng đời kỳ kế toán (mở/đóng/khóa sổ)
+ *
+ * Nghiệp vụ: Quản lý toàn bộ vòng đời kỳ kế toán theo Circular 99 — từ tạo kỳ,
+ * kiểm tra kỳ mở, khóa sổ cuối kỳ, kết chuyển doanh thu/chi phí, điều chỉnh thuế,
+ * lưu trữ số dư, và mở lại kỳ khi cần. Đảm bảo tính tuần tự thời gian, không
+ * bỏ sót kỳ, và bảo vệ số liệu kỳ đã đóng.
+ *
+ * RỦI RO: Sai sót trong quản lý kỳ kế toán dẫn đến sai báo cáo tài chính (BC01/BC02/BC03)
+ * và bị phạt thuế theo Nghị định 125/2020. Mọi thao tác đều được ghi audit trail.
+ */
 class PeriodService
 {
     private ?\PDO $pdo;
@@ -18,6 +29,16 @@ class PeriodService
     private ?ReconciliationService $reconciliationService;
     private ?ConfigService $config;
 
+    /**
+     * @param \PDO $pdo Kết nối database
+     * @param AccountRepositoryInterface $accountRepo Repository tài khoản kế toán
+     * @param TransactionRepositoryInterface $txnRepo Repository giao dịch
+     * @param JournalServiceInterface $journal Service nhật ký chung (bút toán)
+     * @param AuditLoggerInterface|null $auditLogger Logger audit trail
+     * @param InventoryServiceInterface|null $inventoryService Service tồn kho (đóng kỳ)
+     * @param ReconciliationService|null $reconciliationService Service đối chiếu công nợ
+     * @param ConfigService|null $config Service cấu hình hệ thống
+     */
     public function __construct(\PDO $pdo, AccountRepositoryInterface $accountRepo, TransactionRepositoryInterface $txnRepo, JournalServiceInterface $journal, ?AuditLoggerInterface $auditLogger = null, ?InventoryServiceInterface $inventoryService = null, ?ReconciliationService $reconciliationService = null, ?ConfigService $config = null)
     {
         $this->pdo = $pdo;
@@ -30,13 +51,19 @@ class PeriodService
         $this->config = $config;
     }
 
-    // KỲ KẾ TOÁN: Kiểm tra kỳ kế toán đang mở trước khi cho phép ghi nhận bút toán
-    //
-    // Nghiệp vụ: Mọi bút toán chỉ được post vào kỳ đang mở. Nếu kỳ đã đóng (status != 'open'),
-    // hệ thống từ chối ghi nhận để đảm bảo số liệu kỳ trước không bị thay đổi.
-    //
-    // RỦI RO: Cho phép post vào kỳ đã đóng → số liệu BC01/BC02 thay đổi → sai báo cáo tài chính
-    // đã nộp → bị phạt thuế theo Nghị định 125/2020. Audit trail không trace được.
+    /**
+     * KỲ KẾ TOÁN: Kiểm tra kỳ kế toán đang mở trước khi cho phép ghi nhận bút toán
+     *
+     * Nghiệp vụ: Mọi bút toán chỉ được post vào kỳ đang mở. Nếu kỳ đã đóng (status != 'open'),
+     * hệ thống từ chối ghi nhận để đảm bảo số liệu kỳ trước không bị thay đổi.
+     *
+     * RỦI RO: Cho phép post vào kỳ đã đóng → số liệu BC01/BC02 thay đổi → sai báo cáo tài chính
+     * đã nộp → bị phạt thuế theo Nghị định 125/2020. Audit trail không trace được.
+     *
+     * @param string|null $date Ngày giao dịch cần kiểm tra (mặc định: ngày hiện tại)
+     * @param \PDO|null $pdo PDO connection (mặc định: lấy từ global container)
+     * @return bool true nếu kỳ đang mở hoặc chưa có kỳ kế toán nào
+     */
     public static function isPeriodOpen(?string $date = null, ?\PDO $pdo = null): bool
     {
         $pdo ??= $GLOBALS['container']['pdo'] ?? null;
@@ -55,6 +82,13 @@ class PeriodService
         return (int)$stmt->fetchColumn() > 0;
     }
 
+    /**
+     * Lấy danh sách tất cả kỳ kế toán, sắp xếp theo ngày bắt đầu giảm dần
+     *
+     * @return array[] Mảng các kỳ kế toán, mỗi kỳ gồm id, period_type, period_code,
+     *                 name, start_date, end_date, status, deadline, hard_closed,
+     *                 is_first, is_last, opened_by, opened_at, closed_by, closed_at, re_open_count
+     */
     public function getPeriods(): array
     {
         $rows = $this->pdo->query('SELECT * FROM accounting_periods ORDER BY start_date DESC')->fetchAll(\PDO::FETCH_ASSOC);
@@ -78,6 +112,13 @@ class PeriodService
         ], $rows);
     }
 
+    /**
+     * Lấy thông tin một kỳ kế toán theo ID
+     *
+     * @param int $id ID của kỳ kế toán
+     * @return array Thông tin chi tiết kỳ kế toán
+     * @throws \InvalidArgumentException Nếu không tìm thấy kỳ kế toán
+     */
     public function getPeriod(int $id): array
     {
         $stmt = $this->pdo->prepare('SELECT * FROM accounting_periods WHERE id = ?');
@@ -104,8 +145,14 @@ class PeriodService
         ];
     }
 
-    // CẤU HÌNH KỲ KẾ TOÁN: Đọc giá trị từ bảng period_config
-    // Cho phép kế toán trưởng cấu hình tỷ lệ thuế, trích quỹ mà không cần sửa code
+    /**
+     * CẤU HÌNH KỲ KẾ TOÁN: Đọc giá trị từ bảng period_config
+     *
+     * Cho phép kế toán trưởng cấu hình tỷ lệ thuế, trích quỹ mà không cần sửa code.
+     *
+     * @param string $key Khóa cấu hình (ví dụ: 'cit_rate', 'bonus_rate', 'investment_rate')
+     * @return float Giá trị cấu hình, 0.0 nếu không tồn tại
+     */
     public function getPeriodConfig(string $key): float
     {
         $stmt = $this->pdo->prepare('SELECT `value` FROM period_config WHERE `key` = ?');
@@ -114,6 +161,16 @@ class PeriodService
         return $row ? (float)$row['value'] : 0.0;
     }
 
+    /**
+     * CẤU HÌNH KỲ KẾ TOÁN: Ghi giá trị cấu hình cho kỳ kế toán
+     *
+     * Sử dụng ON DUPLICATE KEY UPDATE để đảm bảo idempotent.
+     *
+     * @param string $key Khóa cấu hình
+     * @param float $value Giá trị cấu hình
+     * @param string $updatedBy Người cập nhật
+     * @return void
+     */
     public function setPeriodConfig(string $key, float $value, string $updatedBy): void
     {
         $stmt = $this->pdo->prepare(
@@ -123,6 +180,11 @@ class PeriodService
         $stmt->execute([$key, $value, $updatedBy]);
     }
 
+    /**
+     * Lấy tất cả cấu hình kỳ kế toán, sắp xếp theo key
+     *
+     * @return array[] Mảng các cấu hình, mỗi cấu hình gồm key, value, description, updated_at, updated_by
+     */
     public function getAllPeriodConfigs(): array
     {
         $rows = $this->pdo->query('SELECT * FROM period_config ORDER BY `key`')->fetchAll(\PDO::FETCH_ASSOC);
@@ -135,9 +197,16 @@ class PeriodService
         ], $rows);
     }
 
-    // KỲ KẾ TOÁN: Tự động tạo 12 kỳ tháng cho một năm tài chính
-    // Cho phép kế toán trưởng tạo toàn bộ năm chỉ với một thao tác
-    // Thứ tự tạo từ tháng 1 → 12 để đảm bảo điều kiện kỳ trước phải mở
+    /**
+     * KỲ KẾ TOÁN: Tự động tạo 12 kỳ tháng cho một năm tài chính
+     *
+     * Cho phép kế toán trưởng tạo toàn bộ năm chỉ với một thao tác.
+     * Thứ tự tạo từ tháng 1 → 12 để đảm bảo điều kiện kỳ trước phải mở.
+     *
+     * @param int $fiscalYear Năm tài chính (ví dụ: 2025)
+     * @param string $openedBy Người tạo kỳ
+     * @return array[] Mảng 12 kỳ kế toán đã được tạo
+     */
     public function generatePeriods(int $fiscalYear, string $openedBy): array
     {
         $created = [];
@@ -164,13 +233,24 @@ class PeriodService
         return $created;
     }
 
-    // KỲ KẾ TOÁN: Tạo kỳ kế toán mới — tháng/quý/năm
-    //
-    // Nghiệp vụ: Kỳ kế toán được tạo tuần tự, không được bỏ sót kỳ. Kỳ trước
-    // phải được đóng trước khi mở kỳ mới. Hệ thống tự động kiểm tra.
-    //
-    // RỦI RO: Tạo kỳ mới khi kỳ trước chưa đóng → giao dịch có thể rơi vào sai kỳ
-    // → sai BC01/BC02. Nếu bỏ sót kỳ, audit trail bị gián đoạn.
+    /**
+     * KỲ KẾ TOÁN: Tạo kỳ kế toán mới — tháng/quý/năm
+     *
+     * Nghiệp vụ: Kỳ kế toán được tạo tuần tự, không được bỏ sót kỳ. Kỳ trước
+     * phải được đóng trước khi mở kỳ mới. Hệ thống tự động kiểm tra.
+     *
+     * RỦI RO: Tạo kỳ mới khi kỳ trước chưa đóng → giao dịch có thể rơi vào sai kỳ
+     * → sai BC01/BC02. Nếu bỏ sót kỳ, audit trail bị gián đoạn.
+     *
+     * @param string $type Loại kỳ ('month', 'quarter', 'year')
+     * @param string $code Mã kỳ (ví dụ: '2025-01')
+     * @param string $name Tên kỳ (ví dụ: 'Tháng 1/2025')
+     * @param string $start Ngày bắt đầu (định dạng Y-m-d)
+     * @param string $end Ngày kết thúc (định dạng Y-m-d)
+     * @param string $openedBy Người tạo kỳ
+     * @return array Thông tin kỳ kế toán đã tạo
+     * @throws \InvalidArgumentException Nếu khoảng thời gian chồng lấn hoặc kỳ trước chưa đóng
+     */
     public function createPeriod(string $type, string $code, string $name, string $start, string $end, string $openedBy): array
     {
         // Kiểm tra chồng lấn ngày tháng: Không có kỳ nào có start_date < end và end_date > start
@@ -208,13 +288,23 @@ class PeriodService
         return $this->getPeriod($id);
     }
 
-    // KHÓA SỔ: Kiểm tra điều kiện trước khi cho phép đóng kỳ kế toán
-    //
-    // Nghiệp vụ: Trước khi khóa sổ kỳ kế toán, hệ thống kiểm tra 7 điều kiện bắt buộc.
-    // Nếu bất kỳ điều kiện nào không đạt → từ chối đóng kỳ.
-    //
-    // RỦI RO: Cho phép đóng kỳ khi chưa đủ điều kiện → số liệu không đầy đủ →
-    // BC01/BC02 sai → phải mở lại kỳ (re-open) gây mất audit trail.
+    /**
+     * KHÓA SỔ: Kiểm tra điều kiện trước khi cho phép đóng kỳ kế toán
+     *
+     * Nghiệp vụ: Trước khi khóa sổ kỳ kế toán, hệ thống kiểm tra các điều kiện bắt buộc:
+     * (1) không tồn kho chưa post, (2) không phiếu kiểm kê nháp, (3) không tồn kho âm,
+     * (4) đối chiếu sub-ledger vs GL, (5) trial balance Dr = Cr, (6) tuần tự thời gian,
+     * (7) báo cáo tài chính đã lập, (8) lương đã hạch toán, (9) tờ khai GTGT đã khóa,
+     * (10) quyết toán TNDN, (11) tờ khai FCT.
+     * Nếu bất kỳ điều kiện nào không đạt → từ chối đóng kỳ.
+     *
+     * RỦI RO: Cho phép đóng kỳ khi chưa đủ điều kiện → số liệu không đầy đủ →
+     * BC01/BC02 sai → phải mở lại kỳ (re-open) gây mất audit trail.
+     *
+     * @param int $id ID của kỳ kế toán
+     * @return array{can_close: bool, checks: array[]} Kết quả kiểm tra
+     * @throws \InvalidArgumentException Nếu kỳ kế toán không tồn tại
+     */
     public function canClose(int $id): array
     {
         $period = $this->getPeriod($id);
@@ -416,7 +506,16 @@ class PeriodService
         ];
     }
 
-    // Lấy checklist đóng kỳ cho giao diện người dùng
+    /**
+     * Lấy checklist đóng kỳ cho giao diện người dùng
+     *
+     * Wrapper của canClose() kèm thông tin bổ sung (tên kỳ, số check đạt/tổng số).
+     *
+     * @param int $id ID của kỳ kế toán
+     * @return array{period_id: int, period_code: string, period_name: string,
+     *               status: string, can_close: bool, checks: array[],
+     *               passed_count: int, total_count: int}
+     */
     public function getCloseChecklist(int $id): array
     {
         $period = $this->getPeriod($id);
@@ -434,20 +533,27 @@ class PeriodService
         ];
     }
 
-    // KHÓA SỔ: Đóng kỳ kế toán — thực hiện các bút toán kết chuyển và khóa sổ
-    //
-    // Nghiệp vụ: Khi đóng kỳ, hệ thống thực hiện theo thứ tự:
-    // 1. Chụp tồn kho + đối chiếu hàng tồn (InventoryService)
-    // 2. Kết chuyển doanh thu → 911
-    // 3. Kết chuyển chi phí → 911
-    // 4. Kết chuyển lãi/lỗ → 421
-    // 5. Điều chỉnh thuế TNDN (821 → 3334)
-    // 6. Nếu là kỳ cuối năm: phân phối lợi nhuận (quỹ khen thưởng 353, quỹ đầu tư 414)
-    // 7. Chuyển trạng thái kỳ từ 'open' → 'closed'
-    //
-    // RỦI RO: Không thực hiện đúng thứ tự → kết chuyển thiếu → BC02 sai →
-    // lợi nhuận chưa phân phối (421) sai → BC01 sai.
-    // Đây là thao tác KHÔNG THỂ UNDO nếu đã hard_close.
+    /**
+     * KHÓA SỔ: Đóng kỳ kế toán — thực hiện các bút toán kết chuyển và khóa sổ
+     *
+     * Nghiệp vụ: Khi đóng kỳ, hệ thống thực hiện theo thứ tự:
+     * 1. Chụp tồn kho + đối chiếu hàng tồn (InventoryService)
+     * 2. Kết chuyển doanh thu → 911
+     * 3. Kết chuyển chi phí → 911
+     * 4. Kết chuyển lãi/lỗ → 421
+     * 5. Điều chỉnh thuế TNDN (821 → 3334)
+     * 6. Nếu là kỳ cuối năm: phân phối lợi nhuận (quỹ khen thưởng 353, quỹ đầu tư 414)
+     * 7. Chuyển trạng thái kỳ từ 'open' → 'closed'
+     *
+     * RỦI RO: Không thực hiện đúng thứ tự → kết chuyển thiếu → BC02 sai →
+     * lợi nhuận chưa phân phối (421) sai → BC01 sai.
+     * Đây là thao tác KHÔNG THỂ UNDO nếu đã hard_close.
+     *
+     * @param int $id ID của kỳ kế toán
+     * @param string $closedBy Người thực hiện khóa sổ
+     * @return array Thông tin kỳ kế toán sau khi đóng
+     * @throws \InvalidArgumentException Nếu kỳ không ở trạng thái mở
+     */
     public function closePeriod(int $id, string $closedBy): array
     {
         $period = $this->getPeriod($id);
@@ -501,15 +607,22 @@ class PeriodService
         return $result;
     }
 
-    // LƯU TRỮ: Chụp số dư tài khoản cuối kỳ để phục vụ kiểm toán và đối chiếu sau này
-    //
-    // Nghiệp vụ: Sau khi khóa sổ, hệ thống lưu snapshot số dư toàn bộ tài khoản.
-    // Dữ liệu này được dùng để:
-    // - Đối chiếu với báo cáo tài chính đã nộp
-    // - Phục vụ kiểm toán nội bộ và kiểm toán độc lập
-    // - Khôi phục số liệu khi cần (nếu có sự cố)
-    //
-    // RỦI RO: Không lưu trữ → không đối chiếu được khi kiểm toán → thiếu audit trail.
+    /**
+     * LƯU TRỮ: Chụp số dư tài khoản cuối kỳ để phục vụ kiểm toán và đối chiếu sau này
+     *
+     * Nghiệp vụ: Sau khi khóa sổ, hệ thống lưu snapshot số dư toàn bộ tài khoản.
+     * Dữ liệu này được dùng để:
+     * - Đối chiếu với báo cáo tài chính đã nộp
+     * - Phục vụ kiểm toán nội bộ và kiểm toán độc lập
+     * - Khôi phục số liệu khi cần (nếu có sự cố)
+     *
+     * RỦI RO: Không lưu trữ → không đối chiếu được khi kiểm toán → thiếu audit trail.
+     *
+     * @param int $id ID của kỳ kế toán
+     * @param string $archivedBy Người thực hiện lưu trữ
+     * @return array{message: string, accounts: int}
+     * @throws \InvalidArgumentException Nếu kỳ chưa được khóa sổ
+     */
     public function archivePeriod(int $id, string $archivedBy): array
     {
         $period = $this->getPeriod($id);
@@ -538,15 +651,22 @@ class PeriodService
         return ['message' => 'Archived', 'accounts' => count($snapshot)];
     }
 
-    // KỲ KẾ TOÁN: Mở lại kỳ đã đóng — chỉ Kế toán trưởng
-    //
-    // Nghiệp vụ: Trong trường hợp phát hiện sai sót sau khi khóa sổ, Kế toán trưởng
-    // có thể mở lại kỷ để điều chỉnh. Hệ thống tự động rollback các bút toán
-    // kết chuyển tồn kho.
-    //
-    // RỦI RO NGHIÊM TRỌNG: Mở lại kỳ đã đóng làm thay đổi số liệu BC01/BC02.
-    // - Phải thông báo cho Kiểm toán nội bộ
-    // - Audit trail ghi nhận mỗi lần re-open (re_open_count)
+    /**
+     * KỲ KẾ TOÁN: Mở lại kỳ đã đóng — chỉ Kế toán trưởng
+     *
+     * Nghiệp vụ: Trong trường hợp phát hiện sai sót sau khi khóa sổ, Kế toán trưởng
+     * có thể mở lại kỳ để điều chỉnh. Hệ thống tự động rollback các bút toán
+     * kết chuyển tồn kho.
+     *
+     * RỦI RO NGHIÊM TRỌNG: Mở lại kỳ đã đóng làm thay đổi số liệu BC01/BC02.
+     * - Phải thông báo cho Kiểm toán nội bộ
+     * - Audit trail ghi nhận mỗi lần re-open (re_open_count)
+     *
+     * @param int $id ID của kỳ kế toán
+     * @param string $reOpenedBy Người yêu cầu mở lại (Kế toán trưởng)
+     * @return array Thông tin kỳ kế toán sau khi mở lại
+     * @throws \InvalidArgumentException Nếu kỳ chưa đóng hoặc đã vượt quá số lần mở lại tối đa
+     */
     public function reOpenPeriod(int $id, string $reOpenedBy): array
     {
         $period = $this->getPeriod($id);
@@ -588,22 +708,27 @@ class PeriodService
         return $this->getPeriod($id);
     }
 
-    // KẾT CHUYỂN: Bút toán kết chuyển doanh thu và chi phí cuối kỳ
-    //
-    // Nghiệp vụ: Theo Circular 99, cuối mỗi kỳ kế toán thực hiện:
-    // 1. Kết chuyển doanh thu (TK 5, 7) → TK 911 (Xác định KQKD)
-    //    - Nợ các TK doanh thu / Có 911
-    // 2. Kết chuyển chi phí (TK 6, 8) → TK 911
-    //    - Nợ 911 / Có các TK chi phí
-    // 3. Kết chuyển lợi nhuận sau thuế → TK 421 (LN chưa phân phối)
-    //    - Nợ 911 / Có 421 (nếu lãi)
-    //    - Nợ 421 / Có 911 (nếu lỗ)
-    //
-    // Mục đích: Reset TK doanh thu/chi phí về 0 để bắt đầu kỳ mới.
-    // Số dư TK 911 = 0 sau khi kết chuyển (nếu đúng).
-    //
-    // RỦI RO: Nếu kết chuyển thiếu một tài khoản → TK 911 ≠ 0 đầu kỳ sau →
-    // số dư đầu kỳ sai → toàn bộ BC01/BC02 kỳ sau sai.
+    /**
+     * KẾT CHUYỂN: Bút toán kết chuyển doanh thu và chi phí cuối kỳ
+     *
+     * Nghiệp vụ: Theo Circular 99, cuối mỗi kỳ kế toán thực hiện:
+     * 1. Kết chuyển doanh thu (TK 5, 7) → TK 911 (Xác định KQKD)
+     *    - Nợ các TK doanh thu / Có 911
+     * 2. Kết chuyển chi phí (TK 6, 8) → TK 911
+     *    - Nợ 911 / Có các TK chi phí
+     * 3. Kết chuyển lợi nhuận sau thuế → TK 421 (LN chưa phân phối)
+     *    - Nợ 911 / Có 421 (nếu lãi)
+     *    - Nợ 421 / Có 911 (nếu lỗ)
+     *
+     * Mục đích: Reset TK doanh thu/chi phí về 0 để bắt đầu kỳ mới.
+     * Số dư TK 911 = 0 sau khi kết chuyển (nếu đúng).
+     *
+     * RỦI RO: Nếu kết chuyển thiếu một tài khoản → TK 911 ≠ 0 đầu kỳ sau →
+     * số dư đầu kỳ sai → toàn bộ BC01/BC02 kỳ sau sai.
+     *
+     * @param string $createdBy Người thực hiện kết chuyển
+     * @return void
+     */
     public function executeClosingEntries(string $createdBy): void
     {
         // THỨ TỰ KẾT CHUYỂN: Doanh thu TRƯỚC, Chi phí SAU, Lãi/lỗ CUỐI CÙNG.
@@ -676,14 +801,21 @@ class PeriodService
         }
     }
 
-    // THUẾ: Tạo bút toán điều chỉnh thuế cuối kỳ — tạm tính TNDN, điều chỉnh VAT
-    // Nghiệp vụ: Cuối mỗi kỳ, hệ thống tạo các bút toán điều chỉnh thuế dựa trên
-    // chênh lệch giữa doanh thu/chi phí và tờ khai thuế tạm tính.
-    // - Nợ 821 (Chi phí thuế TNDN) / Có 3334 (Thuế TNDN)
-    // - Điều chỉnh VAT nếu có chênh lệch giữa VAT đầu ra và đầu vào
-    //
-    // RỦI RO: Nếu không ghi nhận thuế đúng kỳ, số liệu BC02 chỉ tiêu 28 sai
-    // và dẫn đến truy thu thuế + phạt chậm nộp.
+    /**
+     * THUẾ: Tạo bút toán điều chỉnh thuế cuối kỳ — tạm tính TNDN, điều chỉnh VAT
+     *
+     * Nghiệp vụ: Cuối mỗi kỳ, hệ thống tạo các bút toán điều chỉnh thuế dựa trên
+     * chênh lệch giữa doanh thu/chi phí và tờ khai thuế tạm tính.
+     * - Nợ 821 (Chi phí thuế TNDN) / Có 3334 (Thuế TNDN)
+     * - Điều chỉnh VAT nếu có chênh lệch giữa VAT đầu ra và đầu vào
+     *
+     * RỦI RO: Nếu không ghi nhận thuế đúng kỳ, số liệu BC02 chỉ tiêu 28 sai
+     * và dẫn đến truy thu thuế + phạt chậm nộp.
+     *
+     * @param array $period Thông tin kỳ kế toán (start_date, end_date, period_code)
+     * @param string $createdBy Người thực hiện
+     * @return void
+     */
     public function executeTaxAdjustments(array $period, string $createdBy): void
     {
         // Tạm tính chi phí thuế TNDN: 20% lợi nhuận kế toán trước thuế
@@ -732,15 +864,22 @@ class PeriodService
         }
     }
 
-    // Năm tài chính: Thực hiện kết chuyển cuối năm — reset 911, xử lý lợi nhuận sau thuế
-    //
-    // Nghiệp vụ: Cuối năm tài chính (is_last = true), hệ thống thực hiện:
-    // 1. Kết chuyển lãi/lỗ từ 911 → 421 (đã thực hiện trong executeClosingEntries)
-    // 2. Phân phối lợi nhuận: trích quỹ khen thưởng (421 → 353), trích quỹ đầu tư (421 → 414)
-    // 3. Xác định kết quả kinh doanh sau thuế
-    //
-    // RỦI RO: Nếu không thực hiện phân phối lợi nhuận cuối năm, BC01 chỉ tiêu 421
-    // sẽ phản ánh sai số dư lợi nhuận chưa phân phối.
+    /**
+     * Năm tài chính: Thực hiện kết chuyển cuối năm — reset 911, xử lý lợi nhuận sau thuế
+     *
+     * Nghiệp vụ: Cuối năm tài chính (is_last = true), hệ thống thực hiện:
+     * 1. Kiểm tra ánh xạ BCTC cho tất cả tài khoản active
+     * 2. Phân phối lợi nhuận: trích quỹ khen thưởng (421 → 353), trích quỹ đầu tư (421 → 414)
+     * 3. Xác định kết quả kinh doanh sau thuế
+     *
+     * RỦI RO: Nếu không thực hiện phân phối lợi nhuận cuối năm, BC01 chỉ tiêu 421
+     * sẽ phản ánh sai số dư lợi nhuận chưa phân phối.
+     *
+     * @param array $period Thông tin kỳ kế toán (is_last, start_date, end_date, period_code)
+     * @param string $createdBy Người thực hiện
+     * @return void
+     * @throws \RuntimeException Nếu còn tài khoản chưa có ánh xạ BCTC
+     */
     public function executeYearEndClose(array $period, string $createdBy): void
     {
         // Bước 0: Kiểm tra ánh xạ BCTC — tất cả tài khoản active phải có FS mapping
@@ -808,11 +947,18 @@ class PeriodService
         }
     }
 
-    // KỲ KẾ TOÁN: Kiểm tra hard deadline — trả về true nếu còn hạn (chưa quá deadline)
-    // Nếu đã quá deadline và hard_closed = 0, tự động đánh dấu hard_closed = 1
-    //
-    // RỦI RO: Nếu không enforce deadline, kế toán có thể ghi nhận giao dịch muộn,
-    // dẫn đến sai số liệu kỳ trước và phải restate báo cáo tài chính.
+    /**
+     * KỲ KẾ TOÁN: Kiểm tra hard deadline — trả về true nếu còn hạn (chưa quá deadline)
+     *
+     * Nếu đã quá deadline và hard_closed = 0, tự động đánh dấu hard_closed = 1 để
+     * ngăn mọi bút toán mới vào kỳ này. Đây là bảo vệ cuối cùng (last line of defense).
+     *
+     * RỦI RO: Nếu không enforce deadline, kế toán có thể ghi nhận giao dịch muộn,
+     * dẫn đến sai số liệu kỳ trước và phải restate báo cáo tài chính.
+     *
+     * @param int $id ID của kỳ kế toán
+     * @return bool true nếu còn hạn, false nếu đã quá deadline
+     */
     public function enforceHardDeadline(int $id): bool
     {
         $period = $this->getPeriod($id);
@@ -836,13 +982,20 @@ class PeriodService
         return !$period['hard_closed'];
     }
 
-    // KỲ KẾ TOÁN: Cho phép Kế toán trưởng override deadline để ghi nhận bổ sung
-    //
-    // Nghiệp vụ: Trong trường hợp đặc biệt (theo yêu cầu Kiểm toán hoặc cơ quan thuế),
-    // Kế toán trưởng có thể mở lại kỳ đã hard-close để ghi nhận bổ sung.
-    //
-    // RỦI RO: Override deadline phải có lý do bằng văn bản và được lưu trong audit trail.
-    // Mỗi lần override đều được ghi nhận để kiểm toán viên đối chiếu sau này.
+    /**
+     * KỲ KẾ TOÁN: Cho phép Kế toán trưởng override deadline để ghi nhận bổ sung
+     *
+     * Nghiệp vụ: Trong trường hợp đặc biệt (theo yêu cầu Kiểm toán hoặc cơ quan thuế),
+     * Kế toán trưởng có thể mở lại kỳ đã hard-close để ghi nhận bổ sung.
+     *
+     * RỦI RO: Override deadline phải có lý do bằng văn bản và được lưu trong audit trail.
+     * Mỗi lần override đều được ghi nhận để kiểm toán viên đối chiếu sau này.
+     *
+     * @param int $id ID của kỳ kế toán
+     * @param string $reason Lý do override
+     * @param string $overriddenBy Người thực hiện override
+     * @return array Thông tin kỳ kế toán sau khi override
+     */
     public function overrideDeadline(int $id, string $reason, string $overriddenBy): array
     {
         $this->pdo->prepare(
@@ -854,15 +1007,22 @@ class PeriodService
         return $this->getPeriod($id);
     }
 
-    // KỲ KẾ TOÁN: Đặt hạn chót (deadline) cho kỳ kế toán
-    //
-    // Nghiệp vụ: Hạn nộp báo cáo tài chính theo quy định:
-    // - Báo cáo quý: 20 ngày sau khi kết thúc quý
-    // - Báo cáo năm: 90 ngày sau khi kết thúc năm tài chính
-    // Sau deadline, hệ thống tự động hard-close (enforceHardDeadline)
-    //
-    // RỦI RO: Không đặt deadline → kế toán có thể kéo dài thời gian ghi nhận →
-    // sai kỳ kế toán → chậm nộp BC → phạt hành chính.
+    /**
+     * KỲ KẾ TOÁN: Đặt hạn chót (deadline) cho kỳ kế toán
+     *
+     * Nghiệp vụ: Hạn nộp báo cáo tài chính theo quy định:
+     * - Báo cáo quý: 20 ngày sau khi kết thúc quý
+     * - Báo cáo năm: 90 ngày sau khi kết thúc năm tài chính
+     * Sau deadline, hệ thống tự động hard-close (enforceHardDeadline).
+     *
+     * RỦI RO: Không đặt deadline → kế toán có thể kéo dài thời gian ghi nhận →
+     * sai kỳ kế toán → chậm nộp BC → phạt hành chính.
+     *
+     * @param int $id ID của kỳ kế toán
+     * @param string $deadline Ngày hạn chót (định dạng Y-m-d)
+     * @param string $setBy Người thiết lập
+     * @return array Thông tin kỳ kế toán sau khi cập nhật deadline
+     */
     public function setDeadline(int $id, string $deadline, string $setBy): array
     {
         $this->pdo->prepare(
@@ -873,27 +1033,28 @@ class PeriodService
         return $this->getPeriod($id);
     }
 
-    //
-    // NGHIỆP VỤ: So sánh số liệu giữa 2 kỳ kế toán
-    //
-    // Mục đích: Phân tích biến động doanh thu/chi phí/tài sản giữa kỳ A và kỳ B.
-    // Thường dùng cho:
-    //   - BC quản trị: so sánh tháng này vs tháng trước, quý này vs quý trước
-    //   - Audit: phát hiện tài khoản có biến động bất thường
-    //   - Kế hoạch: so sánh thực tế vs kế hoạch
-    //
-    // Input: periodA code, periodB code (vd '2025-01' vs '2025-02')
-    // Output: {
-    //   period_a: { period_code, total_debit, total_credit, txn_count, by_type: { asset: {dr, cr}, liability: ..., } },
-    //   period_b: tương tự,
-    //   variance: {
-    //     by_type: { asset: { dr_diff, cr_diff, dr_pct, cr_pct }, ... },
-    //     by_account: [ { code, name, type, a_debit, b_debit, diff, pct } ]   (chỉ accounts có biến động)
-    //   }
-    // }
-    //
-    // RỦI RO: Nếu một kỳ chưa tồn tại → throw exception (kế toán phải tạo kỳ trước khi compare)
-    //
+    /**
+     * NGHIỆP VỤ: So sánh số liệu giữa 2 kỳ kế toán
+     *
+     * Mục đích: Phân tích biến động doanh thu/chi phí/tài sản giữa kỳ A và kỳ B.
+     * Thường dùng cho:
+     *   - BC quản trị: so sánh tháng này vs tháng trước, quý này vs quý trước
+     *   - Audit: phát hiện tài khoản có biến động bất thường
+     *   - Kế hoạch: so sánh thực tế vs kế hoạch
+     *
+     * Output: {
+     *   period_a: { period_code, total_debit, total_credit, txn_count, by_type },
+     *   period_b: tương tự,
+     *   variance: { by_type, by_account }
+     * }
+     *
+     * RỦI RO: Nếu một kỳ chưa tồn tại → throw exception (kế toán phải tạo kỳ trước khi compare).
+     *
+     * @param string $periodA Mã kỳ thứ nhất (ví dụ: '2025-01')
+     * @param string $periodB Mã kỳ thứ hai (ví dụ: '2025-02')
+     * @return array{period_a: array, period_b: array, variance: array}
+     * @throws \InvalidArgumentException Nếu một trong hai kỳ không tồn tại
+     */
     public function comparePeriods(string $periodA, string $periodB): array
     {
         // Validate cả 2 kỳ tồn tại + lấy date range
@@ -975,9 +1136,13 @@ class PeriodService
         ];
     }
 
-    //
-    // Helper: Lấy date range của period (start_date, end_date)
-    //
+    /**
+     * Helper: Lấy date range của period (start_date, end_date)
+     *
+     * @param string $periodCode Mã kỳ kế toán
+     * @return string[] [start_date, end_date]
+     * @throws \InvalidArgumentException Nếu kỳ kế toán không tồn tại
+     */
     private function getPeriodDateRange(string $periodCode): array
     {
         $stmt = $this->pdo->prepare(
@@ -991,9 +1156,13 @@ class PeriodService
         return [$r['start_date'], $r['end_date']];
     }
 
-    //
-    // Helper: Tổng hợp số liệu 1 kỳ (theo type)
-    //
+    /**
+     * Helper: Tổng hợp số liệu 1 kỳ (theo type)
+     *
+     * @param string[] $range [start_date, end_date]
+     * @param string $periodCode Mã kỳ kế toán
+     * @return array{period_code: string, txn_count: int, total_debit: float, total_credit: float, by_type: array}
+     */
     private function periodSummary(array $range, string $periodCode): array
     {
         $stmt = $this->pdo->prepare(

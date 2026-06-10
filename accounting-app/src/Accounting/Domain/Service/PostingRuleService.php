@@ -1,39 +1,46 @@
 <?php
 namespace Accounting\Domain\Service;
 
-// Dịch vụ kiểm tra quy tắc hạch toán (Posting Rules — GL Validation Engine Phase 1)
-//
-// Nghiệp vụ: Mỗi cặp Nợ-Có (Dr-Cr) được kiểm tra theo các quy tắc đã định nghĩa
-// trong bảng posting_rules để đảm bảo tuân thủ thông lệ kế toán và phòng ngừa
-// sai sót nghiệp vụ. Kết quả trả về:
-//   - block: Cặp Nợ-Có không hợp lệ (VD: Nợ 156 / Có 511 không có cơ sở nghiệp vụ)
-//   - warn: Cặp hiếm gặp, cần xác nhận thêm (VD: Nợ 642 / Có 112 — chi phí bằng tiền)
-//   - pass: Không có quy tắc → cho phép (có thể là nghiệp vụ mới phát sinh)
-//
-// Mục đích:
-//   - Ngăn chặn hạch toán sai bản chất nghiệp vụ ngay từ khi nhập liệu
-//   - Giảm thiểu sai sót do kế toán viên mới hoặc nhầm lẫn
-//   - Lưu dấu audit cho mọi quyết định hạch toán
-//   - Từ chối các cặp Dr-Cr không có cơ sở kinh tế (VD: Dr 511/Cr 111)
-//
-// Posting rules có 3 cấp độ:
-//   1. Exact match (debit, credit, module): Rule cụ thể cho 1 module + 1 cặp TK
-//   2. Wildcard (debit, credit, module=NULL): Rule áp dụng cho mọi module
-//   3. Fallback: Không có rule → pass (cho phép)
-//
-// 75 rules đã được seed cho các nghiệp vụ phổ biến (mua hàng, bán hàng, thu chi...).
-// Các nghiệp vụ mới (VD: crypto, quỹ đầu tư) chưa có rule → pass.
-// Cần bổ sung rule khi phát sinh nghiệp vụ mới để kiểm soát chặt hơn.
-//
-// RỦI RO:
-//   - Block nhầm: Nếu rule block quá rộng → từ chối nghiệp vụ hợp lệ → user không làm được
-//   - Pass thiếu: Nếu nghiệp vụ sai không có rule → pass → dữ liệu sai
-//   - Bảo trì: Rule cần được review định kỳ theo Thông tư mới
-//   - Module-scope: Rule theo module có thể bỏ sót nghiệp vụ cross-module
+/**
+ * Dịch vụ kiểm tra quy tắc hạch toán (Posting Rules — GL Validation Engine Phase 1).
+ *
+ * Nghiệp vụ: Mỗi cặp Nợ-Có (Dr-Cr) được kiểm tra theo các quy tắc đã định nghĩa
+ * trong bảng posting_rules để đảm bảo tuân thủ thông lệ kế toán và phòng ngừa
+ * sai sót nghiệp vụ. Kết quả trả về:
+ *   - block: Cặp Nợ-Có không hợp lệ (VD: Nợ 156 / Có 511 không có cơ sở nghiệp vụ)
+ *   - warn: Cặp hiếm gặp, cần xác nhận thêm (VD: Nợ 642 / Có 112 — chi phí bằng tiền)
+ *   - pass: Không có quy tắc → cho phép (có thể là nghiệp vụ mới phát sinh)
+ *
+ * Mục đích:
+ *   - Ngăn chặn hạch toán sai bản chất nghiệp vụ ngay từ khi nhập liệu
+ *   - Giảm thiểu sai sót do kế toán viên mới hoặc nhầm lẫn
+ *   - Lưu dấu audit cho mọi quyết định hạch toán
+ *   - Từ chối các cặp Dr-Cr không có cơ sở kinh tế (VD: Dr 511/Cr 111)
+ *
+ * Posting rules có 3 cấp độ:
+ *   1. Exact match (debit, credit, module): Rule cụ thể cho 1 module + 1 cặp TK
+ *   2. Wildcard (debit, credit, module=NULL): Rule áp dụng cho mọi module
+ *   3. Fallback: Không có rule → pass (cho phép)
+ *
+ * 75 rules đã được seed cho các nghiệp vụ phổ biến (mua hàng, bán hàng, thu chi...).
+ * Các nghiệp vụ mới (VD: crypto, quỹ đầu tư) chưa có rule → pass.
+ * Cần bổ sung rule khi phát sinh nghiệp vụ mới để kiểm soát chặt hơn.
+ *
+ * RỦI RO:
+ *   - Block nhầm: Nếu rule block quá rộng → từ chối nghiệp vụ hợp lệ → user không làm được
+ *   - Pass thiếu: Nếu nghiệp vụ sai không có rule → pass → dữ liệu sai
+ *   - Bảo trì: Rule cần được review định kỳ theo Thông tư mới
+ *   - Module-scope: Rule theo module có thể bỏ sót nghiệp vụ cross-module
+ */
 class PostingRuleService
 {
     private \PDO $pdo;
 
+    /**
+     * Khởi tạo dịch vụ kiểm tra quy tắc hạch toán.
+     *
+     * @param \PDO $pdo Kết nối PDO đến database, dùng để truy vấn bảng posting_rules
+     */
     public function __construct(\PDO $pdo)
     {
         $this->pdo = $pdo;
@@ -73,6 +80,12 @@ class PostingRuleService
      *   - max_amount không được kiểm tra → rule giới hạn amount vô hiệu
      *
      * Transaction boundary: READ-ONLY — không cần transaction.
+     *
+     * @param string $debitAccountCode Mã tài khoản Nợ (bên Dr)
+     * @param string $creditAccountCode Mã tài khoản Có (bên Cr)
+     * @param string|null $module Module nghiệp vụ (VD: 'purchase', 'sales', 'cash'), null = áp dụng cho mọi module
+     * @return array{severity: string, message: string, rule_id: int|null} Kết quả kiểm tra: 'block' | 'warn' | 'pass'
+     * @throws \PDOException Khi truy vấn database thất bại
      */
     public function validatePair(string $debitAccountCode, string $creditAccountCode, ?string $module = null): array
     {
@@ -142,6 +155,11 @@ class PostingRuleService
      * RỦI RO: Cartesian product có thể bỏ sót kiểm tra tổng thể
      * (VD: Dr 156/Cr 331 pass, Dr 1331/Cr 331 pass, nhưng tổng Nợ ≠ tổng Có
      * — kiểm tra này do JournalService thực hiện, không phải PostingRuleService)
+     *
+     * @param array $lines Danh sách các dòng bút toán, mỗi dòng chứa 'account_code', 'is_debit', 'amount'
+     * @param string|null $module Module nghiệp vụ (VD: 'purchase', 'sales', 'cash'), null = mọi module
+     * @return array[] Mảng các kết quả từ validatePair(), mỗi phần tử có 'severity', 'message', 'rule_id'
+     * @throws \PDOException Khi truy vấn database thất bại
      */
     public function validateEntry(array $lines, ?string $module = null): array
     {
@@ -176,6 +194,9 @@ class PostingRuleService
      * RỦI RO: hasBlock() chỉ kiểm tra block — không quan tâm warn.
      * Nếu có block + warn, ưu tiên block (từ chối).
      * Người dùng cần sửa cặp Dr-Cr bị block trước, sau đó mới xử lý warn.
+     *
+     * @param array $validationResults Mảng kết quả từ validatePair() hoặc validateEntry()
+     * @return bool True nếu có bất kỳ kết quả nào có severity = 'block'
      */
     public function hasBlock(array $validationResults): bool
     {
@@ -195,6 +216,9 @@ class PostingRuleService
      * Lưu ý: hasWarning() KHÔNG loại trừ hasBlock().
      * Nếu có cả block và warn → block chiếm ưu tiên.
      * Caller nên kiểm tra hasBlock() trước, hasWarning() sau.
+     *
+     * @param array $validationResults Mảng kết quả từ validatePair() hoặc validateEntry()
+     * @return bool True nếu có bất kỳ kết quả nào có severity = 'warn'
      */
     public function hasWarning(array $validationResults): bool
     {

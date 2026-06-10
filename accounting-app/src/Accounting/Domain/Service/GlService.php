@@ -3,33 +3,36 @@ namespace Accounting\Domain\Service;
 
 use Accounting\Domain\Repository\AccountRepositoryInterface;
 
-// Dịch vụ Sổ Cái (General Ledger)
-//
-// Nghiệp vụ: Cung cấp sổ cái chi tiết theo từng tài khoản kế toán, phục vụ:
-//   - Kế toán viên kiểm tra chi tiết phát sinh từng TK
-//   - Kiểm toán viên đối chiếu số liệu
-//   - Lập bảng cân đối tài khoản (Trial Balance)
-//   - Lập BCTC cuối kỳ
-//
-// getGeneralLedger: Sổ chi tiết từng giao dịch với số dư luỹ kế
-// getMonthlyLedger: Sổ tổng hợp theo tháng có chi tiết đối ứng
-//
-// Ảnh hưởng: Đây là nguồn dữ liệu nền tảng cho mọi báo cáo tài chính.
-// Sai sót ở đây sẽ ảnh hưởng đến toàn bộ hệ thống báo cáo.
-// Nguyên tắc: Số dư đầu kỳ + Phát sinh Nợ - Phát sinh Có = Số dư cuối kỳ
-//
-// ĐỐI SOÁT: GlService là cầu nối giữa sub-ledger (AP/AR/Inventory) và BCTC.
-// Số dư từng TK trên GL phải khớp với:
-//   - TK 131: Tổng số dư ar_invoices (chi tiết KH)
-//   - TK 331: Tổng số dư ap_invoices (chi tiết NCC)
-//   - TK 152/156: Tổng giá trị tồn kho
-// Nếu có chênh lệch → quy trình đối soát hàng tháng phải phát hiện và xử lý.
-//
-// RUNNING BALANCE: Số dư luỹ kế được tính tại thời điểm query, không được lưu trữ.
-// Điều này đảm bảo tính chính xác theo thời gian thực nhưng chậm hơn khi query nhiều dữ liệu.
-// Cân nhắc: Nếu transaction quá nhiều (>100K), cần snapshot định kỳ.
-//
-// READ-ONLY: Service này chỉ đọc dữ liệu, không ghi. Do đó không cần transaction.
+/**
+ * Dịch vụ Sổ Cái (General Ledger)
+ *
+ * Nghiệp vụ: Cung cấp sổ cái chi tiết theo từng tài khoản kế toán, phục vụ:
+ *   - Kế toán viên kiểm tra chi tiết phát sinh từng TK
+ *   - Kiểm toán viên đối chiếu số liệu
+ *   - Lập bảng cân đối tài khoản (Trial Balance)
+ *   - Lập BCTC cuối kỳ
+ *
+ * getGeneralLedger: Sổ chi tiết từng giao dịch với số dư luỹ kế
+ * getMonthlyLedger: Sổ tổng hợp theo tháng có chi tiết đối ứng
+ * getSubsidiaryLedger: Sổ chi tiết theo đối tượng (khách hàng, nhà cung cấp, nhân viên, dự án)
+ *
+ * Ảnh hưởng: Đây là nguồn dữ liệu nền tảng cho mọi báo cáo tài chính.
+ * Sai sót ở đây sẽ ảnh hưởng đến toàn bộ hệ thống báo cáo.
+ * Nguyên tắc: Số dư đầu kỳ + Phát sinh Nợ - Phát sinh Có = Số dư cuối kỳ
+ *
+ * ĐỐI SOÁT: GlService là cầu nối giữa sub-ledger (AP/AR/Inventory) và BCTC.
+ * Số dư từng TK trên GL phải khớp với:
+ *   - TK 131: Tổng số dư ar_invoices (chi tiết KH)
+ *   - TK 331: Tổng số dư ap_invoices (chi tiết NCC)
+ *   - TK 152/156: Tổng giá trị tồn kho
+ * Nếu có chênh lệch → quy trình đối soát hàng tháng phải phát hiện và xử lý.
+ *
+ * RUNNING BALANCE: Số dư luỹ kế được tính tại thời điểm query, không được lưu trữ.
+ * Điều này đảm bảo tính chính xác theo thời gian thực nhưng chậm hơn khi query nhiều dữ liệu.
+ * Cân nhắc: Nếu transaction quá nhiều (>100K), cần snapshot định kỳ.
+ *
+ * READ-ONLY: Service này chỉ đọc dữ liệu, không ghi. Do đó không cần transaction.
+ */
 class GlService
 {
     private \PDO $pdo;
@@ -41,24 +44,32 @@ class GlService
         $this->accountRepo = $accountRepo;
     }
 
-    //
-    // SỔ CÁI CHI TIẾT: Xuất tất cả giao dịch của một tài khoản kèm số dư luỹ kế.
-    // Input: accountCode (bắt buộc), fromDate, toDate (tùy chọn).
-    // Process:
-    //   1. Xác định loại tài khoản (asset/expense → dư Nợ, còn lại → dư Có)
-    //   2. Tính số dư đầu kỳ (từ đầu năm đến fromDate)
-    //   3. Lấy các giao dịch trong kỳ, nhóm theo transaction_id để ghép Dr/Cr
-    //   4. Tính số dư luỹ kế sau mỗi giao dịch
-    // Output: account info, opening balance, entries with running balance, closing balance
-    //
-    // LƯU Ý: LEFT JOIN ledger_entries le2 để lấy tài khoản đối ứng.
-    // Với các bút toán có nhiều dòng, mỗi dòng Dr ghép với nhiều dòng Cr → sinh ra nhiều hàng.
-    // Grouping by transaction_id giải quyết vấn đề này bằng cách gộp Dr/Cr lại.
-    //
-    // KIỂM TOÁN: Sổ cái là chứng từ kiểm toán quan trọng nhất.
-    // Mỗi dòng phải trace được về bút toán gốc (transaction_id, reference).
-    // Running balance giúp kiểm tra: số dư cuối = đầu + phát sinh.
-    //
+    /**
+     * SỔ CÁI CHI TIẾT: Xuất tất cả giao dịch của một tài khoản kèm số dư luỹ kế.
+     *
+     * Nghiệp vụ: Kế toán viên kiểm tra chi tiết phát sinh từng tài khoản kế toán.
+     * Đây là chứng từ kiểm toán quan trọng nhất — mỗi dòng phải trace được về
+     * bút toán gốc (transaction_id, reference).
+     *
+     * Process:
+     *   1. Xác định loại tài khoản (asset/expense → dư Nợ, còn lại → dư Có)
+     *   2. Tính số dư đầu kỳ (từ đầu năm đến fromDate)
+     *   3. Lấy các giao dịch trong kỳ, nhóm theo transaction_id để ghép Dr/Cr
+     *   4. Tính số dư luỹ kế sau mỗi giao dịch
+     *
+     * LƯU Ý: LEFT JOIN ledger_entries le2 để lấy tài khoản đối ứng.
+     * Với các bút toán có nhiều dòng, mỗi dòng Dr ghép với nhiều dòng Cr
+     * → sinh ra nhiều hàng. Grouping by transaction_id giải quyết vấn đề này
+     * bằng cách gộp Dr/Cr lại.
+     *
+     * KIỂM TOÁN: Running balance giúp kiểm tra: số dư cuối = đầu + phát sinh.
+     *
+     * @param string $accountCode Mã tài khoản kế toán (ví dụ: "1111", "131")
+     * @param string|null $fromDate Ngày bắt đầu (YYYY-MM-DD), nếu null thì lấy từ đầu năm
+     * @param string|null $toDate Ngày kết thúc (YYYY-MM-DD), nếu null thì lấy đến cuối năm
+     * @return array{account_code: string, account_name: string, account_type: string, opening_balance: float, closing_balance: float, entries: array}
+     * @throws \InvalidArgumentException Nếu không tìm thấy tài khoản kế toán
+     */
     public function getGeneralLedger(string $accountCode, ?string $fromDate = null, ?string $toDate = null): array
     {
         $account = $this->accountRepo->findByCode($accountCode);
@@ -178,23 +189,30 @@ class GlService
         ];
     }
 
-    //
-    // SỔ CÁI TỔNG HỢP THEO THÁNG: Xuất số dư đầu kỳ, phát sinh, số dư cuối kỳ theo từng tháng.
-    // Input: accountCode, từ tháng, đến tháng (mặc định: cả năm).
-    // Process:
-    //   1. Tính số dư đầu kỳ tại thời điểm firstMonthStart
-    //   2. GROUP BY DATE_FORMAT(created_at, '%Y-%m') để lấy tổng Dr/Cr mỗi tháng
-    //   3. JOIN ledger_entries đối ứng để lấy chi tiết tài khoản đối ứng bên Dr
-    //   4. Build mảng all months trong khoảng — kể cả tháng không có phát sinh
-    //
-    // GIỚI HẠN: Contra detail chỉ lấy bên Nợ của account đang xét (le.is_debit = 1).
-    // Nếu account có bên Có → không có chi tiết đối ứng bên Có.
-    // Điều này phù hợp khi xem sổ cái TK Tài sản (Dr là phát sinh tăng).
-    // Với TK Nguồn vốn (dư Có), cần query riêng để xem chi tiết bên Có.
-    //
-    // BÁO CÁO TÀI CHÍNH: Dữ liệu monthly được FsService dùng để lập BC01/02/03.
-    // Số dư cuối kỳ tháng cuối của năm = số dư năm trên BCTC.
-    //
+    /**
+     * SỔ CÁI TỔNG HỢP THEO THÁNG: Xuất số dư đầu kỳ, phát sinh, số dư cuối kỳ theo từng tháng.
+     *
+     * Nghiệp vụ: Phục vụ lập báo cáo tài chính theo tháng và kiểm tra xu hướng biến động
+     * của từng tài khoản. Dữ liệu monthly được FsService dùng để lập BC01/02/03.
+     * Số dư cuối kỳ tháng cuối của năm = số dư năm trên BCTC.
+     *
+     * Process:
+     *   1. Tính số dư đầu kỳ tại thời điểm firstMonthStart
+     *   2. GROUP BY DATE_FORMAT(created_at, '%Y-%m') để lấy tổng Dr/Cr mỗi tháng
+     *   3. JOIN ledger_entries đối ứng để lấy chi tiết tài khoản đối ứng bên Dr
+     *   4. Build mảng all months trong khoảng — kể cả tháng không có phát sinh
+     *
+     * GIỚI HẠN: Contra detail chỉ lấy bên Nợ của account đang xét (le.is_debit = 1).
+     * Nếu account có bên Có → không có chi tiết đối ứng bên Có.
+     * Điều này phù hợp khi xem sổ cái TK Tài sản (Dr là phát sinh tăng).
+     * Với TK Nguồn vốn (dư Có), cần query riêng để xem chi tiết bên Có.
+     *
+     * @param string $accountCode Mã tài khoản kế toán (ví dụ: "1111", "131")
+     * @param string|null $fromDate Ngày bắt đầu (YYYY-MM-DD), mặc định đầu năm
+     * @param string|null $toDate Ngày kết thúc (YYYY-MM-DD), mặc định cuối năm
+     * @return array{account_code: string, account_name: string, account_type: string, mode: string, opening_balance: float, closing_balance: float, entries: array}
+     * @throws \InvalidArgumentException Nếu không tìm thấy tài khoản kế toán
+     */
     public function getMonthlyLedger(string $accountCode, ?string $fromDate = null, ?string $toDate = null): array
     {
         $account = $this->accountRepo->findByCode($accountCode);
@@ -310,17 +328,25 @@ class GlService
         ];
     }
 
-    // SỔ CHI TIẾT TÀI KHOẢN (Subsidiary Ledger)
-    //
-    // Input: accountCode, fromDate, toDate, groupBy (optional: 'customer', 'supplier', 'employee', 'project', null)
-    // Output: Grouped by object if groupBy specified, otherwise flat detail (same as getGeneralLedger)
-    //
-    // Khác với sổ cái tổng hợp, sổ chi tiết hiển thị phát sinh tách biệt theo từng
-    // đối tượng hạch toán (khách hàng 131, nhà cung cấp 331, nhân viên 334, dự án, ...)
-    //
-    // ĐỐI SOÁT: Sổ chi tiết phải khớp với sổ cái tổng hợp của cùng tài khoản.
-    // Nếu có chênh lệch → dữ liệu hạch toán bị phân tán.
-    //
+    /**
+     * SỔ CHI TIẾT TÀI KHOẢN (Subsidiary Ledger)
+     *
+     * Nghiệp vụ: Khác với sổ cái tổng hợp, sổ chi tiết hiển thị phát sinh tách biệt
+     * theo từng đối tượng hạch toán (khách hàng 131, nhà cung cấp 331, nhân viên 334,
+     * dự án, ...). Mỗi object có opening balance riêng, phát sinh riêng, closing balance riêng.
+     *
+     * ĐỐI SOÁT: Sổ chi tiết phải khớp với sổ cái tổng hợp của cùng tài khoản.
+     * Tổng opening balance của các object = opening balance tổng hợp.
+     * Tổng phát sinh của các object = phát sinh tổng hợp.
+     * Nếu có chênh lệch → dữ liệu hạch toán bị phân tán, cần đối soát ngay.
+     *
+     * @param string $accountCode Mã tài khoản kế toán (ví dụ: "131", "331")
+     * @param string|null $fromDate Ngày bắt đầu (YYYY-MM-DD)
+     * @param string|null $toDate Ngày kết thúc (YYYY-MM-DD)
+     * @param string|null $groupBy Nhóm theo đối tượng: 'customer', 'supplier', 'employee', 'project', hoặc null để trả về sổ cái chi tiết
+     * @return array Sổ cái tổng hợp (nếu groupBy=null) hoặc sổ chi tiết theo đối tượng
+     * @throws \InvalidArgumentException Nếu không tìm thấy tài khoản hoặc groupBy không hợp lệ
+     */
     public function getSubsidiaryLedger(string $accountCode, ?string $fromDate = null, ?string $toDate = null, ?string $groupBy = null): array
     {
         $account = $this->accountRepo->findByCode($accountCode);
@@ -459,6 +485,15 @@ class GlService
         return $this->getGeneralLedger($accountCode, $fromDate, $toDate);
     }
 
+    /**
+     * Lấy danh sách tài khoản kế toán cho dropdown sổ cái.
+     *
+     * Nghiệp vụ: Cung cấp danh sách tài khoản chi tiết (is_control = 0) để
+     * kế toán viên chọn tài khoản khi xem sổ cái. Chỉ hiển thị tài khoản chi tiết,
+     * không hiển thị tài khoản tổng hợp (control account).
+     *
+     * @return array<int, array{code: string, name: string, type: string, balance: string}>
+     */
     public function getAccounts(): array
     {
         $stmt = $this->pdo->query("SELECT code, name, type, balance FROM accounts WHERE is_control = 0 ORDER BY code");
