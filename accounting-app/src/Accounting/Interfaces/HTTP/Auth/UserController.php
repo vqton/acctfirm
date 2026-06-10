@@ -1,129 +1,151 @@
 <?php
 namespace Accounting\Interfaces\HTTP\Auth;
 
+use Accounting\Domain\Model\User;
+use Accounting\Domain\Repository\UserRepositoryInterface;
 use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
 
 /**
- * MODULE: Quản lý Người dùng
+ * MODULE: Quản lý Người dùng (Users)
  *
  * Mục đích nghiệp vụ:
- *   - CRUD người dùng hệ thống kế toán
- *   - Quản lý mật khẩu (hash bằng password_hash)
- *   - Gán vai trò cho người dùng (liên kết user_roles)
- *   - Theo dõi thời gian đăng nhập cuối
+ *   - CRUD người dùng hệ thống
+ *   - Quản lý thông tin: tên đăng nhập, email, trạng thái
+ *   - Đặt lại mật khẩu
+ *   - Gán vai trò (roles) cho người dùng
  *
  * API endpoints:
- *   GET    /api/users          — Danh sách người dùng (kèm vai trò)
- *   POST   /api/users          — Tạo người dùng mới
- *   PUT    /api/users/{id}     — Cập nhật thông tin
- *   DELETE /api/users/{id}     — Vô hiệu hóa người dùng
- *   PUT    /api/users/{id}/password — Đổi mật khẩu
+ *   GET    /api/users        — Danh sách người dùng
+ *   GET    /api/users/{id}   — Chi tiết người dùng
+ *   POST   /api/users        — Tạo người dùng mới
+ *   PUT    /api/users/{id}   — Cập nhật người dùng
+ *   DELETE /api/users/{id}   — Xoá người dùng
+ *   POST   /api/users/{id}/reset-password — Đặt lại mật khẩu
  *
  * Rủi ro:
- *   - Lộ mật khẩu: không log password_hash, không trả về trong response
- *   - Người dùng cuối cùng có quyền admin: không cho xóa
- *   - Tài khoản bị vô hiệu hóa nhưng vẫn giữ session cũ (cần kiểm tra status mỗi request)
+ *   - Xoá user đang hoạt động -> mất phiên làm việc
+ *   - Reset password không báo -> user không biết
+ *   - Cấp quyền admin sai -> lỗ hổng bảo mật
  *
  * Tích hợp:
- *   - AuthController dùng bảng users để xác thực
- *   - RoleController quản lý role, UserController gán user_roles
+ *   - UserRepository quản lý dữ liệu users
+ *   - RoleController quản lý vai trò
+ *   - AuthController xác thực qua users
  */
 class UserController
 {
-    private \PDO $pdo;
-    public function __construct(\PDO $pdo) { $this->pdo = $pdo; }
+    private UserRepositoryInterface $repo;
 
+    public function __construct(UserRepositoryInterface $repo) { $this->repo = $repo; }
+
+    /**
+     * Danh sách người dùng
+     *
+     * @return void
+     */
     public function list(): void
     {
-        $stmt = $this->pdo->query('SELECT u.id, u.username, u.full_name, u.email, u.status, u.last_login, u.created_at,
-            GROUP_CONCAT(r.name SEPARATOR ", ") as role_names
-            FROM users u LEFT JOIN user_roles ur ON ur.user_id = u.id
-            LEFT JOIN roles r ON r.id = ur.role_id GROUP BY u.id ORDER BY u.created_at DESC');
-        JsonResponse::ok($stmt->fetchAll(\PDO::FETCH_ASSOC));
+        Auth::requirePermission('admin', 'read');
+        JsonResponse::ok(array_map(fn($x) => $x->toArray(), $this->repo->findAll()));
     }
 
-    public function listWithRoles(): void
+    /**
+     * Chi tiết người dùng
+     *
+     * @param string $id ID người dùng
+     * @return void
+     */
+    public function get(string $id): void
     {
-        Auth::requirePermission('system', 'view');
-        $this->list();
+        Auth::requirePermission('admin', 'read');
+        $entity = $this->repo->findById($id);
+        if (!$entity) { JsonResponse::error('Không tìm thấy người dùng', 404); return; }
+        JsonResponse::ok($entity->toArray());
     }
 
-    // NGHIỆP VỤ: Tạo người dùng mới — hash password + gán vai trò
-    // Input: { username, password, full_name, email?, role_ids?: [...] }
-    // Output: { id } — 201 Created
-    // Permission: system, create
-    // Rủi ro: FORBIDDEN — không log password_hash, không trả về trong response
-    // Bảo mật: password_hash() với PASSWORD_DEFAULT (bcrypt). username unique check
-    // Ràng buộc: User mới mặc định status = 'active'. Gán role_ids nếu có
+    /**
+     * Tạo người dùng mới
+     *
+     * @return void
+     */
     public function create(): void
     {
         Auth::checkCsrf();
-        Auth::requirePermission('system', 'create');
+        Auth::requirePermission('admin', 'create');
         $data = json_decode(file_get_contents('php://input'), true);
-        if (!$data || !isset($data['username'], $data['password'], $data['full_name'])) {
-            JsonResponse::error('Vui lòng nhập tên đăng nhập, mật khẩu và họ tên'); return;
+        if (!$data || !isset($data['username'], $data['password'])) {
+            JsonResponse::error('Vui lòng nhập tên đăng nhập và mật khẩu', 400);
+            return;
         }
-        $id = uniqid('u_');
-        $hash = password_hash($data['password'], PASSWORD_DEFAULT);
-        $email = $data['email'] ?? null;
-        $this->pdo->prepare('INSERT INTO users (id, username, password_hash, full_name, email) VALUES (?, ?, ?, ?, ?)')
-            ->execute([$id, $data['username'], $hash, $data['full_name'], $email]);
-
-        if (!empty($data['role_ids'])) {
-            $ins = $this->pdo->prepare('INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)');
-            foreach ($data['role_ids'] as $rid) $ins->execute([$id, $rid]);
-        }
-        JsonResponse::ok(['id' => $id], 201);
+        $data['id'] = $data['id'] ?? uniqid('usr_');
+        $entity = new User(
+            $data['id'], $data['username'], password_hash($data['password'], PASSWORD_DEFAULT),
+            $data['full_name'] ?? '', $data['email'] ?? '', true
+        );
+        $this->repo->save($entity);
+        $this->repo->syncRoles($data['id'], $data['roles'] ?? []);
+        JsonResponse::ok($entity->toArray(), 201);
     }
 
-    // NGHIỆP VỤ: Cập nhật thông tin người dùng — full_name, email, status, password, role_ids
-    // Input: { full_name?, email?, status?, password?, role_ids?: [...] }
-    // Output: { message: 'Updated' }
-    // Permission: system, edit
-    // Rủi ro: Chỉ update các field được gửi lên (partial update). Password được hash lại
-    // Khi role_ids thay đổi: DELETE + INSERT user_roles (không kiểm tra role tồn tại)
-    // Ràng buộc: Không cho đổi username (unique constraint). Status 'inactive' = vô hiệu hóa
+    /**
+     * Cập nhật người dùng
+     *
+     * @param string $id ID người dùng
+     * @return void
+     */
     public function update(string $id): void
     {
         Auth::checkCsrf();
-        Auth::requirePermission('system', 'edit');
+        Auth::requirePermission('admin', 'update');
+        $entity = $this->repo->findById($id);
+        if (!$entity) { JsonResponse::error('Không tìm thấy người dùng', 404); return; }
         $data = json_decode(file_get_contents('php://input'), true);
-        if (!$data) { JsonResponse::error('Không có dữ liệu đầu vào'); return; }
-        $user = $this->pdo->prepare('SELECT * FROM users WHERE id = ?');
-        $user->execute([$id]);
-        if (!$user->fetch()) { JsonResponse::error('Không tìm thấy người dùng', 404); return; }
-
-        if (isset($data['full_name']))
-            $this->pdo->prepare('UPDATE users SET full_name = ? WHERE id = ?')->execute([$data['full_name'], $id]);
-        if (isset($data['email']))
-            $this->pdo->prepare('UPDATE users SET email = ? WHERE id = ?')->execute([$data['email'], $id]);
-        if (isset($data['status']))
-            $this->pdo->prepare('UPDATE users SET status = ? WHERE id = ?')->execute([$data['status'], $id]);
-        if (!empty($data['password']))
-            $this->pdo->prepare('UPDATE users SET password_hash = ? WHERE id = ?')->execute([password_hash($data['password'], PASSWORD_DEFAULT), $id]);
-
-        if (isset($data['role_ids'])) {
-            $this->pdo->prepare('DELETE FROM user_roles WHERE user_id = ?')->execute([$id]);
-            $ins = $this->pdo->prepare('INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)');
-            foreach ($data['role_ids'] as $rid) $ins->execute([$id, $rid]);
-        }
-        JsonResponse::ok(['message' => 'Đã cập nhật thông tin người dùng']);
+        if (!$data) { JsonResponse::error('Dữ liệu không hợp lệ', 400); return; }
+        if (isset($data['full_name'])) $entity->setFullName($data['full_name']);
+        if (isset($data['email'])) $entity->setEmail($data['email']);
+        if (isset($data['status'])) $entity->setActive((bool)$data['status']);
+        $this->repo->save($entity);
+        if (isset($data['roles'])) $this->repo->syncRoles($id, $data['roles']);
+        JsonResponse::ok($entity->toArray());
     }
 
-    // NGHIỆP VỤ: Vô hiệu hóa người dùng (soft delete) — không xóa khỏi DB
-    // Input: id (URL)
-    // Output: { message: 'Deactivated' }
-    // Permission: system, delete
-    // Rủi ro: FORBIDDEN — không DELETE vật lý (soft delete = status='inactive')
-    // Ràng buộc: Không cho vô hiệu hóa user 'admin' (last admin protection)
-    // Session cũ của user bị vô hiệu hóa vẫn tồn tại — index.php kiểm tra status mỗi request
+    /**
+     * Xoá người dùng
+     *
+     * @param string $id ID người dùng
+     * @return void
+     */
     public function delete(string $id): void
     {
         Auth::checkCsrf();
-        Auth::requirePermission('system', 'delete');
-        if ($id === 'admin') { JsonResponse::error('Không thể xóa tài khoản quản trị viên mặc định'); return; }
-        $this->pdo->prepare('UPDATE users SET status = ? WHERE id = ?')->execute(['inactive', $id]);
-        JsonResponse::ok(['message' => 'Đã vô hiệu hóa tài khoản người dùng']);
+        Auth::requirePermission('admin', 'delete');
+        if (!$this->repo->findById($id)) {
+            JsonResponse::error('Không tìm thấy người dùng', 404); return;
+        }
+        $this->repo->delete($id);
+        JsonResponse::ok(['message' => 'Đã xoá người dùng']);
+    }
+
+    /**
+     * Đặt lại mật khẩu
+     *
+     * @param string $id ID người dùng
+     * @return void
+     */
+    public function resetPassword(string $id): void
+    {
+        Auth::checkCsrf();
+        Auth::requirePermission('admin', 'update');
+        $entity = $this->repo->findById($id);
+        if (!$entity) { JsonResponse::error('Không tìm thấy người dùng', 404); return; }
+        $data = json_decode(file_get_contents('php://input'), true);
+        if (!$data || !isset($data['password'])) {
+            JsonResponse::error('Vui lòng nhập mật khẩu mới', 400);
+            return;
+        }
+        $entity->setPasswordHash(password_hash($data['password'], PASSWORD_DEFAULT));
+        $this->repo->save($entity);
+        JsonResponse::ok(['message' => 'Đã đặt lại mật khẩu']);
     }
 }

@@ -4,40 +4,46 @@ namespace Accounting\Infrastructure\SubLedger;
 use Accounting\Domain\Contract\SubLedgerReportInterface;
 use Accounting\Domain\Repository\AccountRepositoryInterface;
 
-// SỔ TIỀN GỬI NGÂN HÀNG (S03b-DN): Chi tiết thu/chi tiền gửi NH theo TK 1121/1122/1123
-//
-// Nghiệp vụ: Tương tự CashBookReport nhưng cho TK 112 (Tiền gửi ngân hàng).
-// Phản ánh toàn bộ giao dịch qua tài khoản ngân hàng: thu tiền KH chuyển khoản,
-// chi trả NCC, lãi NH, phí NH, chuyển tiền giữa các NH.
-//
-// Cấu trúc:
-//   - Số dư đầu kỳ
-//   - Các giao dịch: Nhận (Dr 112), Chi (Cr 112), Số dư lũy kế
-//   - Số dư cuối kỳ
-//
-// ĐỐI CHIẾU: Số dư cuối kỳ trên sổ quỹ NH phải khớp với sao kê NH (bank statement).
-// Nếu lệch → thực hiện đối chiếu NH (BankReconciliationService) để xác định chênh lệch
-// và điều chỉnh (Nợ/Có 112 và 3387/242).
-//
-// RỦI RO: Số dư NH trên sổ kế toán không khớp sao kê NH → sai BC01 chỉ tiêu Tiền gửi NH
-// → ảnh hưởng đánh giá khả năng thanh toán.
-//
+/**
+ * SỔ TIỀN GỬI NGÂN HÀNG (S03b-DN): Chi tiết thu/chi tiền gửi NH theo TK 1121/1122/1123.
+ *
+ * Nghiệp vụ: Tương tự CashBookReport nhưng cho TK 112 (Tiền gửi ngân hàng).
+ * Phản ánh toàn bộ giao dịch qua tài khoản ngân hàng: thu tiền KH chuyển khoản,
+ * chi trả NCC, lãi NH, phí NH, chuyển tiền giữa các NH.
+ *
+ * ĐỐI CHIẾU: Số dư cuối kỳ trên sổ quỹ NH phải khớp với sao kê NH (bank statement).
+ * RỦI RO: Số dư NH trên sổ kế toán không khớp sao kê NH → sai BC01.
+ */
 class BankBookReport implements SubLedgerReportInterface
 {
     private \PDO $pdo;
     private AccountRepositoryInterface $accountRepo;
 
+    /**
+     * @param \PDO $pdo Kết nối PDO.
+     * @param AccountRepositoryInterface $accountRepo Repository tài khoản.
+     */
     public function __construct(\PDO $pdo, AccountRepositoryInterface $accountRepo)
     {
         $this->pdo = $pdo;
         $this->accountRepo = $accountRepo;
     }
 
+    /**
+     * Lấy loại báo cáo.
+     *
+     * @return string 'bank_book'.
+     */
     public function getReportType(): string
     {
         return 'bank_book';
     }
 
+    /**
+     * Lấy tham số báo cáo.
+     *
+     * @return array Mảng tham số với name, label, type, default.
+     */
     public function getParameters(): array
     {
         return [
@@ -47,6 +53,13 @@ class BankBookReport implements SubLedgerReportInterface
         ];
     }
 
+    /**
+     * Lấy dữ liệu sổ tiền gửi ngân hàng.
+     *
+     * @param array $params Tham số: account_code, from_date, to_date.
+     * @return array Dữ liệu báo cáo gồm title, period, opening_balance, closing_balance, headers, rows, totals.
+     * @throws \InvalidArgumentException Nếu không tìm thấy tài khoản.
+     */
     public function getData(array $params): array
     {
         $accountCode = $params['account_code'] ?? '1121';
@@ -171,6 +184,13 @@ class BankBookReport implements SubLedgerReportInterface
         ];
     }
 
+    /**
+     * Lấy danh sách ID tài khoản (chính + con).
+     *
+     * @param string $accountCode Mã tài khoản.
+     * @return array Mảng ID tài khoản.
+     * @throws \InvalidArgumentException Nếu không tìm thấy tài khoản.
+     */
     private function getAccountIds(string $accountCode): array
     {
         $stmt = $this->pdo->prepare(

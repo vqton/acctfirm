@@ -11,30 +11,31 @@ use Accounting\Infrastructure\JsonResponse;
  * MODULE: Tiền mặt & Tiền gửi Ngân hàng (TK 111, 112)
  *
  * Mục đích nghiệp vụ:
- *   - Ghi nhận phiếu thu (PT) — tiền mặt vào quỹ
- *   - Ghi nhận phiếu chi (PC) — tiền mặt ra khỏi quỹ
- *   - Chuyển tiền giữa các tài khoản (111 ⇄ 112, nội bộ)
- *   - Tất cả giao dịch đều qua CashService → JournalService (đảm bảo Dr = Cr)
+ *   - Ghi nhận phiếu thu (PT)
+ *   - Ghi nhận phiếu chi (PC)
+ *   - Chuyển tiền giữa các tài khoản
+ *   - Mọi giao dịch qua CashService → JournalService (Dr = Cr)
  *
  * API endpoints:
- *   GET    /api/cash/receipts        — Danh sách phiếu thu
- *   POST   /api/cash/receipts        — Tạo phiếu thu mới
- *   GET    /api/cash/payments        — Danh sách phiếu chi
- *   POST   /api/cash/payments        — Tạo phiếu chi mới
- *   POST   /api/cash/transfers       — Chuyển tiền giữa các tài khoản
- *   GET    /api/cash/accounts        — Danh sách tài khoản tiền
- *   POST   /api/cash/{id}/reverse    — Hoàn nhập giao dịch
+ *   GET  /api/cash/receipts — Danh sách phiếu thu
+ *   POST /api/cash/receipts — Tạo phiếu thu
+ *   GET  /api/cash/payments — Danh sách phiếu chi
+ *   POST /api/cash/payments — Tạo phiếu chi
+ *   GET  /api/cash/payments/{id} — Chi tiết phiếu chi
+ *   POST /api/cash/transfers — Chuyển tiền
+ *   GET  /api/cash/accounts — Danh sách TK tiền
+ *   POST /api/cash/reverse — Hoàn nhập
  *
  * Rủi ro:
- *   - R002: Dr ≠ Cr do lỗi nhập liệu — đã kiểm tra qua JournalService
- *   - R005: Sai account code (111 thay vì 1111) — control account check
- *   - R001: Post vào kỳ đã đóng — PeriodService kiểm tra trước
- *   - R006: Trùng số chứng từ — VoucherService dùng SELECT FOR UPDATE
+ *   - R002: Dr ≠ Cr
+ *   - R005: Sai account code (control account)
+ *   - R001: Post vào kỳ đã đóng
+ *   - R006: Trùng số chứng từ
  *
  * Tích hợp:
- *   - CashService → JournalService (bắt buộc)
- *   - PettyCashController dùng chung CashService cho tạm ứng
- *   - BankReconciliationController đối chiếu số dư cuối kỳ
+ *   - CashService → JournalService
+ *   - PettyCashController
+ *   - BankReconciliationController
  */
 class CashController
 {
@@ -47,8 +48,11 @@ class CashController
         $this->pdo = $pdo;
     }
 
-    // ── Cash Receipts ──
-
+    /**
+     * Danh sách phiếu thu
+     *
+     * @return void
+     */
     public function receipts(): void
     {
         Auth::requirePermission('cash', 'view');
@@ -65,15 +69,11 @@ class CashController
         JsonResponse::ok($stmt->fetchAll(\PDO::FETCH_ASSOC));
     }
 
-    // NGHIỆP VỤ: Ghi nhận phiếu thu tiền mặt (PT) — Nợ 111 / Có (đối ứng)
-    // Input: { amount, credit_account_code, description?, reference?, created_by?, payer_name?, payer_type?, payer_id?, transaction_date? }
-    // Output: { transaction_id, reference, status } — 201 Created
-    // Service: CashService.recordReceipt() → CashService → JournalService.postEntry
-    // Transaction: CashService tự wrap beginTransaction/commit/rollback
-    // Permission: CSRF check + Auth::requirePermission('cash', 'create') (implicit qua service)
-    // Rủi ro: R002 — Dr=Cr kiểm tra trong JournalService. R001 — Period open check
-    // R006: Số CT tự động sinh qua Helpers::nextVoucherNo('PT') với SELECT FOR UPDATE
-    // Tích hợp: Sau ghi nhận, cập nhật payer info vào transactions table
+    /**
+     * Ghi nhận phiếu thu tiền mặt (PT) — Nợ 111 / Có (đối ứng)
+     *
+     * @return void
+     */
     public function createReceipt(): void
     {
         Auth::checkCsrf();
@@ -83,8 +83,6 @@ class CashController
             return;
         }
         try {
-            // THUẾ GTGT: Nếu vat_amount > 0 → hạch toán tách thuế:
-            //   Nợ 111 (tổng) / Có credit_account (chưa thuế) + Có 33311 (VAT)
             $vatAmount = (float)($data['vat_amount'] ?? 0);
             $vatRate = (float)($data['vat_rate'] ?? 0);
             $result = $this->cash->recordReceipt(
@@ -94,7 +92,6 @@ class CashController
                 $data['created_by'] ?? 'system',
                 $vatAmount, $vatRate
             );
-            // Save payer info and transaction date
             $txnId = $result['transaction_id'] ?? null;
             if ($txnId && ($data['payer_name'] ?? null)) {
                 $pdo = $this->getPdo();
@@ -116,8 +113,11 @@ class CashController
         }
     }
 
-    // ── Cash Payments ──
-
+    /**
+     * Danh sách phiếu chi
+     *
+     * @return void
+     */
     public function payments(): void
     {
         Auth::requirePermission('cash', 'view');
@@ -134,15 +134,12 @@ class CashController
         JsonResponse::ok($stmt->fetchAll(\PDO::FETCH_ASSOC));
     }
 
-    // NGHIỆP VỤ: Ghi nhận phiếu chi tiền mặt (PC) — Nợ (đối ứng) / Có 111
-    // Input: { amount, debit_account_code, description?, reference?, created_by?, ... }
-    // Output: { transaction_id, reference, status } — 201 Created
-    // Service: CashService.recordPayment() → JournalService.postEntry
-    // Permission: CSRF check
-    // Rủi ro: R005 — debit_account_code phải là TK con (không phải control account 111)
-    // Số CT tự động: Helpers::nextVoucherNo('PC') với SELECT FOR UPDATE
-    // NGHIỆP VỤ: Chi tiết phiếu chi — dùng cho in Mẫu 02-TT
-    // Trả về thông tin giao dịch + các bút toán chi tiết
+    /**
+     * Chi tiết phiếu chi — dùng cho in Mẫu 02-TT
+     *
+     * @param string $id ID phiếu chi
+     * @return void
+     */
     public function getPayment(string $id): void
     {
         Auth::requirePermission('cash', 'view');
@@ -158,7 +155,6 @@ class CashController
             JsonResponse::error('Không tìm thấy phiếu chi', 404);
             return;
         }
-        // Lấy các bút toán chi tiết (hiển thị Có 1111)
         $stmt = $this->pdo->prepare(
             "SELECT le.*, a.code AS account_code, a.name AS account_name
              FROM ledger_entries le JOIN accounts a ON a.id = le.account_id
@@ -169,6 +165,11 @@ class CashController
         JsonResponse::ok($txn);
     }
 
+    /**
+     * Ghi nhận phiếu chi tiền mặt (PC) — Nợ (đối ứng) / Có 111
+     *
+     * @return void
+     */
     public function createPayment(): void
     {
         Auth::checkCsrf();
@@ -203,9 +204,6 @@ class CashController
                     $pdo->prepare('UPDATE transactions SET ' . implode(', ', $fields) . ' WHERE id = ?')
                         ->execute($params);
                 }
-
-                // T11: Auto-link AP supplier payment — nếu TK Nợ là 331 và payer là supplier
-                // Ghi nhận payment allocation để tracking công nợ NCC
                 $debitCode = $data['debit_account_code'] ?? '';
                 $payerType = $data['payer_type'] ?? '';
                 $payerId = $data['payer_id'] ?? '';
@@ -223,8 +221,11 @@ class CashController
         }
     }
 
-    // ── Bank Transactions ──
-
+    /**
+     * Danh sách giao dịch ngân hàng
+     *
+     * @return void
+     */
     public function bankTransactions(): void
     {
         $pdo = $this->getPdo();
@@ -243,13 +244,11 @@ class CashController
         JsonResponse::ok($stmt->fetchAll(\PDO::FETCH_ASSOC));
     }
 
-    // NGHIỆP VỤ: Ghi nhận nộp tiền vào ngân hàng — Nợ 112 / Có 111 (chuyển tiền mặt ra NH)
-    // Input: { amount, description?, reference?, created_by? }
-    // Output: { transaction_id, reference, status } — 201 Created
-    // Service: CashService.recordBankDeposit() → JournalService.postEntry
-    // Permission: CSRF check
-    // Hạch toán: Dr 112 (tiền gửi) / Cr 111 (tiền mặt) — cùng một doanh nghiệp
-    // Rủi ro: Phải đảm bảo tiền mặt đủ để nộp. Kiểm tra period open.
+    /**
+     * Nộp tiền vào ngân hàng — Nợ 112 / Có 111
+     *
+     * @return void
+     */
     public function createDeposit(): void
     {
         Auth::checkCsrf();
@@ -271,13 +270,11 @@ class CashController
         }
     }
 
-    // NGHIỆP VỤ: Ghi nhận rút tiền ngân hàng về quỹ — Nợ 111 / Có 112
-    // Input: { amount, description?, reference?, created_by? }
-    // Output: { transaction_id, reference, status } — 201 Created
-    // Service: CashService.recordBankWithdrawal() → JournalService.postEntry
-    // Permission: CSRF check
-    // Hạch toán: Dr 111 (tiền mặt) / Cr 112 (tiền gửi)
-    // Rủi ro: Số dư TK 112 phải đủ để rút. Cần kiểm tra số dư trước khi ghi nhận
+    /**
+     * Rút tiền ngân hàng về quỹ — Nợ 111 / Có 112
+     *
+     * @return void
+     */
     public function createWithdrawal(): void
     {
         Auth::checkCsrf();
@@ -299,13 +296,11 @@ class CashController
         }
     }
 
-    // NGHIỆP VỤ: Ghi nhận thu tiền qua ngân hàng (KH chuyển khoản) — Nợ 112 / Có (đối ứng)
-    // Input: { amount, credit_account_code, description?, reference?, created_by? }
-    // Output: { transaction_id, reference, status } — 201 Created
-    // Service: CashService.recordBankReceipt() → JournalService.postEntry
-    // Permission: CSRF check
-    // Hạch toán: Dr 112 / Cr 511 (doanh thu), Cr 131 (thu hồi công nợ), Cr 515 (lãi), ...
-    // Rủi ro: R005 — credit_account_code không được là control account
+    /**
+     * Thu tiền qua ngân hàng — Nợ 112 / Có (đối ứng)
+     *
+     * @return void
+     */
     public function createBankReceipt(): void
     {
         Auth::checkCsrf();
@@ -330,13 +325,11 @@ class CashController
         }
     }
 
-    // NGHIỆP VỤ: Ghi nhận chi tiền qua ngân hàng — Nợ (đối ứng) / Có 112
-    // Input: { amount, debit_account_code, description?, reference?, created_by? }
-    // Output: { transaction_id, reference, status } — 201 Created
-    // Service: CashService.recordBankPayment() → JournalService.postEntry
-    // Permission: CSRF check
-    // Hạch toán: Dr 331 (thanh toán NCC), Dr 152 (mua hàng), Dr 642 (chi phí), ... / Cr 112
-    // Rủi ro: R005 — debit_account_code không control account. Cần kiểm tra số dư 112
+    /**
+     * Chi tiền qua ngân hàng — Nợ (đối ứng) / Có 112
+     *
+     * @return void
+     */
     public function createBankPayment(): void
     {
         Auth::checkCsrf();
@@ -361,13 +354,11 @@ class CashController
         }
     }
 
-    // NGHIỆP VỤ: Ghi nhận lãi tiền gửi ngân hàng — Nợ 112 / Có 515
-    // Input: { amount, description?, reference?, created_by? }
-    // Output: { transaction_id, reference, status } — 201 Created
-    // Service: CashService.recordBankInterest() → JournalService.postEntry
-    // Hạch toán: Dr 112 (tiền gửi tăng) / Cr 515 (doanh thu hoạt động tài chính)
-    // Rủi ro: Lãi NH thường được NH báo cuối tháng, cần đối chiếu với sao kê
-    // Ảnh hưởng BC02: Tăng chỉ tiêu doanh thu HĐTC (515)
+    /**
+     * Lãi tiền gửi ngân hàng — Nợ 112 / Có 515
+     *
+     * @return void
+     */
     public function createInterest(): void
     {
         Auth::checkCsrf();
@@ -389,12 +380,11 @@ class CashController
         }
     }
 
-    // NGHIỆP VỤ: Ghi nhận phí ngân hàng — Nợ 642 (chi phí QLDN) / Có 112
-    // Input: { amount, description?, reference?, created_by? }
-    // Output: { transaction_id, reference, status } — 201 Created
-    // Service: CashService.recordBankCharge() → JournalService.postEntry
-    // Hạch toán: Dr 6425 (phí ngân hàng) / Cr 112 (tiền gửi giảm)
-    // Rủi ro: Phí NH cần đối chiếu với sao kê. Sai TK đối ứng → sai BC02 (642 vs 635)
+    /**
+     * Phí ngân hàng — Nợ 642 (chi phí QLDN) / Có 112
+     *
+     * @return void
+     */
     public function createCharge(): void
     {
         Auth::checkCsrf();
@@ -419,8 +409,11 @@ class CashController
         }
     }
 
-    // ── Transit ──
-
+    /**
+     * Danh sách tiền đang chuyển
+     *
+     * @return void
+     */
     public function transitRecords(): void
     {
         $pdo = $this->getPdo();
@@ -428,13 +421,11 @@ class CashController
         JsonResponse::ok($stmt->fetchAll(\PDO::FETCH_ASSOC));
     }
 
-    // NGHIỆP VỤ: Ghi nhận tiền đang chuyển — giữa 2 tài khoản chưa xác định
-    // Input: { amount, description?, reference?, created_by? }
-    // Output: { transit_id, status } — 201 Created
-    // Service: CashService.recordTransit() — ghi vào cash_transit table (tạm thời)
-    // Permission: CSRF check
-    // Rủi ro: Tiền đang chuyển chưa ảnh hưởng số dư TK 111/112. Cần confirmTransit để ghi nhận
-    // Đây là bước trung gian, sau khi xác nhận sẽ ghi bút toán chính thức
+    /**
+     * Ghi nhận tiền đang chuyển — ghi vào cash_transit table (tạm thời)
+     *
+     * @return void
+     */
     public function createTransit(): void
     {
         Auth::checkCsrf();
@@ -456,12 +447,11 @@ class CashController
         }
     }
 
-    // NGHIỆP VỤ: Xác nhận tiền đã đến tài khoản đích — ghi bút toán chính thức
-    // Input: { transit_id, created_by? }
-    // Output: { transaction_id, status } — 200 OK
-    // Service: CashService.confirmTransit() → JournalService.postEntry
-    // Hạch toán: Dr 1112/112 (tài khoản đích) / Cr 1111 (tài khoản nguồn)
-    // Rủi ro: R007 — Nếu confirm thất bại, transit record vẫn tồn tại để xử lý thủ công
+    /**
+     * Xác nhận tiền đến tài khoản đích — ghi bút toán chính thức
+     *
+     * @return void
+     */
     public function confirmTransit(): void
     {
         Auth::checkCsrf();
@@ -481,11 +471,11 @@ class CashController
         }
     }
 
-    // NGHIỆP VỤ: Hủy giao dịch tiền đang chuyển — xóa transit record, không ghi bút toán
-    // Input: { transit_id, created_by? }
-    // Output: { success: true } — 200 OK
-    // Service: CashService.reverseTransit() — xóa transit (chỉ khi chưa confirm)
-    // Rủi ro: Chỉ reverse được transit chưa confirm. Nếu đã confirm → phải tạo reversing journal
+    /**
+     * Hủy giao dịch tiền đang chuyển — xóa transit record
+     *
+     * @return void
+     */
     public function reverseTransit(): void
     {
         Auth::checkCsrf();
@@ -505,14 +495,11 @@ class CashController
         }
     }
 
-    // ── Cash Book ──
-
-    // NGHIỆP VỤ: Sổ quỹ tiền mặt — tổng hợp thu/chi theo ngày, tồn quỹ cuối kỳ
-    // Input: GET ?from=2025-01-01&to=2025-01-31
-    // Output: { opening_balance, receipts: [...], payments: [...], closing_balance }
-    // Service: CashService.getCashBook() — đọc từ TransactionRepository
-    // Mục đích: Đối chiếu sổ quỹ thực tế với số dư kế toán (111)
-    // Rủi ro: Chỉ tính giao dịch status=posted, không tính draft
+    /**
+     * Sổ quỹ tiền mặt — tổng hợp thu/chi theo ngày
+     *
+     * @return void
+     */
     public function cashBook(): void
     {
         try {
@@ -524,21 +511,21 @@ class CashController
         }
     }
 
-    // ── FX ──
-
+    /**
+     * Số dư ngoại tệ
+     *
+     * @return void
+     */
     public function fcBalances(): void
     {
         JsonResponse::ok($this->cash->getFCBalances());
     }
 
-    // NGHIỆP VỤ: Đánh giá lại ngoại tệ cho một tài khoản cụ thể (theo VAS 10)
-    // Input: { account_code, currency_code, closing_rate, as_of_date?, created_by? }
-    // Output: { difference, gain_loss_account, journal_entry }
-    // Service: CashService.revalueFC() → JournalService.postEntry
-    // Permission: CSRF check
-    // Hạch toán: Dr 1112/1122 / Cr 515 (lãi TG) hoặc Dr 635 / Cr 1112/1122 (lỗ TG)
-    // Rủi ro: R001 — Không đánh giá lại nếu kỳ đã đóng. closing_rate phải là tỷ giá cuối kỳ
-    // Ràng buộc: Chỉ áp dụng cho TK 1112, 1122 (tiền mặt/gửi NH ngoại tệ)
+    /**
+     * Đánh giá lại ngoại tệ cho một tài khoản (VAS 10)
+     *
+     * @return void
+     */
     public function fcRevalue(): void
     {
         Auth::checkCsrf();
@@ -560,12 +547,14 @@ class CashController
         }
     }
 
-    // ── Transaction Templates ──
-
+    /**
+     * Transaction templates cho phiếu thu/chi
+     *
+     * @return void
+     */
     public function transactionTemplates(): void
     {
         $type = $_GET['type'] ?? 'receipt';
-
         $receiptTemplates = [
             ['id' => 'sales', 'name' => 'Thu tiền bán hàng', 'default_account' => '511', 'has_vat' => true, 'vat_rate' => 10],
             ['id' => 'ar_recovery', 'name' => 'Thu hồi công nợ', 'default_account' => '131', 'has_vat' => false, 'vat_rate' => 0],
@@ -577,7 +566,6 @@ class CashController
             ['id' => 'advance_recovery', 'name' => 'Thu hồi tạm ứng', 'default_account' => '141', 'has_vat' => false, 'vat_rate' => 0],
             ['id' => 'subsidy', 'name' => 'Nhận trợ cấp Nhà nước', 'default_account' => '3339', 'has_vat' => false, 'vat_rate' => 0],
         ];
-
         $paymentTemplates = [
             ['id' => 'inventory', 'name' => 'Mua hàng tồn kho', 'default_account' => '152', 'has_vat' => true, 'vat_rate' => 10],
             ['id' => 'fixed_asset', 'name' => 'Mua TSCĐ', 'default_account' => '211', 'has_vat' => true, 'vat_rate' => 10],
@@ -592,50 +580,38 @@ class CashController
             ['id' => 'escrow', 'name' => 'Ký quỹ, ký cược', 'default_account' => '244', 'has_vat' => false, 'vat_rate' => 0],
             ['id' => 'advance', 'name' => 'Tạm ứng', 'default_account' => '141', 'has_vat' => false, 'vat_rate' => 0],
         ];
-
         $templates = ($type === 'receipt') ? $receiptTemplates : $paymentTemplates;
         JsonResponse::ok($templates);
     }
 
-    // ── Account picker ──
-
+    /**
+     * Danh sách tài khoản đối ứng cho phiếu thu/chi
+     *
+     * @return void
+     */
     public function accounts(): void
     {
         header('Content-Type: application/json; charset=utf-8');
         header('Cache-Control: no-cache, must-revalidate');
         $for = $_GET['for'] ?? 'all';
-
-        // Define allowed account types per transaction nature
-        // Receipt (Dr 111 -> Cr X): credit-normal accounts
         $receiptTypes = ['liability', 'equity', 'revenue'];
-        // Payment (Dr X -> Cr 111): debit-normal accounts
         $paymentTypes = ['asset', 'expense'];
-
         $all = $this->accountRepo->findAll();
         $result = [];
-
         foreach ($all as $a) {
             $code = $a->getCode();
-            // Always exclude cash/bank accounts (111, 112, 113)
             if (in_array($code, ['111', '112', '113'])) continue;
-            // Exclude control accounts (parent accounts with sub-accounts)
             if ($a->isControl()) continue;
-            // Exclude result determination account
             if ($code === '911') continue;
-
-            // Filter by transaction nature
             $type = $a->getType();
             if ($for === 'receipt') {
-                // Credit accounts for receipt: revenue/liability/equity + AR (131)
                 $allowed = in_array($type, $receiptTypes) || $code === '131';
                 if (!$allowed) continue;
             }
             if ($for === 'payment') {
-                // Debit accounts for payment: asset/expense + AP (331)
                 $allowed = in_array($type, $paymentTypes) || $code === '331';
                 if (!$allowed) continue;
             }
-
             $result[] = [
                 'code' => $code,
                 'name' => $a->getName(),
@@ -643,10 +619,12 @@ class CashController
                 'balance' => $a->getBalance(),
             ];
         }
-
         JsonResponse::ok($result);
     }
 
+    /**
+     * @return \PDO
+     */
     private function getPdo(): \PDO
     {
         return $this->pdo;

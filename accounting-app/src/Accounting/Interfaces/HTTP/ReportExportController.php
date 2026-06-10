@@ -7,6 +7,24 @@ use Accounting\Domain\Service\FsService;
 use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
 
+/**
+ * MODULE: Xuất báo cáo kế toán (Report Export)
+ *
+ * Mục đích nghiệp vụ:
+ *   - Xuất sổ cái CSV/HTML
+ *   - Xuất bảng cân đối phát sinh CSV
+ *   - Xuất BC03 LCTT CSV
+ *
+ * API endpoints:
+ *   GET /api/reports/export/ledger/csv — Sổ cái CSV
+ *   GET /api/reports/export/ledger/html — Sổ cái HTML
+ *   GET /api/reports/export/trial-balance/csv — BC cân đối PS CSV
+ *   GET /api/reports/export/bc03/csv — BC03 CSV
+ *
+ * Tích hợp:
+ *   - ReportExportService render định dạng
+ *   - GlService, FsService cung cấp dữ liệu
+ */
 class ReportExportController
 {
     private ReportExportService $export;
@@ -20,6 +38,11 @@ class ReportExportController
         $this->fs = $fs;
     }
 
+    /**
+     * Xuất sổ cái CSV
+     *
+     * @return void
+     */
     public function exportCsvLedger(): void
     {
         Auth::requirePermission('report', 'export');
@@ -43,6 +66,11 @@ class ReportExportController
         }
     }
 
+    /**
+     * Xuất sổ cái HTML
+     *
+     * @return void
+     */
     public function exportHtmlLedger(): void
     {
         Auth::requirePermission('report', 'export');
@@ -69,6 +97,11 @@ class ReportExportController
         }
     }
 
+    /**
+     * Xuất bảng cân đối phát sinh CSV
+     *
+     * @return void
+     */
     public function exportCsvTrialBalance(): void
     {
         Auth::requirePermission('report', 'export');
@@ -93,6 +126,11 @@ class ReportExportController
         }
     }
 
+    /**
+     * Xuất BC03 CSV
+     *
+     * @return void
+     */
     public function exportCsvBC03(): void
     {
         Auth::requirePermission('report', 'export');

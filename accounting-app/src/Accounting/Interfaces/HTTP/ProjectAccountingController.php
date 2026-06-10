@@ -6,8 +6,34 @@ use Accounting\Domain\Service\ProjectAccountingService;
 use Accounting\Domain\Repository\ProjectRepositoryInterface;
 use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
-use Accounting\Infrastructure\Helpers;
 
+/**
+ * MODULE: Kế toán Dự án (Project Accounting)
+ *
+ * Mục đích nghiệp vụ:
+ *   - Dashboard dự án
+ *   - Báo cáo chi phí/doanh thu dự án
+ *   - Phân bổ chi phí vào dự án
+ *   - Tạo chứng từ yêu cầu thanh toán (Progress Billing)
+ *   - Ghi nhận doanh thu dự án
+ *   - Kết thúc dự án
+ *   - Thiết lập ngân sách dự án
+ *
+ * API endpoints:
+ *   GET  /api/project/dashboard — Dashboard
+ *   GET  /api/project/{id} — Báo cáo
+ *   POST /api/project/{id}/allocate-cost — Phân bổ chi phí
+ *   POST /api/project/{id}/billing — Tạo billing
+ *   POST /api/project/{id}/recognize-revenue — Ghi nhận DT
+ *   POST /api/project/{id}/finalize — Kết thúc
+ *   PUT  /api/project/{id}/budget — Ngân sách
+ *   GET  /api/project/{id}/export — Xuất CSV
+ *   GET  /api/project/view — View HTML
+ *
+ * Tích hợp:
+ *   - ProjectAccountingService gọi JournalService
+ *   - MasterData/ProjectController quản lý CRUD
+ */
 class ProjectAccountingController
 {
     private ProjectAccountingService $service;
@@ -19,6 +45,11 @@ class ProjectAccountingController
         $this->projectRepo = $projectRepo;
     }
 
+    /**
+     * Dashboard dự án
+     *
+     * @return void
+     */
     public function dashboard(): void
     {
         Auth::requirePermission('project', 'read');
@@ -28,6 +59,12 @@ class ProjectAccountingController
         ]);
     }
 
+    /**
+     * Báo cáo chi phí/doanh thu dự án
+     *
+     * @param string $id ID dự án
+     * @return void
+     */
     public function report(string $id): void
     {
         Auth::requirePermission('project', 'read');
@@ -38,6 +75,12 @@ class ProjectAccountingController
         }
     }
 
+    /**
+     * Phân bổ chi phí vào dự án
+     *
+     * @param string $id ID dự án
+     * @return void
+     */
     public function allocateCost(string $id): void
     {
         Auth::requirePermission('project', 'update');
@@ -58,6 +101,12 @@ class ProjectAccountingController
         }
     }
 
+    /**
+     * Tạo chứng từ yêu cầu thanh toán (Progress Billing)
+     *
+     * @param string $id ID dự án
+     * @return void
+     */
     public function createBilling(string $id): void
     {
         Auth::requirePermission('project', 'create');
@@ -78,6 +127,12 @@ class ProjectAccountingController
         }
     }
 
+    /**
+     * Ghi nhận doanh thu dự án
+     *
+     * @param string $id ID dự án
+     * @return void
+     */
     public function recognizeRevenue(string $id): void
     {
         Auth::requirePermission('project', 'update');
@@ -90,6 +145,12 @@ class ProjectAccountingController
         }
     }
 
+    /**
+     * Kết thúc dự án
+     *
+     * @param string $id ID dự án
+     * @return void
+     */
     public function finalize(string $id): void
     {
         Auth::requirePermission('project', 'delete');
@@ -102,6 +163,12 @@ class ProjectAccountingController
         }
     }
 
+    /**
+     * Thiết lập ngân sách dự án
+     *
+     * @param string $id ID dự án
+     * @return void
+     */
     public function setBudget(string $id): void
     {
         Auth::requirePermission('project', 'update');
@@ -119,6 +186,12 @@ class ProjectAccountingController
         }
     }
 
+    /**
+     * Xuất báo cáo dự án
+     *
+     * @param string $id ID dự án
+     * @return void
+     */
     public function exportReport(string $id): void
     {
         Auth::requirePermission('project', 'read');
@@ -128,6 +201,11 @@ class ProjectAccountingController
         echo $result['content'];
     }
 
+    /**
+     * View HTML
+     *
+     * @return void
+     */
     public function viewIndex(): void
     {
         Auth::requirePermission('project', 'read');

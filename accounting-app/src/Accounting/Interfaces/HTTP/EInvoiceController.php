@@ -6,20 +6,35 @@ use Accounting\Infrastructure\JsonResponse;
 use Accounting\Domain\Service\InvoiceService;
 use Accounting\Domain\Service\VatDeclarationEngine;
 
-//
-// CONTROLLER HÓA ĐƠN ĐIỆN TỬ
-//
-// API endpoints cho vòng đời hóa đơn điện tử:
-//   GET  /api/einvoice            — danh sách hóa đơn
-//   GET  /api/einvoice/:id         — chi tiết hóa đơn
-//   POST /api/einvoice/create      — tạo từ giao dịch
-//   POST /api/einvoice/adjust      — điều chỉnh
-//   POST /api/einvoice/replace     — thay thế
-//   POST /api/einvoice/cancel      — hủy
-//   POST /api/einvoice/retry       — retry phát hành
-//   GET  /api/einvoice/download/:id — tải XML
-//   GET  /api/vat/declarations/:id/export — xuất XML tờ khai 01/GTGT
-//
+/**
+ * MODULE: Hóa đơn Điện tử (E-Invoice)
+ *
+ * Mục đích nghiệp vụ:
+ *   - Vòng đời hóa đơn điện tử: tạo, điều chỉnh, thay thế, hủy
+ *   - Phát hành hóa đơn từ giao dịch kế toán
+ *   - Tải XML hóa đơn đã ký
+ *   - Tính toán chỉ tiêu tờ khai 01/GTGT
+ *
+ * API endpoints:
+ *   GET  /api/einvoice — Danh sách hóa đơn
+ *   GET  /api/einvoice/{id} — Chi tiết
+ *   POST /api/einvoice/create — Tạo từ giao dịch
+ *   POST /api/einvoice/adjust — Điều chỉnh
+ *   POST /api/einvoice/replace — Thay thế
+ *   POST /api/einvoice/cancel — Hủy
+ *   POST /api/einvoice/retry — Retry phát hành
+ *   GET  /api/einvoice/download/{id} — Tải XML
+ *   GET  /api/vat/declarations/{id}/export — Xuất XML tờ khai 01/GTGT
+ *   POST /api/einvoice/vat-calculate — Tính 43 chỉ tiêu 01/GTGT
+ *
+ * Rủi ro:
+ *   - Hủy hóa đơn đã phát hành -> sai số liệu kê khai thuế
+ *   - Điều chỉnh không đúng thời điểm -> chậm nộp tờ khai
+ *
+ * Tích hợp:
+ *   - InvoiceService xử lý nghiệp vụ hóa đơn
+ *   - VatDeclarationEngine tính chỉ tiêu tờ khai
+ */
 class EInvoiceController
 {
     private InvoiceService $invoiceService;
@@ -31,7 +46,11 @@ class EInvoiceController
         $this->vatEngine = $vatEngine;
     }
 
-    // Danh sách hóa đơn
+    /**
+     * Danh sách hóa đơn
+     *
+     * @return void
+     */
     public function list(): void
     {
         Auth::requirePermission('einvoice', 'read');
@@ -41,7 +60,12 @@ class EInvoiceController
         JsonResponse::ok($this->invoiceService->listInvoices($status, $from, $to));
     }
 
-    // Chi tiết hóa đơn
+    /**
+     * Chi tiết hóa đơn
+     *
+     * @param string $id ID hóa đơn
+     * @return void
+     */
     public function get(string $id): void
     {
         Auth::requirePermission('einvoice', 'read');
@@ -50,7 +74,11 @@ class EInvoiceController
         JsonResponse::ok($inv);
     }
 
-    // Tạo hóa đơn từ giao dịch
+    /**
+     * Tạo hóa đơn từ giao dịch kế toán
+     *
+     * @return void
+     */
     public function create(): void
     {
         Auth::requirePermission('einvoice', 'create');
@@ -66,7 +94,11 @@ class EInvoiceController
         }
     }
 
-    // Tạo hóa đơn điều chỉnh
+    /**
+     * Tạo hóa đơn điều chỉnh
+     *
+     * @return void
+     */
     public function adjust(): void
     {
         Auth::requirePermission('einvoice', 'update');
@@ -81,7 +113,11 @@ class EInvoiceController
         }
     }
 
-    // Thay thế hóa đơn
+    /**
+     * Thay thế hóa đơn
+     *
+     * @return void
+     */
     public function replace(): void
     {
         Auth::requirePermission('einvoice', 'update');
@@ -96,7 +132,11 @@ class EInvoiceController
         }
     }
 
-    // Hủy hóa đơn
+    /**
+     * Hủy hóa đơn
+     *
+     * @return void
+     */
     public function cancel(): void
     {
         Auth::requirePermission('einvoice', 'delete');
@@ -112,7 +152,11 @@ class EInvoiceController
         }
     }
 
-    // Retry publish
+    /**
+     * Retry phát hành hóa đơn
+     *
+     * @return void
+     */
     public function retry(): void
     {
         Auth::requirePermission('einvoice', 'update');
@@ -127,7 +171,12 @@ class EInvoiceController
         }
     }
 
-    // Tải XML hóa đơn đã ký
+    /**
+     * Tải XML hóa đơn đã ký
+     *
+     * @param string $id ID hóa đơn
+     * @return void
+     */
     public function downloadXml(string $id): void
     {
         Auth::requirePermission('einvoice', 'read');
@@ -141,7 +190,12 @@ class EInvoiceController
         echo $inv['xml_signed'];
     }
 
-    // Xuất XML tờ khai 01/GTGT theo chuẩn TĐT
+    /**
+     * Xuất XML tờ khai 01/GTGT theo chuẩn TĐT
+     *
+     * @param string $declarationId ID tờ khai
+     * @return void
+     */
     public function exportVatXml(string $declarationId): void
     {
         Auth::requirePermission('tax', 'read');
@@ -155,7 +209,11 @@ class EInvoiceController
         }
     }
 
-    // Tính toán 43 chỉ tiêu tờ khai 01/GTGT
+    /**
+     * Tính toán 43 chỉ tiêu tờ khai 01/GTGT
+     *
+     * @return void
+     */
     public function calculateVatIndicators(): void
     {
         Auth::requirePermission('tax', 'create');

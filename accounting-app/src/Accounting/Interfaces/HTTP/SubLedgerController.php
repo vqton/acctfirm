@@ -6,16 +6,25 @@ use Accounting\Domain\Service\ReportExportService;
 use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
 
-// Controller cho Sổ Chi Tiết (Subsidiary Ledger)
-//
-// Nghiệp vụ: Cung cấp API endpoints cho tất cả báo cáo sổ chi tiết:
-//   - GET /api/reports/sub-ledger?type=general_ledger&account_code=1111
-//   - POST /api/reports/sub-ledger/export (CSV hoặc HTML)
-//   - GET /so-chi-tiet (View trang chính)
-//
-// Controller chỉ validate input và format response — không chứa business logic.
-// Mọi nghiệp vụ báo cáo được xử lý bởi SubLedgerService và các Report implementations.
-//
+/**
+ * MODULE: Sổ Chi Tiết (Subsidiary Ledger)
+ *
+ * Mục đích nghiệp vụ:
+ *   - Báo cáo sổ chi tiết cho tất cả các loại (sổ cái, sổ quỹ, sổ kho...)
+ *   - Xuất CSV/HTML
+ *   - Hỗ trợ lọc theo tài khoản, khách hàng, NCC, hàng hóa
+ *
+ * API endpoints:
+ *   GET  /api/reports/sub-ledger — Báo cáo (type=general_ledger, account_code=...)
+ *   POST /api/reports/sub-ledger/export — Xuất
+ *   GET  /api/reports/sub-ledger/parameters — Tham số
+ *   GET  /api/reports/sub-ledger/supported — Danh sách báo cáo
+ *   GET  /so-chi-tiet — View HTML
+ *
+ * Tích hợp:
+ *   - SubLedgerService xử lý mọi loại báo cáo
+ *   - ReportExportService format output
+ */
 class SubLedgerController
 {
     private SubLedgerService $subLedgerService;
@@ -27,9 +36,11 @@ class SubLedgerController
         $this->exportService = $exportService;
     }
 
-    // GET /api/reports/sub-ledger
-    // Query params: type (required), account_code, from_date, to_date, customer_id, supplier_id, item_id
-    //
+    /**
+     * Lấy báo cáo sổ chi tiết
+     *
+     * @return void
+     */
     public function getReport(): void
     {
         Auth::requirePermission('report', 'read');
@@ -51,9 +62,11 @@ class SubLedgerController
         }
     }
 
-    // POST /api/reports/sub-ledger/export
-    // Body JSON: { type: string, format: 'csv'|'html', params: {...} }
-    //
+    /**
+     * Xuất báo cáo CSV/HTML
+     *
+     * @return void
+     */
     public function exportReport(): void
     {
         Auth::requirePermission('report', 'export');
@@ -85,8 +98,11 @@ class SubLedgerController
         }
     }
 
-    // GET /so-chi-tiet — Hiển thị view sổ chi tiết
-    //
+    /**
+     * View HTML sổ chi tiết
+     *
+     * @return void
+     */
     public function viewIndex(): void
     {
         Auth::requirePermission('report', 'read');
@@ -99,8 +115,11 @@ class SubLedgerController
         require __DIR__ . '/../../../../public/views/sub-ledger.php';
     }
 
-    // GET /api/reports/sub-ledger/parameters?type=general_ledger
-    //
+    /**
+     * Tham số cho một loại báo cáo
+     *
+     * @return void
+     */
     public function getParameters(): void
     {
         Auth::requirePermission('report', 'read');
@@ -119,8 +138,11 @@ class SubLedgerController
         }
     }
 
-    // GET /api/reports/sub-ledger/supported
-    //
+    /**
+     * Danh sách báo cáo được hỗ trợ
+     *
+     * @return void
+     */
     public function getSupportedReports(): void
     {
         Auth::requirePermission('report', 'read');
@@ -128,7 +150,11 @@ class SubLedgerController
         JsonResponse::ok(['data' => $reports]);
     }
 
-    // Xây dựng params từ $_GET
+    /**
+     * Xây dựng params từ $_GET
+     *
+     * @return array
+     */
     private function buildParamsFromGet(): array
     {
         $params = [];

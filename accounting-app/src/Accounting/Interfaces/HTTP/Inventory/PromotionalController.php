@@ -2,67 +2,64 @@
 namespace Accounting\Interfaces\HTTP\Inventory;
 
 use Accounting\Domain\Contract\InventoryServiceInterface;
-use Accounting\Domain\Repository\ItemRepositoryInterface;
 use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
 
 /**
- * MODULE: Hàng Khuyến mại (Promotional Goods)
+ * MODULE: Hàng khuyến mại (Promotional Goods)
  *
  * Mục đích nghiệp vụ:
- *   - Xuất hàng khuyến mại, quà tặng cho khách hàng
- *   - Hạch toán chi phí khuyến mại (641 — Chi phí bán hàng)
- *   - Giảm tồn kho tương ứng
- *   - Tuân thủ quy định về thuế GTGT đối với hàng khuyến mại
+ *   - Quản lý hàng khuyến mại, hàng tặng kèm
+ *   - Xuất kho hàng khuyến mại
+ *   - Hạch toán chi phí khuyến mại (TK 641)
  *
  * API endpoints:
- *   POST /api/promotional/issue — Xuất hàng khuyến mại
+ *   POST /api/inventory/promotional — Xuất hàng KM
+ *   GET  /api/inventory/promotional — Danh sách
  *
  * Rủi ro:
- *   - Không xuất hóa đơn cho hàng KM → vi phạm luật thuế GTGT
- *   - Sai TK đối ứng (632 thay vì 641) → sai BC02
- *   - Hàng KM vượt định mức → không được khấu trừ thuế
+ *   - Sai TK hạch toán (641 thay vì 632)
+ *   - Vi phạm quy định thuế về hàng KM
  *
  * Tích hợp:
- *   - InventoryService.issuePromotional ghi Nợ 641 / Có 152,156
- *   - IssueController xử lý xuất kho thông thường (632)
- *   - Cần integrate với module thuế để xử lý GTGT hàng KM
+ *   - InventoryService gọi JournalService
  */
 class PromotionalController
 {
     private InventoryServiceInterface $inventory;
-    private ItemRepositoryInterface $itemRepo;
 
-    public function __construct(InventoryServiceInterface $inventory, ItemRepositoryInterface $itemRepo)
-    {
-        $this->inventory = $inventory;
-        $this->itemRepo = $itemRepo;
-    }
+    public function __construct(InventoryServiceInterface $inventory) { $this->inventory = $inventory; }
 
-    // NGHIỆP VỤ: Xuất hàng khuyến mại, quà tặng — ghi nhận chi phí bán hàng
-    // Input: { item_id, qty, reference?, created_by? }
-    // Output: { transaction_id, item_id, qty, total_cost } — 201 Created
-    // Service: InventoryService.issuePromotional() → JournalService.postEntry
-    // Hạch toán: Nợ 641 (chi phí bán hàng) / Có 152,156 (giảm tồn kho)
-    // Rủi ro: TK đối ứng 641 (chi phí bán hàng), KHÔNG phải 632 (giá vốn). Sai TK → sai BC02
-    // Thuế: Hàng KM phải xuất hóa đơn và chịu thuế GTGT theo quy định
+    /**
+     * Xuất hàng khuyến mại
+     *
+     * @return void
+     */
     public function issue(): void
     {
-        Auth::checkCsrf();
         Auth::requirePermission('inventory', 'create');
+        Auth::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['item_id'], $data['qty'])) {
-            JsonResponse::error('Vui lòng nhập mã vật tư và số lượng');
+            JsonResponse::error('Vui lòng nhập mã hàng và số lượng', 400);
             return;
         }
         try {
-            $result = $this->inventory->issuePromotional(
-                $data['item_id'], (float)$data['qty'],
-                $data['reference'] ?? uniqid('promo_'), $data['created_by'] ?? 'system'
-            );
+            $result = $this->inventory->issuePromotional($data, $_SESSION['user_id'] ?? 'system');
             JsonResponse::ok($result, 201);
         } catch (\InvalidArgumentException $e) {
-            JsonResponse::error($e->getMessage());
+            JsonResponse::error($e->getMessage(), 400);
         }
+    }
+
+    /**
+     * Danh sách hàng khuyến mại đã xuất
+     *
+     * @return void
+     */
+    public function list(): void
+    {
+        Auth::requirePermission('inventory', 'read');
+        JsonResponse::ok($this->inventory->getPromotionalIssues());
     }
 }

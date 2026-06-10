@@ -4,35 +4,50 @@ namespace Accounting\Infrastructure\SubLedger;
 use Accounting\Domain\Contract\SubLedgerReportInterface;
 use Accounting\Domain\Repository\AccountRepositoryInterface;
 
-// SỔ QUỸ TIỀN MẶT (S03a-DN): Chi tiết thu/chi tiền mặt theo TK 1111/1112/1113
-//
-// Nghiệp vụ: Sổ quỹ tiền mặt theo dõi toàn bộ dòng tiền vào/ra khỏi quỹ tiền mặt.
-// Áp dụng cho TK 1111 (Tiền mặt VNĐ), 1112 (Tiền mặt ngoại tệ), 1113 (Vàng bạc, đá quý).
-//
-// Cấu trúc:
-//   - Dòng đầu: Số dư đầu kỳ
-//   - Các dòng phát sinh: Cột Thu (Dr 111), Cột Chi (Cr 111), Số dư cuối
-//   - Dòng cuối: Số dư cuối kỳ
-//
-// RỦI RO: Sổ quỹ là chứng từ kiểm kê quỹ bắt buộc. Nếu không khớp với kiểm kê thực tế
-// → phải lập biên bản kiểm kê quỹ và điều chỉnh (Nợ/Có 111 và 1381/3381).
-//
+/**
+ * SỔ QUỸ TIỀN MẶT (S03a-DN): Chi tiết thu/chi tiền mặt theo TK 1111/1112/1113.
+ *
+ * Nghiệp vụ: Sổ quỹ tiền mặt theo dõi toàn bộ dòng tiền vào/ra khỏi quỹ tiền mặt.
+ * Áp dụng cho TK 1111 (Tiền mặt VNĐ), 1112 (Tiền mặt ngoại tệ), 1113 (Vàng bạc, đá quý).
+ *
+ * Cấu trúc:
+ *   - Dòng đầu: Số dư đầu kỳ
+ *   - Các dòng phát sinh: Cột Thu (Dr 111), Cột Chi (Cr 111), Số dư cuối
+ *   - Dòng cuối: Số dư cuối kỳ
+ *
+ * RỦI RO: Sổ quỹ là chứng từ kiểm kê quỹ bắt buộc. Nếu không khớp với kiểm kê thực tế
+ * → phải lập biên bản kiểm kê quỹ và điều chỉnh (Nợ/Có 111 và 1381/3381).
+ */
 class CashBookReport implements SubLedgerReportInterface
 {
     private \PDO $pdo;
     private AccountRepositoryInterface $accountRepo;
 
+    /**
+     * @param \PDO $pdo Kết nối PDO.
+     * @param AccountRepositoryInterface $accountRepo Repository tài khoản.
+     */
     public function __construct(\PDO $pdo, AccountRepositoryInterface $accountRepo)
     {
         $this->pdo = $pdo;
         $this->accountRepo = $accountRepo;
     }
 
+    /**
+     * Lấy loại báo cáo.
+     *
+     * @return string 'cash_book'.
+     */
     public function getReportType(): string
     {
         return 'cash_book';
     }
 
+    /**
+     * Lấy tham số báo cáo.
+     *
+     * @return array Mảng tham số với name, label, type, default.
+     */
     public function getParameters(): array
     {
         return [
@@ -42,6 +57,13 @@ class CashBookReport implements SubLedgerReportInterface
         ];
     }
 
+    /**
+     * Lấy dữ liệu sổ quỹ tiền mặt.
+     *
+     * @param array $params Tham số: account_code, from_date, to_date.
+     * @return array Dữ liệu báo cáo gồm title, period, opening_balance, closing_balance, headers, rows, totals.
+     * @throws \InvalidArgumentException Nếu không tìm thấy tài khoản.
+     */
     public function getData(array $params): array
     {
         $accountCode = $params['account_code'] ?? '1111';
@@ -170,9 +192,15 @@ class CashBookReport implements SubLedgerReportInterface
         ];
     }
 
+    /**
+     * Lấy danh sách ID tài khoản (chính + con).
+     *
+     * @param string $accountCode Mã tài khoản.
+     * @return array Mảng ID tài khoản.
+     * @throws \InvalidArgumentException Nếu không tìm thấy tài khoản.
+     */
     private function getAccountIds(string $accountCode): array
     {
-        // Lấy tất cả ID của TK chính và TK con
         $stmt = $this->pdo->prepare(
             "SELECT id FROM accounts WHERE code = ? OR code LIKE ?"
         );

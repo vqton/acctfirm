@@ -5,99 +5,134 @@ use Accounting\Domain\Service\CitService;
 use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
 
+/**
+ * MODULE: Thuế TNDN (Corporate Income Tax)
+ *
+ * Mục đích nghiệp vụ:
+ *   - Quản lý thuế thu nhập doanh nghiệp tạm tính và quyết toán năm
+ *   - Theo dõi số thuế TNDN phải nộp (TK 3334)
+ *   - Tính toán chênh lệch kế toán - thuế
+ *   - Quản lý tạm tính hàng quý và quyết toán năm
+ *
+ * API endpoints:
+ *   GET  /api/cit/declarations       — Danh sách tờ khai
+ *   GET  /api/cit/declarations/{id}  — Chi tiết tờ khai
+ *   POST /api/cit/declarations       — Tạo tờ khai mới
+ *   POST /api/cit/declarations/{id}/finalize — Khoá tờ khai
+ *   GET  /api/cit/dashboard          — Dashboard CIT
+ *   GET  /api/cit/report             — Báo cáo tổng hợp
+ *
+ * Rủi ro:
+ *   - Sai lợi nhuận tính thuế -> sai thuế TNDN -> phạt
+ *   - Chênh lệch tạm tính và quyết toán -> truy thu/lãi chậm nộp
+ *   - Không theo dõi được lỗ lũy kế -> mất quyền chuyển lỗ
+ *
+ * Tích hợp:
+ *   - CitService đọc từ AccountRepository (TK 421, 821, 3334)
+ *   - FsService cung cấp lợi nhuận kế toán từ BC02
+ *   - Kết quả ảnh hưởng BC01 (3334) và BC02 (821)
+ */
 class CitController
 {
     private CitService $cit;
 
     public function __construct(CitService $cit) { $this->cit = $cit; }
 
-    public function list(): void
+    /**
+     * Danh sách tờ khai thuế TNDN
+     *
+     * @return void
+     */
+    public function declarations(): void
     {
-        Auth::requirePermission('report', 'read');
-        JsonResponse::ok($this->cit->getCalculations());
+        Auth::requirePermission('tax', 'read');
+        $period = $_GET['period'] ?? date('Y');
+        JsonResponse::ok($this->cit->getDeclarations($period));
     }
 
-    public function get(string $id): void
+    /**
+     * Chi tiết tờ khai thuế TNDN
+     *
+     * @param string $id ID tờ khai
+     * @return void
+     */
+    public function getDeclaration(string $id): void
     {
-        Auth::requirePermission('report', 'read');
-        $calc = $this->cit->getCalculation($id);
-        if (!$calc) { JsonResponse::error('Không tìm thấy quyết toán TNDN', 404); return; }
-        JsonResponse::ok($calc);
+        Auth::requirePermission('tax', 'read');
+        $decl = $this->cit->getDeclaration($id);
+        if (!$decl) { JsonResponse::error('Không tìm thấy tờ khai', 404); return; }
+        JsonResponse::ok($decl);
     }
 
-    public function prepare(): void
+    /**
+     * Tạo tờ khai thuế TNDN mới
+     *
+     * @return void
+     */
+    public function createDeclaration(): void
     {
         Auth::requirePermission('tax', 'create');
         Auth::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
-        $period = $data['period'] ?? date('Y-m');
+        $period = $data['period'] ?? date('Y');
+        $createdBy = $_SESSION['user_id'] ?? 'system';
         try {
-            $result = $this->cit->prepareCalculation($period, $_SESSION['user_id'] ?? 'system');
-            JsonResponse::ok($result, 201);
-        } catch (\Throwable $e) {
+            $decl = $this->cit->createDeclaration($period, $createdBy);
+            JsonResponse::ok($decl, 201);
+        } catch (\InvalidArgumentException $e) {
             JsonResponse::error($e->getMessage(), 400);
         }
     }
 
-    public function finalise(string $id): void
+    /**
+     * Khoá tờ khai thuế TNDN — sau finalize không sửa được
+     *
+     * @param string $id ID tờ khai
+     * @return void
+     */
+    public function finalizeDeclaration(string $id): void
     {
         Auth::requirePermission('tax', 'post');
         Auth::checkCsrf();
         try {
-            JsonResponse::ok($this->cit->finalise($id));
-        } catch (\Throwable $e) {
+            $this->cit->finalizeDeclaration($id);
+            JsonResponse::ok(['message' => 'Đã khoá tờ khai']);
+        } catch (\InvalidArgumentException $e) {
             JsonResponse::error($e->getMessage(), 400);
         }
     }
 
-    public function scanNonDeductible(string $period): void
+    /**
+     * Dashboard CIT — tổng quan tình hình thuế TNDN
+     *
+     * @return void
+     */
+    public function dashboard(): void
     {
         Auth::requirePermission('tax', 'read');
-        // Auto-detect revenue from ledger for scan
-        $pdo = $GLOBALS['container']['pdo'] ?? null;
-        $revenue = 0;
-        if ($pdo) {
-            $periodStart = $period . '-01';
-            $nextPeriod = date('Y-m', strtotime('+1 month', strtotime($periodStart)));
-            $periodEnd = date('Y-m-d', strtotime('-1 day', strtotime($nextPeriod . '-01')));
-            $stmtRev = $pdo->prepare(
-                "SELECT COALESCE(SUM(le.amount), 0) FROM ledger_entries le
-                 JOIN transactions t ON t.id = le.transaction_id
-                 JOIN accounts a ON a.id = le.account_id
-                 WHERE a.code = '511' AND t.status = 'posted'
-                 AND t.transaction_date BETWEEN ? AND ? AND le.is_debit = 0"
-            );
-            $stmtRev->execute([$periodStart, $periodEnd]);
-            $revenue = (float)$stmtRev->fetchColumn();
-        }
-        JsonResponse::ok($this->cit->scanNonDeductibleExpenses($period, $revenue));
+        $year = (int)($_GET['year'] ?? date('Y'));
+        JsonResponse::ok($this->cit->getDashboard($year));
     }
 
-    public function lossCarryforward(string $period): void
+    /**
+     * Báo cáo tổng hợp thuế TNDN
+     *
+     * @return void
+     */
+    public function report(): void
     {
         Auth::requirePermission('tax', 'read');
-        JsonResponse::ok($this->cit->getLossCarryforward($period));
+        $period = $_GET['period'] ?? date('Y');
+        JsonResponse::ok($this->cit->getCitReport($period));
     }
 
-    public function exportXml(string $id): void
-    {
-        Auth::requirePermission('tax', 'read');
-        try {
-            $calc = $this->cit->getCalculation($id);
-            if (!$calc) { JsonResponse::error('Không tìm thấy quyết toán', 404); return; }
-            $pdo = $GLOBALS['container']['pdo'] ?? null;
-            if (!$pdo) { JsonResponse::error('DB not available', 500); return; }
-            $engine = new \Accounting\Domain\Service\CitDeclarationEngine($pdo);
-            header('Content-Type: application/xml; charset=UTF-8');
-            header('Content-Disposition: attachment; filename="03-TNDN-' . $id . '.xml"');
-            echo $engine->exportToXml($id);
-        } catch (\Throwable $e) {
-            JsonResponse::error($e->getMessage(), 400);
-        }
-    }
-
+    /**
+     * View tờ khai CIT
+     *
+     * @return void
+     */
     public function view(): void
     {
-        require __DIR__ . '/../../../../../public/views/cit_calculations.php';
+        require __DIR__ . '/../../../../../public/views/cit.php';
     }
 }

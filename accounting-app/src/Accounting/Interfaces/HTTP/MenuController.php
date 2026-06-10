@@ -6,6 +6,26 @@ use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
 use PDO;
 
+/**
+ * MODULE: Menu & Điều hướng
+ *
+ * Mục đích nghiệp vụ:
+ *   - Cung cấp menu sidebar theo quyền người dùng
+ *   - Tìm kiếm chức năng
+ *   - Quản lý menu yêu thích
+ *
+ * API endpoints:
+ *   GET  /api/menu/sidebar — Menu tree
+ *   GET  /api/menu/search?q= — Tìm kiếm
+ *   GET  /api/menu/section/{section} — Menu theo section
+ *   POST /api/menu/favorites — Thêm yêu thích
+ *   DELETE /api/menu/favorites/{id} — Xóa yêu thích
+ *   GET  /api/menu/favorites — Danh sách yêu thích
+ *
+ * Tích hợp:
+ *   - MenuService xây dựng menu động
+ *   - Auth kiểm tra quyền truy cập
+ */
 class MenuController
 {
     private MenuService $menuService;
@@ -17,7 +37,11 @@ class MenuController
         $this->pdo = $pdo;
     }
 
-    // GET /api/menu/sidebar — trả về menu tree cho sidebar
+    /**
+     * Menu sidebar
+     *
+     * @return void
+     */
     public function getSidebar(): void
     {
         $menu = $this->menuService->getSidebarMenu();
@@ -36,7 +60,11 @@ class MenuController
         ]);
     }
 
-    // GET /api/menu/search?q=keyword
+    /**
+     * Tìm kiếm chức năng
+     *
+     * @return void
+     */
     public function search(): void
     {
         $q = $_GET['q'] ?? '';
@@ -51,14 +79,23 @@ class MenuController
         ]);
     }
 
-    // GET /api/menu/section/:section
+    /**
+     * Menu theo section
+     *
+     * @param string $section Tên section
+     * @return void
+     */
     public function getSection(string $section): void
     {
         $items = $this->menuService->getSectionMenu($section);
         JsonResponse::ok(['items' => $items]);
     }
 
-    // POST /api/menu/favorites — thêm menu vào yêu thích
+    /**
+     * Thêm menu vào yêu thích
+     *
+     * @return void
+     */
     public function addFavorite(): void
     {
         Auth::requirePermission('admin', 'update');
@@ -81,7 +118,12 @@ class MenuController
         JsonResponse::ok(['message' => 'Đã thêm vào yêu thích'], 201);
     }
 
-    // DELETE /api/menu/favorites/:id
+    /**
+     * Xóa menu yêu thích
+     *
+     * @param int $id ID menu
+     * @return void
+     */
     public function removeFavorite(int $id): void
     {
         Auth::requirePermission('admin', 'update');
@@ -94,7 +136,11 @@ class MenuController
         JsonResponse::ok(['message' => 'Đã xóa khỏi yêu thích']);
     }
 
-    // GET /api/menu/favorites — danh sách yêu thích
+    /**
+     * Danh sách yêu thích
+     *
+     * @return void
+     */
     public function getFavorites(): void
     {
         $userId = Auth::getCurrentUserId();

@@ -5,24 +5,35 @@ use Accounting\Domain\Service\ExportService;
 use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
 
-// Controller xuất file thống nhất (PDF/Excel/CSV)
-// Endpoint duy nhất POST /api/export — client gửi format, title, headers, rows, options
-// Hỗ trợ các định dạng: csv, xls (HTML table), pdf (pure PHP)
-// Yêu cầu quyền report.export
+/**
+ * MODULE: Xuất file thống nhất (CSV/XLS/PDF Export)
+ *
+ * Mục đích nghiệp vụ:
+ *   - Xuất dữ liệu từ các báo cáo ra file
+ *   - Hỗ trợ CSV, XLS (HTML table), PDF
+ *   - Endpoint duy nhất POST /api/export
+ *
+ * API endpoints:
+ *   POST /api/export — Xuất file
+ *
+ * Yêu cầu quyền:
+ *   - report.export
+ *
+ * Tích hợp:
+ *   - ExportService xử lý render file
+ *   - Gọi từ ReportExportController, SubLedgerController
+ */
 class ExportController
 {
     public function __construct(
         private ExportService $exportService
     ) {}
 
-    // POST /api/export
-    // Body JSON: { format, title, headers, rows, options }
-    //   format: "csv" | "xls" | "pdf"
-    //   title: string — tiêu đề báo cáo
-    //   headers: string[] — tên các cột
-    //   rows: array[] — mảng các dòng dữ liệu
-    //   options: { orientation?, signature?, footer?, filename?, subtitle?, summary? }
-    // Response: file download với Content-Type và Content-Disposition phù hợp
+    /**
+     * Xuất file CSV/XLS/PDF
+     *
+     * @return void
+     */
     public function export(): void
     {
         Auth::requirePermission('report', 'export');
@@ -52,7 +63,6 @@ class ExportController
         try {
             $result = $this->exportService->export($format, $title, $headers, $rows, $options);
 
-            // Set header cho file download
             header('Content-Type: ' . $result->getMimeType());
             header('Content-Disposition: attachment; filename="' . $result->getFilename() . '"');
             header('Content-Length: ' . $result->getSize());

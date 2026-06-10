@@ -36,13 +36,11 @@ class ReconciliationController
         $this->service = $service;
     }
 
-    // NGHIỆP VỤ: Đối chiếu tổng thể hệ thống — kiểm tra tính toàn vẹn dữ liệu
-    // Input: GET ?type=all|trial_balance|coa|...
-    // Output: { trial_balance: {total_dr, total_cr, balanced}, ... }
-    // Service: ReconciliationService.reconcileAll() — gọi nhiều sub-method
-    // Permission: report, read
-    // Rủi ro: R002 — Trial Balance không cân = toàn bộ hệ thống sai
-    // Quy trình: Chạy trước khi PeriodController đóng kỳ, nếu fail thì không cho đóng
+    /**
+     * Chạy đối chiếu tổng thể hệ thống
+     *
+     * @return void
+     */
     public function run(): void
     {
         Auth::requirePermission('report', 'read');

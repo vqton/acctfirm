@@ -37,14 +37,12 @@ class FxController
 
     public function __construct(FxRevaluationService $fx) { $this->fx = $fx; }
 
-    // NGHIỆP VỤ: Đánh giá lại số dư ngoại tệ cuối kỳ — VAS 10 (Ảnh hưởng thay đổi tỷ giá)
-    // Input: periodId (int) — ID kỳ kế toán
-    // Output: { transactions: [...], fx_gains: number, fx_losses: number }
-    // Service: FxRevaluationService.revaluate() → gọi JournalService.postEntry cho mỗi chênh lệch
-    // Permission: system, edit
-    // Hạch toán: Nợ 111,112,131,331 / Có 515 (lãi TG) hoặc Nợ 635 / Có 111,112,131,331 (lỗ TG)
-    // Rủi ro: R001 — Không cho đánh giá lại nếu kỳ đã đóng. Sai tỷ giá cuối kỳ → sai BC02 (515/635)
-    // Ràng buộc: Bút toán điều chỉnh tự động được ghi = journal, phải đảm bảo Dr = Cr
+    /**
+     * Đánh giá lại số dư ngoại tệ cuối kỳ — VAS 10
+     *
+     * @param int $periodId ID kỳ kế toán
+     * @return void
+     */
     public function revaluate(int $periodId): void
     {
         Auth::requirePermission('system', 'edit');
@@ -53,12 +51,12 @@ class FxController
         } catch (\InvalidArgumentException $e) { JsonResponse::error($e->getMessage()); }
     }
 
-    // NGHIỆP VỤ: Xem trước báo cáo đánh giá lại — không tạo bút toán
-    // Output: { items: [{ account_code, currency, book_balance, fx_rate, revalued_amount, difference }], total_gain, total_loss }
-    // Service: FxRevaluationService.getRevaluationReport() — read-only
-    // Mục đích: Kế toán kiểm tra trước khi xác nhận đánh giá lại
-    // Rủi ro: Cần đảm bảo tỷ giá cuối kỳ đã được cập nhật (ExchangeRateController)
-    // Báo cáo đánh giá lại (không tạo bút toán)
+    /**
+     * Báo cáo đánh giá lại ngoại tệ (xem trước, không tạo bút toán)
+     *
+     * @param int $periodId ID kỳ kế toán
+     * @return void
+     */
     public function report(int $periodId): void
     {
         try {
@@ -66,7 +64,11 @@ class FxController
         } catch (\InvalidArgumentException $e) { JsonResponse::error($e->getMessage()); }
     }
 
-    // View
+    /**
+     * View giao diện đánh giá lại ngoại tệ
+     *
+     * @return void
+     */
     public function view(): void
     {
         require __DIR__ . '/../../../../public/views/fx_revaluation.php';

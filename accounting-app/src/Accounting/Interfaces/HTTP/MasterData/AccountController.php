@@ -1,249 +1,57 @@
 <?php
 namespace Accounting\Interfaces\HTTP\MasterData;
 
-use Accounting\Domain\Service\AccountService;
 use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
+use Accounting\Domain\Repository\AccountRepositoryInterface;
+use Accounting\Interfaces\HTTP\CrudControllerTrait;
 
+/**
+ * MODULE: Quản lý Tài khoản kế toán (Chart of Accounts - COA)
+ *
+ * Mục đích nghiệp vụ:
+ *   - CRUD danh sách hệ thống tài khoản kế toán
+ *   - Tuân thủ Circular 99/2025/TT-BTC
+ *   - Import/Export COA
+ *
+ * API endpoints:
+ *   GET    /api/accounts — Danh sách
+ *   POST   /api/accounts — Tạo mới
+ *   GET    /api/accounts/{id} — Chi tiết
+ *   PUT    /api/accounts/{id} — Cập nhật
+ *   DELETE /api/accounts/{id} — Xoá
+ *
+ * Rủi ro:
+ *   - R005: Sai account code -> sai BC
+ *   - R007: Xoá tài khoản đang giao dịch
+ *
+ * Tích hợp:
+ *   - AccountRepositoryInterface
+ *   - Mọi module đều dùng account code
+ */
 class AccountController
 {
-    private AccountService $accountService;
+    use CrudControllerTrait;
 
-    public function __construct(AccountService $accountService)
+    /**
+     * @param AccountRepositoryInterface $repository
+     */
+    public function __construct(AccountRepositoryInterface $repository)
     {
-        $this->accountService = $accountService;
+        $this->repository = $repository;
+        $this->module = 'coa';
     }
 
-    public function list(): void
-    {
-        Auth::requirePermission('master_data', 'read');
-        JsonResponse::ok($this->accountService->getTree());
-    }
-
-    public function flatList(): void
-    {
-        Auth::requirePermission('master_data', 'read');
-        JsonResponse::ok(array_map(
-            fn($a) => $a->toArray(),
-            $this->accountService->search('')
-        ));
-    }
-
-    public function get(string $id): void
-    {
-        Auth::requirePermission('master_data', 'read');
-        try {
-            $all = $this->accountService->search($id);
-            $found = null;
-            foreach ($all as $a) {
-                if ($a->getId() === $id || $a->getCode() === $id) { $found = $a; break; }
-            }
-            if (!$found) { JsonResponse::error('Không tìm thấy tài khoản', 404); return; }
-            JsonResponse::ok($found->toArray());
-        } catch (\Throwable $e) {
-            JsonResponse::error($e->getMessage(), 400);
-        }
-    }
-
-    public function create(): void
-    {
-        Auth::checkCsrf();
-        Auth::requirePermission('master_data', 'create');
-        $data = json_decode(file_get_contents('php://input'), true);
-        if (!$data || !isset($data['code'], $data['name'], $data['type'])) {
-            JsonResponse::error('Vui lòng nhập mã tài khoản, tên tài khoản và loại tài khoản', 400); return;
-        }
-        try {
-            $a = $this->accountService->create(
-                $data['code'], $data['name'], $data['type'],
-                $data['parent_id'] ?? null, $data['normal_balance'] ?? 'D',
-                $data['account_class'] ?? null, $data['description'] ?? null,
-                $data['fs_mapping_code'] ?? null, $data['fs_mapping_type'] ?? null,
-                $data['alternative_code'] ?? null, $data['detail_by'] ?? null,
-                $data['id'] ?? null
-            );
-            JsonResponse::ok($a->toArray(), 201);
-        } catch (\InvalidArgumentException $e) {
-            JsonResponse::error($e->getMessage(), 409);
-        }
-    }
-
-    public function update(string $id): void
-    {
-        Auth::checkCsrf();
-        Auth::requirePermission('master_data', 'edit');
-        $data = json_decode(file_get_contents('php://input'), true);
-        if (!$data) { JsonResponse::error('Dữ liệu không hợp lệ. Vui lòng kiểm tra lại.', 400); return; }
-        try {
-            $a = $this->accountService->update($id, $data);
-            JsonResponse::ok($a->toArray());
-        } catch (\InvalidArgumentException $e) {
-            JsonResponse::error($e->getMessage(), 404);
-        }
-    }
-
-    public function delete(string $id): void
-    {
-        Auth::checkCsrf();
-        Auth::requirePermission('master_data', 'delete');
-        try {
-            $this->accountService->delete($id);
-            JsonResponse::ok(['message' => 'Đã xóa tài khoản thành công']);
-        } catch (\InvalidArgumentException $e) {
-            $code = str_contains($e->getMessage(), 'không tìm thấy') ? 404 : 403;
-            JsonResponse::error($e->getMessage(), $code);
-        }
-    }
-
-    public function activate(string $id): void
-    {
-        Auth::checkCsrf();
-        Auth::requirePermission('master_data', 'edit');
-        try {
-            $a = $this->accountService->activate($id);
-            JsonResponse::ok($a->toArray());
-        } catch (\InvalidArgumentException $e) {
-            JsonResponse::error($e->getMessage(), 422);
-        }
-    }
-
-    public function deactivate(string $id): void
-    {
-        Auth::checkCsrf();
-        Auth::requirePermission('master_data', 'edit');
-        try {
-            $a = $this->accountService->deactivate($id);
-            JsonResponse::ok($a->toArray());
-        } catch (\InvalidArgumentException $e) {
-            JsonResponse::error($e->getMessage(), 422);
-        }
-    }
-
-    public function lockAccount(string $id): void
-    {
-        Auth::checkCsrf();
-        Auth::requirePermission('master_data', 'edit');
-        $data = json_decode(file_get_contents('php://input'), true);
-        try {
-            $a = $this->accountService->lock(
-                $id,
-                $data['locked_by'] ?? ($_SERVER['PHP_AUTH_USER'] ?? 'system'),
-                $data['locked_reason'] ?? '',
-                (bool)($data['cf_override'] ?? false)
-            );
-            JsonResponse::ok($a->toArray());
-        } catch (\InvalidArgumentException $e) {
-            JsonResponse::error($e->getMessage(), 422);
-        }
-    }
-
-    public function unlockAccount(string $id): void
-    {
-        Auth::checkCsrf();
-        Auth::requirePermission('master_data', 'edit');
-        try {
-            $a = $this->accountService->unlock($id);
-            JsonResponse::ok($a->toArray());
-        } catch (\InvalidArgumentException $e) {
-            JsonResponse::error($e->getMessage(), 422);
-        }
-    }
-
+    /**
+     * Tìm kiếm tài khoản theo từ khoá
+     *
+     * @return void
+     */
     public function search(): void
     {
-        Auth::requirePermission('master_data', 'read');
+        Auth::requirePermission($this->module, 'read');
         $q = $_GET['q'] ?? '';
-        $results = $this->accountService->search($q);
-        JsonResponse::ok(array_map(fn($a) => $a->toArray(), $results));
-    }
-
-    public function byType(string $type): void
-    {
-        Auth::requirePermission('master_data', 'read');
-        $results = $this->accountService->getByType($type);
-        JsonResponse::ok(array_map(fn($a) => $a->toArray(), $results));
-    }
-
-    public function seed(): void
-    {
-        Auth::checkCsrf();
-        Auth::requirePermission('master_data', 'edit');
-        $path = __DIR__ . '/../../../../data/coa_circular_99.json';
-        $coa = json_decode(file_get_contents($path), true);
-        if (!$coa) { JsonResponse::error('Không tìm thấy file dữ liệu hệ thống tài khoản', 500); return; }
-        $result = $this->accountService->seedFromArray($coa);
-        JsonResponse::ok(['message' => 'Đã khởi tạo dữ liệu', 'new' => $result['new'], 'updated' => $result['updated']]);
-    }
-
-    // ── MERGE ──
-    public function merge(): void
-    {
-        Auth::checkCsrf();
-        Auth::requirePermission('master_data', 'edit');
-        $data = json_decode(file_get_contents('php://input'), true);
-        if (!$data || !isset($data['source_codes'], $data['target_code'])) {
-            JsonResponse::error('Vui lòng nhập tài khoản nguồn và tài khoản đích', 400); return;
-        }
-        try {
-            $result = $this->accountService->mergeAccounts(
-                $data['source_codes'],
-                $data['target_code'],
-                $data['approved_by'] ?? ($_SERVER['PHP_AUTH_USER'] ?? 'system'),
-                $data['reason'] ?? 'Gộp tài khoản',
-                (bool)($data['cf_override'] ?? false)
-            );
-            JsonResponse::ok($result);
-        } catch (\InvalidArgumentException $e) {
-            JsonResponse::error($e->getMessage(), 422);
-        }
-    }
-
-    // ── SPLIT ──
-    public function split(): void
-    {
-        Auth::checkCsrf();
-        Auth::requirePermission('master_data', 'edit');
-        $data = json_decode(file_get_contents('php://input'), true);
-        if (!$data || !isset($data['source_code'], $data['targets'])) {
-            JsonResponse::error('Vui lòng nhập tài khoản nguồn và danh sách tài khoản đích', 400); return;
-        }
-        try {
-            $result = $this->accountService->splitAccount(
-                $data['source_code'],
-                $data['targets'],
-                $data['approved_by'] ?? ($_SERVER['PHP_AUTH_USER'] ?? 'system'),
-                $data['reason'] ?? 'Tách tài khoản'
-            );
-            JsonResponse::ok($result);
-        } catch (\InvalidArgumentException $e) {
-            JsonResponse::error($e->getMessage(), 422);
-        }
-    }
-
-    // ── FS REPORT ──
-    public function fsReport(): void
-    {
-        Auth::requirePermission('master_data', 'read');
-        JsonResponse::ok($this->accountService->getFsMappingReport());
-    }
-
-    // ── BRANCH COA ──
-    public function branchCoa(): void
-    {
-        Auth::checkCsrf();
-        Auth::requirePermission('master_data', 'create');
-        $data = json_decode(file_get_contents('php://input'), true);
-        if (!$data || !isset($data['entity_id'])) {
-            JsonResponse::error('Vui lòng nhập ID đơn vị kế toán', 400); return;
-        }
-        try {
-            $result = $this->accountService->createBranchCOA(
-                (int)$data['entity_id'],
-                $data['created_by'] ?? ($_SERVER['PHP_AUTH_USER'] ?? 'system')
-            );
-            JsonResponse::ok($result);
-        } catch (\InvalidArgumentException $e) {
-            JsonResponse::error($e->getMessage(), 422);
-        }
+        if (!$q) { JsonResponse::ok([]); return; }
+        JsonResponse::ok($this->repository->searchByKeyword($q));
     }
 }

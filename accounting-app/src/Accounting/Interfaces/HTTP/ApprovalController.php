@@ -43,6 +43,11 @@ class ApprovalController
         $this->routingService = $routingService;
     }
 
+    /**
+     * Danh sách bút toán chờ phê duyệt
+     *
+     * @return void
+     */
     public function getPending(): void
     {
         Auth::requirePermission('journal', 'approve');
@@ -73,17 +78,15 @@ class ApprovalController
         JsonResponse::ok($pending);
     }
 
-    // NGHIỆP VỤ: Phê duyệt bút toán — chuyển status từ submitted → posted
-    // Input: { comment?: string }
-    // Output: { id, status } — 200 OK
-    // Service: JournalService::approveEntry() — gọi PostingRuleService + AuditLogger
-    // Transaction: JournalService tự wrap transaction
-    // Permission: journal, approve
-    // Rủi ro: R007 — sau khi approve, bút toán không sửa/xóa được
-    // Ràng buộc: Chỉ approve bút toán status=submitted. Kiểm tra period open trước khi post.
-    //
-    // R-17: Nếu user không có role khớp current level → check delegation
-    //       Audit ghi cả actual_approver (delegate) lẫn on_behalf_of (delegator)
+    /**
+     * Phê duyệt bút toán — chuyển status từ submitted → posted
+     *
+     * R-17: Nếu user không có role khớp current level → check delegation.
+     * Audit ghi cả actual_approver (delegate) lẫn on_behalf_of (delegator).
+     *
+     * @param string $txnId ID bút toán
+     * @return void
+     */
     public function approve(string $txnId): void
     {
         Auth::checkCsrf();
@@ -130,6 +133,12 @@ class ApprovalController
         JsonResponse::ok($resp);
     }
 
+    /**
+     * Tính tổng giá trị bút toán (tổng Nợ)
+     *
+     * @param string $txnId ID bút toán
+     * @return float Tổng số tiền Nợ
+     */
     private function txnTotal(string $txnId): float
     {
         $stmt = $this->pdo->prepare("SELECT COALESCE(SUM(amount), 0) FROM ledger_entries WHERE transaction_id = ? AND is_debit = 1");
@@ -137,7 +146,12 @@ class ApprovalController
         return (float)$stmt->fetchColumn();
     }
 
-    // R-17: Quản lý delegation
+    /**
+     * Danh sách ủy quyền phê duyệt của user
+     *
+     * @param string $userId ID user
+     * @return void
+     */
     public function listDelegations(string $userId): void
     {
         Auth::requirePermission('journal', 'read');
@@ -145,6 +159,11 @@ class ApprovalController
         JsonResponse::ok($rows);
     }
 
+    /**
+     * Tạo ủy quyền phê duyệt
+     *
+     * @return void
+     */
     public function createDelegation(): void
     {
         Auth::checkCsrf();
@@ -170,6 +189,12 @@ class ApprovalController
         }
     }
 
+    /**
+     * Thu hồi ủy quyền phê duyệt
+     *
+     * @param string $id ID ủy quyền
+     * @return void
+     */
     public function revokeDelegation(string $id): void
     {
         Auth::checkCsrf();
@@ -183,12 +208,12 @@ class ApprovalController
         JsonResponse::ok(['message' => 'Đã hủy ủy quyền']);
     }
 
-    // NGHIỆP VỤ: Từ chối bút toán — chuyển status từ submitted → draft
-    // Input: { reason?: string }
-    // Output: { id, status } — 200 OK
-    // Service: JournalService::rejectEntry() — đưa về draft để sửa
-    // Permission: journal, approve
-    // Rủi ro: Sau reject, kế toán viên cần sửa và gửi lại (resubmit)
+    /**
+     * Từ chối bút toán — chuyển status từ submitted → draft
+     *
+     * @param string $txnId ID bút toán
+     * @return void
+     */
     public function reject(string $txnId): void
     {
         Auth::checkCsrf();
@@ -201,6 +226,12 @@ class ApprovalController
         JsonResponse::ok(['id' => $txn->getId(), 'status' => $txn->getStatus()]);
     }
 
+    /**
+     * Lịch sử phê duyệt của một bút toán
+     *
+     * @param string $txnId ID bút toán
+     * @return void
+     */
     public function history(string $txnId): void
     {
         Auth::requirePermission('journal', 'read');
@@ -211,6 +242,11 @@ class ApprovalController
         JsonResponse::ok($stmt->fetchAll(\PDO::FETCH_ASSOC));
     }
 
+    /**
+     * Quy tắc phê duyệt theo giá trị bút toán
+     *
+     * @return void
+     */
     public function routing(): void
     {
         Auth::requirePermission('journal', 'read');
@@ -220,10 +256,15 @@ class ApprovalController
         JsonResponse::ok(['required_steps' => $steps, 'count' => count($steps)]);
     }
 
-    // NGHIỆP VỤ: Kiểm tra quyền phê duyệt dựa trên giá trị bút toán và role
-    // R-16 Multi-level: user chỉ duyệt được nếu role của họ khớp với cấp hiện tại
-    // (không phải bất kỳ cấp nào trong sequence)
-    // Trả về: can_approve + current_level + required_count + required_role_current
+    /**
+     * Kiểm tra quyền phê duyệt của user cho một bút toán
+     *
+     * R-16 Multi-level: user chỉ duyệt được nếu role khớp với cấp hiện tại.
+     *
+     * @param string $txnId ID bút toán
+     * @param string $userRole Role của user
+     * @return array{can_approve: bool, current_level: int, required_count: int, required_role_current: string|null}
+     */
     private function userCanApprove(string $txnId, string $userRole): array
     {
         $total = $this->txnTotal($txnId);

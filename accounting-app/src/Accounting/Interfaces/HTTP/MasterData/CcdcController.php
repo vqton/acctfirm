@@ -1,71 +1,40 @@
 <?php
 namespace Accounting\Interfaces\HTTP\MasterData;
 
-use Accounting\Domain\Model\Ccdc;
+use Accounting\Infrastructure\JsonResponse;
+use Accounting\Infrastructure\Auth;
 use Accounting\Domain\Repository\CcdcRepositoryInterface;
-
-use \Accounting\Interfaces\HTTP\CrudControllerTrait;
+use Accounting\Interfaces\HTTP\CrudControllerTrait;
 
 /**
- * MODULE: Danh mục Công cụ Dụng cụ (CCDC — TK 153)
+ * MODULE: Quản lý CCDC (Công cụ dụng cụ)
  *
  * Mục đích nghiệp vụ:
- *   - CRUD công cụ, dụng cụ (tool, instrument) theo dõi riêng
- *   - Quản lý phương pháp phân bổ (allocation_type): phân bổ 1 lần (direct) hoặc nhiều lần
- *   - Theo dõi tổng chi phí và giá trị đã phân bổ
- *   - Tuân thủ quy định về CCDC (thời gian sử dụng < 1 năm)
+ *   - CRUD danh sách công cụ dụng cụ
+ *   - Nhập kho CCDC (TK 153)
+ *   - Xuất kho + phân bổ CCDC
  *
  * API endpoints:
- *   (Sử dụng CrudControllerTrait — CRUD chuẩn)
- *
- * Rủi ro:
- *   - Nhầm lẫn giữa CCDC và TSCĐ (thời gian sử dụng > 1 năm là TSCĐ)
- *   - Phân bổ sai → ảnh hưởng chi phí (641, 642, 627)
- *   - Quản lý số lượng không chính xác
+ *   GET    /api/ccdc — Danh sách
+ *   POST   /api/ccdc — Tạo mới
+ *   GET    /api/ccdc/{id} — Chi tiết
+ *   PUT    /api/ccdc/{id} — Cập nhật
+ *   DELETE /api/ccdc/{id} — Xoá
  *
  * Tích hợp:
- *   - CCDC nhập kho qua ReceiptController (TK 153)
- *   - Xuất CCDC qua IssueController, hạch toán vào chi phí
- *   - Phân bổ nhiều kỳ cần theo dõi qua bảng phân bổ
+ *   - InventoryService xử lý tồn kho CCDC
+ *   - CcdcAllocationController xử lý phân bổ
  */
 class CcdcController
 {
     use CrudControllerTrait;
 
-    private CcdcRepositoryInterface $repo;
-    public function __construct(CcdcRepositoryInterface $repo) { $this->repo = $repo; }
-    protected function repo() { return $this->repo; }
-    protected function idPrefix(): string { return 'ccdc_'; }
-
-    protected function createEntity(array $data): object
+    /**
+     * @param CcdcRepositoryInterface $repository
+     */
+    public function __construct(CcdcRepositoryInterface $repository)
     {
-        return new Ccdc(
-            $data['id'], $data['code'], $data['name'],
-            $data['unit'] ?? 'cai',
-            (float)($data['quantity'] ?? 0),
-            $data['allocation_type'] ?? 'period',
-            (int)($data['allocation_months'] ?? 0),
-            $data['expense_account'] ?? '642',
-            $data['allocation_start_date'] ?? null,
-            (float)($data['total_cost'] ?? 0),
-            (float)($data['allocated'] ?? 0),
-            (int)($data['remaining_months'] ?? 0)
-        );
-    }
-
-    protected function updateEntity(object $entity, array $data): void
-    {
-        if (isset($data['code'])) $entity->setCode($data['code']);
-        if (isset($data['name'])) $entity->setName($data['name']);
-        if (isset($data['unit'])) $entity->setUnit($data['unit']);
-        if (isset($data['quantity'])) $entity->setQuantity((float)$data['quantity']);
-        if (isset($data['allocation_type'])) $entity->setAllocationType($data['allocation_type']);
-        if (isset($data['allocation_months'])) $entity->setAllocationMonths((int)$data['allocation_months']);
-        if (isset($data['expense_account'])) $entity->setExpenseAccount($data['expense_account']);
-        if (isset($data['allocation_start_date'])) $entity->setAllocationStartDate($data['allocation_start_date']);
-        if (isset($data['total_cost'])) $entity->setTotalCost((float)$data['total_cost']);
-        if (isset($data['allocated'])) $entity->setAllocated((float)$data['allocated']);
-        if (isset($data['remaining_months'])) $entity->setRemainingMonths((int)$data['remaining_months']);
-        if (isset($data['status'])) $entity->setStatus((bool)$data['status']);
+        $this->repository = $repository;
+        $this->module = 'ccdc';
     }
 }

@@ -4,35 +4,48 @@ namespace Accounting\Infrastructure\SubLedger;
 use Accounting\Domain\Contract\SubLedgerReportInterface;
 use Accounting\Domain\Repository\AccountRepositoryInterface;
 
-// SỔ KHO (S12-DN): Chi tiết nhập/xuất/tồn theo từng mặt hàng
-//
-// Nghiệp vụ: Sổ kho theo dõi chi tiết số lượng và giá trị từng mặt hàng tồn kho.
-// Phản ánh mọi biến động: nhập kho, xuất kho, trả lại, điều chuyển, kiểm kê.
-//
-// Phương pháp tính giá: FIFO / Bình quân gia quyền. Giá trị xuất được tính từ
-// cost layer (inventory_cost_layers) theo phương pháp đã đăng ký.
-//
-// RỦI RO: Sai giá vốn (632) → BC02 chỉ tiêu 24 sai → Thuế TNDN sai
-// RỦI RO: Tồn kho âm → xuất hàng khi chưa nhập → sai số liệu kiểm kê
-//
-// Cấu trúc: Date | Reference | Description | Nhập SL | Nhập GT | Xuất SL | Xuất GT | Tồn SL | Tồn GT
-//
+/**
+ * SỔ KHO (S12-DN): Chi tiết nhập/xuất/tồn theo từng mặt hàng.
+ *
+ * Nghiệp vụ: Sổ kho theo dõi chi tiết số lượng và giá trị từng mặt hàng tồn kho.
+ * Phản ánh mọi biến động: nhập kho, xuất kho, trả lại, điều chuyển, kiểm kê.
+ *
+ * Phương pháp tính giá: FIFO / Bình quân gia quyền. Giá trị xuất được tính từ
+ * cost layer (inventory_cost_layers) theo phương pháp đã đăng ký.
+ *
+ * RỦI RO: Sai giá vốn (632) → BC02 chỉ tiêu 24 sai → Thuế TNDN sai.
+ * RỦI RO: Tồn kho âm → xuất hàng khi chưa nhập → sai số liệu kiểm kê.
+ */
 class InventoryLedgerReport implements SubLedgerReportInterface
 {
     private \PDO $pdo;
     private AccountRepositoryInterface $accountRepo;
 
+    /**
+     * @param \PDO $pdo Kết nối PDO.
+     * @param AccountRepositoryInterface $accountRepo Repository tài khoản.
+     */
     public function __construct(\PDO $pdo, AccountRepositoryInterface $accountRepo)
     {
         $this->pdo = $pdo;
         $this->accountRepo = $accountRepo;
     }
 
+    /**
+     * Lấy loại báo cáo.
+     *
+     * @return string 'inventory_ledger'.
+     */
     public function getReportType(): string
     {
         return 'inventory_ledger';
     }
 
+    /**
+     * Lấy tham số báo cáo.
+     *
+     * @return array Mảng tham số với name, label, type, required.
+     */
     public function getParameters(): array
     {
         return [
@@ -42,6 +55,13 @@ class InventoryLedgerReport implements SubLedgerReportInterface
         ];
     }
 
+    /**
+     * Lấy dữ liệu sổ kho.
+     *
+     * @param array $params Tham số: item_id, from_date, to_date.
+     * @return array Dữ liệu báo cáo gồm title, period, headers, rows, totals.
+     * @throws \InvalidArgumentException Nếu không chọn mặt hàng hoặc không tìm thấy.
+     */
     public function getData(array $params): array
     {
         $itemId = $params['item_id'] ?? '';
@@ -140,6 +160,14 @@ class InventoryLedgerReport implements SubLedgerReportInterface
         ];
     }
 
+    /**
+     * Lấy danh sách giao dịch nhập/xuất kho của mặt hàng.
+     *
+     * @param string $itemId ID mặt hàng.
+     * @param string|null $fromDate Từ ngày.
+     * @param string|null $toDate Đến ngày.
+     * @return array Mảng giao dịch inventory.
+     */
     private function fetchInventoryTransactions(string $itemId, ?string $fromDate, ?string $toDate): array
     {
         $params = [$itemId];
@@ -169,6 +197,12 @@ class InventoryLedgerReport implements SubLedgerReportInterface
         }
     }
 
+    /**
+     * Lấy thông tin mặt hàng.
+     *
+     * @param string $itemId ID mặt hàng.
+     * @return array|null Thông tin mặt hàng hoặc null.
+     */
     private function getItem(string $itemId): ?array
     {
         try {

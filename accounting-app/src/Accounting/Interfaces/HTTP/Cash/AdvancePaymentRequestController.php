@@ -6,27 +6,26 @@ use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
 
 /**
- * MODULE: Giấy đề nghị tạm ứng — Mẫu số 03-TT theo Thông tư 99
+ * MODULE: Giấy đề nghị tạm ứng — Mẫu số 03-TT (TT 99)
  *
  * Mục đích nghiệp vụ:
- *   - Quản lý giấy đề nghị tạm ứng của nhân viên
- *   - Lifecycle: draft → submitted → approved → paid → cancelled
- *   - Tích hợp với PettyCashService/PettyCashController khi lập phiếu chi
+ *   - Quản lý đề nghị tạm ứng: draft → submitted → approved → paid → cancelled
+ *   - Tích hợp PettyCashService khi lập phiếu chi
  *
  * API endpoints:
- *   POST /api/advance-payment/draft       — Tạo đề nghị mới (draft)
+ *   POST /api/advance-payment/draft — Tạo đề nghị
  *   POST /api/advance-payment/{id}/submit — Gửi duyệt
- *   POST /api/advance-payment/{id}/approve — Duyệt đề nghị
- *   POST /api/advance-payment/{id}/reject  — Từ chối
- *   POST /api/advance-payment/{id}/cancel  — Hủy (chỉ draft)
- *   POST /api/advance-payment/{id}/paid    — Đánh dấu đã chi
- *   GET  /api/advance-payment/{id}         — Chi tiết
- *   GET  /api/advance-payment/list         — Danh sách
+ *   POST /api/advance-payment/{id}/approve — Duyệt
+ *   POST /api/advance-payment/{id}/reject — Từ chối
+ *   POST /api/advance-payment/{id}/cancel — Hủy
+ *   POST /api/advance-payment/{id}/paid — Đã chi
+ *   POST /api/advance-payment/{id}/settle — Hoàn ứng
+ *   GET  /api/advance-payment/{id} — Chi tiết
+ *   GET  /api/advance-payment/list — Danh sách
  *
- * Rủi ro:
- *   - Chi vượt quá số tiền đã duyệt → mất kiểm soát
- *   - Đề nghị không được duyệt nhưng vẫn chi → sai quy trình
- *   - Mất audit trail nếu không log đầy đủ
+ * Tích hợp:
+ *   - PettyCashController::disburseFromRequest()
+ *   - PettyCashService
  */
 class AdvancePaymentRequestController
 {
@@ -37,7 +36,11 @@ class AdvancePaymentRequestController
         $this->service = $service;
     }
 
-    // TẠO ĐỀ NGHỊ MỚI (draft)
+    /**
+     * Tạo đề nghị tạm ứng mới (draft)
+     *
+     * @return void
+     */
     public function createDraft(): void
     {
         Auth::checkCsrf();
@@ -56,7 +59,12 @@ class AdvancePaymentRequestController
         }
     }
 
-    // GỬI DUYỆT
+    /**
+     * Gửi duyệt đề nghị
+     *
+     * @param string $id ID đề nghị
+     * @return void
+     */
     public function submit(string $id): void
     {
         Auth::checkCsrf();
@@ -69,7 +77,12 @@ class AdvancePaymentRequestController
         }
     }
 
-    // DUYỆT
+    /**
+     * Duyệt đề nghị
+     *
+     * @param string $id ID đề nghị
+     * @return void
+     */
     public function approve(string $id): void
     {
         Auth::checkCsrf();
@@ -82,7 +95,12 @@ class AdvancePaymentRequestController
         }
     }
 
-    // TỪ CHỐI
+    /**
+     * Từ chối đề nghị
+     *
+     * @param string $id ID đề nghị
+     * @return void
+     */
     public function reject(string $id): void
     {
         Auth::checkCsrf();
@@ -97,7 +115,12 @@ class AdvancePaymentRequestController
         }
     }
 
-    // HỦY (chỉ draft)
+    /**
+     * Hủy đề nghị (chỉ draft)
+     *
+     * @param string $id ID đề nghị
+     * @return void
+     */
     public function cancel(string $id): void
     {
         Auth::checkCsrf();
@@ -110,7 +133,12 @@ class AdvancePaymentRequestController
         }
     }
 
-    // ĐÁNH DẤU ĐÃ CHI
+    /**
+     * Đánh dấu đã chi
+     *
+     * @param string $id ID đề nghị
+     * @return void
+     */
     public function markPaid(string $id): void
     {
         Auth::checkCsrf();
@@ -123,7 +151,12 @@ class AdvancePaymentRequestController
         }
     }
 
-    // CHI TIẾT
+    /**
+     * Chi tiết đề nghị
+     *
+     * @param string $id ID đề nghị
+     * @return void
+     */
     public function getDetail(string $id): void
     {
         Auth::requirePermission('cash', 'read');
@@ -135,7 +168,11 @@ class AdvancePaymentRequestController
         }
     }
 
-    // DANH SÁCH
+    /**
+     * Danh sách đề nghị
+     *
+     * @return void
+     */
     public function list(): void
     {
         Auth::requirePermission('cash', 'read');
@@ -144,11 +181,12 @@ class AdvancePaymentRequestController
         JsonResponse::ok($this->service->listRequests($status, $limit));
     }
 
-    // HOAN UNG TAM UNG
-    // NGHIEP VU: Nhan vien hoan lai tien tam ung chua dung + chi phi
-    // Input: { cash_returned, expense_lines: [{account_code, amount}], created_by? }
-    // Output: { transaction_id, cash_returned, expense_amount, status }
-    // Hach toan: No 111 + No TK chi phi / Co 141
+    /**
+     * Hoàn ứng tạm ứng — nhân viên nộp lại tiền + chi phí
+     *
+     * @param string $id ID đề nghị
+     * @return void
+     */
     public function settle(string $id): void
     {
         Auth::checkCsrf();
@@ -171,7 +209,11 @@ class AdvancePaymentRequestController
         }
     }
 
-    // VIEW
+    /**
+     * View HTML
+     *
+     * @return void
+     */
     public function viewIndex(): void
     {
         require __DIR__ . '/../../../../public/views/advance_payment_request.php';

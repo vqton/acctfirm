@@ -8,6 +8,41 @@ use Accounting\Domain\Repository\ProductionOrderRepositoryInterface;
 use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
 
+/**
+ * MODULE: Sản xuất (Manufacturing)
+ *
+ * Mục đích nghiệp vụ:
+ *   - Quản lý định mức nguyên vật liệu (BOM)
+ *   - Quản lý lệnh sản xuất (Production Orders)
+ *   - Xuất NVL, ghi nhận nhân công, CPSXC
+ *   - Tính giá thành, hoàn thành/đóng lệnh SX
+ *
+ * API endpoints:
+ *   === BOM ===
+ *   GET  /api/manufacturing/bom — Danh sách
+ *   GET  /api/manufacturing/bom/{id} — Chi tiết
+ *   POST /api/manufacturing/bom — Tạo mới
+ *   POST /api/manufacturing/bom/{id}/activate — Kích hoạt
+ *
+ *   === Production Orders ===
+ *   GET  /api/manufacturing/orders — Danh sách
+ *   GET  /api/manufacturing/orders/{id} — Chi tiết
+ *   POST /api/manufacturing/orders — Tạo mới
+ *   POST /api/manufacturing/orders/{id}/release — Release
+ *   POST /api/manufacturing/orders/{id}/issue-material — Xuất NVL
+ *   POST /api/manufacturing/orders/{id}/labor — Ghi nhận NC
+ *   POST /api/manufacturing/orders/{id}/overhead — Ghi nhận CPSXC
+ *   POST /api/manufacturing/orders/{id}/complete — Hoàn thành
+ *   POST /api/manufacturing/orders/{id}/calculate-cost — Tính giá
+ *   POST /api/manufacturing/orders/{id}/close — Đóng lệnh
+ *   GET  /api/manufacturing/dashboard — Dashboard
+ *   GET  /api/manufacturing/export/{id} — Xuất CSV
+ *   GET  /api/manufacturing/view — View HTML
+ *
+ * Tích hợp:
+ *   - ManufacturingService gọi JournalService
+ *   - InventoryService xuất/nhập kho
+ */
 class ManufacturingController
 {
     private ManufacturingService $service;
@@ -24,7 +59,11 @@ class ManufacturingController
         $this->poRepo = $poRepo;
     }
 
-    // === BOM ===
+    /**
+     * Danh sách BOM
+     *
+     * @return void
+     */
     public function listBom(): void
     {
         Auth::requirePermission('manufacturing', 'read');
@@ -33,6 +72,12 @@ class ManufacturingController
         JsonResponse::ok($items);
     }
 
+    /**
+     * Chi tiết BOM
+     *
+     * @param string $id ID BOM
+     * @return void
+     */
     public function getBom(string $id): void
     {
         Auth::requirePermission('manufacturing', 'read');
@@ -43,6 +88,11 @@ class ManufacturingController
         }
     }
 
+    /**
+     * Tạo BOM mới
+     *
+     * @return void
+     */
     public function createBom(): void
     {
         Auth::requirePermission('manufacturing', 'create');
@@ -63,6 +113,12 @@ class ManufacturingController
         }
     }
 
+    /**
+     * Kích hoạt BOM
+     *
+     * @param string $id ID BOM
+     * @return void
+     */
     public function activateBom(string $id): void
     {
         Auth::requirePermission('manufacturing', 'update');
@@ -75,7 +131,11 @@ class ManufacturingController
         }
     }
 
-    // === PRODUCTION ORDERS ===
+    /**
+     * Danh sách lệnh SX
+     *
+     * @return void
+     */
     public function listOrders(): void
     {
         Auth::requirePermission('manufacturing', 'read');
@@ -84,6 +144,12 @@ class ManufacturingController
         JsonResponse::ok($items);
     }
 
+    /**
+     * Chi tiết lệnh SX
+     *
+     * @param string $id ID lệnh SX
+     * @return void
+     */
     public function getOrder(string $id): void
     {
         Auth::requirePermission('manufacturing', 'read');
@@ -94,6 +160,11 @@ class ManufacturingController
         }
     }
 
+    /**
+     * Tạo lệnh SX mới
+     *
+     * @return void
+     */
     public function createOrder(): void
     {
         Auth::requirePermission('manufacturing', 'create');
@@ -114,6 +185,12 @@ class ManufacturingController
         }
     }
 
+    /**
+     * Release lệnh SX
+     *
+     * @param string $id ID lệnh SX
+     * @return void
+     */
     public function releaseOrder(string $id): void
     {
         Auth::requirePermission('manufacturing', 'update');
@@ -126,6 +203,12 @@ class ManufacturingController
         }
     }
 
+    /**
+     * Xuất NVL cho lệnh SX
+     *
+     * @param string $id ID lệnh SX
+     * @return void
+     */
     public function issueMaterial(string $id): void
     {
         Auth::requirePermission('manufacturing', 'update');
@@ -146,6 +229,12 @@ class ManufacturingController
         }
     }
 
+    /**
+     * Ghi nhận nhân công cho lệnh SX
+     *
+     * @param string $id ID lệnh SX
+     * @return void
+     */
     public function recordLabor(string $id): void
     {
         Auth::requirePermission('manufacturing', 'update');
@@ -166,6 +255,12 @@ class ManufacturingController
         }
     }
 
+    /**
+     * Ghi nhận CPSXC cho lệnh SX
+     *
+     * @param string $id ID lệnh SX
+     * @return void
+     */
     public function recordOverhead(string $id): void
     {
         Auth::requirePermission('manufacturing', 'update');
@@ -183,6 +278,12 @@ class ManufacturingController
         }
     }
 
+    /**
+     * Hoàn thành lệnh SX
+     *
+     * @param string $id ID lệnh SX
+     * @return void
+     */
     public function completeOrder(string $id): void
     {
         Auth::requirePermission('manufacturing', 'update');
@@ -202,6 +303,12 @@ class ManufacturingController
         }
     }
 
+    /**
+     * Tính giá thành lệnh SX
+     *
+     * @param string $id ID lệnh SX
+     * @return void
+     */
     public function calculateCost(string $id): void
     {
         Auth::requirePermission('manufacturing', 'update');
@@ -214,6 +321,12 @@ class ManufacturingController
         }
     }
 
+    /**
+     * Đóng lệnh SX
+     *
+     * @param string $id ID lệnh SX
+     * @return void
+     */
     public function closeOrder(string $id): void
     {
         Auth::requirePermission('manufacturing', 'delete');
@@ -226,12 +339,23 @@ class ManufacturingController
         }
     }
 
+    /**
+     * Dashboard sản xuất
+     *
+     * @return void
+     */
     public function dashboard(): void
     {
         Auth::requirePermission('manufacturing', 'read');
         JsonResponse::ok($this->service->getDashboard());
     }
 
+    /**
+     * Xuất báo cáo lệnh SX
+     *
+     * @param string $id ID lệnh SX
+     * @return void
+     */
     public function exportReport(string $id): void
     {
         Auth::requirePermission('manufacturing', 'read');
@@ -241,6 +365,11 @@ class ManufacturingController
         echo $result['content'];
     }
 
+    /**
+     * View HTML
+     *
+     * @return void
+     */
     public function viewIndex(): void
     {
         Auth::requirePermission('manufacturing', 'read');

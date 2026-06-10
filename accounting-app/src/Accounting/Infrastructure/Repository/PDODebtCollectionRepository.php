@@ -8,10 +8,23 @@ use Accounting\Domain\Model\Approval;
 use Accounting\Domain\Model\Settlement;
 use Accounting\Domain\Repository\DebtCollectionRepositoryInterface;
 
+/**
+ * Repository PDO cho module Thu hồi công nợ (Debt Collection).
+ *
+ * Quản lý các thao tác CRUD cho:
+ * - debt_collection_queue (danh sách công nợ cần thu hồi)
+ * - debt_collection_activities (hoạt động thu hồi)
+ * - debt_collection_promises (cam kết thanh toán)
+ * - debt_collection_approvals (phê duyệt phương án)
+ * - debt_collection_settlements (thỏa thuận thanh toán)
+ */
 class PDODebtCollectionRepository implements DebtCollectionRepositoryInterface
 {
     private \PDO $pdo;
 
+    /**
+     * @param \PDO $pdo Kết nối PDO đến MySQL
+     */
     public function __construct(\PDO $pdo)
     {
         $this->pdo = $pdo;
@@ -19,6 +32,14 @@ class PDODebtCollectionRepository implements DebtCollectionRepositoryInterface
 
     // ── Queue ──
 
+    /**
+     * Tìm mục công nợ trong hàng đợi theo ID.
+     *
+     * JOIN với ar_invoices và customers để lấy thông tin hóa đơn và khách hàng.
+     *
+     * @param int $id ID của mục trong hàng đợi
+     * @return QueueEntry|null Đối tượng QueueEntry nếu tìm thấy, null nếu không
+     */
     public function findQueueById(int $id): ?QueueEntry
     {
         $stmt = $this->pdo->prepare('SELECT q.*, i.invoice_number, i.gross_amount, i.balance, i.due_date, i.status as invoice_status, c.name as customer_name, c.code as customer_code
@@ -31,6 +52,12 @@ class PDODebtCollectionRepository implements DebtCollectionRepositoryInterface
         return $row ? QueueEntry::fromRow($row) : null;
     }
 
+    /**
+     * Tìm mục công nợ trong hàng đợi theo ID hóa đơn.
+     *
+     * @param int $invoiceId ID của hóa đơn
+     * @return QueueEntry|null Đối tượng QueueEntry nếu tìm thấy, null nếu không
+     */
     public function findQueueByInvoice(int $invoiceId): ?QueueEntry
     {
         $stmt = $this->pdo->prepare('SELECT * FROM debt_collection_queue WHERE invoice_id = ? ORDER BY id DESC LIMIT 1');
@@ -39,6 +66,16 @@ class PDODebtCollectionRepository implements DebtCollectionRepositoryInterface
         return $row ? QueueEntry::fromRow($row) : null;
     }
 
+    /**
+     * Tìm danh sách công nợ trong hàng đợi theo bộ lọc.
+     *
+     * Hỗ trợ lọc theo: status (một hoặc nhiều), assigned_to, customer_id,
+     * priority_min, escalation_level, unassigned.
+     * Giới hạn tối đa 200 bản ghi, sắp xếp theo priority DESC, entered_at ASC.
+     *
+     * @param array $filters Mảng các điều kiện lọc
+     * @return array Danh sách các mục công nợ (mảng kết hợp)
+     */
     public function findQueues(array $filters = []): array
     {
         $sql = 'SELECT q.*, i.invoice_number, i.gross_amount, i.balance, i.due_date, i.status as invoice_status, c.name as customer_name, c.code as customer_code
@@ -83,6 +120,14 @@ class PDODebtCollectionRepository implements DebtCollectionRepositoryInterface
         return $stmt->fetchAll(\PDO::FETCH_ASSOC);
     }
 
+    /**
+     * Tìm danh sách công nợ đang hoạt động của một nhân viên thu hồi.
+     *
+     * Lọc các mục có trạng thái new, active, hold và assigned_to = collectorId.
+     *
+     * @param string $collectorId ID của nhân viên thu hồi
+     * @return array Danh sách các mục công nợ (mảng kết hợp)
+     */
     public function findActiveQueuesByCollector(string $collectorId): array
     {
         $stmt = $this->pdo->prepare(
@@ -97,11 +142,22 @@ class PDODebtCollectionRepository implements DebtCollectionRepositoryInterface
         return $stmt->fetchAll(\PDO::FETCH_ASSOC);
     }
 
+    /**
+     * Tìm danh sách công nợ chưa được phân công.
+     *
+     * @return array Danh sách các mục công nợ chưa gán (mảng kết hợp)
+     */
     public function findUnassignedQueues(): array
     {
         return $this->findQueues(['unassigned' => true]);
     }
 
+    /**
+     * Lưu mục công nợ mới vào hàng đợi.
+     *
+     * @param QueueEntry $entry Đối tượng QueueEntry cần lưu
+     * @return int ID của bản ghi vừa tạo
+     */
     public function saveQueue(QueueEntry $entry): int
     {
         $stmt = $this->pdo->prepare(
@@ -121,6 +177,17 @@ class PDODebtCollectionRepository implements DebtCollectionRepositoryInterface
         return (int)$this->pdo->lastInsertId();
     }
 
+    /**
+     * Cập nhật trạng thái mục công nợ.
+     *
+     * Nếu trạng thái là 'closed', tự động ghi nhận thời gian và lý do giải quyết.
+     *
+     * @param int $id ID của mục công nợ
+     * @param string $status Trạng thái mới (new, active, hold, escalated, closed)
+     * @param string|null $resolution Hình thức giải quyết (chỉ khi đóng)
+     * @param string|null $resolutionNote Ghi chú giải quyết (chỉ khi đóng)
+     * @return void
+     */
     public function updateQueueStatus(int $id, string $status, ?string $resolution = null, ?string $resolutionNote = null): void
     {
         if ($status === 'closed') {
@@ -134,12 +201,33 @@ class PDODebtCollectionRepository implements DebtCollectionRepositoryInterface
         }
     }
 
+    /**
+     * Phân công mục công nợ cho nhân viên thu hồi.
+     *
+     * Tự động chuyển trạng thái thành 'active'.
+     *
+     * @param int $id ID của mục công nợ
+     * @param string $collectorId ID của nhân viên thu hồi
+     * @return void
+     */
     public function updateQueueAssignment(int $id, string $collectorId): void
     {
         $stmt = $this->pdo->prepare('UPDATE debt_collection_queue SET assigned_to = ?, status = "active" WHERE id = ?');
         $stmt->execute([$collectorId, $id]);
     }
 
+    /**
+     * Tạm giữ hoặc bỏ tạm giữ mục công nợ.
+     *
+     * Nếu có lý do -> chuyển sang trạng thái hold.
+     * Nếu không có lý do -> chuyển về trạng thái active và xóa thông tin hold.
+     *
+     * @param int $id ID của mục công nợ
+     * @param string|null $reason Lý do tạm giữ (null để bỏ tạm giữ)
+     * @param string|null $holdUntil Thời hạn tạm giữ
+     * @param int $holdCount Số lần đã tạm giữ
+     * @return void
+     */
     public function updateQueueHold(int $id, ?string $reason, ?string $holdUntil, int $holdCount): void
     {
         if ($reason !== null) {
@@ -155,18 +243,41 @@ class PDODebtCollectionRepository implements DebtCollectionRepositoryInterface
         }
     }
 
+    /**
+     * Cập nhật mức ưu tiên của mục công nợ.
+     *
+     * @param int $id ID của mục công nợ
+     * @param int $priority Mức ưu tiên mới (cao hơn = quan trọng hơn)
+     * @return void
+     */
     public function updateQueuePriority(int $id, int $priority): void
     {
         $stmt = $this->pdo->prepare('UPDATE debt_collection_queue SET priority = ? WHERE id = ?');
         $stmt->execute([$priority, $id]);
     }
 
+    /**
+     * Cập nhật mức leo thang của mục công nợ.
+     *
+     * Tự động chuyển trạng thái thành 'escalated'.
+     *
+     * @param int $id ID của mục công nợ
+     * @param int $level Mức leo thang mới
+     * @return void
+     */
     public function updateQueueEscalation(int $id, int $level): void
     {
         $stmt = $this->pdo->prepare('UPDATE debt_collection_queue SET escalation_level = ?, status = "escalated" WHERE id = ?');
         $stmt->execute([$level, $id]);
     }
 
+    /**
+     * Cập nhật thông tin hành động gần nhất của mục công nợ.
+     *
+     * @param int $id ID của mục công nợ
+     * @param string|null $nextActionDate Ngày hành động tiếp theo
+     * @return void
+     */
     public function updateQueueLastAction(int $id, ?string $nextActionDate): void
     {
         $stmt = $this->pdo->prepare(
@@ -175,11 +286,25 @@ class PDODebtCollectionRepository implements DebtCollectionRepositoryInterface
         $stmt->execute([$nextActionDate, $id]);
     }
 
+    /**
+     * Đóng mục công nợ với lý do giải quyết.
+     *
+     * @param int $id ID của mục công nợ
+     * @param string $resolution Hình thức giải quyết (paid, written_off, etc.)
+     * @param string|null $note Ghi chú giải quyết
+     * @return void
+     */
     public function closeQueue(int $id, string $resolution, ?string $note = null): void
     {
         $this->updateQueueStatus($id, 'closed', $resolution, $note);
     }
 
+    /**
+     * Đếm số lượng công nợ đang xử lý của một nhân viên thu hồi.
+     *
+     * @param string $collectorId ID của nhân viên thu hồi
+     * @return int Số lượng công nợ đang xử lý
+     */
     public function countActiveByCollector(string $collectorId): int
     {
         $stmt = $this->pdo->prepare(
@@ -189,6 +314,12 @@ class PDODebtCollectionRepository implements DebtCollectionRepositoryInterface
         return (int)$stmt->fetchColumn();
     }
 
+    /**
+     * Kiểm tra xem hóa đơn đã có trong hàng đợi chưa (chưa đóng).
+     *
+     * @param int $invoiceId ID của hóa đơn
+     * @return bool True nếu đã tồn tại trong hàng đợi
+     */
     public function queueExistsForInvoice(int $invoiceId): bool
     {
         $stmt = $this->pdo->prepare(
@@ -200,6 +331,12 @@ class PDODebtCollectionRepository implements DebtCollectionRepositoryInterface
 
     // ── Activities ──
 
+    /**
+     * Tìm hoạt động thu hồi theo ID.
+     *
+     * @param int $id ID của hoạt động
+     * @return Activity|null Đối tượng Activity nếu tìm thấy, null nếu không
+     */
     public function findActivityById(int $id): ?Activity
     {
         $stmt = $this->pdo->prepare('SELECT * FROM debt_collection_activities WHERE id = ?');
@@ -208,6 +345,12 @@ class PDODebtCollectionRepository implements DebtCollectionRepositoryInterface
         return $row ? Activity::fromRow($row) : null;
     }
 
+    /**
+     * Tìm danh sách hoạt động thu hồi theo mục công nợ.
+     *
+     * @param int $queueId ID của mục công nợ
+     * @return array Danh sách hoạt động (mảng kết hợp)
+     */
     public function findActivitiesByQueue(int $queueId): array
     {
         $stmt = $this->pdo->prepare(
@@ -220,6 +363,12 @@ class PDODebtCollectionRepository implements DebtCollectionRepositoryInterface
         return $stmt->fetchAll(\PDO::FETCH_ASSOC);
     }
 
+    /**
+     * Lưu hoạt động thu hồi mới.
+     *
+     * @param Activity $activity Đối tượng Activity cần lưu
+     * @return int ID của bản ghi vừa tạo
+     */
     public function saveActivity(Activity $activity): int
     {
         $stmt = $this->pdo->prepare(
@@ -243,6 +392,12 @@ class PDODebtCollectionRepository implements DebtCollectionRepositoryInterface
         return (int)$this->pdo->lastInsertId();
     }
 
+    /**
+     * Xóa hoạt động thu hồi.
+     *
+     * @param int $id ID của hoạt động cần xóa
+     * @return void
+     */
     public function deleteActivity(int $id): void
     {
         $stmt = $this->pdo->prepare('DELETE FROM debt_collection_activities WHERE id = ?');
@@ -251,6 +406,12 @@ class PDODebtCollectionRepository implements DebtCollectionRepositoryInterface
 
     // ── Promises ──
 
+    /**
+     * Tìm cam kết thanh toán theo ID.
+     *
+     * @param int $id ID của cam kết
+     * @return Promise|null Đối tượng Promise nếu tìm thấy, null nếu không
+     */
     public function findPromiseById(int $id): ?Promise
     {
         $stmt = $this->pdo->prepare('SELECT * FROM debt_collection_promises WHERE id = ?');
@@ -259,6 +420,12 @@ class PDODebtCollectionRepository implements DebtCollectionRepositoryInterface
         return $row ? Promise::fromRow($row) : null;
     }
 
+    /**
+     * Tìm danh sách cam kết thanh toán theo mục công nợ.
+     *
+     * @param int $queueId ID của mục công nợ
+     * @return array Danh sách cam kết (mảng kết hợp)
+     */
     public function findPromisesByQueue(int $queueId): array
     {
         $stmt = $this->pdo->prepare(
@@ -268,6 +435,13 @@ class PDODebtCollectionRepository implements DebtCollectionRepositoryInterface
         return $stmt->fetchAll(\PDO::FETCH_ASSOC);
     }
 
+    /**
+     * Tìm các cam kết thanh toán đang hoạt động và đến hạn hôm nay.
+     *
+     * JOIN với debt_collection_queue và customers để lấy thông tin liên quan.
+     *
+     * @return array Danh sách cam kết đến hạn (mảng kết hợp)
+     */
     public function findActivePromisesDueToday(): array
     {
         $stmt = $this->pdo->prepare(
@@ -281,6 +455,12 @@ class PDODebtCollectionRepository implements DebtCollectionRepositoryInterface
         return $stmt->fetchAll(\PDO::FETCH_ASSOC);
     }
 
+    /**
+     * Tìm các cam kết thanh toán đang hoạt động của một khách hàng.
+     *
+     * @param string $customerId ID của khách hàng
+     * @return array Danh sách cam kết (mảng kết hợp)
+     */
     public function findActivePromisesByCustomer(string $customerId): array
     {
         $stmt = $this->pdo->prepare(
@@ -293,6 +473,12 @@ class PDODebtCollectionRepository implements DebtCollectionRepositoryInterface
         return $stmt->fetchAll(\PDO::FETCH_ASSOC);
     }
 
+    /**
+     * Lưu cam kết thanh toán mới.
+     *
+     * @param Promise $promise Đối tượng Promise cần lưu
+     * @return int ID của bản ghi vừa tạo
+     */
     public function savePromise(Promise $promise): int
     {
         $stmt = $this->pdo->prepare(
@@ -312,6 +498,18 @@ class PDODebtCollectionRepository implements DebtCollectionRepositoryInterface
         return (int)$this->pdo->lastInsertId();
     }
 
+    /**
+     * Cập nhật trạng thái cam kết thanh toán.
+     *
+     * Nếu có kept_date -> cập nhật ngày giữ cam kết.
+     * Nếu có broken_reason -> cập nhật lý do vi phạm và tăng broken_count.
+     *
+     * @param int $id ID của cam kết
+     * @param string $status Trạng thái mới (active, kept, broken)
+     * @param string|null $keptDate Ngày giữ cam kết (nếu có)
+     * @param string|null $brokenReason Lý do vi phạm (nếu có)
+     * @return void
+     */
     public function updatePromiseStatus(int $id, string $status, ?string $keptDate = null, ?string $brokenReason = null): void
     {
         if ($keptDate) {
@@ -326,6 +524,12 @@ class PDODebtCollectionRepository implements DebtCollectionRepositoryInterface
         }
     }
 
+    /**
+     * Tăng số lần vi phạm cam kết.
+     *
+     * @param int $id ID của cam kết
+     * @return void
+     */
     public function incrementPromiseBrokenCount(int $id): void
     {
         $stmt = $this->pdo->prepare('UPDATE debt_collection_promises SET broken_count = broken_count + 1 WHERE id = ?');
@@ -334,6 +538,12 @@ class PDODebtCollectionRepository implements DebtCollectionRepositoryInterface
 
     // ── Approvals ──
 
+    /**
+     * Tìm phê duyệt phương án thu hồi theo ID.
+     *
+     * @param int $id ID của phê duyệt
+     * @return Approval|null Đối tượng Approval nếu tìm thấy, null nếu không
+     */
     public function findApprovalById(int $id): ?Approval
     {
         $stmt = $this->pdo->prepare('SELECT * FROM debt_collection_approvals WHERE id = ?');
@@ -342,6 +552,12 @@ class PDODebtCollectionRepository implements DebtCollectionRepositoryInterface
         return $row ? Approval::fromRow($row) : null;
     }
 
+    /**
+     * Tìm danh sách phê duyệt theo mục công nợ.
+     *
+     * @param int $queueId ID của mục công nợ
+     * @return array Danh sách phê duyệt (mảng kết hợp)
+     */
     public function findApprovalsByQueue(int $queueId): array
     {
         $stmt = $this->pdo->prepare(
@@ -351,6 +567,14 @@ class PDODebtCollectionRepository implements DebtCollectionRepositoryInterface
         return $stmt->fetchAll(\PDO::FETCH_ASSOC);
     }
 
+    /**
+     * Tìm danh sách phê duyệt đang chờ xử lý.
+     *
+     * Có thể lọc theo người phê duyệt (level 1, 2, hoặc 3).
+     *
+     * @param string|null $approverId ID của người phê duyệt (null để lấy tất cả)
+     * @return array Danh sách phê duyệt đang chờ (mảng kết hợp)
+     */
     public function findPendingApprovals(?string $approverId = null): array
     {
         $sql = 'SELECT a.*, q.customer_id, c.name as customer_name, i.invoice_number, i.balance
@@ -372,6 +596,12 @@ class PDODebtCollectionRepository implements DebtCollectionRepositoryInterface
         return $stmt->fetchAll(\PDO::FETCH_ASSOC);
     }
 
+    /**
+     * Lưu phê duyệt phương án thu hồi mới.
+     *
+     * @param Approval $approval Đối tượng Approval cần lưu
+     * @return int ID của bản ghi vừa tạo
+     */
     public function saveApproval(Approval $approval): int
     {
         $stmt = $this->pdo->prepare(
@@ -393,6 +623,18 @@ class PDODebtCollectionRepository implements DebtCollectionRepositoryInterface
         return (int)$this->pdo->lastInsertId();
     }
 
+    /**
+     * Cập nhật trạng thái phê duyệt theo cấp.
+     *
+     * Nếu cấp nào bị từ chối (rejected), tự động cập nhật overall_status thành rejected.
+     *
+     * @param int $id ID của phê duyệt
+     * @param int $level Cấp phê duyệt (1, 2, 3)
+     * @param string $approver ID người phê duyệt
+     * @param string $status Trạng thái phê duyệt (approved, rejected)
+     * @param string|null $note Ghi chú phê duyệt
+     * @return void
+     */
     public function updateApprovalLevel(int $id, int $level, string $approver, string $status, ?string $note = null): void
     {
         $field = "level_{$level}_status";
@@ -411,6 +653,15 @@ class PDODebtCollectionRepository implements DebtCollectionRepositoryInterface
         }
     }
 
+    /**
+     * Cập nhật trạng thái tổng thể của phê duyệt.
+     *
+     * Nếu trạng thái là approved hoặc rejected, tự động ghi nhận thời gian giải quyết.
+     *
+     * @param int $id ID của phê duyệt
+     * @param string $status Trạng thái tổng thể mới (pending, approved, rejected)
+     * @return void
+     */
     public function updateApprovalOverallStatus(int $id, string $status): void
     {
         $stmt = $this->pdo->prepare(
@@ -421,6 +672,12 @@ class PDODebtCollectionRepository implements DebtCollectionRepositoryInterface
 
     // ── Settlements ──
 
+    /**
+     * Tìm thỏa thuận thanh toán theo ID.
+     *
+     * @param int $id ID của thỏa thuận
+     * @return Settlement|null Đối tượng Settlement nếu tìm thấy, null nếu không
+     */
     public function findSettlementById(int $id): ?Settlement
     {
         $stmt = $this->pdo->prepare('SELECT * FROM debt_collection_settlements WHERE id = ?');
@@ -429,6 +686,12 @@ class PDODebtCollectionRepository implements DebtCollectionRepositoryInterface
         return $row ? Settlement::fromRow($row) : null;
     }
 
+    /**
+     * Tìm thỏa thuận thanh toán theo mục công nợ.
+     *
+     * @param int $queueId ID của mục công nợ
+     * @return Settlement|null Đối tượng Settlement nếu tìm thấy, null nếu không
+     */
     public function findSettlementByQueue(int $queueId): ?Settlement
     {
         $stmt = $this->pdo->prepare('SELECT * FROM debt_collection_settlements WHERE queue_id = ? ORDER BY id DESC LIMIT 1');
@@ -437,6 +700,13 @@ class PDODebtCollectionRepository implements DebtCollectionRepositoryInterface
         return $row ? Settlement::fromRow($row) : null;
     }
 
+    /**
+     * Tìm danh sách thỏa thuận thanh toán đang hoạt động.
+     *
+     * JOIN với debt_collection_queue và customers để lấy thông tin liên quan.
+     *
+     * @return array Danh sách thỏa thuận đang hoạt động (mảng kết hợp)
+     */
     public function findActiveSettlements(): array
     {
         $stmt = $this->pdo->prepare(
@@ -451,6 +721,12 @@ class PDODebtCollectionRepository implements DebtCollectionRepositoryInterface
         return $stmt->fetchAll(\PDO::FETCH_ASSOC);
     }
 
+    /**
+     * Lưu thỏa thuận thanh toán mới.
+     *
+     * @param Settlement $settlement Đối tượng Settlement cần lưu
+     * @return int ID của bản ghi vừa tạo
+     */
     public function saveSettlement(Settlement $settlement): int
     {
         $stmt = $this->pdo->prepare(
@@ -476,6 +752,16 @@ class PDODebtCollectionRepository implements DebtCollectionRepositoryInterface
         return (int)$this->pdo->lastInsertId();
     }
 
+    /**
+     * Cập nhật số tiền đã thanh toán của thỏa thuận.
+     *
+     * Cộng dồn số tiền thanh toán và ghi nhận ngày thanh toán cuối.
+     *
+     * @param int $id ID của thỏa thuận
+     * @param float $amount Số tiền thanh toán thêm
+     * @param string $paymentDate Ngày thanh toán
+     * @return void
+     */
     public function updateSettlementPayment(int $id, float $amount, string $paymentDate): void
     {
         $stmt = $this->pdo->prepare(
@@ -484,6 +770,13 @@ class PDODebtCollectionRepository implements DebtCollectionRepositoryInterface
         $stmt->execute([$amount, $paymentDate, $id]);
     }
 
+    /**
+     * Cập nhật trạng thái thỏa thuận thanh toán.
+     *
+     * @param int $id ID của thỏa thuận
+     * @param string $status Trạng thái mới (active, completed, defaulted)
+     * @return void
+     */
     public function updateSettlementStatus(int $id, string $status): void
     {
         $stmt = $this->pdo->prepare('UPDATE debt_collection_settlements SET status = ? WHERE id = ?');
@@ -492,6 +785,13 @@ class PDODebtCollectionRepository implements DebtCollectionRepositoryInterface
 
     // ── Stats ──
 
+    /**
+     * Lấy thống kê tổng quan về hàng đợi thu hồi công nợ.
+     *
+     * Trả về số lượng: new, active, hold, escalated, closed, total_open, total.
+     *
+     * @return array Mảng kết hợp chứa các thống kê
+     */
     public function getQueueStats(): array
     {
         return $this->pdo->query(
@@ -507,6 +807,14 @@ class PDODebtCollectionRepository implements DebtCollectionRepositoryInterface
         )->fetch(\PDO::FETCH_ASSOC);
     }
 
+    /**
+     * Lấy thống kê hiệu suất của một nhân viên thu hồi.
+     *
+     * Trả về: total_assigned, active, on_hold, resolved_paid, total_closed.
+     *
+     * @param string $collectorId ID của nhân viên thu hồi
+     * @return array Mảng kết hợp chứa các thống kê
+     */
     public function getCollectorStats(string $collectorId): array
     {
         $stmt = $this->pdo->prepare(

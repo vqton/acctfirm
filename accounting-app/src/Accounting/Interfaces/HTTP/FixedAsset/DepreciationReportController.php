@@ -2,71 +2,56 @@
 namespace Accounting\Interfaces\HTTP\FixedAsset;
 
 use Accounting\Domain\Service\FixedAssetService;
-use Accounting\Domain\Service\DepreciationBatchService;
 use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
 
+/**
+ * MODULE: Báo cáo Khấu hao TSCĐ
+ *
+ * Mục đích nghiệp vụ:
+ *   - Báo cáo chi tiết khấu hao từng tài sản cố định
+ *   - Bảng tính khấu hao theo kỳ
+ *   - Tổng hợp khấu hao theo loại TSCĐ
+ *
+ * API endpoints:
+ *   GET /api/fixed-asset/depreciation/report — Báo cáo khấu hao
+ *   GET /api/fixed-asset/depreciation/schedule — Lịch khấu hao
+ *
+ * Rủi ro:
+ *   - Sai phương pháp khấu hao -> sai BC01 (214) và BC02 (642, 627)
+ *
+ * Tích hợp:
+ *   - FixedAssetService đọc từ fixed_assets + depreciation_schedules
+ */
 class DepreciationReportController
 {
-    private FixedAssetService $fixedAssetService;
-    private DepreciationBatchService $batchService;
-    private \PDO $pdo;
+    private FixedAssetService $service;
 
-    public function __construct(
-        FixedAssetService $fixedAssetService,
-        DepreciationBatchService $batchService,
-        \PDO $pdo
-    ) {
-        $this->fixedAssetService = $fixedAssetService;
-        $this->batchService = $batchService;
-        $this->pdo = $pdo;
-    }
+    public function __construct(FixedAssetService $service) { $this->service = $service; }
 
-    // Sinh Mẫu 06-TSCĐ cho kỳ
-    public function report(string $period): void
+    /**
+     * Báo cáo khấu hao tài sản cố định
+     *
+     * @return void
+     */
+    public function report(): void
     {
         Auth::requirePermission('fixed_asset', 'read');
-        try {
-            $data = $this->batchService->generateReport($period);
-            JsonResponse::ok($data);
-        } catch (\Throwable $e) {
-            JsonResponse::error($e->getMessage());
-        }
+        $period = $_GET['period'] ?? date('Y-m');
+        $assetId = $_GET['asset_id'] ?? null;
+        JsonResponse::ok($this->service->getDepreciationReport($period, $assetId));
     }
 
-    // Lưu batch (sau khi chạy depreciation)
-    public function saveBatch(): void
-    {
-        Auth::checkCsrf();
-        $input = json_decode(file_get_contents('php://input'), true);
-        $period = $input['period'] ?? date('Y-m');
-        try {
-            $id = $this->batchService->saveBatch($period, $_SESSION['user_id'] ?? 'system');
-            JsonResponse::ok(['batch_id' => $id, 'period' => $period]);
-        } catch (\Throwable $e) {
-            JsonResponse::error($e->getMessage());
-        }
-    }
-
-    // Xem batch đã lưu
-    public function getBatch(string $period): void
+    /**
+     * Lịch khấu hao chi tiết
+     *
+     * @return void
+     */
+    public function schedule(): void
     {
         Auth::requirePermission('fixed_asset', 'read');
-        $batch = $this->batchService->loadBatch($period);
-        if (!$batch) {
-            JsonResponse::error('Không tìm thấy batch cho kỳ ' . $period, 404);
-            return;
-        }
-        JsonResponse::ok($batch);
-    }
-
-    // Lịch sử các batch
-    public function listBatches(): void
-    {
-        Auth::requirePermission('fixed_asset', 'read');
-        $stmt = $this->pdo->query(
-            "SELECT * FROM fa_depreciation_batches ORDER BY period DESC LIMIT 24"
-        );
-        JsonResponse::ok($stmt->fetchAll(\PDO::FETCH_ASSOC));
+        $assetId = $_GET['asset_id'] ?? '';
+        if (!$assetId) { JsonResponse::error('Vui lòng nhập mã tài sản', 400); return; }
+        JsonResponse::ok($this->service->getDepreciationSchedule($assetId));
     }
 }

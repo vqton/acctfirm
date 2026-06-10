@@ -5,6 +5,34 @@ use Accounting\Domain\Service\EInvoiceImportService;
 use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
 
+/**
+ * MODULE: Import Hóa đơn Điện tử đầu vào (E-Invoice Import)
+ *
+ * Mục đích nghiệp vụ:
+ *   - Import XML hóa đơn đầu vào từ nhà cung cấp
+ *   - Tự động tạo chứng từ kế toán (Nợ 156/1331/Có 331)
+ *   - Xem trước dữ liệu trước khi import
+ *   - Theo dõi lịch sử import
+ *   - Ghi nhận thanh toán/tạm ứng cho hóa đơn import
+ *   - Phân bổ hóa đơn vào lệnh sản xuất
+ *   - Tổng hợp VAT từ hóa đơn đã import
+ *
+ * API endpoints:
+ *   POST /api/einvoice/import — Import XML
+ *   POST /api/einvoice/import/preview — Xem trước
+ *   GET  /api/einvoice/imports — Danh sách
+ *   GET  /api/einvoice/imports/{id} — Chi tiết
+ *   GET  /api/einvoice/import/parse — Parse XML preview
+ *   GET  /api/einvoice/import/vat-summary/{period} — Tổng hợp VAT
+ *   POST /api/einvoice/import/{id}/prepay — Tạm ứng
+ *   POST /api/einvoice/import/{id}/allocate — Phân bổ SX
+ *   POST /api/einvoice/import/{id}/pay — Thanh toán
+ *
+ * Tích hợp:
+ *   - EInvoiceImportService xử lý parse + tạo chứng từ
+ *   - CashService ghi nhận thanh toán
+ *   - ManufacturingService phân bổ vào lệnh SX
+ */
 class EInvoiceImportController
 {
     private EInvoiceImportService $importService;
@@ -14,7 +42,11 @@ class EInvoiceImportController
         $this->importService = $importService;
     }
 
-    // POST /api/einvoice/import — Import XML hóa đơn đầu vào
+    /**
+     * Import XML hóa đơn đầu vào
+     *
+     * @return void
+     */
     public function import(): void
     {
         Auth::requirePermission('einvoice', 'create');
@@ -52,7 +84,11 @@ class EInvoiceImportController
         }
     }
 
-    // POST /api/einvoice/import/preview — Xem trước dữ liệu từ XML
+    /**
+     * Xem trước dữ liệu từ XML hóa đơn
+     *
+     * @return void
+     */
     public function preview(): void
     {
         Auth::requirePermission('einvoice', 'read');
@@ -70,8 +106,6 @@ class EInvoiceImportController
 
         try {
             $parsed = $this->importService->parseXml($xmlContent);
-
-            // Kiểm tra trùng
             $isDuplicate = $this->importService->checkDuplicate($parsed['fkey']);
 
             JsonResponse::ok([
@@ -94,14 +128,23 @@ class EInvoiceImportController
         }
     }
 
-    // GET /api/einvoice/imports — Danh sách lịch sử import
+    /**
+     * Danh sách lịch sử import
+     *
+     * @return void
+     */
     public function list(): void
     {
         Auth::requirePermission('einvoice', 'read');
         JsonResponse::ok($this->importService->listImports());
     }
 
-    // GET /api/einvoice/imports/:id — Chi tiết import
+    /**
+     * Chi tiết import
+     *
+     * @param string $id ID import
+     * @return void
+     */
     public function get(string $id): void
     {
         Auth::requirePermission('einvoice', 'read');
@@ -113,7 +156,11 @@ class EInvoiceImportController
         JsonResponse::ok($import);
     }
 
-    // GET /api/einvoice/import/parse — Parse XML preview (for AJAX in browser)
+    /**
+     * Parse XML preview (cho AJAX trong browser)
+     *
+     * @return void
+     */
     public function parseXml(): void
     {
         Auth::requirePermission('einvoice', 'read');
@@ -135,14 +182,24 @@ class EInvoiceImportController
         }
     }
 
-    // GET /api/einvoice/import/vat-summary/:period — Tổng hợp VAT từ hóa đơn đã import
+    /**
+     * Tổng hợp VAT từ hóa đơn đã import
+     *
+     * @param string $period Kỳ kế toán (YYYY-MM)
+     * @return void
+     */
     public function vatSummary(string $period): void
     {
         Auth::requirePermission('einvoice', 'read');
         JsonResponse::ok($this->importService->getVatSummary($period));
     }
 
-    // POST /api/einvoice/import/{id}/prepay — Ghi nhận tạm ứng cho hóa đơn đã import
+    /**
+     * Ghi nhận tạm ứng cho hóa đơn đã import
+     *
+     * @param string $id ID import
+     * @return void
+     */
     public function prepay(string $id): void
     {
         Auth::requirePermission('einvoice', 'create');
@@ -170,7 +227,12 @@ class EInvoiceImportController
         }
     }
 
-    // POST /api/einvoice/import/{id}/allocate — Liên kết hóa đơn với lệnh sản xuất
+    /**
+     * Liên kết hóa đơn import với lệnh sản xuất
+     *
+     * @param string $id ID import
+     * @return void
+     */
     public function allocate(string $id): void
     {
         Auth::requirePermission('einvoice', 'create');
@@ -198,7 +260,12 @@ class EInvoiceImportController
         }
     }
 
-    // POST /api/einvoice/import/{id}/pay — Ghi nhận thanh toán hóa đơn đã import
+    /**
+     * Ghi nhận thanh toán hóa đơn đã import
+     *
+     * @param string $id ID import
+     * @return void
+     */
     public function pay(string $id): void
     {
         Auth::requirePermission('einvoice', 'create');

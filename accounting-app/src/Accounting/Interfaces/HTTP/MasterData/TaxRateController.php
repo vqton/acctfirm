@@ -1,68 +1,39 @@
 <?php
 namespace Accounting\Interfaces\HTTP\MasterData;
 
-use Accounting\Domain\Model\TaxRate;
-use Accounting\Domain\Repository\TaxRateRepositoryInterface;
-
 use Accounting\Infrastructure\JsonResponse;
-use \Accounting\Interfaces\HTTP\CrudControllerTrait;
+use Accounting\Infrastructure\Auth;
+use Accounting\Domain\Repository\TaxRateRepositoryInterface;
+use Accounting\Interfaces\HTTP\CrudControllerTrait;
 
 /**
- * MODULE: Danh mục Thuế suất (Tax Rate)
+ * MODULE: Quản lý Thuế suất
  *
  * Mục đích nghiệp vụ:
- *   - CRUD thuế suất: thuế GTGT (VAT), thuế TNCN, thuế TNDN
- *   - Quản lý các mức thuế: 0%, 5%, 8%, 10% (GTGT), các loại thuế khác
- *   - Phân loại theo tax_type (vat, income, withholding, etc.)
+ *   - CRUD danh sách thuế suất (GTGT, TNCN, TNDN...)
+ *   - Mỗi thuế suất gắn với account code tương ứng
  *
  * API endpoints:
- *   (Sử dụng CrudControllerTrait — CRUD chuẩn)
- *
- * Rủi ro:
- *   - Sai thuế suất → sai số thuế phải nộp → phạt chậm nộp
- *   - Không cập nhật theo thay đổi chính sách thuế (Thông tư mới)
- *   - Sai phân loại thuế → kê khai sai tờ khai thuế GTGT
+ *   GET    /api/tax-rates — Danh sách
+ *   POST   /api/tax-rates — Tạo mới
+ *   GET    /api/tax-rates/{id} — Chi tiết
+ *   PUT    /api/tax-rates/{id} — Cập nhật
+ *   DELETE /api/tax-rates/{id} — Xoá
  *
  * Tích hợp:
- *   - ApController dùng tax_rate để tính VAT đầu vào (1331)
- *   - ArController dùng tax_rate để tính VAT đầu ra (3331)
- *   - Báo cáo thuế GTGT tổng hợp
+ *   - VatController dùng để tính thuế
+ *   - FsController dùng để lập BC
  */
 class TaxRateController
 {
     use CrudControllerTrait;
 
-    private TaxRateRepositoryInterface $repo;
-    public function __construct(TaxRateRepositoryInterface $repo) { $this->repo = $repo; }
-    protected function repo() { return $this->repo; }
-    protected function idPrefix(): string { return 'tax_'; }
-
-    protected function createEntity(array $data): object
+    /**
+     * @param TaxRateRepositoryInterface $repository
+     */
+    public function __construct(TaxRateRepositoryInterface $repository)
     {
-        return new TaxRate(
-            $data['id'], $data['code'], $data['name'],
-            (float)($data['rate'] ?? 0), $data['tax_type'] ?? 'vat'
-        );
-    }
-
-    protected function updateEntity(object $entity, array $data): void
-    {
-        if (isset($data['code'])) $entity->setCode($data['code']);
-        if (isset($data['name'])) $entity->setName($data['name']);
-        if (isset($data['rate'])) $entity->setRate((float)$data['rate']);
-        if (isset($data['tax_type'])) $entity->setTaxType($data['tax_type']);
-        if (isset($data['status'])) $entity->setStatus((bool)$data['status']);
-    }
-
-    // API: danh sách thuế suất VAT active — dùng cho dropdown chọn thuế suất trong form
-    public function vatRates(): void
-    {
-        $all = $this->repo()->findAll();
-        $vatRates = array_values(array_filter(
-            array_map(fn($x) => $x->toArray(), $all),
-            fn($r) => ($r['tax_type'] ?? '') === 'vat' && !empty($r['status'])
-        ));
-        usort($vatRates, fn($a, $b) => (float)$a['rate'] <=> (float)$b['rate']);
-        JsonResponse::ok($vatRates);
+        $this->repository = $repository;
+        $this->module = 'tax_rates';
     }
 }

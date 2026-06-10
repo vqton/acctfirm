@@ -4,34 +4,44 @@ namespace Accounting\Infrastructure\SubLedger;
 use Accounting\Domain\Contract\SubLedgerReportInterface;
 use Accounting\Domain\Repository\AccountRepositoryInterface;
 
-// SỔ CHI TIẾT CÔNG NỢ PHẢI THU (S13-DN): Theo dõi công nợ theo từng khách hàng
-//
-// Nghiệp vụ: Báo cáo chi tiết các khoản phải thu (TK 131) theo từng khách hàng.
-// Dữ liệu lấy từ bảng ar_invoices và ar_payments — không query ledger_entries trực tiếp
-// vì quan hệ KH được lưu trên ar_invoices, không phải ledger_entries.
-//
-// Cấu trúc:
-//   - Mỗi KH một bảng riêng hoặc lọc theo KH
-//   - Cột: Ngày, Số CT, Diễn giải, Phát sinh Nợ (tăng), Phát sinh Có (giảm), Số dư
-//
-// ĐỐI SOÁT: Tổng số dư tất cả KH phải khớp với số dư TK 131 trên sổ cái.
-//
+/**
+ * SỔ CHI TIẾT CÔNG NỢ PHẢI THU (S13-DN): Theo dõi công nợ theo từng khách hàng.
+ *
+ * Nghiệp vụ: Báo cáo chi tiết các khoản phải thu (TK 131) theo từng khách hàng.
+ * Dữ liệu lấy từ bảng ar_invoices và ar_payments.
+ *
+ * ĐỐI SOÁT: Tổng số dư tất cả KH phải khớp với số dư TK 131 trên sổ cái.
+ */
 class ArLedgerReport implements SubLedgerReportInterface
 {
     private \PDO $pdo;
     private AccountRepositoryInterface $accountRepo;
 
+    /**
+     * @param \PDO $pdo Kết nối PDO.
+     * @param AccountRepositoryInterface $accountRepo Repository tài khoản.
+     */
     public function __construct(\PDO $pdo, AccountRepositoryInterface $accountRepo)
     {
         $this->pdo = $pdo;
         $this->accountRepo = $accountRepo;
     }
 
+    /**
+     * Lấy loại báo cáo.
+     *
+     * @return string 'ar_ledger'.
+     */
     public function getReportType(): string
     {
         return 'ar_ledger';
     }
 
+    /**
+     * Lấy tham số báo cáo.
+     *
+     * @return array Mảng tham số với name, label, type, required.
+     */
     public function getParameters(): array
     {
         return [
@@ -41,6 +51,14 @@ class ArLedgerReport implements SubLedgerReportInterface
         ];
     }
 
+    /**
+     * Lấy dữ liệu sổ chi tiết công nợ phải thu.
+     *
+     * Nếu có customer_id, trả về chi tiết theo KH; nếu không, trả về tổng hợp.
+     *
+     * @param array $params Tham số: customer_id, from_date, to_date.
+     * @return array Dữ liệu báo cáo.
+     */
     public function getData(array $params): array
     {
         $customerId = $params['customer_id'] ?? null;
@@ -54,6 +72,14 @@ class ArLedgerReport implements SubLedgerReportInterface
         return $this->getAllCustomersSummary($fromDate, $toDate);
     }
 
+    /**
+     * Lấy chi tiết công nợ theo khách hàng.
+     *
+     * @param string $customerId ID khách hàng.
+     * @param string|null $fromDate Từ ngày.
+     * @param string|null $toDate Đến ngày.
+     * @return array Dữ liệu chi tiết công nợ.
+     */
     private function getCustomerDetail(string $customerId, ?string $fromDate, ?string $toDate): array
     {
         $customer = $this->getCustomer($customerId);
@@ -112,6 +138,13 @@ class ArLedgerReport implements SubLedgerReportInterface
         ];
     }
 
+    /**
+     * Lấy tổng hợp công nợ theo tất cả khách hàng.
+     *
+     * @param string|null $fromDate Từ ngày.
+     * @param string|null $toDate Đến ngày.
+     * @return array Dữ liệu tổng hợp.
+     */
     private function getAllCustomersSummary(?string $fromDate, ?string $toDate): array
     {
         $dateWhere = '';
@@ -165,6 +198,14 @@ class ArLedgerReport implements SubLedgerReportInterface
         ];
     }
 
+    /**
+     * Lấy danh sách giao dịch của khách hàng (hóa đơn + thanh toán).
+     *
+     * @param string $customerId ID khách hàng.
+     * @param string|null $fromDate Từ ngày.
+     * @param string|null $toDate Đến ngày.
+     * @return array Mảng giao dịch đã sắp xếp theo ngày.
+     */
     private function fetchCustomerTransactions(string $customerId, ?string $fromDate, ?string $toDate): array
     {
         $transactions = [];
@@ -230,6 +271,12 @@ class ArLedgerReport implements SubLedgerReportInterface
         return $transactions;
     }
 
+    /**
+     * Lấy thông tin khách hàng.
+     *
+     * @param string $customerId ID khách hàng.
+     * @return array|null Thông tin khách hàng hoặc null.
+     */
     private function getCustomer(string $customerId): ?array
     {
         try {

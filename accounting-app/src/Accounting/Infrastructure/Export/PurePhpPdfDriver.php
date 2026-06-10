@@ -4,16 +4,19 @@ namespace Accounting\Infrastructure\Export;
 use Accounting\Domain\Contract\ExportDriverInterface;
 use Accounting\Domain\Model\ExportResult;
 
-// Driver xuất PDF thuần PHP — không cần thư viện ngoài
-// Sinh file PDF tuân thủ PDF 1.4 spec với bảng, header/footer, phân trang
-// Hỗ trợ A4 dọc và ngang, chữ ký mẫu Việt Nam
-//
-// PDF STRUCTURE:
-// - file = header + objects + xref table + trailer
-// - object có thể là: pages, page, fonts, content stream
-// - content stream dùng PDF operators: BT/ET (text), Td (move), Tj (show), re (rect), S (stroke)
-//
-// HẠN CHẾ: ASCII font (Courier) — hỗ trợ tiếng Việt qua UTF-8 BOM nhưng không dùng Unicode PDF
+/**
+ * Driver xuất PDF thuần PHP — không cần thư viện ngoài.
+ *
+ * Sinh file PDF tuân thủ PDF 1.4 spec với bảng, header/footer, phân trang.
+ * Hỗ trợ A4 dọc và ngang, chữ ký mẫu Việt Nam.
+ *
+ * PDF STRUCTURE:
+ * - file = header + objects + xref table + trailer
+ * - object có thể là: pages, page, fonts, content stream
+ * - content stream dùng PDF operators: BT/ET (text), Td (move), Tj (show), re (rect), S (stroke)
+ *
+ * HẠN CHẾ: ASCII font (Courier) — hỗ trợ tiếng Việt hạn chế.
+ */
 class PurePhpPdfDriver implements ExportDriverInterface
 {
     private int $pageNo = 0;
@@ -28,11 +31,26 @@ class PurePhpPdfDriver implements ExportDriverInterface
     private float $drawW;
     private float $drawH;
 
+    /**
+     * Kiểm tra định dạng có được hỗ trợ không.
+     *
+     * @param string $format Định dạng (pdf, PDF).
+     * @return bool True nếu hỗ trợ.
+     */
     public function supports(string $format): bool
     {
         return in_array($format, ['pdf', 'PDF'], true);
     }
 
+    /**
+     * Xuất dữ liệu ra PDF.
+     *
+     * @param string $title Tiêu đề báo cáo.
+     * @param array $headers Mảng tiêu đề cột.
+     * @param array $rows Mảng dòng dữ liệu.
+     * @param array $options Tùy chọn: orientation, signature, footer, summary, filename.
+     * @return ExportResult Kết quả xuất.
+     */
     public function export(string $title, array $headers, array $rows, array $options = []): ExportResult
     {
         $orientation = $options['orientation'] ?? 'portrait';
@@ -287,17 +305,39 @@ class PurePhpPdfDriver implements ExportDriverInterface
         );
     }
 
+    /**
+     * Tạo object PDF.
+     *
+     * @param int $id ID object.
+     * @param string $content Nội dung object.
+     * @return string Chuỗi PDF object.
+     */
     private function pdfObj(int $id, string $content): string
     {
         return "{$id} 0 obj\n{$content}\nendobj\n";
     }
 
+    /**
+     * Tạo PDF stream object.
+     *
+     * @param int $id ID object.
+     * @param string $content Nội dung stream.
+     * @return string Chuỗi PDF stream object.
+     */
     private function pdfStreamObj(int $id, string $content): string
     {
         $len = strlen($content);
         return "{$id} 0 obj\n<< /Length {$len} >>\nstream\n{$content}\nendstream\nendobj\n";
     }
 
+    /**
+     * Tạo PDF page object.
+     *
+     * @param int $id ID page object.
+     * @param int $fontObj ID font object.
+     * @param int $contentObj ID content stream object.
+     * @return string Chuỗi PDF page object.
+     */
     private function pdfPageObj(int $id, int $fontObj, int $contentObj): string
     {
         $w = $this->pageWidth;
@@ -305,7 +345,15 @@ class PurePhpPdfDriver implements ExportDriverInterface
         return $this->pdfObj($id, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {$w} {$h}] /Contents {$contentObj} 0 R /Resources << /Font << /F1 {$fontObj} 0 R >> >> >>");
     }
 
-    // Escape PDF string — dùng dấu ngoặc đơn, escape nội bộ
+    /**
+     * Escape PDF string và tạo text operator.
+     *
+     * Dùng dấu ngoặc đơn, escape nội bộ.
+     * Chuyển ký tự đặc biệt không phải ASCII thành '?'.
+     *
+     * @param string $text Chuỗi cần xuất.
+     * @return string PDF text operator.
+     */
     private function pdfText(string $text): string
     {
         // PDF string literal trong ngoặc đơn
@@ -328,6 +376,12 @@ class PurePhpPdfDriver implements ExportDriverInterface
         return "({$converted}) Tj\n";
     }
 
+    /**
+     * Làm sạch tên file — loại bỏ ký tự đặc biệt.
+     *
+     * @param string $title Tiêu đề gốc.
+     * @return string Tên file đã làm sạch.
+     */
     private function sanitizeFilename(string $title): string
     {
         $clean = preg_replace('/[^a-zA-Z0-9_\-\p{L}]/u', '_', $title);

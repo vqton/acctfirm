@@ -4,35 +4,46 @@ namespace Accounting\Infrastructure\SubLedger;
 use Accounting\Domain\Contract\SubLedgerReportInterface;
 use Accounting\Domain\Repository\AccountRepositoryInterface;
 
-// SỔ CHI TIẾT CÔNG NỢ PHẢI TRẢ (S13-DN): Theo dõi công nợ theo từng nhà cung cấp
-//
-// Nghiệp vụ: Báo cáo chi tiết các khoản phải trả (TK 331) theo từng nhà cung cấp.
-// Dữ liệu lấy từ bảng ap_invoices và ap_payments.
-//
-// Cấu trúc:
-//   - Mỗi NCC một bảng riêng hoặc lọc theo NCC
-//   - Cột: Ngày, Số CT, Diễn giải, Phát sinh Nợ (giảm), Phát sinh Có (tăng), Số dư
-//
-// LƯU Ý VỀ DẤU: Công nợ phải trả có số dư bên Có (dư Có 331).
-// - Phát sinh Có 331: Tăng công nợ (mua hàng, dịch vụ)
-// - Phát sinh Nợ 331: Giảm công nợ (thanh toán, trả lại, chiết khấu)
-//
+/**
+ * SỔ CHI TIẾT CÔNG NỢ PHẢI TRẢ (S13-DN): Theo dõi công nợ theo từng nhà cung cấp.
+ *
+ * Nghiệp vụ: Báo cáo chi tiết các khoản phải trả (TK 331) theo từng nhà cung cấp.
+ * Dữ liệu lấy từ bảng ap_invoices và ap_payments.
+ *
+ * LƯU Ý VỀ DẤU: Công nợ phải trả có số dư bên Có (dư Có 331).
+ * - Phát sinh Có 331: Tăng công nợ (mua hàng, dịch vụ)
+ * - Phát sinh Nợ 331: Giảm công nợ (thanh toán, trả lại, chiết khấu)
+ */
 class ApLedgerReport implements SubLedgerReportInterface
 {
     private \PDO $pdo;
     private AccountRepositoryInterface $accountRepo;
 
+    /**
+     * @param \PDO $pdo Kết nối PDO.
+     * @param AccountRepositoryInterface $accountRepo Repository tài khoản.
+     */
     public function __construct(\PDO $pdo, AccountRepositoryInterface $accountRepo)
     {
         $this->pdo = $pdo;
         $this->accountRepo = $accountRepo;
     }
 
+    /**
+     * Lấy loại báo cáo.
+     *
+     * @return string 'ap_ledger'.
+     */
     public function getReportType(): string
     {
         return 'ap_ledger';
     }
 
+    /**
+     * Lấy tham số báo cáo.
+     *
+     * @return array Mảng tham số với name, label, type, required.
+     */
     public function getParameters(): array
     {
         return [
@@ -42,6 +53,14 @@ class ApLedgerReport implements SubLedgerReportInterface
         ];
     }
 
+    /**
+     * Lấy dữ liệu sổ chi tiết công nợ phải trả.
+     *
+     * Nếu có supplier_id, trả về chi tiết theo NCC; nếu không, trả về tổng hợp.
+     *
+     * @param array $params Tham số: supplier_id, from_date, to_date.
+     * @return array Dữ liệu báo cáo.
+     */
     public function getData(array $params): array
     {
         $supplierId = $params['supplier_id'] ?? null;
@@ -55,6 +74,14 @@ class ApLedgerReport implements SubLedgerReportInterface
         return $this->getAllSuppliersSummary($fromDate, $toDate);
     }
 
+    /**
+     * Lấy chi tiết công nợ theo nhà cung cấp.
+     *
+     * @param string $supplierId ID nhà cung cấp.
+     * @param string|null $fromDate Từ ngày.
+     * @param string|null $toDate Đến ngày.
+     * @return array Dữ liệu chi tiết công nợ.
+     */
     private function getSupplierDetail(string $supplierId, ?string $fromDate, ?string $toDate): array
     {
         $supplier = $this->getSupplier($supplierId);
@@ -114,6 +141,13 @@ class ApLedgerReport implements SubLedgerReportInterface
         ];
     }
 
+    /**
+     * Lấy tổng hợp công nợ theo tất cả nhà cung cấp.
+     *
+     * @param string|null $fromDate Từ ngày.
+     * @param string|null $toDate Đến ngày.
+     * @return array Dữ liệu tổng hợp.
+     */
     private function getAllSuppliersSummary(?string $fromDate, ?string $toDate): array
     {
         $dateWhere = '';
@@ -167,6 +201,14 @@ class ApLedgerReport implements SubLedgerReportInterface
         ];
     }
 
+    /**
+     * Lấy danh sách giao dịch của nhà cung cấp (hóa đơn + thanh toán).
+     *
+     * @param string $supplierId ID nhà cung cấp.
+     * @param string|null $fromDate Từ ngày.
+     * @param string|null $toDate Đến ngày.
+     * @return array Mảng giao dịch đã sắp xếp theo ngày.
+     */
     private function fetchSupplierTransactions(string $supplierId, ?string $fromDate, ?string $toDate): array
     {
         $transactions = [];
@@ -230,6 +272,12 @@ class ApLedgerReport implements SubLedgerReportInterface
         return $transactions;
     }
 
+    /**
+     * Lấy thông tin nhà cung cấp.
+     *
+     * @param string $supplierId ID nhà cung cấp.
+     * @return array|null Thông tin nhà cung cấp hoặc null.
+     */
     private function getSupplier(string $supplierId): ?array
     {
         try {

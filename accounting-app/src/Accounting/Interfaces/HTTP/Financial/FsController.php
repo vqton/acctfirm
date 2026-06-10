@@ -10,29 +10,30 @@ use Accounting\Infrastructure\Auth;
  * MODULE: Báo cáo Tài chính (Financial Statements)
  *
  * Mục đích nghiệp vụ:
- *   - BC 01: Bảng Cân đối kế toán (Balance Sheet)
- *   - BC 02: Báo cáo Kết quả Hoạt động Kinh doanh (Income Statement)
- *   - BC 03: Báo cáo Lưu chuyển Tiền tệ (Cash Flow Statement)
- *   - Tuân thủ Circular 99/2025/TT-BTC theo chỉ tiêu quy định
- *   - Kiểm tra tính hợp lệ (validate) trước khi xuất báo cáo
+ *   - BC 01: Bảng Cân đối kế toán
+ *   - BC 02: Báo cáo KQKD
+ *   - BC 03: Báo cáo Lưu chuyển Tiền tệ
+ *   - Tuân thủ Circular 99/2025/TT-BTC
+ *   - Xuất XBRL theo Taxonomy GDT
  *
  * API endpoints:
- *   GET /api/fs/bc01 — Bảng Cân đối kế toán (theo kỳ)
- *   GET /api/fs/bc02 — Báo cáo KQKD
- *   GET /api/fs/bc03 — Báo cáo Lưu chuyển Tiền tệ
- *   GET /api/fs/tt99 — Báo cáo tổng hợp TT99 (cả 3 BC + validation)
+ *   GET /api/fs/bc01 — BC01
+ *   GET /api/fs/bc02 — BC02
+ *   GET /api/fs/bc03 — BC03
+ *   GET /api/fs/bc03/direct — BC03 trực tiếp
+ *   GET /api/fs/tt99 — Tổng hợp TT99
+ *   POST /api/fs/manual-values — Lưu chỉ tiêu nhập tay
+ *   GET /api/fs/xbrl/bc01 — Xuất XBRL BC01
+ *   GET /api/fs/xbrl/bc02 — Xuất XBRL BC02
+ *   GET /api/fs/xbrl/bc03 — Xuất XBRL BC03
  *
  * Rủi ro:
- *   - R005: Sai tài khoản → sai chỉ tiêu BC → sai BCTC → phạt thuế
- *   - BC01: Tổng Tài sản (280) phải = Tổng Nguồn vốn (440)
- *   - BC02: Lợi nhuận gộp (20) = 511 - 632 - 333
- *   - BC03: Phải khớp với BC01 và BC02 (nguồn tiền = chênh lệch tiền)
- *   - Dữ liệu kỳ trước (prior period) cần so sánh để phát hiện bất thường
+ *   - R005: Sai tài khoản → sai chỉ tiêu
+ *   - BC01: Tổng TS (280) = Tổng NV (440)
  *
  * Tích hợp:
- *   - FsService đọc từ AccountRepository số dư cuối kỳ
- *   - PeriodService cung cấp thông tin kỳ kế toán
- *   - Số liệu BC02 ảnh hưởng đến chỉ tiêu thuế TNDN
+ *   - FsService đọc AccountRepository
+ *   - PeriodService
  */
 class FsController
 {
@@ -41,13 +42,11 @@ class FsController
 
     public function __construct(FsService $fs, XbrlGenerator $xbrl) { $this->fs = $fs; $this->xbrl = $xbrl; }
 
-    // NGHIỆP VỤ: BC 01 — Bảng Cân đối kế toán (Balance Sheet)
-    // Input: GET ?period=2025
-    // Output: { items: [{ ma_so, name_vi, value }], total_assets, total_equity, errors }
-    // Service: FsService.generateBC01() — đọc số dư từ AccountRepository
-    // Kiểm tra: Tổng Tài sản (280) phải = Tổng Nguồn vốn (440) — nếu không = errors
-    // Rủi ro: R005 — Sai tài khoản → sai chỉ tiêu BC. Sai số dư đầu kỳ → sai toàn bộ BC
-    // Tuân thủ: Circular 99/2025/TT-BTC — Mẫu số B01-DN
+    /**
+     * BC 01 — Bảng Cân đối kế toán
+     *
+     * @return void
+     */
     public function bc01(): void
     {
         $period = $_GET['period'] ?? date('Y');
@@ -61,13 +60,11 @@ class FsController
         ]);
     }
 
-    // NGHIỆP VỤ: BC 02 — Báo cáo Kết quả Hoạt động Kinh doanh (Income Statement)
-    // Input: GET ?period=2025
-    // Output: { items, net_profit (60), errors }
-    // Service: FsService.generateBC02() — tổng hợp doanh thu, chi phí, lợi nhuận
-    // Kiểm tra: Lợi nhuận gộp (20) = 511 - 632 - 333. LNST (60) = tổng thu nhập - tổng chi phí
-    // Rủi ro: Sai kết chuyển 511,632,641,642,635,811 → lợi nhuận sai → thuế TNDN sai
-    // Tuân thủ: TT 99 — Mẫu số B02-DN. Chỉ tiêu 60 = cơ sở tính thuế TNDN
+    /**
+     * BC 02 — Báo cáo KQKD
+     *
+     * @return void
+     */
     public function bc02(): void
     {
         Auth::requirePermission('report', 'read');
@@ -86,13 +83,11 @@ class FsController
         ]);
     }
 
-    // NGHIỆP VỤ: Báo cáo tổng hợp TT99 — xuất đồng thời BC01 + BC02 + BC03 + validation
-    // Input: GET ?period=2025
-    // Output: { items (BC01+BC02 merged), cash_flow (BC03), total_assets, total_equity, net_profit, closing_cash, errors }
-    // Service: Gọi generateBC01, generateBC02, generateBC03, validate mỗi BC, prior period values
-    // Kiểm tra tổng thể: BC01 tổng TS=NV, BC03 closing cash = BC01 cash
-    // Rủi ro: Prior period values dùng để phát hiện biến động bất thường
-    // Mục đích: Giao diện tổng hợp cho Kế toán trưởng kiểm tra nhanh trước khi nộp
+    /**
+     * Báo cáo tổng hợp TT99 — BC01+BC02+BC03+validation
+     *
+     * @return void
+     */
     public function tt99(): void
     {
         Auth::requirePermission('report', 'read');
@@ -119,24 +114,31 @@ class FsController
         ]);
     }
 
+    /**
+     * View BC01
+     *
+     * @return void
+     */
     public function viewBC01(): void
     {
         require __DIR__ . '/../../../../../public/views/fs_bc01.php';
     }
 
+    /**
+     * View BC02
+     *
+     * @return void
+     */
     public function viewBC02(): void
     {
         require __DIR__ . '/../../../../../public/views/fs_bc02.php';
     }
 
-    // NGHIỆP VỤ: BC 03 — Báo cáo Lưu chuyển Tiền tệ (Cash Flow Statement)
-    // Input: GET ?period=2025
-    // Output: { items, net_cash_flow (50), closing_cash (70), bc01_closing_cash, errors }
-    // Service: FsService.generateBC03()
-    // Kiểm tra chéo: Số dư tiền cuối kỳ (70) phải = Tiền trên BC01 (chỉ tiêu 110)
-    // Sai lệch > 1 VND → errors. So sánh với prior period values
-    // Rủi ro: BC03 không khớp BC01 → BCTC không hợp lệ → audit fail
-    // Tuân thủ: TT 99 — Mẫu số B03-DN, VAS 24
+    /**
+     * BC 03 — Báo cáo Lưu chuyển Tiền tệ
+     *
+     * @return void
+     */
     public function bc03(): void
     {
         Auth::requirePermission('report', 'read');
@@ -164,12 +166,11 @@ class FsController
         ]);
     }
 
-    // NGHIỆP VỤ: BC 03 — Phương pháp Trực tiếp (Direct Method)
-    // Input: GET ?period=2025
-    // Output: { items, net_cash_flow (50), closing_cash (70), errors }
-    // Service: FsService.generateBC03Direct()
-    // Kiểm tra chéo: Số dư tiền cuối kỳ (70) phải = Tiền trên BC01 (chỉ tiêu 110)
-    // Phân loại: Cash receipt/payment từ đối ứng TK tiền (111/112) với opponent account
+    /**
+     * BC 03 — Phương pháp Trực tiếp
+     *
+     * @return void
+     */
     public function bc03Direct(): void
     {
         Auth::requirePermission('report', 'read');
@@ -194,25 +195,31 @@ class FsController
         ]);
     }
 
+    /**
+     * View BC03
+     *
+     * @return void
+     */
     public function viewBC03(): void
     {
         require __DIR__ . '/../../../../../public/views/fs_bc03.php';
     }
 
+    /**
+     * View TT99
+     *
+     * @return void
+     */
     public function viewTT99(): void
     {
         require __DIR__ . '/../../../../../public/views/bc09.php';
     }
 
-    //
-    // NGHIỆP VỤ: Xuất BC01 dạng XBRL theo Taxonomy GDT
-    // Input: GET ?period=2025
-    // Output: file .xbrl (Content-Type: application/xml)
-    // Service: XbrlGenerator.generateBC01() — map fs_line_items → tags GDT
-    // Tuân thủ: XBRL 2.1 + GDT namespace http://www.gdt.gov.vn/2025/btc
-    // Rủi ro: Sai namespace → GDT từ chối. Sai period → BC kỳ khác.
-    // Ảnh hưởng: Bắt buộc cho DN >₫10B doanh thu (Thông tư 99/2025/TT-BTC)
-    //
+    /**
+     * Xuất BC01 dạng XBRL theo Taxonomy GDT
+     *
+     * @return void
+     */
     public function exportXbrlBC01(): void
     {
         Auth::requirePermission('report', 'export');
@@ -231,12 +238,11 @@ class FsController
         echo $xml;
     }
 
-    //
-    // NGHIỆP VỤ: Lưu giá trị nhập tay cho chỉ tiêu BC (BC02: MS 21,70,71; BC03: MS 02,04,07,...)
-    // Input: POST { statement: "BC03", period: "2025", values: { "02": 120000000 } }
-    // Output: { success: true, manual: { ... } }
-    // Lưu vào business_config với key = {statement}.manual.{period}
-    //
+    /**
+     * Lưu giá trị nhập tay cho chỉ tiêu BC
+     *
+     * @return void
+     */
     public function saveManualValues(): void
     {
         Auth::requirePermission('report', 'update');
@@ -246,7 +252,6 @@ class FsController
         $statement = $body['statement'] ?? 'BC02';
         $values = $body['values'] ?? [];
         $user = $_SESSION['user']['username'] ?? 'system';
-        // Danh sách mã số được phép nhập tay theo từng loại báo cáo
         $allowedMap = [
             'BC02' => ['21', '70', '71'],
             'BC03' => ['02', '04', '07', '14', '15', '16', '17', '22', '24', '26', '27', '35', '36', '61'],
@@ -262,6 +267,11 @@ class FsController
         JsonResponse::ok(['success' => true, 'manual' => $filtered]);
     }
 
+    /**
+     * Xuất BC02 dạng XBRL
+     *
+     * @return void
+     */
     public function exportXbrlBC02(): void
     {
         Auth::requirePermission('report', 'export');
@@ -281,6 +291,11 @@ class FsController
         echo $xml;
     }
 
+    /**
+     * Xuất BC03 dạng XBRL
+     *
+     * @return void
+     */
     public function exportXbrlBC03(): void
     {
         Auth::requirePermission('report', 'export');
@@ -300,6 +315,13 @@ class FsController
         echo $xml;
     }
 
+    /**
+     * Tìm giá trị theo mã số trong mảng items
+     *
+     * @param array $items Mảng items
+     * @param string $maSo Mã số cần tìm
+     * @return float
+     */
     private function findValue(array $items, string $maSo): float
     {
         foreach ($items as $r) {

@@ -5,18 +5,28 @@ use Accounting\Domain\Service\FsNotesService;
 use Accounting\Infrastructure\JsonResponse;
 use Accounting\Infrastructure\Auth;
 
-//
-// BC09 — Thuyết minh Báo cáo tài chính (Notes to Financial Statements)
-// Mẫu B09-DN theo Thông tư 99/2025/TT-BTC
-//
-// API endpoints:
-//   GET  /api/fs/bc09/:periodId          — Lấy báo cáo BC09
-//   POST /api/fs/bc09/:periodId/generate  — Sinh tự động chỉ tiêu auto-calc
-//   PUT  /api/fs/bc09/:periodId/indicator/:code — Cập nhật chỉ tiêu thủ công
-//   POST /api/fs/bc09/:periodId/validate  — Kiểm tra chéo số liệu
-//   GET  /api/fs/bc09/policies            — Mẫu chính sách kế toán
-//   GET  /bao-cao-tai-chinh/thuyet-minh-bc09 — Giao diện người dùng
-//
+/**
+ * MODULE: BC09 — Thuyết minh Báo cáo Tài chính
+ *
+ * Mục đích nghiệp vụ:
+ *   - Mẫu B09-DN theo TT 99
+ *   - Sinh tự động các chỉ tiêu từ số dư tài khoản
+ *   - Cập nhật chỉ tiêu nhập tay
+ *   - Kiểm tra chéo số liệu BC09 với BC01/BC02
+ *   - Mẫu chính sách kế toán
+ *
+ * API endpoints:
+ *   GET  /api/fs/bc09/{periodId} — Báo cáo BC09
+ *   POST /api/fs/bc09/{periodId}/generate — Sinh tự động
+ *   PUT  /api/fs/bc09/{periodId}/indicator/{code} — Cập nhật
+ *   POST /api/fs/bc09/{periodId}/validate — Kiểm tra chéo
+ *   GET  /api/fs/bc09/policies — Mẫu chính sách
+ *   GET  /bao-cao-tai-chinh/thuyet-minh-bc09 — View HTML
+ *
+ * Tích hợp:
+ *   - FsNotesService xử lý logic BC09
+ *   - Dữ liệu từ AccountRepository, LedgerEntry
+ */
 class FsNotesController
 {
     private FsNotesService $fsNotes;
@@ -26,10 +36,12 @@ class FsNotesController
         $this->fsNotes = $fsNotes;
     }
 
-    //
-    // GET /api/fs/bc09/{periodId}
-    // Trả về toàn bộ báo cáo BC09 cho một kỳ kế toán
-    //
+    /**
+     * Lấy báo cáo BC09 cho một kỳ
+     *
+     * @param string $periodId ID kỳ kế toán
+     * @return void
+     */
     public function getReport(string $periodId): void
     {
         Auth::requirePermission('report', 'read');
@@ -46,10 +58,12 @@ class FsNotesController
         }
     }
 
-    //
-    // POST /api/fs/bc09/{periodId}/generate
-    // Sinh tự động các chỉ tiêu auto-calc từ số dư tài khoản
-    //
+    /**
+     * Sinh tự động các chỉ tiêu auto-calc
+     *
+     * @param string $periodId ID kỳ kế toán
+     * @return void
+     */
     public function generate(string $periodId): void
     {
         Auth::requirePermission('report', 'create');
@@ -72,11 +86,13 @@ class FsNotesController
         }
     }
 
-    //
-    // PUT /api/fs/bc09/{periodId}/indicator/{code}
-    // Cập nhật số liệu cho một chỉ tiêu (nhập tay)
-    // Body JSON: { "year_start": 1000000, "year_end": 1500000, "note_text": "..." }
-    //
+    /**
+     * Cập nhật chỉ tiêu nhập tay
+     *
+     * @param string $periodId ID kỳ kế toán
+     * @param string $code Mã chỉ tiêu
+     * @return void
+     */
     public function updateIndicator(string $periodId, string $code): void
     {
         Auth::requirePermission('report', 'update');
@@ -104,10 +120,12 @@ class FsNotesController
         }
     }
 
-    //
-    // POST /api/fs/bc09/{periodId}/validate
-    // Kiểm tra chéo số liệu BC09 với BC01/BC02
-    //
+    /**
+     * Kiểm tra chéo số liệu BC09 với BC01/BC02
+     *
+     * @param string $periodId ID kỳ kế toán
+     * @return void
+     */
     public function validate(string $periodId): void
     {
         Auth::requirePermission('report', 'read');
@@ -124,10 +142,11 @@ class FsNotesController
         }
     }
 
-    //
-    // GET /api/fs/bc09/policies
-    // Trả về danh sách mẫu chính sách kế toán (Section IV)
-    //
+    /**
+     * Danh sách mẫu chính sách kế toán
+     *
+     * @return void
+     */
     public function getPolicies(): void
     {
         Auth::requirePermission('report', 'read');
@@ -135,10 +154,11 @@ class FsNotesController
         JsonResponse::ok(['policies' => $policies]);
     }
 
-    //
-    // GET /bao-cao-tai-chinh/thuyet-minh-bc09
-    // Giao diện người dùng
-    //
+    /**
+     * View HTML
+     *
+     * @return void
+     */
     public function viewIndex(): void
     {
         Auth::requirePermission('report', 'read');

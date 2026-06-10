@@ -7,12 +7,27 @@ use Accounting\Domain\Model\SalesOrderLine;
 use Accounting\Domain\Repository\SalesOrderRepositoryInterface;
 use PDO;
 
+/**
+ * Repository PDO cho module Đơn bán hàng (Sales Orders).
+ *
+ * Triển khai các thao tác CRUD với bảng sales_orders, sales_order_lines,
+ * sales_order_links sử dụng PDO prepared statements.
+ */
 class PDOSalesOrderRepository implements SalesOrderRepositoryInterface
 {
     private PDO $pdo;
 
+    /**
+     * @param PDO $pdo Kết nối PDO đến MySQL
+     */
     public function __construct(PDO $pdo) { $this->pdo = $pdo; }
 
+    /**
+     * Tìm đơn bán hàng theo ID.
+     *
+     * @param string $id ID của đơn bán hàng
+     * @return SalesOrder|null Đối tượng SalesOrder nếu tìm thấy, null nếu không
+     */
     public function findById(string $id): ?SalesOrder
     {
         $stmt = $this->pdo->prepare('SELECT * FROM sales_orders WHERE id = ?');
@@ -24,6 +39,12 @@ class PDOSalesOrderRepository implements SalesOrderRepositoryInterface
         return $order;
     }
 
+    /**
+     * Tìm đơn bán hàng theo số tham chiếu.
+     *
+     * @param string $reference Số tham chiếu của đơn bán hàng
+     * @return SalesOrder|null Đối tượng SalesOrder nếu tìm thấy, null nếu không
+     */
     public function findByReference(string $reference): ?SalesOrder
     {
         $stmt = $this->pdo->prepare('SELECT * FROM sales_orders WHERE reference = ?');
@@ -33,6 +54,12 @@ class PDOSalesOrderRepository implements SalesOrderRepositoryInterface
         return $this->hydrate($row);
     }
 
+    /**
+     * Tìm đơn bán hàng theo mã khách hàng.
+     *
+     * @param int $customerId ID của khách hàng
+     * @return SalesOrder[] Danh sách đơn bán hàng, sắp xếp theo created_at DESC
+     */
     public function findByCustomer(int $customerId): array
     {
         $stmt = $this->pdo->prepare('SELECT * FROM sales_orders WHERE customer_id = ? ORDER BY created_at DESC');
@@ -40,6 +67,12 @@ class PDOSalesOrderRepository implements SalesOrderRepositoryInterface
         return $this->hydrateAll($stmt);
     }
 
+    /**
+     * Tìm đơn bán hàng theo trạng thái.
+     *
+     * @param string $status Trạng thái đơn hàng (draft, confirmed, processing, shipped, delivered, cancelled, etc.)
+     * @return SalesOrder[] Danh sách đơn bán hàng, sắp xếp theo created_at DESC
+     */
     public function findByStatus(string $status): array
     {
         $stmt = $this->pdo->prepare('SELECT * FROM sales_orders WHERE status = ? ORDER BY created_at DESC');
@@ -47,6 +80,13 @@ class PDOSalesOrderRepository implements SalesOrderRepositoryInterface
         return $this->hydrateAll($stmt);
     }
 
+    /**
+     * Lấy danh sách đơn bán hàng có phân trang.
+     *
+     * @param int $limit Số lượng bản ghi tối đa (mặc định 50)
+     * @param int $offset Số lượng bản ghi bỏ qua (mặc định 0)
+     * @return SalesOrder[] Danh sách đơn bán hàng
+     */
     public function findAll(int $limit = 50, int $offset = 0): array
     {
         $stmt = $this->pdo->prepare('SELECT * FROM sales_orders ORDER BY created_at DESC LIMIT ? OFFSET ?');
@@ -54,6 +94,15 @@ class PDOSalesOrderRepository implements SalesOrderRepositoryInterface
         return $this->hydrateAll($stmt);
     }
 
+    /**
+     * Lưu đơn bán hàng (thêm mới hoặc cập nhật).
+     *
+     * Sử dụng ON DUPLICATE KEY UPDATE để hỗ trợ cả insert và update.
+     * Nếu đơn hàng có ID numeric, tự động lưu các dòng chi tiết.
+     *
+     * @param SalesOrder $order Đối tượng SalesOrder cần lưu
+     * @return void
+     */
     public function save(SalesOrder $order): void
     {
         $id = $order->getId();
@@ -86,6 +135,14 @@ class PDOSalesOrderRepository implements SalesOrderRepositoryInterface
         }
     }
 
+    /**
+     * Xóa đơn bán hàng và các dữ liệu liên quan.
+     *
+     * Xóa theo thứ tự: links → lines → order.
+     *
+     * @param string $id ID của đơn bán hàng cần xóa
+     * @return void
+     */
     public function delete(string $id): void
     {
         $stmt = $this->pdo->prepare('DELETE FROM sales_order_links WHERE sales_order_id = ?');
@@ -96,6 +153,12 @@ class PDOSalesOrderRepository implements SalesOrderRepositoryInterface
         $stmt->execute([$id]);
     }
 
+    /**
+     * Đếm số lượng đơn bán hàng theo trạng thái.
+     *
+     * @param string $status Trạng thái cần đếm
+     * @return int Số lượng đơn bán hàng
+     */
     public function countByStatus(string $status): int
     {
         $stmt = $this->pdo->prepare('SELECT COUNT(*) FROM sales_orders WHERE status = ?');
@@ -103,6 +166,17 @@ class PDOSalesOrderRepository implements SalesOrderRepositoryInterface
         return (int)$stmt->fetchColumn();
     }
 
+    /**
+     * Lưu liên kết giữa đơn bán hàng và đối tượng khác (hóa đơn, phiếu xuất...).
+     *
+     * @param string $orderId ID của đơn bán hàng
+     * @param string $linkedType Loại đối tượng liên kết (invoice, delivery_note, etc.)
+     * @param string $linkedId ID của đối tượng liên kết
+     * @param string|null $linkedRef Số tham chiếu của đối tượng liên kết
+     * @param float $amount Số tiền liên kết
+     * @param string $createdBy Người tạo liên kết
+     * @return void
+     */
     public function saveLink(string $orderId, string $linkedType, string $linkedId, ?string $linkedRef, float $amount, string $createdBy): void
     {
         $stmt = $this->pdo->prepare(
@@ -112,6 +186,12 @@ class PDOSalesOrderRepository implements SalesOrderRepositoryInterface
         $stmt->execute([$orderId, $linkedType, $linkedId, $linkedRef, $amount, $createdBy]);
     }
 
+    /**
+     * Lấy danh sách liên kết của một đơn bán hàng.
+     *
+     * @param string $orderId ID của đơn bán hàng
+     * @return array Danh sách các liên kết (mảng kết hợp)
+     */
     public function getLinks(string $orderId): array
     {
         $stmt = $this->pdo->prepare('SELECT * FROM sales_order_links WHERE sales_order_id = ? ORDER BY created_at');
@@ -119,6 +199,12 @@ class PDOSalesOrderRepository implements SalesOrderRepositoryInterface
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
+    /**
+     * Nạp danh sách dòng chi tiết của đơn bán hàng.
+     *
+     * @param int $orderId ID của đơn bán hàng
+     * @return SalesOrderLine[] Danh sách các dòng chi tiết
+     */
     private function loadLines(int $orderId): array
     {
         $stmt = $this->pdo->prepare('SELECT * FROM sales_order_lines WHERE sales_order_id = ? ORDER BY sort_order, line_no');
@@ -139,6 +225,15 @@ class PDOSalesOrderRepository implements SalesOrderRepositoryInterface
         return $lines;
     }
 
+    /**
+     * Lưu danh sách dòng chi tiết cho đơn bán hàng.
+     *
+     * Xóa các dòng cũ trước khi insert các dòng mới.
+     *
+     * @param int $orderId ID của đơn bán hàng
+     * @param SalesOrderLine[] $lines Danh sách các dòng chi tiết
+     * @return void
+     */
     private function saveLines(int $orderId, array $lines): void
     {
         $stmt = $this->pdo->prepare('DELETE FROM sales_order_lines WHERE sales_order_id = ?');
@@ -160,6 +255,12 @@ class PDOSalesOrderRepository implements SalesOrderRepositoryInterface
         }
     }
 
+    /**
+     * Hydrate một dòng dữ liệu từ database thành đối tượng SalesOrder.
+     *
+     * @param array $row Mảng dữ liệu từ database (PDO::FETCH_ASSOC)
+     * @return SalesOrder Đối tượng SalesOrder đã được khởi tạo
+     */
     private function hydrate(array $row): SalesOrder
     {
         return new SalesOrder(
@@ -176,6 +277,12 @@ class PDOSalesOrderRepository implements SalesOrderRepositoryInterface
         );
     }
 
+    /**
+     * Hydrate nhiều dòng dữ liệu từ statement thành mảng các SalesOrder.
+     *
+     * @param \PDOStatement $stmt PDO statement đã được execute
+     * @return SalesOrder[] Danh sách đối tượng SalesOrder
+     */
     private function hydrateAll(\PDOStatement $stmt): array
     {
         $items = [];

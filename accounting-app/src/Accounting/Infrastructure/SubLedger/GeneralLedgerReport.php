@@ -6,19 +6,26 @@ use Accounting\Domain\Repository\AccountRepositoryInterface;
 use Accounting\Domain\Service\GlService;
 use Accounting\Domain\Service\PeriodService;
 
-// SỔ CÁI: Báo cáo chi tiết phát sinh theo tài khoản (Mẫu S05-DN theo TT 99)
-//
-// Nghiệp vụ: Sổ cái là báo cáo nền tảng, hiển thị tất cả giao dịch của một tài khoản
-// kèm số dư lũy kế. Dùng GlService::getGeneralLedger() làm nguồn dữ liệu chính.
-//
-// RỦI RO: GlService trả về dữ liệu thời gian thực. Nếu kỳ đã đóng mà GL vẫn thay đổi
-// → số dư không khớp với báo cáo tài chính đã nộp → rủi ro kiểm toán.
+/**
+ * SỔ CÁI: Báo cáo chi tiết phát sinh theo tài khoản (Mẫu S05-DN theo TT 99).
+ *
+ * Nghiệp vụ: Sổ cái là báo cáo nền tảng, hiển thị tất cả giao dịch của một tài khoản
+ * kèm số dư lũy kế. Dùng GlService::getGeneralLedger() làm nguồn dữ liệu chính.
+ *
+ * RỦI RO: GlService trả về dữ liệu thời gian thực. Nếu kỳ đã đóng mà GL vẫn thay đổi
+ * → số dư không khớp với báo cáo tài chính đã nộp → rủi ro kiểm toán.
+ */
 class GeneralLedgerReport implements SubLedgerReportInterface
 {
     private GlService $glService;
     private AccountRepositoryInterface $accountRepo;
     private PeriodService $periodService;
 
+    /**
+     * @param GlService $glService Service sổ cái.
+     * @param AccountRepositoryInterface $accountRepo Repository tài khoản.
+     * @param PeriodService $periodService Service kỳ kế toán.
+     */
     public function __construct(GlService $glService, AccountRepositoryInterface $accountRepo, PeriodService $periodService)
     {
         $this->glService = $glService;
@@ -26,11 +33,21 @@ class GeneralLedgerReport implements SubLedgerReportInterface
         $this->periodService = $periodService;
     }
 
+    /**
+     * Lấy loại báo cáo.
+     *
+     * @return string 'general_ledger'.
+     */
     public function getReportType(): string
     {
         return 'general_ledger';
     }
 
+    /**
+     * Lấy tham số báo cáo.
+     *
+     * @return array Mảng tham số với name, label, type, required.
+     */
     public function getParameters(): array
     {
         return [
@@ -40,6 +57,13 @@ class GeneralLedgerReport implements SubLedgerReportInterface
         ];
     }
 
+    /**
+     * Lấy dữ liệu sổ cái.
+     *
+     * @param array $params Tham số: account_code, from_date, to_date.
+     * @return array Dữ liệu báo cáo gồm title, period, opening_balance, closing_balance, headers, rows, totals.
+     * @throws \InvalidArgumentException Nếu không chọn tài khoản.
+     */
     public function getData(array $params): array
     {
         $accountCode = $params['account_code'] ?? '';

@@ -37,15 +37,14 @@ class AuthController
         $this->pdo = $pdo;
     }
 
-    // NGHIỆP VỤ: Đăng nhập hệ thống — xác thực username/password, tải quyền và vai trò
-    // Input: { username, password }
-    // Output: { user: {id, username, full_name, email}, roles: [...], csrf: token } — 200 OK
-    // Process: (1) Kiểm tra user tồn tại + active (2) password_verify
-    // (3) Load role_permissions → $_SESSION['permissions'] (4) Load roles → $_SESSION['roles']
-    // (5) session_regenerate_id(true) — chống session fixation
-    // (6) Update last_login. Trả về CSRF token cho client dùng trong POST/PUT/DELETE
-    // Rủi ro: Brute force — cần giới hạn số lần sai. Session timeout 8h
-    // Ràng buộc: Session start trong index.php trước khi gọi controller. Sau login, mọi request cần session
+    /**
+     * Đăng nhập hệ thống
+     *
+     * Xác thực username/password, tải quyền và vai trò,
+     * regenerate session ID chống fixation.
+     *
+     * @return void
+     */
     public function login(): void
     {
         $data = json_decode(file_get_contents('php://input'), true);
@@ -111,11 +110,11 @@ class AuthController
         ]);
     }
 
-    // NGHIỆP VỤ: Đăng xuất — destroy session + xóa file session
-    // Process: SessionMiddleware::destroy() (session_destroy + xóa cookie) + unlink file session
-    // Output: Redirect 302 → /dang-nhap
-    // Rủi ro: FORBIDDEN — session_start() sau session_write_close(). Logout = POST (chống CSRF logout)
-    // Ràng buộc: Sau logout, redirect về trang login. Cache clearing ở client (meta cache-control)
+    /**
+     * Đăng xuất — destroy session + xóa file session + redirect
+     *
+     * @return void
+     */
     public function logout(): void
     {
         $oldSid = session_id();
@@ -129,6 +128,11 @@ class AuthController
         exit;
     }
 
+    /**
+     * Lấy thông tin người dùng hiện tại
+     *
+     * @return void
+     */
     public function me(): void
     {
         if (!isset($_SESSION['user'])) {

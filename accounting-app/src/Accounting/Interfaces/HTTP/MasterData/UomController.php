@@ -1,46 +1,38 @@
 <?php
 namespace Accounting\Interfaces\HTTP\MasterData;
 
-use Accounting\Domain\Model\Uom;
+use Accounting\Infrastructure\JsonResponse;
+use Accounting\Infrastructure\Auth;
 use Accounting\Domain\Repository\UomRepositoryInterface;
-
-use \Accounting\Interfaces\HTTP\CrudControllerTrait;
+use Accounting\Interfaces\HTTP\CrudControllerTrait;
 
 /**
- * MODULE: Danh mục Đơn vị Tính (Unit of Measure)
+ * MODULE: Quản lý Đơn vị tính (UoM)
  *
  * Mục đích nghiệp vụ:
- *   - CRUD đơn vị tính: cái, chiếc, kg, mét, thùng, v.v.
- *   - Cơ sở cho quản lý hàng tồn kho và báo giá
+ *   - CRUD danh sách đơn vị tính (cái, kg, thùng...)
+ *   - Quản lý tỷ lệ quy đổi giữa các đơn vị
  *
  * API endpoints:
- *   (Sử dụng CrudControllerTrait — CRUD chuẩn)
- *
- * Rủi ro:
- *   - Thiếu đơn vị tính → không tạo được item mới
+ *   GET    /api/uoms — Danh sách
+ *   POST   /api/uoms — Tạo mới
+ *   GET    /api/uoms/{id} — Chi tiết
+ *   PUT    /api/uoms/{id} — Cập nhật
+ *   DELETE /api/uoms/{id} — Xoá
  *
  * Tích hợp:
- *   - ItemController gán uom_id cho từng item
- *   - ReceiptController và IssueController dùng đơn vị tính của item
+ *   - ItemController gán UoM cho hàng hoá
  */
 class UomController
 {
     use CrudControllerTrait;
 
-    private UomRepositoryInterface $repo;
-    public function __construct(UomRepositoryInterface $repo) { $this->repo = $repo; }
-    protected function repo() { return $this->repo; }
-    protected function idPrefix(): string { return 'uom_'; }
-
-    protected function createEntity(array $data): object
+    /**
+     * @param UomRepositoryInterface $repository
+     */
+    public function __construct(UomRepositoryInterface $repository)
     {
-        return new Uom($data['id'], $data['code'], $data['name']);
-    }
-
-    protected function updateEntity(object $entity, array $data): void
-    {
-        if (isset($data['code'])) $entity->setCode($data['code']);
-        if (isset($data['name'])) $entity->setName($data['name']);
-        if (isset($data['status'])) $entity->setStatus((bool)$data['status']);
+        $this->repository = $repository;
+        $this->module = 'uoms';
     }
 }

@@ -6,18 +6,52 @@ use Accounting\Domain\Service\ReportBuilderService;
 use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
 
+/**
+ * MODULE: Tạo báo cáo tùy chỉnh (Custom Report Builder)
+ *
+ * Mục đích nghiệp vụ:
+ *   - Tạo báo cáo tùy chỉnh từ các bảng dữ liệu
+ *   - Lưu định nghĩa báo cáo để tái sử dụng
+ *   - Chạy báo cáo ad-hoc
+ *   - Xuất kết quả CSV
+ *
+ * API endpoints:
+ *   GET  /api/reports/tables — Danh sách bảng
+ *   POST /api/reports/save — Lưu báo cáo
+ *   GET  /api/reports/list — Danh sách đã lưu
+ *   GET  /api/reports/{id} — Chi tiết
+ *   GET  /api/reports/{id}/run — Chạy
+ *   POST /api/reports/run-adhoc — Chạy ad-hoc
+ *   DELETE /api/reports/{id} — Xóa
+ *   GET  /api/reports/{id}/export — Xuất CSV
+ *   POST /api/reports/export-adhoc — Xuất ad-hoc
+ *   GET  /api/reports/view — View HTML
+ *
+ * Tích hợp:
+ *   - ReportBuilderService xử lý động các truy vấn
+ */
 class ReportBuilderController
 {
     private ReportBuilderService $service;
 
     public function __construct(ReportBuilderService $service) { $this->service = $service; }
 
+    /**
+     * Danh sách bảng có thể dùng làm báo cáo
+     *
+     * @return void
+     */
     public function tables(): void
     {
         Auth::requirePermission('report', 'read');
         JsonResponse::ok($this->service->getAvailableTables());
     }
 
+    /**
+     * Lưu định nghĩa báo cáo
+     *
+     * @return void
+     */
     public function save(): void
     {
         Auth::requirePermission('report', 'create');
@@ -31,12 +65,23 @@ class ReportBuilderController
         JsonResponse::ok(['id' => $id], 201);
     }
 
+    /**
+     * Danh sách báo cáo đã lưu
+     *
+     * @return void
+     */
     public function list(): void
     {
         Auth::requirePermission('report', 'read');
         JsonResponse::ok($this->service->getSavedReports(Auth::currentUser()));
     }
 
+    /**
+     * Chi tiết định nghĩa báo cáo
+     *
+     * @param string $id ID báo cáo
+     * @return void
+     */
     public function get(string $id): void
     {
         Auth::requirePermission('report', 'read');
@@ -45,6 +90,12 @@ class ReportBuilderController
         JsonResponse::ok($def);
     }
 
+    /**
+     * Chạy báo cáo đã lưu
+     *
+     * @param string $id ID báo cáo
+     * @return void
+     */
     public function run(string $id): void
     {
         Auth::requirePermission('report', 'read');
@@ -58,6 +109,11 @@ class ReportBuilderController
         }
     }
 
+    /**
+     * Chạy báo cáo ad-hoc
+     *
+     * @return void
+     */
     public function runAdhoc(): void
     {
         Auth::requirePermission('report', 'read');
@@ -71,6 +127,12 @@ class ReportBuilderController
         }
     }
 
+    /**
+     * Xóa báo cáo đã lưu
+     *
+     * @param string $id ID báo cáo
+     * @return void
+     */
     public function delete(string $id): void
     {
         Auth::requirePermission('report', 'delete');
@@ -79,6 +141,12 @@ class ReportBuilderController
         JsonResponse::ok(['message' => 'Đã xóa báo cáo']);
     }
 
+    /**
+     * Xuất báo cáo đã lưu
+     *
+     * @param string $id ID báo cáo
+     * @return void
+     */
     public function export(string $id): void
     {
         Auth::requirePermission('report', 'read');
@@ -90,6 +158,11 @@ class ReportBuilderController
         echo $result['content'];
     }
 
+    /**
+     * Xuất báo cáo ad-hoc
+     *
+     * @return void
+     */
     public function exportAdhoc(): void
     {
         Auth::requirePermission('report', 'read');
@@ -101,6 +174,11 @@ class ReportBuilderController
         echo $result['content'];
     }
 
+    /**
+     * View HTML
+     *
+     * @return void
+     */
     public function viewIndex(): void
     {
         Auth::requirePermission('report', 'read');

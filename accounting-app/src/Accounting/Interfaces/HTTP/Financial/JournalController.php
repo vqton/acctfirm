@@ -53,6 +53,11 @@ class JournalController
         $this->txnRepo = $txnRepo;
     }
 
+    /**
+     * Danh sách bút toán theo kỳ
+     *
+     * @return void
+     */
     public function list(): void
     {
         $period = $_GET['period'] ?? date('Y-m');
@@ -88,6 +93,13 @@ class JournalController
         JsonResponse::ok($result);
     }
 
+    /**
+     * Chi tiết bút toán
+     *
+     * @param string $id ID bút toán
+     * @throws \InvalidArgumentException
+     * @return void
+     */
     public function get(string $id): void
     {
         $txn = $this->txnRepo->findById($id);
@@ -113,14 +125,20 @@ class JournalController
         ]);
     }
 
-    // NGHIỆP VỤ: Tạo bút toán nháp (draft) — chưa ghi sổ, có thể sửa/xóa
-    // Input: { description?, reference?, lines: [{account_code, amount, is_debit}], created_by? }
-    // Output: { id, reference, status: 'draft', date } — 201 Created
-    // Service: JournalService.createDraft() — validate: ít nhất 2 lines, Dr=Cr, posting rules
-    // Permission: Không cần CSRF (không ảnh hưởng data cuối cùng), không cần permission đặc biệt
-    // Rủi ro: R002 — Kiểm tra Dr=Cr ngay tại createDraft (tolerance ±10). R005 — Control account check
-    // Ràng buộc: lines phải có ít nhất 1 Dr và 1 Cr. Tất cả tài khoản phải tồn tại
-    // Trạng thái: draft → submitted (gửi duyệt) → posted (đã ghi sổ)
+    /**
+     * NGHIỆP VỤ: Tạo bút toán nháp (draft) — chưa ghi sổ, có thể sửa/xóa
+     *
+     * Input: { description?, reference?, lines: [{account_code, amount, is_debit}], created_by? }
+     * Output: { id, reference, status: 'draft', date } — 201 Created
+     * Service: JournalService.createDraft() — validate: ít nhất 2 lines, Dr=Cr, posting rules
+     * Permission: Không cần CSRF (không ảnh hưởng data cuối cùng), không cần permission đặc biệt
+     * Rủi ro: R002 — Kiểm tra Dr=Cr ngay tại createDraft (tolerance ±10). R005 — Control account check
+     * Ràng buộc: lines phải có ít nhất 1 Dr và 1 Cr. Tất cả tài khoản phải tồn tại
+     * Trạng thái: draft → submitted (gửi duyệt) → posted (đã ghi sổ)
+     *
+     * @throws \InvalidArgumentException
+     * @return void
+     */
     public function createDraft(): void
     {
         Auth::checkCsrf();
@@ -148,13 +166,20 @@ class JournalController
         }
     }
 
-    // NGHIỆP VỤ: Phê duyệt draft (gửi duyệt) — chuyển status draft → submitted
-    // Input: id (URL)
-    // Output: { id, reference, status: 'submitted' }
-    // Service: JournalService.approveDraft() — cập nhật status
-    // Permission: journal, approve
-    // Rủi ro: Sau khi submitted, draft không sửa được nữa. Chờ ApprovalController duyệt
-    // Quy trình: Draft → Submitted → (ApprovalController) → Posted
+    /**
+     * NGHIỆP VỤ: Phê duyệt draft (gửi duyệt) — chuyển status draft → submitted
+     *
+     * Input: id (URL)
+     * Output: { id, reference, status: 'submitted' }
+     * Service: JournalService.approveDraft() — cập nhật status
+     * Permission: journal, approve
+     * Rủi ro: Sau khi submitted, draft không sửa được nữa. Chờ ApprovalController duyệt
+     * Quy trình: Draft → Submitted → (ApprovalController) → Posted
+     *
+     * @param string $id ID bút toán
+     * @throws \InvalidArgumentException|\RuntimeException
+     * @return void
+     */
     public function approveDraft(string $id): void
     {
         Auth::requirePermission('journal', 'approve');
@@ -171,6 +196,13 @@ class JournalController
         }
     }
 
+    /**
+     * Gửi duyệt bút toán — chuyển draft → submitted
+     *
+     * @param string $id ID bút toán
+     * @throws \InvalidArgumentException|\RuntimeException
+     * @return void
+     */
     public function submitEntry(string $id): void
     {
         Auth::checkCsrf();
@@ -183,6 +215,13 @@ class JournalController
         }
     }
 
+    /**
+     * Từ chối bút toán đã duyệt
+     *
+     * @param string $id ID bút toán
+     * @throws \InvalidArgumentException|\RuntimeException
+     * @return void
+     */
     public function rejectEntry(string $id): void
     {
         Auth::checkCsrf();
@@ -198,6 +237,13 @@ class JournalController
         }
     }
 
+    /**
+     * Trả lại bút toán cho người tạo sửa
+     *
+     * @param string $id ID bút toán
+     * @throws \InvalidArgumentException|\RuntimeException
+     * @return void
+     */
     public function returnEntry(string $id): void
     {
         Auth::checkCsrf();
@@ -210,6 +256,13 @@ class JournalController
         }
     }
 
+    /**
+     * Ghi sổ bút toán đã được duyệt
+     *
+     * @param string $id ID bút toán
+     * @throws \Exception
+     * @return void
+     */
     public function postApproved(string $id): void
     {
         Auth::checkCsrf();
@@ -245,16 +298,22 @@ class JournalController
         }
     }
 
-    // NGHIỆP VỤ: Ghi sổ bút toán trực tiếp (post ngay, không qua draft) — CORE OPERATION
-    // Input: { description?, reference?, lines: [{account_code, amount, is_debit}], created_by? }
-    // Output: { id, reference, status: 'posted', date, description, lines } — 201 Created
-    // Service: JournalService.postEntry() — validate posting rules → insert transaction + ledger_entries
-    // Transaction: JournalService tự wrap trong beginTransaction/commit/rollback
-    // Permission: Không CSRF (gọi từ service khác, không trình duyệt trực tiếp)
-    // Validate sequence: (1) Account tồn tại (2) Lines ≥ 2 (3) Dr=Cr ±10 (4) Control account (5) Posting rules
-    // (6) Period open check (7) Voucher uniqueness (SELECT FOR UPDATE)
-    // Rủi ro: R002 (Dr=Cr), R001 (period closed), R005 (control account), R006 (voucher)
-    // Ràng buộc: Sau post, không sửa/xóa được. Chỉ reverse (journal reversal)
+    /**
+     * NGHIỆP VỤ: Ghi sổ bút toán trực tiếp (post ngay, không qua draft) — CORE OPERATION
+     *
+     * Input: { description?, reference?, lines: [{account_code, amount, is_debit}], created_by? }
+     * Output: { id, reference, status: 'posted', date, description, lines } — 201 Created
+     * Service: JournalService.postEntry() — validate posting rules → insert transaction + ledger_entries
+     * Transaction: JournalService tự wrap trong beginTransaction/commit/rollback
+     * Permission: Không CSRF (gọi từ service khác, không trình duyệt trực tiếp)
+     * Validate sequence: (1) Account tồn tại (2) Lines ≥ 2 (3) Dr=Cr ±10 (4) Control account (5) Posting rules
+     * (6) Period open check (7) Voucher uniqueness (SELECT FOR UPDATE)
+     * Rủi ro: R002 (Dr=Cr), R001 (period closed), R005 (control account), R006 (voucher)
+     * Ràng buộc: Sau post, không sửa/xóa được. Chỉ reverse (journal reversal)
+     *
+     * @throws \InvalidArgumentException
+     * @return void
+     */
     public function postEntry(): void
     {
         Auth::checkCsrf();
@@ -288,14 +347,19 @@ class JournalController
         }
     }
 
-    // NGHIỆP VỤ: Bảng cân đối tài khoản (Trial Balance) — tổng hợp số dư tất cả TK
-    // Input: none (đọc tất cả tài khoản)
-    // Output: { accounts: [{code, name, type, debit, credit}], total_debit, total_credit, balanced }
-    // Service: AccountRepository.findAll() — lấy số dư từng tài khoản
-    // Tính chất: Normal_balance D = Asset, Expense. Normal_balance C = Liability, Equity, Revenue
-    // Kiểm tra: total_debit - total_credit < 10 VND → balanced = true
-    // Rủi ro: R002 (CRITICAL) — Nếu balanced=false → toàn bộ hệ thống sai, không thể lập BCTC
-    // Mục đích: Kiểm tra toàn bộ hệ thống trước khi đóng kỳ (PeriodController.closeWithChecklist)
+    /**
+     * NGHIỆP VỤ: Bảng cân đối tài khoản (Trial Balance) — tổng hợp số dư tất cả TK
+     *
+     * Input: none (đọc tất cả tài khoản)
+     * Output: { accounts: [{code, name, type, debit, credit}], total_debit, total_credit, balanced }
+     * Service: AccountRepository.findAll() — lấy số dư từng tài khoản
+     * Tính chất: Normal_balance D = Asset, Expense. Normal_balance C = Liability, Equity, Revenue
+     * Kiểm tra: total_debit - total_credit < 10 VND → balanced = true
+     * Rủi ro: R002 (CRITICAL) — Nếu balanced=false → toàn bộ hệ thống sai, không thể lập BCTC
+     * Mục đích: Kiểm tra toàn bộ hệ thống trước khi đóng kỳ (PeriodController.closeWithChecklist)
+     *
+     * @return void
+     */
     public function trialBalance(): void
     {
         $accounts = $this->accountRepo->findAll();
@@ -327,12 +391,17 @@ class JournalController
         ]);
     }
 
-    //
-    // R-9: Duplicate bút toán — copy lines từ bút toán gốc → tạo draft mới
-    // Input: POST /api/journal/duplicate/{id} body: { date?: 'YYYY-MM-DD' }
-    // Output: { id, reference: '', status: 'draft', lines }
-    // Quyền: journal.create
-    //
+    /**
+     * R-9: Duplicate bút toán — copy lines từ bút toán gốc → tạo draft mới
+     *
+     * Input: POST /api/journal/duplicate/{id} body: { date?: 'YYYY-MM-DD' }
+     * Output: { id, reference: '', status: 'draft', lines }
+     * Quyền: journal.create
+     *
+     * @param string $id ID bút toán gốc
+     * @throws \InvalidArgumentException
+     * @return void
+     */
     public function duplicate(string $id): void
     {
         Auth::checkCsrf();
@@ -357,10 +426,15 @@ class JournalController
         }
     }
 
-    //
-    // R-13: Soft delete — xóa mềm bút toán (chỉ draft/reversed, không cho posted)
-    // Input: POST /api/journal/{id}/delete body: { reason: string }
-    //
+    /**
+     * R-13: Soft delete — xóa mềm bút toán (chỉ draft/reversed, không cho posted)
+     *
+     * Input: POST /api/journal/{id}/delete body: { reason: string }
+     *
+     * @param string $id ID bút toán
+     * @throws \InvalidArgumentException
+     * @return void
+     */
     public function softDelete(string $id): void
     {
         Auth::checkCsrf();
@@ -381,10 +455,15 @@ class JournalController
         }
     }
 
-    //
-    // R-13: Restore — khôi phục bút toán đã xóa (trong 30 ngày)
-    // Input: POST /api/journal/{id}/restore
-    //
+    /**
+     * R-13: Restore — khôi phục bút toán đã xóa (trong 30 ngày)
+     *
+     * Input: POST /api/journal/{id}/restore
+     *
+     * @param string $id ID bút toán
+     * @throws \InvalidArgumentException
+     * @return void
+     */
     public function restore(string $id): void
     {
         Auth::checkCsrf();
@@ -401,11 +480,14 @@ class JournalController
         }
     }
 
-    //
-    // R-8: Bulk Post — ghi sổ hàng loạt, all-or-nothing transactional
-    // Input: POST /api/journal/bulk-post body: { txn_ids: [...] }
-    // Output: { posted: [...], failed: [{id, error}], rolled_back: bool }
-    //
+    /**
+     * R-8: Bulk Post — ghi sổ hàng loạt, all-or-nothing transactional
+     *
+     * Input: POST /api/journal/bulk-post body: { txn_ids: [...] }
+     * Output: { posted: [...], failed: [{id, error}], rolled_back: bool }
+     *
+     * @return void
+     */
     public function bulkPost(): void
     {
         Auth::checkCsrf();

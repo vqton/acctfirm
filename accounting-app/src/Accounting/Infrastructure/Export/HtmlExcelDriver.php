@@ -4,16 +4,35 @@ namespace Accounting\Infrastructure\Export;
 use Accounting\Domain\Contract\ExportDriverInterface;
 use Accounting\Domain\Model\ExportResult;
 
-// Driver xuất Excel dạng HTML table — Excel mở được file .xls chứa HTML table
-// Không cần thư viện — render table với mso styles cho Excel hiển thị đúng
-// Hỗ trợ: header lặp lại khi in, số định dạng tiền tệ, màu sắc cơ bản, signature block
+/**
+ * Driver xuất Excel dạng HTML table.
+ *
+ * Excel mở được file .xls chứa HTML table.
+ * Không cần thư viện — render table với mso styles cho Excel hiển thị đúng.
+ * Hỗ trợ: header lặp lại khi in, số định dạng tiền tệ, màu sắc cơ bản, signature block.
+ */
 class HtmlExcelDriver implements ExportDriverInterface
 {
+    /**
+     * Kiểm tra định dạng có được hỗ trợ không.
+     *
+     * @param string $format Định dạng (xls, xlsx, excel).
+     * @return bool True nếu hỗ trợ.
+     */
     public function supports(string $format): bool
     {
         return in_array($format, ['xls', 'xlsx', 'excel', 'XLS', 'XLSX'], true);
     }
 
+    /**
+     * Xuất dữ liệu ra Excel (HTML table).
+     *
+     * @param string $title Tiêu đề báo cáo.
+     * @param array $headers Mảng tiêu đề cột.
+     * @param array $rows Mảng dòng dữ liệu.
+     * @param array $options Tùy chọn: orientation, page_size, signature, footer, summary, filename.
+     * @return ExportResult Kết quả xuất.
+     */
     public function export(string $title, array $headers, array $rows, array $options = []): ExportResult
     {
         $orientation = $options['orientation'] ?? 'portrait';
@@ -125,6 +144,12 @@ class HtmlExcelDriver implements ExportDriverInterface
         );
     }
 
+    /**
+     * Làm sạch tên file — loại bỏ ký tự đặc biệt.
+     *
+     * @param string $title Tiêu đề gốc.
+     * @return string Tên file đã làm sạch.
+     */
     private function sanitizeFilename(string $title): string
     {
         $clean = preg_replace('/[^a-zA-Z0-9_\-\p{L}]/u', '_', $title);

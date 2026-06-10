@@ -11,27 +11,26 @@ use Accounting\Infrastructure\JsonResponse;
  *
  * Mục đích nghiệp vụ:
  *   - Đối chiếu số dư sổ kế toán (TK 112) với sao kê ngân hàng
- *   - Tạo phiên đối chiếu (session) theo từng kỳ
- *   - Phát hiện chênh lệch: giao dịch chưa ghi nhận, phí ngân hàng, lãi
- *   - Tạo bút toán điều chỉnh tự động từ kết quả đối chiếu
+ *   - Tạo phiên đối chiếu theo từng kỳ
+ *   - Phát hiện chênh lệch, tạo bút toán điều chỉnh
  *
  * API endpoints:
- *   GET    /api/bank-recon/sessions       — Danh sách phiên đối chiếu
- *   POST   /api/bank-recon/sessions       — Tạo phiên mới
- *   GET    /api/bank-recon/sessions/{id}  — Chi tiết phiên
- *   POST   /api/bank-recon/sessions/{id}/match    — Khớp giao dịch
- *   POST   /api/bank-recon/sessions/{id}/adjust   — Tạo bút toán điều chỉnh
- *   POST   /api/bank-recon/sessions/{id}/close    — Đóng phiên
- *
- * Rủi ro:
- *   - R007: Chênh lệch không được xử lý → sai số dư ngân hàng
- *   - Điều chỉnh sai → ảnh hưởng BC01 (khoản mục tiền)
- *   - Trùng lặp giao dịch khi đối chiếu thủ công
+ *   GET  /api/bank-recon/sessions — Danh sách phiên
+ *   POST /api/bank-recon/sessions — Tạo phiên mới
+ *   GET  /api/bank-recon/sessions/{id} — Chi tiết
+ *   GET  /api/bank-recon/sessions/{id}/items — Items
+ *   GET  /api/bank-recon/sessions/{id}/unmatched — Chưa khớp
+ *   POST /api/bank-recon/sessions/{id}/statement-entry — Thêm sao kê
+ *   POST /api/bank-recon/sessions/{id}/auto-match — Auto match
+ *   POST /api/bank-recon/sessions/{id}/manual-match — Manual match
+ *   POST /api/bank-recon/sessions/{id}/adjusting-entry — Tạo điều chỉnh
+ *   POST /api/bank-recon/sessions/{id}/complete — Đóng phiên
+ *   POST /api/bank-recon/sessions/{id}/import-csv — Import CSV
+ *   GET  /api/bank-recon/bank-accounts — DS TK ngân hàng
  *
  * Tích hợp:
- *   - BankReconciliationService gọi JournalService cho bút toán điều chỉnh
- *   - CashController cập nhật số dư sau đối chiếu
- *   - Cần sao kê ngân hàng (statement) nhập từ bên ngoài
+ *   - BankReconciliationService → JournalService
+ *   - CashController
  */
 class BankReconciliationController
 {
@@ -44,18 +43,21 @@ class BankReconciliationController
         $this->accountRepo = $accountRepo;
     }
 
+    /**
+     * Danh sách phiên đối chiếu
+     *
+     * @return void
+     */
     public function sessions(): void
     {
         JsonResponse::ok($this->recon->getSessions());
     }
 
-    // NGHIỆP VỤ: Tạo phiên đối chiếu ngân hàng mới — so sánh sổ sách (112) với sao kê
-    // Input: { bank_account_code, statement_date, statement_balance, created_by? }
-    // Output: { session_id, book_balance, statement_balance, difference } — 201 Created
-    // Service: BankReconciliationService.startSession() — lấy số dư sổ từ AccountRepository
-    // Permission: CSRF check
-    // Rủi ro: R007 — Chênh lệch giữa sổ và sao kê cần được xử lý trước khi đóng kỳ
-    // Quy trình: Khởi tạo → nhập sao kê → match items → adjusting entries → complete
+    /**
+     * Tạo phiên đối chiếu ngân hàng mới
+     *
+     * @return void
+     */
     public function startSession(): void
     {
         Auth::checkCsrf();
@@ -76,6 +78,12 @@ class BankReconciliationController
         }
     }
 
+    /**
+     * Chi tiết phiên đối chiếu
+     *
+     * @param int $id ID phiên
+     * @return void
+     */
     public function getSession(int $id): void
     {
         try {
@@ -85,22 +93,34 @@ class BankReconciliationController
         }
     }
 
+    /**
+     * Danh sách items trong phiên
+     *
+     * @param int $id ID phiên
+     * @return void
+     */
     public function items(int $id): void
     {
         JsonResponse::ok($this->recon->getSessionItems($id));
     }
 
+    /**
+     * Danh sách giao dịch chưa khớp
+     *
+     * @param int $id ID phiên
+     * @return void
+     */
     public function unmatched(int $id): void
     {
         JsonResponse::ok($this->recon->getUnmatchedItems($id));
     }
 
-    // NGHIỆP VỤ: Thêm dòng sao kê ngân hàng vào phiên đối chiếu
-    // Input: { amount, type (debit|credit), description?, reference?, date? }
-    // Output: { id } — 201 Created
-    // Service: BankReconciliationService.addStatementEntry()
-    // Rủi ro: Dữ liệu sao kê phải chính xác (nhập tay hoặc import file)
-    // Sai sót trong sao kê → đối chiếu sai → chênh lệch kéo dài
+    /**
+     * Thêm dòng sao kê ngân hàng vào phiên
+     *
+     * @param int $sessionId ID phiên
+     * @return void
+     */
     public function addStatementEntry(int $sessionId): void
     {
         Auth::checkCsrf();
@@ -121,11 +141,12 @@ class BankReconciliationController
         }
     }
 
-    // NGHIỆP VỤ: Tự động khớp giao dịch sao kê với giao dịch sổ sách
-    // Input: { statement_item_id, book_item_id }
-    // Output: { matched: true }
-    // Service: BankReconciliationService.autoMatch() — dùng reference, amount, date để match
-    // Rủi ro: Auto match có thể sai nếu reference không chuẩn. Cần manual match verify sau
+    /**
+     * Tự động khớp giao dịch sao kê với sổ sách
+     *
+     * @param int $sessionId ID phiên
+     * @return void
+     */
     public function autoMatch(int $sessionId): void
     {
         Auth::checkCsrf();
@@ -142,12 +163,12 @@ class BankReconciliationController
         }
     }
 
-    // NGHIỆP VỤ: Khớp giao dịch thủ công — kế toán tự chọn cặp sao kê ↔ sổ sách
-    // Input: { statement_item_id, book_item_id }
-    // Output: { matched: true }
-    // Service: BankReconciliationService.manualMatch()
-    // Rủi ro: Khớp sai cặp giao dịch → chênh lệch không được phát hiện
-    // Audit trail: Mọi manual match đều được ghi lại để kiểm toán
+    /**
+     * Khớp giao dịch thủ công
+     *
+     * @param int $sessionId ID phiên
+     * @return void
+     */
     public function manualMatch(int $sessionId): void
     {
         Auth::checkCsrf();
@@ -164,14 +185,12 @@ class BankReconciliationController
         }
     }
 
-    // NGHIỆP VỤ: Tạo bút toán điều chỉnh từ chênh lệch đối chiếu ngân hàng
-    // Input: { debit_account, credit_account, amount, description?, created_by? }
-    // Output: { transaction_id, reference, status }
-    // Service: BankReconciliationService.addAdjustingEntry() → JournalService.postEntry
-    // Permission: CSRF check
-    // Hạch toán: Điều chỉnh phí NH (6425/112), lãi NH (112/515), giao dịch thiếu sót
-    // Rủi ro: R007 — Bút toán điều chỉnh sai → chênh lệch mới. Cần kiểm tra Dr = Cr
-    // Ràng buộc: Chỉ tạo adjusting entry khi phiên đang mở, chưa complete
+    /**
+     * Tạo bút toán điều chỉnh từ chênh lệch đối chiếu
+     *
+     * @param int $sessionId ID phiên
+     * @return void
+     */
     public function addAdjustingEntry(int $sessionId): void
     {
         Auth::checkCsrf();
@@ -192,13 +211,12 @@ class BankReconciliationController
         }
     }
 
-    // NGHIỆP VỤ: Đóng phiên đối chiếu ngân hàng — xác nhận số dư đã khớp
-    // Input: none (sessionId from URL)
-    // Output: { session_id, final_book_balance, final_statement_balance, status: 'completed' }
-    // Service: BankReconciliationService.complete() — kiểm tra chênh lệch = 0 mới cho close
-    // Permission: CSRF check
-    // Rủi ro: R007 — Đóng phiên khi còn chênh lệch → sai số dư. Sau khi complete, không sửa được
-    // Audit trail: Ghi lại số dư cuối và ngày giờ hoàn tất đối chiếu
+    /**
+     * Đóng phiên đối chiếu — xác nhận số dư đã khớp
+     *
+     * @param int $sessionId ID phiên
+     * @return void
+     */
     public function complete(int $sessionId): void
     {
         Auth::checkCsrf();
@@ -209,12 +227,12 @@ class BankReconciliationController
         }
     }
 
-    // NGHIỆP VỤ: Import sao kê ngân hàng từ file CSV
-    // Input: multipart/form-data với field 'file' (CSV file) + session_id
-    // Output: { imported, errors, session_id }
-    // Service: BankReconciliationService.importStatementCsv()
-    // Hỗ trợ định dạng CSV từ hầu hết ngân hàng Việt Nam
-    // Rủi ro: File CSV sai mã hóa, sai định dạng → import lỗi. Cần xác nhận trước khi match
+    /**
+     * Import sao kê ngân hàng từ file CSV
+     *
+     * @param int $sessionId ID phiên
+     * @return void
+     */
     public function importCsv(int $sessionId): void
     {
         Auth::checkCsrf();
@@ -238,6 +256,11 @@ class BankReconciliationController
         }
     }
 
+    /**
+     * Danh sách tài khoản ngân hàng (112)
+     *
+     * @return void
+     */
     public function bankAccounts(): void
     {
         $all = $this->accountRepo->findAll();

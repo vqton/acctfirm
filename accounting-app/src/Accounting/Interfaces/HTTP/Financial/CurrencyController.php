@@ -1,124 +1,69 @@
 <?php
-//
-// CURRENCY CONTROLLER — R-11 Multi-Currency Display
-//
-// Endpoints:
-//   GET  /api/currencies                    — list ngoại tệ active
-//   GET  /api/currencies/rate/:code         — tỷ giá 1 ngoại tệ vs VND
-//   POST /api/currencies/convert            — quy đổi { amount, from, to, date? }
-//   GET  /api/currencies/preference         — display_currency hiện tại của user
-//   POST /api/currencies/preference         — set display_currency (body: { currency })
-//
 namespace Accounting\Interfaces\HTTP\Financial;
 
-use Accounting\Domain\Service\CurrencyDisplayService;
+use Accounting\Domain\Service\CurrencyService;
 use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
 
+/**
+ * MODULE: Ngoại tệ (Currency Management)
+ *
+ * Mục đích nghiệp vụ:
+ *   - Quản lý giao dịch ngoại tệ
+ *   - Theo dõi số dư ngoại tệ theo từng loại tiền
+ *   - Đánh giá lại ngoại tệ cuối kỳ (VAS 10)
+ *
+ * API endpoints:
+ *   GET /api/currency/balances — Số dư ngoại tệ
+ *   GET /api/currency/transactions/{accountCode} — Giao dịch theo TK ngoại tệ
+ *
+ * Rủi ro:
+ *   - Sai tỷ giá -> sai số dư quy đổi VND
+ *   - Không đánh giá lại cuối kỳ -> BCTC sai
+ *
+ * Tích hợp:
+ *   - CurrencyService đọc từ TransactionRepository
+ *   - ExchangeRateController cung cấp tỷ giá
+ *   - FxController xử lý đánh giá lại
+ */
 class CurrencyController
 {
-    private CurrencyDisplayService $svc;
+    private CurrencyService $currency;
 
-    public function __construct(CurrencyDisplayService $svc)
-    {
-        $this->svc = $svc;
-    }
+    public function __construct(CurrencyService $currency) { $this->currency = $currency; }
 
-    public function listCurrencies(): void
-    {
-        Auth::requirePermission('report', 'read');
-        JsonResponse::ok(['currencies' => $this->svc->listCurrencies()]);
-    }
-
-    public function getRate(string $code): void
+    /**
+     * Số dư các tài khoản ngoại tệ
+     *
+     * @return void
+     */
+    public function balances(): void
     {
         Auth::requirePermission('report', 'read');
-        $rate = $this->svc->getRate($code);
-        if (!$rate) {
-            JsonResponse::error("Không tìm thấy tỷ giá cho {$code}", 404);
-            return;
-        }
-        JsonResponse::ok($rate);
+        JsonResponse::ok($this->currency->getFcBalances());
     }
 
-    //
-    // POST /api/currencies/convert
-    // Body: { amount: 1000000, from: 'VND', to: 'USD', date?: '2026-05-19' }
-    //
-    public function convert(): void
+    /**
+     * Giao dịch ngoại tệ cho một tài khoản
+     *
+     * @param string $accountCode Mã tài khoản (1112, 1122, 131, 331)
+     * @return void
+     */
+    public function transactions(string $accountCode): void
     {
         Auth::requirePermission('report', 'read');
-        $data = json_decode(file_get_contents('php://input'), true) ?? [];
-        $amount = $data['amount'] ?? null;
-        $from = strtoupper($data['from'] ?? 'VND');
-        $to = strtoupper($data['to'] ?? '');
-        $date = $data['date'] ?? null;
-
-        if ($amount === null || !is_numeric($amount)) {
-            JsonResponse::error('Thiếu amount (số)', 400);
-            return;
-        }
-        if (!$to) {
-            JsonResponse::error('Thiếu to (target currency)', 400);
-            return;
-        }
-
-        if ($from === $to) {
-            JsonResponse::ok([
-                'amount' => (float)$amount,
-                'currency' => $to,
-                'rate' => 1.0,
-                'note' => 'Same currency, no conversion',
-            ]);
-            return;
-        }
-
-        // Quy đổi qua VND làm trung gian
-        $vndAmount = ($from === 'VND')
-            ? (float)$amount
-            : ($this->svc->convertToVnd((float)$amount, $from, $date)['amount'] ?? null);
-        if ($vndAmount === null) {
-            JsonResponse::error("Không tìm thấy tỷ giá cho {$from}", 404);
-            return;
-        }
-
-        $result = $this->svc->convertFromVnd($vndAmount, $to, $date);
-        if (!$result) {
-            JsonResponse::error("Không tìm thấy tỷ giá cho {$to}", 404);
-            return;
-        }
-        $result['original'] = ['amount' => (float)$amount, 'currency' => $from];
-        JsonResponse::ok($result);
+        $from = $_GET['from'] ?? null;
+        $to = $_GET['to'] ?? null;
+        JsonResponse::ok($this->currency->getCurrencyTransactions($accountCode, $from, $to));
     }
 
-    public function getPreference(): void
+    /**
+     * View ngoại tệ
+     *
+     * @return void
+     */
+    public function view(): void
     {
-        Auth::requirePermission('report', 'read');
-        $userId = Auth::getCurrentUserId() ?? 'system';
-        $currency = $this->svc->getUserDisplayCurrency($userId);
-        JsonResponse::ok(['user_id' => $userId, 'display_currency' => $currency]);
-    }
-
-    //
-    // POST /api/currencies/preference
-    // Body: { currency: 'USD' }
-    //
-    public function setPreference(): void
-    {
-        Auth::checkCsrf();
-        Auth::requirePermission('system', 'edit');
-        $data = json_decode(file_get_contents('php://input'), true) ?? [];
-        $currency = strtoupper($data['currency'] ?? '');
-        if (!$currency) {
-            JsonResponse::error('Thiếu currency', 400);
-            return;
-        }
-        $userId = Auth::getCurrentUserId() ?? 'system';
-        try {
-            $this->svc->setUserDisplayCurrency($userId, $currency);
-            JsonResponse::ok(['user_id' => $userId, 'display_currency' => $currency]);
-        } catch (\InvalidArgumentException $e) {
-            JsonResponse::error($e->getMessage(), 422);
-        }
+        require __DIR__ . '/../../../../../public/views/currency.php';
     }
 }

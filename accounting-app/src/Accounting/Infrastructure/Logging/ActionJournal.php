@@ -1,18 +1,27 @@
 <?php
 namespace Accounting\Infrastructure\Logging;
 
-// Nhật ký bất biến — ghi mọi request HTTP vào file JSON Lines
-// Yêu cầu từ Kiểm toán: ai làm gì, lúc nào, kết quả ra sao
-// Không thể sửa/xóa — append-only
+/**
+ * Nhật ký bất biến — ghi mọi request HTTP vào file JSON Lines.
+ *
+ * Yêu cầu từ Kiểm toán: ai làm gì, lúc nào, kết quả ra sao.
+ * Không thể sửa/xóa — append-only.
+ * Mỗi ngày một file .jsonl riêng, tự động dọn dẹp log cũ (>30 ngày).
+ * Tự động sanitize mật khẩu và token trong request body trước khi ghi.
+ */
 class ActionJournal
 {
     private static ?string $logDir = null;
     private static ?string $customAction = null;
 
-    // Khởi tạo thư mục log — tạo nếu chưa tồn tại
-    // Log được lưu tại logs/actions/ — mỗi ngày một file .jsonl riêng
-    // Permission 0755: owner có full quyền, group/others đọc được
-    // LƯU Ý: Thư mục logs/actions/ phải có quyền ghi cho user chạy web server
+    /**
+     * Khởi tạo thư mục log.
+     *
+     * Log được lưu tại logs/actions/ — mỗi ngày một file .jsonl riêng.
+     * Tạo thư mục nếu chưa tồn tại với permission 0755.
+     *
+     * @return void
+     */
     public static function init(): void
     {
         self::$logDir = __DIR__ . '/../../../../logs/actions';
@@ -21,22 +30,41 @@ class ActionJournal
         }
     }
 
-    // Ghi đè action name — dùng để đặt tên nghiệp vụ cụ thể (VD: auth.login, journal.post)
-    // Mặc định action được tự động sinh từ URI (api.cash.receipts)
-    // Dùng setAction khi cần ghi đè — VD: auth.login thay vì api.auth.login
-    // Reset về null sau mỗi lần record — tránh ảnh hưởng request sau
+    /**
+     * Ghi đè action name.
+     *
+     * Dùng để đặt tên nghiệp vụ cụ thể (VD: auth.login, journal.post).
+     * Mặc định action được tự động sinh từ URI (api.cash.receipts).
+     * Reset về null sau mỗi lần record — tránh ảnh hưởng request sau.
+     *
+     * @param string $action Tên action tùy chỉnh.
+     * @return void
+     */
     public static function setAction(string $action): void
     {
         self::$customAction = $action;
     }
 
-    // Ghi lại một request — bao gồm method, URI, status, thời gian, request/response body
-    // Tự động sanitize mật khẩu và token trong request body
-    // Format JSON Lines: mỗi dòng là một JSON object — dễ đọc, dễ parse, dễ import vào ELK
-    // Entry gồm: ts (ISO8601), action, method, uri, status, ms, user, req_id
-    // Request body: decode JSON → sanitize sensitive fields → lưu
-    // Response body: chỉ lưu cho /api/ — truncate nếu > 10000 ký tự
-    // LOCK_EX: chống ghi đồng thời từ nhiều request — an toàn cho concurrent PHP
+    /**
+     * Ghi lại một request HTTP.
+     *
+     * Bao gồm method, URI, status, thời gian, request/response body.
+     * Tự động sanitize mật khẩu và token trong request body.
+     * Format JSON Lines: mỗi dòng là một JSON object.
+     * Entry gồm: ts (ISO8601), action, method, uri, status, ms, user, req_id.
+     * Response body: chỉ lưu cho /api/ — truncate nếu > 10000 ký tự.
+     * LOCK_EX: chống ghi đồng thời từ nhiều request.
+     *
+     * @param string $method HTTP method (GET, POST, PUT, DELETE...).
+     * @param string $uri URI của request.
+     * @param int $statusCode HTTP status code.
+     * @param string|null $requestBody Request body (JSON string).
+     * @param string|null $responseBody Response body (JSON string).
+     * @param float $durationMs Thời gian xử lý (milliseconds).
+     * @param string|null $userId ID người dùng (hoặc 'anon').
+     * @param string|null $requestId ID request duy nhất.
+     * @return void
+     */
     public static function record(
         string $method,
         string $uri,
@@ -89,11 +117,15 @@ class ActionJournal
         }
     }
 
-    // Dọn dẹp log cũ — giữ tối đa 30 ngày, tránh đầy đĩa
-    // Chạy ngẫu nhiên 1/100 request — không chạy mỗi lần để tránh I/O
-    // Xóa file .jsonl có mtime > 30 ngày
-    // RỦI RO: Nếu server có lượng request thấp, cleanup có thể lâu không chạy
-    // Cân nhắc: Dùng cron job thay vì random cleanup cho production
+    /**
+     * Dọn dẹp log cũ.
+     *
+     * Giữ tối đa 30 ngày, tránh đầy đĩa.
+     * Chạy ngẫu nhiên 1/100 request — không chạy mỗi lần để tránh I/O.
+     * Xóa file .jsonl có mtime > 30 ngày.
+     *
+     * @return void
+     */
     private static function cleanup(): void
     {
         $cutoff = strtotime('-30 days');
@@ -104,11 +136,18 @@ class ActionJournal
         }
     }
 
-    // Tạo action name từ URI — VD: /api/cash/receipts -> api.cash.receipts
-    // Tự động thay ID bằng :id để dễ nhóm log
-    // VD: /api/users/123 → api.users.:id — gom tất cả request user vào cùng action
-    // Hỗ trợ cả UUID (32 ký tự hex) và số nguyên — bao phủ hầu hết ID format
-    // Bỏ query string — không log tham số GET vào action name
+    /**
+     * Tạo action name từ URI.
+     *
+     * VD: /api/cash/receipts -> api.cash.receipts.
+     * Tự động thay ID bằng :id để dễ nhóm log.
+     * Hỗ trợ cả UUID (32 ký tự hex) và số nguyên.
+     * Bỏ query string — không log tham số GET vào action name.
+     *
+     * @param string $method HTTP method.
+     * @param string $uri URI của request.
+     * @return string Action name (VD: api.cash.receipts).
+     */
     private static function actionFromUri(string $method, string $uri): string
     {
         $uri = strtok($uri, '?') ?: $uri;
@@ -125,11 +164,15 @@ class ActionJournal
         return implode('.', $parts) ?: 'root';
     }
 
-    // Che dấu thông tin nhạy cảm (mật khẩu, token, secret) trước khi ghi log
-    // Fields được mask: password, password_confirm, current_password, token, secret, api_key
-    // Đệ quy vào mảng con — sanitize toàn bộ cấu trúc JSON
-    // RỦI RO: Nếu field nhạy cảm không nằm trong danh sách, sẽ bị log raw
-    // Cập nhật danh sách khi có thêm field mới (VD: pin_code, otp_code)
+    /**
+     * Che dấu thông tin nhạy cảm trước khi ghi log.
+     *
+     * Fields được mask: password, password_confirm, current_password, token, secret, api_key.
+     * Đệ quy vào mảng con — sanitize toàn bộ cấu trúc JSON.
+     *
+     * @param array $data Dữ liệu request cần sanitize.
+     * @return array Dữ liệu đã được che dấu thông tin nhạy cảm.
+     */
     private static function sanitize(array $data): array
     {
         $sensitive = ['password', 'password_confirm', 'current_password', 'token', 'secret', 'api_key'];
@@ -143,10 +186,17 @@ class ActionJournal
         return $data;
     }
 
-    // Cắt ngắn response trước khi log — tránh file log quá lớn
-    // depth <= 3: tránh đệ quy vô hạn cho JSON lồng nhau
-    // Mảng > 50 phần tử: chỉ giữ 50 phần tử đầu + ghi chú số phần tử còn lại
-    // RỦI RO: Mất dữ liệu khi truncate — không thể truy vấn response đầy đủ từ log
+    /**
+     * Cắt ngắn response trước khi log.
+     *
+     * Tránh file log quá lớn.
+     * depth <= 3: tránh đệ quy vô hạn cho JSON lồng nhau.
+     * Mảng > 50 phần tử: chỉ giữ 50 phần tử đầu + ghi chú số phần tử còn lại.
+     *
+     * @param array $data Dữ liệu response cần truncate.
+     * @param int $depth Độ sâu đệ quy hiện tại.
+     * @return array Dữ liệu đã được cắt ngắn.
+     */
     private static function truncateResponse(array $data, int $depth = 0): array
     {
         if ($depth > 3) {

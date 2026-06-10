@@ -1,39 +1,37 @@
 <?php
 namespace Accounting\Interfaces\HTTP\MasterData;
 
-use Accounting\Domain\Service\CcdcAllocationService;
 use Accounting\Infrastructure\JsonResponse;
 use Accounting\Infrastructure\Auth;
+use Accounting\Domain\Repository\CcdcAllocationRepositoryInterface;
+use Accounting\Interfaces\HTTP\CrudControllerTrait;
 
+/**
+ * MODULE: Phân bổ CCDC (Công cụ dụng cụ)
+ *
+ * Mục đích nghiệp vụ:
+ *   - Phân bổ giá trị CCDC vào nhiều kỳ
+ *   - Theo dõi giá trị hao mòn CCDC
+ *
+ * API endpoints:
+ *   GET    /api/ccdc-allocations — Danh sách
+ *   POST   /api/ccdc-allocations — Tạo mới
+ *   PUT    /api/ccdc-allocations/{id} — Cập nhật
+ *   DELETE /api/ccdc-allocations/{id} — Xoá
+ *
+ * Tích hợp:
+ *   - CcdcController quản lý CCDC đầu vào
+ */
 class CcdcAllocationController
 {
-    private CcdcAllocationService $allocationService;
+    use CrudControllerTrait;
 
-    public function __construct(CcdcAllocationService $allocationService)
+    /**
+     * @param CcdcAllocationRepositoryInterface $repository
+     */
+    public function __construct(CcdcAllocationRepositoryInterface $repository)
     {
-        $this->allocationService = $allocationService;
-    }
-
-    public function run(): void
-    {
-        Auth::checkCsrf();
-        Auth::requirePermission('inventory', 'post');
-        $data = json_decode(file_get_contents('php://input'), true);
-        $period = $data['period'] ?? date('Y-m');
-        $results = $this->allocationService->runMonthlyAllocation($period, $_SESSION['user_id'] ?? 'system');
-        $success = count(array_filter($results, fn($r) => !isset($r['error'])));
-        JsonResponse::ok(['total' => count($results), 'success' => $success, 'results' => $results]);
-    }
-
-    public function history(): void
-    {
-        Auth::requirePermission('inventory', 'read');
-        $ccdcId = $_GET['ccdc_id'] ?? null;
-        JsonResponse::ok($this->allocationService->getAllocationHistory($ccdcId));
-    }
-
-    public function view(): void
-    {
-        require __DIR__ . '/../../../../../public/views/ccdc_allocations.php';
+        $this->repository = $repository;
+        $this->module = 'ccdc_allocations';
     }
 }

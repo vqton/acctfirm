@@ -7,6 +7,34 @@ use Accounting\Domain\Repository\ContractRepositoryInterface;
 use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
 
+/**
+ * MODULE: Quản lý Hợp đồng nâng cao (Contract Management)
+ *
+ * Mục đích nghiệp vụ:
+ *   - Dashboard hợp đồng, thống kê
+ *   - Chi tiết hợp đồng + lịch thanh toán + phụ lục
+ *   - Liên kết chứng từ (AP/AR/Cash) với hợp đồng
+ *   - Ghi nhận thanh toán theo lịch, thanh lý hợp đồng
+ *
+ * API endpoints:
+ *   GET  /api/contracts/dashboard — Dashboard
+ *   GET  /api/contracts/{id}      — Chi tiết
+ *   POST /api/contracts/{id}/link — Liên kết chứng từ
+ *   POST /api/contracts/{id}/payment-schedule — Thêm lịch TT
+ *   POST /api/contracts/{id}/record-payment  — Ghi nhận TT
+ *   POST /api/contracts/{id}/amendment        — Phụ lục
+ *   POST /api/contracts/{id}/liquidate        — Thanh lý
+ *   GET  /api/contracts/export  — Xuất danh sách
+ *   GET  /api/contracts/view    — View HTML
+ *
+ * Rủi ro:
+ *   - Thanh lý hợp đồng chưa tất toán công nợ
+ *   - Phụ lục làm sai lệch tổng giá trị hợp đồng
+ *
+ * Tích hợp:
+ *   - ContractService gọi JournalService cho bút toán
+ *   - MasterData/ContractController quản lý CRUD cơ bản
+ */
 class ContractManagementController
 {
     private ContractService $contractService;
@@ -18,6 +46,11 @@ class ContractManagementController
         $this->contractRepo = $contractRepo;
     }
 
+    /**
+     * Dashboard hợp đồng
+     *
+     * @return void
+     */
     public function dashboard(): void
     {
         Auth::requirePermission('contract', 'read');
@@ -30,6 +63,12 @@ class ContractManagementController
         JsonResponse::ok(['stats' => $stats, 'expiring' => $expiring, 'contracts' => $contracts]);
     }
 
+    /**
+     * Chi tiết hợp đồng kèm lịch thanh toán, phụ lục, link
+     *
+     * @param string $id ID hợp đồng
+     * @return void
+     */
     public function getDetail(string $id): void
     {
         Auth::requirePermission('contract', 'read');
@@ -42,6 +81,12 @@ class ContractManagementController
         JsonResponse::ok($data);
     }
 
+    /**
+     * Liên kết chứng từ với hợp đồng
+     *
+     * @param string $id ID hợp đồng
+     * @return void
+     */
     public function linkTransaction(string $id): void
     {
         Auth::requirePermission('contract', 'update');
@@ -63,6 +108,12 @@ class ContractManagementController
         }
     }
 
+    /**
+     * Thêm lịch thanh toán cho hợp đồng
+     *
+     * @param string $id ID hợp đồng
+     * @return void
+     */
     public function addPaymentSchedule(string $id): void
     {
         Auth::requirePermission('contract', 'update');
@@ -83,6 +134,12 @@ class ContractManagementController
         }
     }
 
+    /**
+     * Ghi nhận thanh toán theo lịch
+     *
+     * @param string $id ID hợp đồng
+     * @return void
+     */
     public function recordPaymentSchedule(string $id): void
     {
         Auth::requirePermission('cash', 'create');
@@ -100,6 +157,12 @@ class ContractManagementController
         }
     }
 
+    /**
+     * Thêm phụ lục hợp đồng
+     *
+     * @param string $id ID hợp đồng
+     * @return void
+     */
     public function addAmendment(string $id): void
     {
         Auth::requirePermission('contract', 'update');
@@ -121,6 +184,12 @@ class ContractManagementController
         }
     }
 
+    /**
+     * Thanh lý hợp đồng
+     *
+     * @param string $id ID hợp đồng
+     * @return void
+     */
     public function liquidate(string $id): void
     {
         Auth::requirePermission('contract', 'delete');
@@ -133,6 +202,11 @@ class ContractManagementController
         }
     }
 
+    /**
+     * Xuất danh sách hợp đồng
+     *
+     * @return void
+     */
     public function exportContract(): void
     {
         Auth::requirePermission('contract', 'read');
@@ -142,6 +216,11 @@ class ContractManagementController
         echo $result['content'];
     }
 
+    /**
+     * View HTML
+     *
+     * @return void
+     */
     public function viewIndex(): void
     {
         Auth::requirePermission('contract', 'read');

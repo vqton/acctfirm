@@ -1,25 +1,25 @@
 <?php
 namespace Accounting\Infrastructure\EInvoice;
 
-//
-// DỊCH VỤ CHỮ KÝ SỐ CHO HÓA ĐƠN ĐIỆN TỬ
-//
-// Ký số XML hóa đơn điện tử theo chuẩn PKCS#7 (CMS SignedData)
-// Sử dụng openssl CLI + pkcs11 engine để ký với USB Token/HSM
-// Không yêu cầu Composer — gọi openssl qua proc_open
-//
-// Định dạng: RSA với SHA-256, tối thiểu 2048 bits
-// Chuẩn: XML Signature Syntax and Processing (W3C)
-// Tuân thủ: Quyết định về chuẩn XML HĐĐT (30/05/2025), TT 32/2025
-//
-// HỖ TRỢ 3 CHẾ ĐỘ:
-//  1. production: USB Token/HSM qua openssl PKCS#11 engine
-//  2. dev: openssl với private key file (mô phỏng)
-//  3. test: mock signing (không cần openssl)
-//
-// RỦI RO: Private key không bao giờ được rời khỏi token.
-// Token khóa sau 5 lần nhập PIN sai. Cần thông báo cho kế toán trưởng.
-//
+/**
+ * DỊCH VỤ CHỮ KÝ SỐ CHO HÓA ĐƠN ĐIỆN TỬ.
+ *
+ * Ký số XML hóa đơn điện tử theo chuẩn PKCS#7 (CMS SignedData).
+ * Sử dụng openssl CLI + pkcs11 engine để ký với USB Token/HSM.
+ * Không yêu cầu Composer — gọi openssl qua proc_open.
+ *
+ * Định dạng: RSA với SHA-256, tối thiểu 2048 bits.
+ * Chuẩn: XML Signature Syntax and Processing (W3C).
+ * Tuân thủ: Quyết định về chuẩn XML HĐĐT (30/05/2025), TT 32/2025.
+ *
+ * HỖ TRỢ 3 CHẾ ĐỘ:
+ *   1. production: USB Token/HSM qua openssl PKCS#11 engine
+ *   2. dev: openssl với private key file (mô phỏng)
+ *   3. test: mock signing (không cần openssl)
+ *
+ * RỦI RO: Private key không bao giờ được rời khỏi token.
+ * Token khóa sau 5 lần nhập PIN sai. Cần thông báo cho kế toán trưởng.
+ */
 class DigitalSignatureService
 {
     private string $mode;
@@ -28,6 +28,13 @@ class DigitalSignatureService
     private string $certFile;
     private string $keyFile;    // chỉ dùng cho dev mode
 
+    /**
+     * @param string $mode Chế độ: 'test', 'dev', hoặc 'production'.
+     * @param string $pkcs11Lib Đường dẫn thư viện PKCS#11 (production).
+     * @param string $tokenPin PIN của USB Token (production).
+     * @param string $certFile Đường dẫn file chứng chỉ.
+     * @param string $keyFile Đường dẫn file private key (dev).
+     */
     public function __construct(
         string $mode = 'test',
         string $pkcs11Lib = '',
@@ -42,10 +49,16 @@ class DigitalSignatureService
         $this->keyFile = $keyFile;
     }
 
-    // Ký một XML string, trả về XML đã nhúng chữ ký
-    // Input: XML hóa đơn chưa ký (chuẩn TT32)
-    // Output: XML hóa đơn đã ký (có <DSCKS>)
-    // Ném RuntimeException nếu ký thất bại
+    /**
+     * Ký một XML string.
+     *
+     * Input: XML hóa đơn chưa ký (chuẩn TT32).
+     * Output: XML hóa đơn đã ký (có <DSCKS>).
+     *
+     * @param string $xml XML hóa đơn chưa ký.
+     * @return string XML hóa đơn đã ký.
+     * @throws \RuntimeException Nếu ký thất bại.
+     */
     public function signXml(string $xml): string
     {
         $canonicalXml = $this->canonicalize($xml);
@@ -65,7 +78,12 @@ class DigitalSignatureService
         return $this->embedSignature($xml, $signature, $digestValue);
     }
 
-    // Kiểm tra chữ ký số trên XML
+    /**
+     * Kiểm tra chữ ký số trên XML.
+     *
+     * @param string $signedXml XML hóa đơn đã ký.
+     * @return bool True nếu chữ ký hợp lệ.
+     */
     public function verifySignature(string $signedXml): bool
     {
         if ($this->mode === 'test') {
@@ -85,7 +103,13 @@ class DigitalSignatureService
         return $exitCode === 0;
     }
 
-    // === PRODUCTION: Ký với USB Token qua PKCS#11 ===
+    /**
+     * Ký với USB Token qua PKCS#11 (production).
+     *
+     * @param string $data Dữ liệu cần ký.
+     * @return string Chữ ký base64.
+     * @throws \RuntimeException Nếu ký thất bại.
+     */
     private function signWithToken(string $data): string
     {
         $hashFile = tempnam(sys_get_temp_dir(), 'inv_hash_');
@@ -116,7 +140,13 @@ class DigitalSignatureService
         return $signature;
     }
 
-    // === DEV: Ký với private key file (mô phỏng) ===
+    /**
+     * Ký với private key file (dev mode).
+     *
+     * @param string $data Dữ liệu cần ký.
+     * @return string Chữ ký base64.
+     * @throws \RuntimeException Nếu ký thất bại.
+     */
     private function signWithKeyFile(string $data): string
     {
         if (!file_exists($this->keyFile)) {
@@ -149,14 +179,23 @@ class DigitalSignatureService
         return $signature;
     }
 
-    // === TEST: Mock signing (không cần openssl) ===
+    /**
+     * Mock signing (test mode — không cần openssl).
+     *
+     * @param string $data Dữ liệu cần ký.
+     * @return string Chữ ký giả lập base64.
+     */
     private function mockSign(string $data): string
     {
         return base64_encode(sha1($data . '_signed_' . date('Ymd'), true));
     }
 
-    // === TIỆN ÍCH ===
-
+    /**
+     * Chuẩn hóa XML (canonicalization).
+     *
+     * @param string $xml XML cần chuẩn hóa.
+     * @return string XML đã chuẩn hóa.
+     */
     private function canonicalize(string $xml): string
     {
         $doc = new \DOMDocument();
@@ -166,6 +205,17 @@ class DigitalSignatureService
         return $doc->saveXML();
     }
 
+    /**
+     * Nhúng chữ ký số vào XML hóa đơn.
+     *
+     * Thêm block <DSCKS> với XML Signature W3C trước thẻ </HDon>.
+     *
+     * @param string $xml XML gốc.
+     * @param string $signature Chữ ký số base64.
+     * @param string $digestValue Digest value base64.
+     * @return string XML đã nhúng chữ ký.
+     * @throws \RuntimeException Nếu không tìm thấy thẻ </HDon>.
+     */
     private function embedSignature(string $xml, string $signature, string $digestValue): string
     {
         $signatureBlock = <<<XML
@@ -197,7 +247,14 @@ XML;
         return substr_replace($xml, $signatureBlock, $pos, 0);
     }
 
-    // Tạo key pair cho dev mode (nếu chưa có)
+    /**
+     * Tạo key pair cho dev mode (nếu chưa có).
+     *
+     * Sinh self-signed certificate RSA 2048 bits.
+     *
+     * @return void
+     * @throws \RuntimeException Nếu tạo key thất bại.
+     */
     private function generateDevKey(): void
     {
         $dir = dirname($this->keyFile);

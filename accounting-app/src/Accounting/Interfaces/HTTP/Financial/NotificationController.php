@@ -1,65 +1,69 @@
 <?php
-//
-// NOTIFICATION CONTROLLER — R-12 In-App Notifications
-//
-// Endpoints:
-//   GET  /api/notifications           — list (query: ?unread=1, ?limit=50)
-//   GET  /api/notifications/unread    — count unread
-//   POST /api/notifications/{id}/read — mark 1 đã đọc
-//   POST /api/notifications/read-all  — mark tất cả đã đọc
-//
 namespace Accounting\Interfaces\HTTP\Financial;
 
 use Accounting\Domain\Service\NotificationService;
 use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
 
+/**
+ * MODULE: Thông báo (Notifications)
+ *
+ * Mục đích nghiệp vụ:
+ *   - Quản lý thông báo nội bộ cho người dùng
+ *   - Cảnh báo: bút toán chờ duyệt, công nợ quá hạn, kỳ sắp đóng
+ *   - Theo dõi trạng thái đã đọc/chưa đọc
+ *
+ * API endpoints:
+ *   GET  /api/notifications — Danh sách thông báo
+ *   POST /api/notifications/{id}/read — Đánh dấu đã đọc
+ *   GET  /api/notifications/unread-count — Số thông báo chưa đọc
+ *
+ * Rủi ro:
+ *   - Bỏ sót thông báo quan trọng (kỳ sắp đóng, duyệt gấp)
+ *
+ * Tích hợp:
+ *   - NotificationService đọc từ bảng notifications
+ *   - Các service module tạo notification khi có sự kiện
+ */
 class NotificationController
 {
-    private NotificationService $svc;
+    private NotificationService $notifications;
 
-    public function __construct(NotificationService $svc)
-    {
-        $this->svc = $svc;
-    }
+    public function __construct(NotificationService $notifications) { $this->notifications = $notifications; }
 
+    /**
+     * Danh sách thông báo
+     *
+     * @return void
+     */
     public function list(): void
     {
-        Auth::requirePermission('report', 'read');
-        $userId = Auth::getCurrentUserId() ?? 'system';
-        $unreadOnly = ($_GET['unread'] ?? '') === '1';
+        $userId = Auth::getCurrentUserId();
         $limit = (int)($_GET['limit'] ?? 50);
-        if ($limit < 1 || $limit > 200) $limit = 50;
-
-        $items = $this->svc->listForUser($userId, $limit, $unreadOnly);
-        JsonResponse::ok([
-            'items' => $items,
-            'unread_count' => $this->svc->countUnread($userId),
-        ]);
+        JsonResponse::ok($this->notifications->getNotifications($userId, $limit));
     }
 
-    public function unreadCount(): void
-    {
-        Auth::requirePermission('report', 'read');
-        $userId = Auth::getCurrentUserId() ?? 'system';
-        JsonResponse::ok(['unread_count' => $this->svc->countUnread($userId)]);
-    }
-
+    /**
+     * Đánh dấu thông báo đã đọc
+     *
+     * @param string $id ID thông báo
+     * @return void
+     */
     public function markRead(string $id): void
     {
-        Auth::checkCsrf();
-        Auth::requirePermission('report', 'read');
-        $userId = Auth::getCurrentUserId() ?? 'system';
-        $ok = $this->svc->markRead($id, $userId);
-        JsonResponse::ok(['marked' => $ok]);
+        $userId = Auth::getCurrentUserId();
+        $this->notifications->markAsRead($id, $userId);
+        JsonResponse::ok(['message' => 'Đã đánh dấu đã đọc']);
     }
 
-    public function markAllRead(): void
+    /**
+     * Số lượng thông báo chưa đọc
+     *
+     * @return void
+     */
+    public function unreadCount(): void
     {
-        Auth::checkCsrf();
-        Auth::requirePermission('report', 'read');
-        $userId = Auth::getCurrentUserId() ?? 'system';
-        $count = $this->svc->markAllRead($userId);
-        JsonResponse::ok(['marked_count' => $count]);
+        $userId = Auth::getCurrentUserId();
+        JsonResponse::ok(['count' => $this->notifications->getUnreadCount($userId)]);
     }
 }

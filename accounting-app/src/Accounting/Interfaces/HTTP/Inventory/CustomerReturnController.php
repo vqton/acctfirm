@@ -2,89 +2,65 @@
 namespace Accounting\Interfaces\HTTP\Inventory;
 
 use Accounting\Domain\Contract\InventoryServiceInterface;
-use Accounting\Domain\Repository\ItemRepositoryInterface;
-use Accounting\Infrastructure\JsonResponse;
 use Accounting\Infrastructure\Auth;
+use Accounting\Infrastructure\JsonResponse;
 
 /**
  * MODULE: Hàng bán trả lại (Customer Return)
  *
  * Mục đích nghiệp vụ:
- *   - Xử lý hàng hóa bị khách hàng trả lại
- *   - Nhập kho hàng trả lại (tăng tồn kho)
- *   - Điều chỉnh giảm doanh thu (511) và giảm giá vốn (632)
- *   - Điều chỉnh công nợ phải thu (131)
+ *   - Xử lý hàng bán bị trả lại từ khách hàng
+ *   - Nhập kho hàng trả lại
+ *   - Điều chỉnh giảm doanh thu và công nợ
  *
  * API endpoints:
- *   GET  /api/customer-returns       — Danh sách hàng trả lại
- *   POST /api/customer-returns       — Ghi nhận hàng trả lại
+ *   GET  /api/inventory/customer-returns — Danh sách
+ *   POST /api/inventory/customer-returns — Tạo mới
  *
  * Rủi ro:
- *   - Trả lại không đúng lô hàng → sai giá vốn (FIFO/Weighted Average)
- *   - Không điều chỉnh thuế GTGT (3331) nếu đã xuất hóa đơn
- *   - Ảnh hưởng BC02: giảm doanh thu và giá vốn
+ *   - Sai TK hạch toán -> sai doanh thu, sai tồn kho
+ *   - Không điều chỉnh thuế GTGT
  *
  * Tích hợp:
- *   - InventoryService.returnFromCustomer để nhập kho và ghi nhận bút toán
- *   - ArController xử lý điều chỉnh công nợ phải thu
- *   - ItemRepository kiểm tra item tồn tại trước khi xử lý
+ *   - ArService xử lý ghi giảm công nợ
+ *   - InventoryService nhập kho
  */
 class CustomerReturnController
 {
     private InventoryServiceInterface $inventory;
-    private ItemRepositoryInterface $itemRepo;
-    private \PDO $pdo;
 
-    public function __construct(InventoryServiceInterface $inventory, ItemRepositoryInterface $itemRepo, \PDO $pdo)
-    {
-        $this->inventory = $inventory;
-        $this->itemRepo = $itemRepo;
-        $this->pdo = $pdo;
-    }
+    public function __construct(InventoryServiceInterface $inventory) { $this->inventory = $inventory; }
 
+    /**
+     * Danh sách hàng bán trả lại
+     *
+     * @return void
+     */
     public function list(): void
     {
-        $pdo = $this->pdo;
-        $stmt = $pdo->query("SELECT t.id, t.description, t.reference, t.status, t.created_at
-            FROM transactions t WHERE t.description LIKE 'Customer return:%' ORDER BY t.created_at DESC");
-        JsonResponse::ok($stmt->fetchAll(\PDO::FETCH_ASSOC));
+        Auth::requirePermission('inventory', 'read');
+        JsonResponse::ok($this->inventory->getCustomerReturns());
     }
 
-    // NGHIỆP VỤ: Ghi nhận hàng bán trả lại từ khách hàng — nhập kho + điều chỉnh doanh thu
-    // Input: { item_id, qty, reference?, created_by? }
-    // Output: { transaction_id, item_id, qty } — 201 Created
-    // Service: InventoryService.returnFromCustomer() → JournalService.postEntry
-    // Hạch toán: Nợ 152,156 (tăng tồn kho) / Có 632 (giảm giá vốn) + Nợ 511 (giảm doanh thu) / Có 131
-    // Rủi ro: Giá nhập kho lại phải đúng giá vốn tại thời điểm xuất (FIFO). Ảnh hưởng BC02
-    // Tích hợp: ArController.returnGoods xử lý điều chỉnh công nợ
-    public function return(): void
+    /**
+     * Ghi nhận hàng bán trả lại
+     *
+     * @return void
+     */
+    public function create(): void
     {
-        Auth::checkCsrf();
         Auth::requirePermission('inventory', 'create');
+        Auth::checkCsrf();
         $data = json_decode(file_get_contents('php://input'), true);
         if (!$data || !isset($data['item_id'], $data['qty'])) {
-            JsonResponse::error('Vui lòng nhập mã vật tư và số lượng');
-            return;
-        }
-        $qty = (float)$data['qty'];
-        if ($qty <= 0) {
-            JsonResponse::error('Số lượng phải lớn hơn 0');
+            JsonResponse::error('Vui lòng nhập mã hàng và số lượng', 400);
             return;
         }
         try {
-            $result = $this->inventory->returnFromCustomer(
-                $data['item_id'], $qty,
-                $data['reference'] ?? uniqid('ret_'),
-                $data['created_by'] ?? 'system'
-            );
+            $result = $this->inventory->recordCustomerReturn($data, $_SESSION['user_id'] ?? 'system');
             JsonResponse::ok($result, 201);
         } catch (\InvalidArgumentException $e) {
-            JsonResponse::error($e->getMessage());
+            JsonResponse::error($e->getMessage(), 400);
         }
-    }
-
-    public function items(): void
-    {
-        JsonResponse::ok(array_map(fn($x) => $x->toArray(), $this->itemRepo->findAll()));
     }
 }

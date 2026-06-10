@@ -8,32 +8,22 @@ use Accounting\Domain\Contract\ReplaceResult;
 use Accounting\Domain\Contract\CancelResult;
 use Accounting\Domain\Contract\InvoiceDetail;
 
-//
-// CỔNG HÓA ĐƠN ĐIỆN TỬ VNPT (VNPT-Invoice)
-//
-// Kết nối với hệ thống VNPT Invoice qua SOAP WebService
-// Tuân thủ Thông tư 32/2025/TT-BTC (thay TT 78/2021)
-//
-// API functions:
-//   ImportAndPublishInv — phát hành hóa đơn
-//   replaceInv — thay thế hóa đơn
-//   adjustInv — điều chỉnh hóa đơn
-//   cancelInv — hủy hóa đơn
-//   confirmPayment — cập nhật thanh toán
-//   UpdateCus — đồng bộ khách hàng
-//   downloadInv — tải XML/PDF
-//
-// THAM SỐ CẤU HÌNH (từ tvan_providers table):
-//   api_url — endpoint SOAP
-//   username/password — tài khoản gọi service
-//   account/acpass — tài khoản phát hành hóa đơn
-//   pattern/serial — mẫu số và ký hiệu hóa đơn
-//
-// RỦI RO:
-//   - API thay đổi theo phiên bản (cần version check)
-//   - Timeout 30s — nếu quá, cần retry queue
-//   - T-VAN downtime → fallback sang provider khác
-//
+/**
+ * CỔNG HÓA ĐƠN ĐIỆN TỬ VNPT (VNPT-Invoice).
+ *
+ * Kết nối với hệ thống VNPT Invoice qua SOAP WebService.
+ * Tuân thủ Thông tư 32/2025/TT-BTC (thay TT 78/2021).
+ *
+ * API functions: ImportAndPublishInv, replaceInv, adjustInv, cancelInv,
+ * confirmPayment, UpdateCus, downloadInv.
+ *
+ * THAM SỐ CẤU HÌNH (từ tvan_providers table):
+ *   api_url, username/password, account/acpass, pattern/serial.
+ *
+ * RỦI RO: API thay đổi theo phiên bản (cần version check).
+ * Timeout 30s — nếu quá, cần retry queue.
+ * T-VAN downtime → fallback sang provider khác.
+ */
 class VnptEInvoiceGateway implements EInvoiceGatewayInterface
 {
     private string $apiUrl;
@@ -45,6 +35,10 @@ class VnptEInvoiceGateway implements EInvoiceGatewayInterface
     private string $serial;
     private DigitalSignatureService $signer;
 
+    /**
+     * @param array $config Cấu hình T-VAN: api_url, username, password, account, acpass, pattern, serial.
+     * @param DigitalSignatureService $signer Service ký số.
+     */
     public function __construct(
         array $config,
         DigitalSignatureService $signer,
@@ -59,11 +53,17 @@ class VnptEInvoiceGateway implements EInvoiceGatewayInterface
         $this->signer = $signer;
     }
 
-    // Phát hành hóa đơn
-    // 1. Kiểm tra XML hợp lệ
-    // 2. Ký số với USB Token
-    // 3. Gửi lên SOAP service
-    // 4. Xử lý kết quả
+    /**
+     * Phát hành hóa đơn.
+     *
+     * 1. Gửi XML đã ký lên SOAP service.
+     * 2. Xử lý kết quả.
+     *
+     * @param string $signedXml XML hóa đơn đã ký số.
+     * @param string $pattern Mẫu số hóa đơn (đè config nếu có).
+     * @param string $serial Ký hiệu hóa đơn (đè config nếu có).
+     * @return PublishResult Kết quả phát hành.
+     */
     public function publish(string $signedXml, string $pattern = '', string $serial = ''): PublishResult
     {
         $pattern = $pattern ?: $this->pattern;
@@ -87,6 +87,13 @@ class VnptEInvoiceGateway implements EInvoiceGatewayInterface
         }
     }
 
+    /**
+     * Điều chỉnh hóa đơn.
+     *
+     * @param string $fkey FKey hóa đơn gốc.
+     * @param string $signedXml XML hóa đơn điều chỉnh đã ký.
+     * @return AdjustResult Kết quả điều chỉnh.
+     */
     public function adjust(string $fkey, string $signedXml): AdjustResult
     {
         try {
@@ -111,6 +118,13 @@ class VnptEInvoiceGateway implements EInvoiceGatewayInterface
         }
     }
 
+    /**
+     * Thay thế hóa đơn.
+     *
+     * @param string $fkey FKey hóa đơn gốc.
+     * @param string $signedXml XML hóa đơn thay thế đã ký.
+     * @return ReplaceResult Kết quả thay thế.
+     */
     public function replace(string $fkey, string $signedXml): ReplaceResult
     {
         try {
@@ -136,6 +150,13 @@ class VnptEInvoiceGateway implements EInvoiceGatewayInterface
         }
     }
 
+    /**
+     * Hủy hóa đơn.
+     *
+     * @param string $fkey FKey hóa đơn cần hủy.
+     * @param string $reason Lý do hủy.
+     * @return CancelResult Kết quả hủy.
+     */
     public function cancel(string $fkey, string $reason): CancelResult
     {
         try {
@@ -157,6 +178,12 @@ class VnptEInvoiceGateway implements EInvoiceGatewayInterface
         }
     }
 
+    /**
+     * Xác nhận thanh toán hóa đơn.
+     *
+     * @param string $fkey FKey hóa đơn.
+     * @return bool True nếu xác nhận thành công.
+     */
     public function confirmPayment(string $fkey): bool
     {
         try {
@@ -173,6 +200,12 @@ class VnptEInvoiceGateway implements EInvoiceGatewayInterface
         }
     }
 
+    /**
+     * Lấy thông tin hóa đơn.
+     *
+     * @param string $fkey FKey hóa đơn.
+     * @return InvoiceDetail Chi tiết hóa đơn.
+     */
     public function getInvoice(string $fkey): InvoiceDetail
     {
         $response = $this->soapCall('getInvViewFkey', [
@@ -192,6 +225,12 @@ class VnptEInvoiceGateway implements EInvoiceGatewayInterface
         );
     }
 
+    /**
+     * Tải XML hóa đơn.
+     *
+     * @param string $fkey FKey hóa đơn.
+     * @return string Nội dung XML.
+     */
     public function downloadXml(string $fkey): string
     {
         return $this->soapCall('downloadInvFkey', [
@@ -201,6 +240,12 @@ class VnptEInvoiceGateway implements EInvoiceGatewayInterface
         ]);
     }
 
+    /**
+     * Tải PDF hóa đơn.
+     *
+     * @param string $fkey FKey hóa đơn.
+     * @return string Nội dung PDF.
+     */
     public function downloadPdf(string $fkey): string
     {
         return $this->soapCall('downloadInvPDFFkey', [
@@ -210,6 +255,16 @@ class VnptEInvoiceGateway implements EInvoiceGatewayInterface
         ]);
     }
 
+    /**
+     * Đồng bộ khách hàng lên VNPT.
+     *
+     * @param string $cusCode Mã khách hàng.
+     * @param string $name Tên khách hàng.
+     * @param string $taxCode MST khách hàng.
+     * @param string $address Địa chỉ.
+     * @param string $email Email.
+     * @return bool True nếu đồng bộ thành công.
+     */
     public function syncCustomer(string $cusCode, string $name, string $taxCode, string $address, string $email): bool
     {
         $xml = <<<XML
@@ -238,6 +293,13 @@ XML;
         }
     }
 
+    /**
+     * Gán chứng chỉ số cho khách hàng.
+     *
+     * @param string $cusCode Mã khách hàng.
+     * @param string $certSerial Số serial chứng chỉ.
+     * @return bool True nếu gán thành công.
+     */
     public function assignCertificate(string $cusCode, string $certSerial): bool
     {
         try {
@@ -256,6 +318,13 @@ XML;
         }
     }
 
+    /**
+     * Báo cáo tình hình sử dụng hóa đơn.
+     *
+     * @param int $year Năm báo cáo.
+     * @param int $quarter Quý báo cáo.
+     * @return array Dữ liệu báo cáo.
+     */
     public function reportUsage(int $year, int $quarter): array
     {
         $response = $this->soapCall('reportInvUsed', [
@@ -271,6 +340,16 @@ XML;
 
     // === SOAP CLIENT ===
 
+    /**
+     * Gọi SOAP WebService của VNPT.
+     *
+     * Xây dựng SOAP envelope, gửi qua cURL, parse response.
+     *
+     * @param string $function Tên function SOAP.
+     * @param array $params Tham số gửi lên.
+     * @return string Kết quả JSON-encoded.
+     * @throws \RuntimeException Nếu API URL chưa cấu hình hoặc HTTP lỗi.
+     */
     private function soapCall(string $function, array $params): string
     {
         if (empty($this->apiUrl)) {
@@ -329,6 +408,12 @@ SOAP;
         ]);
     }
 
+    /**
+     * Escape XML — chống XXE và XML injection.
+     *
+     * @param string $value Chuỗi cần escape.
+     * @return string Chuỗi đã escape.
+     */
     private function escape(string $value): string
     {
         return htmlspecialchars($value, ENT_XML1 | ENT_QUOTES, 'UTF-8');

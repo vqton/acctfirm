@@ -1,14 +1,32 @@
 <?php
 namespace Accounting\Interfaces\HTTP;
 
-// Điều hướng request HTTP — ánh xạ URL đến Controller xử lý nghiệp vụ kế toán
+/**
+ * MODULE: Điều hướng Request HTTP (Router)
+ *
+ * Ánh xạ URL đến Controller xử lý nghiệp vụ kế toán.
+ * Hỗ trợ tham số động trong URL pattern: /api/users/:id -> match /api/users/123
+ *
+ * API endpoints:
+ *   (Đây là Router engine — không phải controller)
+ *
+ * Rủi ro:
+ *   - Nếu có 2 route match cùng URI, route nào đăng ký trước được chạy trước
+ *   - Pattern :param bắt toàn bộ giá trị ([^/]+) — không hỗ trợ nested params
+ *   - URI được chuẩn hóa bỏ query string và trailing slash
+ */
 class Router
 {
     private array $routes = [];
 
-    // Đăng ký route — method: GET/POST/PUT/DELETE, pattern: URL với :param, handler: closure
-    // pattern hỗ trợ tham số động: /api/users/:id → match /api/users/123
-    // handler là closure được gọi khi route match — nhận tham số từ URL làm đối số
+    /**
+     * Đăng ký route — method: GET/POST/PUT/DELETE, pattern: URL với :param, handler: closure
+     *
+     * @param string $method HTTP method
+     * @param string $pattern URL pattern hỗ trợ :param
+     * @param callable $handler Closure xử lý khi route match
+     * @return void
+     */
     public function addRoute(string $method, string $pattern, $handler): void
     {
         $this->routes[] = [
@@ -18,12 +36,16 @@ class Router
         ];
     }
 
-    // Điều phối request đến xử lý — tìm route phù hợp, gọi handler tương ứng
-    // Nếu không tìm thấy route, trả về 404
-    // Cơ chế: Duyệt danh sách route → so khớp method + pattern (regex) → gọi handler
-    // Pattern :param được chuyển thành regex group ([^/]+) — bắt toàn bộ giá trị
-    // Xử lý URI: bỏ query string, chuẩn hóa trailing slash (/abc/ → /abc)
-    // RỦI RO: Nếu có 2 route match cùng URI, route nào đăng ký trước được chạy trước
+    /**
+     * Điều phối request đến xử lý — tìm route phù hợp, gọi handler tương ứng
+     *
+     * Duyệt danh sách route -> so khớp method + pattern (regex) -> gọi handler.
+     * Pattern :param được chuyển thành regex group ([^/]+).
+     * URI: bỏ query string, chuẩn hóa trailing slash.
+     * Nếu không tìm thấy route, trả về 404.
+     *
+     * @return void
+     */
     public function dispatch(): void
     {
         $method = $_SERVER['REQUEST_METHOD'];
@@ -56,8 +78,39 @@ class Router
         HttpError::notFound('Không tìm thấy đường dẫn: ' . $method . ' ' . $uri);
     }
 
+    /**
+     * Đăng ký route GET
+     *
+     * @param string $pattern URL pattern
+     * @param callable $handler Closure xử lý
+     * @return void
+     */
     public function get(string $pattern, $handler): void { $this->addRoute('GET', $pattern, $handler); }
+
+    /**
+     * Đăng ký route POST
+     *
+     * @param string $pattern URL pattern
+     * @param callable $handler Closure xử lý
+     * @return void
+     */
     public function post(string $pattern, $handler): void { $this->addRoute('POST', $pattern, $handler); }
+
+    /**
+     * Đăng ký route PUT
+     *
+     * @param string $pattern URL pattern
+     * @param callable $handler Closure xử lý
+     * @return void
+     */
     public function put(string $pattern, $handler): void { $this->addRoute('PUT', $pattern, $handler); }
+
+    /**
+     * Đăng ký route DELETE
+     *
+     * @param string $pattern URL pattern
+     * @param callable $handler Closure xử lý
+     * @return void
+     */
     public function delete(string $pattern, $handler): void { $this->addRoute('DELETE', $pattern, $handler); }
 }
