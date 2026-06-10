@@ -6,24 +6,25 @@ use Accounting\Domain\Contract\JournalServiceInterface;
 use Accounting\Domain\Repository\AccountRepositoryInterface;
 use Accounting\Domain\Repository\SupplierRepositoryInterface;
 
-//
-// CÔNG NỢ PHẢI TRẢ (TK 331): Quản lý toàn bộ nghiệp vụ mua hàng và thanh toán cho nhà cung cấp
-// Các nghiệp vụ: Mua hàng (Nợ 156/152 + Nợ 1331 / Có 331), thanh toán, tạm ứng, trả lại, chiết khấu, xóa nợ
-// TK 331 là control account — chỉ post vào chi tiết từng NCC, không post trực tiếp vào 331 tổng hợp
-// Rủi ro: Sai số dư 331 → BC01 MS 310 (Phải trả NCC) sai → mất đối chiếu với NCC → rủi ro pháp lý
-//
-// ĐỐI SOÁT GL: Số dư 331 trên GL phải khớp với tổng số dư chi tiết từng NCC trong sub-ledger.
-// Nếu lệch → mất audit trail → không thể xác nhận công nợ với NCC.
-//
-// GIAO DỊCH: Các method ghi nhận nghiệp vụ KHÔNG wrap trong beginTransaction/commit.
-// Rủi ro: Nếu JournalService::postEntry thành công nhưng INSERT INTO ap_invoices thất bại
-// → ghi nhận Nợ/Có nhưng mất dấu vết công nợ → số dư 331 lệch giữa GL và sub-ledger.
-// Cần refactor: thêm PDO transaction bao quanh mọi multi-step write operation.
-//
-// CONCURRENCY: Không có SELECT FOR UPDATE trên ap_invoices hoặc suppliers.
-// Rủi ro: Hai request thanh toán đồng thời trên cùng hóa đơn → double payment.
-// Giải pháp: recordPayment cần khóa hàng (FOR UPDATE) trước khi đọc balance.
-//
+/**
+ * CÔNG NỢ PHẢI TRẢ (TK 331): Quản lý toàn bộ nghiệp vụ mua hàng và thanh toán cho nhà cung cấp.
+ *
+ * Các nghiệp vụ: Mua hàng (Nợ 156/152 + Nợ 1331 / Có 331), thanh toán, tạm ứng, trả lại, chiết khấu, xóa nợ.
+ * TK 331 là control account — chỉ post vào chi tiết từng NCC, không post trực tiếp vào 331 tổng hợp.
+ * Rủi ro: Sai số dư 331 → BC01 MS 310 (Phải trả NCC) sai → mất đối chiếu với NCC → rủi ro pháp lý.
+ *
+ * ĐỐI SOÁT GL: Số dư 331 trên GL phải khớp với tổng số dư chi tiết từng NCC trong sub-ledger.
+ * Nếu lệch → mất audit trail → không thể xác nhận công nợ với NCC.
+ *
+ * GIAO DỊCH: Các method ghi nhận nghiệp vụ KHÔNG wrap trong beginTransaction/commit.
+ * Rủi ro: Nếu JournalService::postEntry thành công nhưng INSERT INTO ap_invoices thất bại
+ * → ghi nhận Nợ/Có nhưng mất dấu vết công nợ → số dư 331 lệch giữa GL và sub-ledger.
+ * Cần refactor: thêm PDO transaction bao quanh mọi multi-step write operation.
+ *
+ * CONCURRENCY: Không có SELECT FOR UPDATE trên ap_invoices hoặc suppliers.
+ * Rủi ro: Hai request thanh toán đồng thời trên cùng hóa đơn → double payment.
+ * Giải pháp: recordPayment cần khóa hàng (FOR UPDATE) trước khi đọc balance.
+ */
 class ApService
 {
     private \PDO $pdo;
@@ -43,13 +44,30 @@ class ApService
 
     // ── Invoice ──
 
-    //
-    // NGHIỆP VỤ MUA HÀNG: Ghi nhận hóa đơn mua hàng từ nhà cung cấp
-    // Hạch toán: Nợ TK Hàng tồn kho (152/156) — Nợ TK 1331 (VAT đầu vào) — Có TK 331 (tổng giá thanh toán)
-    // Rủi ro: Nhập sai thuế 1331 → ảnh hưởng tờ khai thuế GTGT đầu vào
-    // Chỉ được khấu trừ VAT nếu có hóa đơn đỏ hợp lệ theo TT 32/2025/TT-BTC
-    // Ảnh hưởng BC02: MS 24 (Giá vốn hàng bán) thay đổi khi hàng được bán ra
-    //
+    /**
+     * NGHIỆP VỤ MUA HÀNG: Ghi nhận hóa đơn mua hàng từ nhà cung cấp.
+     *
+     * Hạch toán: Nợ TK Hàng tồn kho (152/156) — Nợ TK 1331 (VAT đầu vào) — Có TK 331 (tổng giá thanh toán).
+     * Rủi ro: Nhập sai thuế 1331 → ảnh hưởng tờ khai thuế GTGT đầu vào.
+     * Chỉ được khấu trừ VAT nếu có hóa đơn đỏ hợp lệ theo TT 32/2025/TT-BTC.
+     * Ảnh hưởng BC02: MS 24 (Giá vốn hàng bán) thay đổi khi hàng được bán ra.
+     *
+     * @param string $supplierId     Mã định danh nhà cung cấp.
+     * @param string $invoiceNumber  Số hóa đơn từ nhà cung cấp.
+     * @param string $invoiceDate    Ngày hóa đơn (YYYY-MM-DD).
+     * @param string $dueDate        Ngày đến hạn thanh toán (YYYY-MM-DD).
+     * @param float  $netAmount      Giá trị chưa thuế.
+     * @param float  $vatAmount      Tiền thuế GTGT.
+     * @param float  $vatRate        Thuế suất GTGT (số thập phân, VD: 0.1 cho 10%).
+     * @param string $description    Diễn giải nghiệp vụ.
+     * @param string $inventoryAccount Tài khoản hàng tồn kho (VD: 152, 156).
+     * @param string $createdBy      Mã người tạo.
+     * @param float  $vatRatePct     Thuế suất GTGT dạng phần trăm (optional, dùng để lưu vào DB).
+     *
+     * @return array Mảng chứa invoice_id, transaction_id, amount.
+     *
+     * @throws \InvalidArgumentException Nếu không tìm thấy NCC, vượt hạn mức tín dụng.
+     */
     public function recordInvoice(string $supplierId, string $invoiceNumber, string $invoiceDate, string $dueDate, float $netAmount, float $vatAmount, float $vatRate, string $description, string $inventoryAccount, string $createdBy, float $vatRatePct = null): array
     {
         $this->pdo->beginTransaction();
@@ -93,12 +111,22 @@ class ApService
 
     // ── Payment ──
 
-    //
-    // NGHIỆP VỤ THANH TOÁN: Trả tiền cho nhà cung cấp
-    // Hạch toán: Nợ 331 — Có 111 (tiền mặt) / Có 112 (tiền gửi ngân hàng)
-    // Ràng buộc: Không thanh toán quá số dư hóa đơn, kiểm tra hóa đơn chưa tất toán
-    // Tác động: Giảm số dư 331 trên BC01, giảm tiền trên BC03 MS 01-03
-    //
+    /**
+     * NGHIỆP VỤ THANH TOÁN: Trả tiền cho nhà cung cấp.
+     *
+     * Hạch toán: Nợ 331 — Có 111 (tiền mặt) / Có 112 (tiền gửi ngân hàng).
+     * Ràng buộc: Không thanh toán quá số dư hóa đơn, kiểm tra hóa đơn chưa tất toán.
+     * Tác động: Giảm số dư 331 trên BC01, giảm tiền trên BC03 MS 01-03.
+     * Sử dụng SELECT FOR UPDATE để chống double payment dưới concurrent.
+     *
+     * @param int    $invoiceId Mã hóa đơn cần thanh toán.
+     * @param float  $amount    Số tiền thanh toán.
+     * @param string $createdBy Mã người tạo.
+     *
+     * @return array Mảng chứa invoice_id, transaction_id, amount, balance sau thanh toán.
+     *
+     * @throws \InvalidArgumentException Nếu hóa đơn không tồn tại, đã tất toán, hoặc không còn số dư.
+     */
     public function recordPayment(int $invoiceId, float $amount, string $createdBy): array
     {
         $this->pdo->beginTransaction();
@@ -144,12 +172,22 @@ class ApService
         } catch (\Throwable $e) { $this->pdo->rollBack(); throw $e; }
     }
 
-    //
-    // NGHIỆP VỤ TẠM ỨNG: Trả trước tiền cho nhà cung cấp khi chưa nhận được hàng
-    // Hạch toán: Nợ 331 — Có 111/112
-    // TK 331 có thể có số dư bên Nợ (dư Nợ 331) thể hiện "khoản phải thu NCC" — tạm ứng chưa thanh toán
-    // Quản lý rủi ro: Nếu NCC không giao hàng → khó thu hồi tạm ứng, cần hợp đồng chặt chẽ
-    //
+    /**
+     * NGHIỆP VỤ TẠM ỨNG: Trả trước tiền cho nhà cung cấp khi chưa nhận được hàng.
+     *
+     * Hạch toán: Nợ 331 — Có 111/112.
+     * TK 331 có thể có số dư bên Nợ (dư Nợ 331) thể hiện "khoản phải thu NCC" — tạm ứng chưa thanh toán.
+     * Quản lý rủi ro: Nếu NCC không giao hàng → khó thu hồi tạm ứng, cần hợp đồng chặt chẽ.
+     *
+     * @param string $supplierId Mã định danh nhà cung cấp.
+     * @param float  $amount     Số tiền tạm ứng.
+     * @param string $description Diễn giải nghiệp vụ.
+     * @param string $createdBy  Mã người tạo.
+     *
+     * @return array Mảng chứa invoice_id, transaction_id, amount.
+     *
+     * @throws \InvalidArgumentException Nếu không tìm thấy nhà cung cấp.
+     */
     public function recordPrepayment(string $supplierId, float $amount, string $description, string $createdBy): array
     {
         $this->pdo->beginTransaction();
@@ -178,12 +216,22 @@ class ApService
 
     // ── Return ──
 
-    //
-    // NGHIỆP VỤ TRẢ LẠI HÀNG MUA: Trả lại hàng cho nhà cung cấp (hàng kém chất lượng, sai quy cách)
-    // Hạch toán: Nợ 331 — Có TK Hàng tồn kho — Có 1331 (thuế GTGT đầu vào hoàn lại)
-    // Tác động 3 mặt: (1) Giảm công nợ 331, (2) Giảm giá trị hàng tồn kho, (3) Giảm VAT được khấu trừ
-    // Yêu cầu: Phải có biên bản trả hàng và hóa đơn điều chỉnh giảm theo TT 32/2025/TT-BTC
-    //
+    /**
+     * NGHIỆP VỤ TRẢ LẠI HÀNG MUA: Trả lại hàng cho nhà cung cấp (hàng kém chất lượng, sai quy cách).
+     *
+     * Hạch toán: Nợ 331 — Có TK Hàng tồn kho — Có 1331 (thuế GTGT đầu vào hoàn lại).
+     * Tác động 3 mặt: (1) Giảm công nợ 331, (2) Giảm giá trị hàng tồn kho, (3) Giảm VAT được khấu trừ.
+     * Yêu cầu: Phải có biên bản trả hàng và hóa đơn điều chỉnh giảm theo TT 32/2025/TT-BTC.
+     *
+     * @param int    $invoiceId         Mã hóa đơn gốc.
+     * @param float  $returnAmount      Số tiền trả lại (đã bao gồm VAT).
+     * @param string $inventoryAccount  Tài khoản hàng tồn kho ghi giảm.
+     * @param string $createdBy         Mã người tạo.
+     *
+     * @return array Mảng chứa invoice_id, transaction_id, amount.
+     *
+     * @throws \InvalidArgumentException Nếu hóa đơn đã tất toán hoặc không tồn tại.
+     */
     public function recordReturn(int $invoiceId, float $returnAmount, string $inventoryAccount, string $createdBy): array
     {
         $this->pdo->beginTransaction();
@@ -220,12 +268,21 @@ class ApService
 
     // ── Discount ──
 
-    //
-    // NGHIỆP VỤ CHIẾT KHẤU THANH TOÁN ĐƯỢC HƯỞNG: NCC giảm giá khi DN thanh toán sớm
-    // Hạch toán: Nợ 331 — Có 515 (Doanh thu hoạt động tài chính)
-    // Tác động BC02: MS 23 (Chi phí tài chính) giảm tương đối — vì 515 là doanh thu tài chính
-    // Phân biệt: Chiết khấu thương mại (giảm giá mua) hạch toán giảm giá vốn, không qua 515
-    //
+    /**
+     * NGHIỆP VỤ CHIẾT KHẤU THANH TOÁN ĐƯỢC HƯỞNG: NCC giảm giá khi DN thanh toán sớm.
+     *
+     * Hạch toán: Nợ 331 — Có 515 (Doanh thu hoạt động tài chính).
+     * Tác động BC02: MS 23 (Chi phí tài chính) giảm tương đối — vì 515 là doanh thu tài chính.
+     * Phân biệt: Chiết khấu thương mại (giảm giá mua) hạch toán giảm giá vốn, không qua 515.
+     *
+     * @param int    $invoiceId      Mã hóa đơn được chiết khấu.
+     * @param float  $discountAmount Số tiền chiết khấu.
+     * @param string $createdBy      Mã người tạo.
+     *
+     * @return array Mảng chứa invoice_id, transaction_id, amount.
+     *
+     * @throws \InvalidArgumentException Nếu số tiền chiết khấu lớn hơn số dư hóa đơn.
+     */
     public function recordDiscount(int $invoiceId, float $discountAmount, string $createdBy): array
     {
         $this->pdo->beginTransaction();
@@ -258,27 +315,25 @@ class ApService
 
     // ── Write-off ──
 
-    //
-    // NGHIỆP VỤ XÓA NỢ PHẢI TRẢ: Xóa số dư công nợ không còn nghĩa vụ thanh toán
-    // Hạch toán: Nợ 331 — Có 711 (Thu nhập khác)
-    // Áp dụng: NCC giải thể, phá sản, hết thời hiệu khởi kiện, hoặc thỏa thuận xóa nợ song phương
-    // Rủi ro thuế: Khoản xóa nợ phải trả có thể bị tính thuế TNDN — cần tư vấn thuế trước khi xóa
-    //
+    /**
+     * NGHIỆP VỤ XÓA NỢ PHẢI TRẢ: Xóa số dư công nợ không còn nghĩa vụ thanh toán.
+     *
+     * Hạch toán: Nợ 331 — Có 711 (Thu nhập khác).
+     * Áp dụng: NCC giải thể, phá sản, hết thời hiệu khởi kiện, hoặc thỏa thuận xóa nợ song phương.
+     * RỦI RO THUẾ TNDN: Khoản xóa nợ phải trả được coi là thu nhập chịu thuế theo TT 78/2014/TT-BTC.
+     * Nếu xóa sai → truy thu thuế + phạt. Cần tư vấn thuế trước khi thực hiện.
+     * THỦ TỤC NỘI BỘ: Phải có biên bản Hội đồng xóa nợ, phê duyệt của TGĐ.
+     * ẢNH HƯỞNG BC02: MS 31 (Thu nhập khác - 711) tăng → lợi nhuận tăng → thuế TNDN tăng.
+     *
+     * @param int    $invoiceId Mã hóa đơn cần xóa nợ.
+     * @param string $createdBy Mã người tạo.
+     *
+     * @return array Mảng chứa invoice_id, transaction_id, amount.
+     *
+     * @throws \InvalidArgumentException Nếu hóa đơn không còn số dư để xóa sổ.
+     */
     public function writeOff(int $invoiceId, string $createdBy): array
     {
-        // NGHIỆP VỤ XÓA NỢ PHẢI TRẢ: Xóa khoản nợ không còn nghĩa vụ thanh toán.
-        // Hạch toán: Nợ 331 / Có 711 (Thu nhập khác).
-        //
-        // RỦI RO THUẾ TNDN: Khoản xóa nợ phải trả được coi là thu nhập chịu thuế.
-        // Theo Thông tư 78/2014/TT-BTC: Nợ phải trả không xác định được chủ nợ, hết thời hiệu khởi kiện
-        // → ghi nhận vào thu nhập khác (711) → tính thuế TNDN.
-        // Cần tư vấn thuế trước khi xóa — nếu xóa sai → truy thu thuế + phạt.
-        //
-        // THỦ TỤC NỘI BỘ: Phải có biên bản Hội đồng xóa nợ, phê duyệt của TGĐ.
-        // Lưu hồ sơ đầy đủ: hợp đồng, biên bản đối chiếu, thông báo xóa nợ.
-        //
-        // ẢNH HƯỞNG BC02: MS 31 (Thu nhập khác - 711) tăng → lợi nhuận tăng → thuế TNDN tăng.
-        //
         $this->pdo->beginTransaction();
         try {
             $invoice = $this->getInvoice($invoiceId);
@@ -307,18 +362,19 @@ class ApService
 
     // ── Reports ──
 
-    //
-    // BÁO CÁO TUỔI NỢ PHẢI TRẢ: Phân loại công nợ NCC theo thời gian quá hạn
-    // Mục đích: Quản lý dòng tiền thanh toán, ưu tiên xử lý nợ đến hạn, tránh phạt quá hạn
-    // Các bucket chuẩn: Hiện tại (chưa đến hạn), 1-30 ngày, 31-60, 61-90, 90+ ngày
-    // Sử dụng: Lập kế hoạch thanh toán, đánh giá uy tín NCC, thương lượng thời hạn thanh toán
-    //
-    // ĐỘ CHÍNH XÁC CỦA AGING: Phụ thuộc vào due_date của hóa đơn. Nếu nhập sai due_date
-    // → aging sai → quyết định thanh toán sai (trả tiền NCC quá hạn, mất uy tín).
-    //
-    // GIỚI HẠN: Chỉ báo cáo hóa đơn có balance > 1 VND và không phải prepayment.
-    // Prepayment (số âm) bị loại trừ — cần báo cáo riêng để theo dõi tạm ứng.
-    //
+    /**
+     * BÁO CÁO TUỔI NỢ PHẢI TRẢ: Phân loại công nợ NCC theo thời gian quá hạn.
+     *
+     * Mục đích: Quản lý dòng tiền thanh toán, ưu tiên xử lý nợ đến hạn, tránh phạt quá hạn.
+     * Các bucket chuẩn: Hiện tại (chưa đến hạn), 1-30 ngày, 31-60, 61-90, 90+ ngày.
+     * Sử dụng: Lập kế hoạch thanh toán, đánh giá uy tín NCC, thương lượng thời hạn thanh toán.
+     * ĐỘ CHÍNH XÁC: Phụ thuộc vào due_date của hóa đơn. Nếu nhập sai due_date
+     * → aging sai → quyết định thanh toán sai (trả tiền NCC quá hạn, mất uy tín).
+     * GIỚI HẠN: Chỉ báo cáo hóa đơn có balance > 1 VND và không phải prepayment.
+     * Prepayment (số âm) bị loại trừ — cần báo cáo riêng để theo dõi tạm ứng.
+     *
+     * @return array Mảng chứa 'buckets' (chi tiết từng bucket), 'totals' (tổng mỗi bucket), 'grand_total'.
+     */
     public function getAgingReport(): array
     {
         $rows = $this->pdo->query(
@@ -350,11 +406,16 @@ class ApService
         return ['buckets' => $buckets, 'totals' => $totals, 'grand_total' => array_sum($totals)];
     }
 
-    //
-    // SAO KÊ CÔNG Nợ NCC: Chi tiết tất cả hóa đơn, thanh toán, trả lại, chiết khấu của một NCC
-    // Mục đích: Đối chiếu công nợ với NCC theo định kỳ (cuối tháng/quý) — cơ sở xác nhận số dư 331
-    // Nếu chênh lệch → điều chỉnh kịp thời trước khi khóa sổ
-    //
+    /**
+     * SAO KÊ CÔNG NỢ NCC: Chi tiết tất cả hóa đơn của một NCC.
+     *
+     * Mục đích: Đối chiếu công nợ với NCC theo định kỳ (cuối tháng/quý) — cơ sở xác nhận số dư 331.
+     * Nếu chênh lệch → điều chỉnh kịp thời trước khi khóa sổ.
+     *
+     * @param string $supplierId Mã định danh nhà cung cấp.
+     *
+     * @return array Danh sách hóa đơn của NCC kèm tên nhà cung cấp.
+     */
     public function getSupplierStatement(string $supplierId): array
     {
         $invoices = $this->pdo->prepare(
@@ -364,6 +425,17 @@ class ApService
         return $invoices->fetchAll(\PDO::FETCH_ASSOC);
     }
 
+    /**
+     * Lấy danh sách hóa đơn phải trả NCC với bộ lọc tùy chọn.
+     *
+     * Cho phép lọc theo trạng thái (unpaid/partial/paid/written_off) và/hoặc theo NCC.
+     * Giới hạn 200 bản ghi mới nhất.
+     *
+     * @param string|null $status     Trạng thái hóa đơn (unpaid, partial, paid, written_off) hoặc null.
+     * @param string|null $supplierId Mã định danh NCC hoặc null để lấy tất cả.
+     *
+     * @return array Danh sách hóa đơn kèm tên nhà cung cấp.
+     */
     public function getInvoices(string $status = null, string $supplierId = null): array
     {
         $sql = 'SELECT i.*, s.name as supplier_name FROM ap_invoices i JOIN suppliers s ON s.id = i.supplier_id WHERE 1=1';
@@ -377,6 +449,13 @@ class ApService
         return $stmt->fetchAll(\PDO::FETCH_ASSOC);
     }
 
+    /**
+     * Lấy chi tiết một hóa đơn phải trả NCC theo ID.
+     *
+     * @param int $id Mã hóa đơn.
+     *
+     * @return array|null Mảng dữ liệu hóa đơn kèm tên NCC, hoặc null nếu không tìm thấy.
+     */
     public function getInvoice(int $id): ?array
     {
         $stmt = $this->pdo->prepare('SELECT i.*, s.name as supplier_name FROM ap_invoices i JOIN suppliers s ON s.id = i.supplier_id WHERE i.id = ?');
@@ -385,6 +464,15 @@ class ApService
         return $row ?: null;
     }
 
+    /**
+     * Lấy danh sách các lần thanh toán/trả lại/chiết khấu của một hóa đơn.
+     *
+     * Kết hợp dữ liệu từ ap_payments và transactions để hiển thị chi tiết giao dịch.
+     *
+     * @param int $invoiceId Mã hóa đơn.
+     *
+     * @return array Danh sách các giao dịch liên quan đến hóa đơn.
+     */
     public function getPayments(int $invoiceId): array
     {
         $stmt = $this->pdo->prepare('SELECT p.*, t.description, t.reference, t.created_at as txn_date FROM ap_payments p JOIN transactions t ON t.id = p.transaction_id WHERE p.ap_invoice_id = ? ORDER BY p.created_at');
@@ -392,21 +480,34 @@ class ApService
         return $stmt->fetchAll(\PDO::FETCH_ASSOC);
     }
 
+    /**
+     * Lấy danh sách tất cả nhà cung cấp kèm số dư công nợ.
+     *
+     * @return array Danh sách NCC với id, code, name, balance.
+     */
     public function getSuppliers(): array
     {
         $rows = $this->pdo->query('SELECT id, code, name, balance FROM suppliers ORDER BY name')->fetchAll(\PDO::FETCH_ASSOC);
         return $rows;
     }
 
-    //
-    // PHÂN BỔ THANH TOÁN NHIỀU HÓA ĐƠN: 1 lần chi tiền thanh toán nhiều hóa đơn NCC.
-    // Input: allocations = [['invoice_id' => 1, 'amount' => 500000], ...]
-    // Yêu cầu: Tất cả hóa đơn phải cùng một NCC và không được vượt quá số dư từng hóa đơn.
-    //
-    // NGHIỆP VỤ THỰC TẾ: Cuối tháng kế toán tổng hợp các hóa đơn cần thanh toán cho 1 NCC,
-    // lập ủy nhiệm chi tổng số tiền, sau đó phân bổ vào từng hóa đơn.
-    // Hạch toán: Nợ 331 (tổng số tiền) — Có 112 (tổng số tiền).
-    //
+    /**
+     * PHÂN BỔ THANH TOÁN NHIỀU HÓA ĐƠN: 1 lần chi tiền thanh toán nhiều hóa đơn NCC.
+     *
+     * NGHIỆP VỤ THỰC TẾ: Cuối tháng kế toán tổng hợp các hóa đơn cần thanh toán cho 1 NCC,
+     * lập ủy nhiệm chi tổng số tiền, sau đó phân bổ vào từng hóa đơn.
+     * Hạch toán: Nợ 331 (tổng số tiền) — Có 112 (tổng số tiền).
+     * Yêu cầu: Tất cả hóa đơn phải cùng một NCC và không được vượt quá số dư từng hóa đơn.
+     *
+     * @param array  $allocations     Mảng phân bổ: [['invoice_id' => int, 'amount' => float], ...].
+     * @param string $paymentAccount  Tài khoản thanh toán (VD: 111, 112).
+     * @param string $description     Diễn giải nghiệp vụ.
+     * @param string $createdBy       Mã người tạo.
+     *
+     * @return array Mảng chứa transaction_id, total_amount, allocations (danh sách đã phân bổ).
+     *
+     * @throws \InvalidArgumentException Nếu hóa đơn không tồn tại, khác NCC, đã tất toán, hoặc vượt số dư.
+     */
     public function allocatePayment(array $allocations, string $paymentAccount, string $description, string $createdBy): array
     {
         $this->pdo->beginTransaction();
@@ -468,10 +569,15 @@ class ApService
         } catch (\Throwable $e) { $this->pdo->rollBack(); throw $e; }
     }
 
-    //
-    // LẤY PHÂN BỔ THANH TOÁN: Trả về danh sách các hóa đơn được thanh toán từ 1 giao dịch.
-    // Kết hợp dữ liệu từ payment_allocations với thông tin hóa đơn để hiển thị chi tiết.
-    //
+    /**
+     * LẤY PHÂN BỔ THANH TOÁN: Trả về danh sách các hóa đơn được thanh toán từ 1 giao dịch.
+     *
+     * Kết hợp dữ liệu từ payment_allocations với thông tin hóa đơn để hiển thị chi tiết.
+     *
+     * @param string $transactionId Mã giao dịch (transaction ID).
+     *
+     * @return array Danh sách phân bổ kèm thông tin hóa đơn và NCC.
+     */
     public function getAllocationDetails(string $transactionId): array
     {
         $stmt = $this->pdo->prepare(
