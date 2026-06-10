@@ -233,16 +233,28 @@ class InventoryService implements InventoryServiceInterface
         });
     }
 
-    // NGHIỆP VỤ: CHUYỂN KHO NỘI BỘ
-    // Hạch toán:
-    //   Nợ 15x (Kho đích)
-    //   Có 15x (Kho nguồn)
-    //
-    // Đây là bút toán nội bảng — không ảnh hưởng đến BC02 (không ghi nhận giá vốn).
-    // Cost layer được chuyển từ kho nguồn sang kho đích giữ nguyên đơn giá gốc,
-    // đảm bảo trace được giá nhập ban đầu.
-    //
-    // RỦI RO: Nếu không giữ nguyên đơn giá layer → sai số dư kho đích → sai giá vốn khi xuất sau này
+    /**
+     * NGHIỆP VỤ: CHUYỂN KHO NỘI BỘ
+     *
+     * Hạch toán:
+     *   Nợ 15x (Kho đích)
+     *   Có 15x (Kho nguồn)
+     *
+     * Đây là bút toán nội bảng — không ảnh hưởng đến BC02 (không ghi nhận giá vốn).
+     * Cost layer được chuyển từ kho nguồn sang kho đích giữ nguyên đơn giá gốc,
+     * đảm bảo trace được giá nhập ban đầu.
+     *
+     * RỦI RO: Nếu không giữ nguyên đơn giá layer → sai số dư kho đích → sai giá vốn khi xuất sau này
+     *
+     * @param string $itemId ID mặt hàng
+     * @param float $qty Số lượng chuyển
+     * @param string|null $fromWarehouseId ID kho nguồn (null = kho tổng hợp)
+     * @param string $toWarehouseId ID kho đích
+     * @param string $reference Số chứng từ
+     * @param string $createdBy ID người tạo
+     * @return array
+     * @throws \InvalidArgumentException Nếu không tìm thấy mặt hàng/kho, hoặc tồn kho không đủ
+     */
     public function transferGoods(string $itemId, float $qty, ?string $fromWarehouseId, string $toWarehouseId, string $reference, string $createdBy): array
     {
         return $this->wrapInTransaction(function () use ($itemId, $qty, $fromWarehouseId, $toWarehouseId, $reference, $createdBy) {
@@ -321,17 +333,29 @@ class InventoryService implements InventoryServiceInterface
         });
     }
 
-    // NGHIỆP VỤ: HÀNG ĐANG ĐI ĐƯỜNG (TK 151)
-    // Hạch toán:
-    //   Nợ 151 (Hàng mua đang đi đường)
-    //   Có 331 (Phải trả người bán)
-    //
-    // Sử dụng khi hàng đã mua nhưng chưa về đến kho.
-    // Hàng đi đường vẫn thuộc sở hữu của DN — phải ghi nhận để đảm bảo BC01 phản ánh đúng.
-    //
-    // ẢNH HƯỞNG BCTC: Tăng TK 151 (BC01), chưa ghi nhận vào tồn kho thực tế
-    //
-    // RỦI RO: Nếu không ghi nhận → thiếu hàng trên BC01 → sai tỷ lệ thanh toán với NCC
+    /**
+     * NGHIỆP VỤ: HÀNG ĐANG ĐI ĐƯỜNG (TK 151)
+     *
+     * Hạch toán:
+     *   Nợ 151 (Hàng mua đang đi đường)
+     *   Có 331 (Phải trả người bán)
+     *
+     * Sử dụng khi hàng đã mua nhưng chưa về đến kho.
+     * Hàng đi đường vẫn thuộc sở hữu của DN — phải ghi nhận để đảm bảo BC01 phản ánh đúng.
+     *
+     * ẢNH HƯỞNG BCTC: Tăng TK 151 (BC01), chưa ghi nhận vào tồn kho thực tế
+     *
+     * RỦI RO: Nếu không ghi nhận → thiếu hàng trên BC01 → sai tỷ lệ thanh toán với NCC
+     *
+     * @param string $itemId ID mặt hàng
+     * @param float $qty Số lượng nhập đi đường
+     * @param float $unitPrice Đơn giá mua
+     * @param array $addonCosts Chi phí mua kèm
+     * @param string $reference Số chứng từ
+     * @param string $createdBy ID người tạo
+     * @return array
+     * @throws \InvalidArgumentException Nếu không tìm thấy mặt hàng
+     */
     public function recordInTransit(string $itemId, float $qty, float $unitPrice,
         array $addonCosts, string $reference, string $createdBy): array
     {
@@ -363,15 +387,25 @@ class InventoryService implements InventoryServiceInterface
         });
     }
 
-    // NGHIỆP VỤ: NHẬN HÀNG TỪ ĐI ĐƯỜNG VỀ KHO
-    // Hạch toán:
-    //   Nợ 15x (Hàng tồn kho)
-    //   Có 151 (Hàng mua đang đi đường)
-    //
-    // Khi hàng về đến kho, chuyển từ TK 151 sang TK tồn kho tương ứng.
-    // Cost layer được tạo với giá gốc giống hồi ghi nhận đi đường.
-    //
-    // ẢNH HƯỞNG BCTC: Giảm TK 151, tăng TK 15x (BC01), không ảnh hưởng BC02
+    /**
+     * NGHIỆP VỤ: NHẬN HÀNG TỪ ĐI ĐƯỜNG VỀ KHO
+     *
+     * Hạch toán:
+     *   Nợ 15x (Hàng tồn kho)
+     *   Có 151 (Hàng mua đang đi đường)
+     *
+     * Khi hàng về đến kho, chuyển từ TK 151 sang TK tồn kho tương ứng.
+     * Cost layer được tạo với giá gốc giống hồi ghi nhận đi đường.
+     *
+     * ẢNH HƯỞNG BCTC: Giảm TK 151, tăng TK 15x (BC01), không ảnh hưởng BC02
+     *
+     * @param string $transitId ID lô hàng đi đường
+     * @param float $qty Số lượng nhận về kho
+     * @param string $reference Số chứng từ
+     * @param string $createdBy ID người tạo
+     * @return array
+     * @throws \InvalidArgumentException Nếu không tìm thấy lô hàng đi đường hoặc số lượng không đủ
+     */
     public function receiveFromTransit(string $transitId, float $qty, string $reference, string $createdBy): array
     {
         return $this->wrapInTransaction(function () use ($transitId, $qty, $reference, $createdBy) {
@@ -416,17 +450,28 @@ class InventoryService implements InventoryServiceInterface
         });
     }
 
-    // NGHIỆP VỤ: GỬI BÁN ĐẠI LÝ/KÝ GỬI (TK 157)
-    // Hạch toán:
-    //   Nợ 157 (Hàng gửi đi bán)
-    //   Có 15x (Hàng tồn kho)
-    //
-    // Hàng gửi đi bán vẫn thuộc sở hữu DN đến khi bên nhận bán được.
-    // Chuyển từ tồn kho trong kho sang tồn kho gửi bán — không ghi nhận doanh thu hay giá vốn.
-    //
-    // ẢNH HƯỞNG BCTC: Giảm TK 15x, tăng TK 157 (BC01), chưa ảnh hưởng BC02
-    //
-    // RỦI RO: Nếu ghi nhận doanh thu khi gửi bán → doanh thu ảo → sai BC02 + Thuế GTGT
+    /**
+     * NGHIỆP VỤ: GỬI BÁN ĐẠI LÝ/KÝ GỬI (TK 157)
+     *
+     * Hạch toán:
+     *   Nợ 157 (Hàng gửi đi bán)
+     *   Có 15x (Hàng tồn kho)
+     *
+     * Hàng gửi đi bán vẫn thuộc sở hữu DN đến khi bên nhận bán được.
+     * Chuyển từ tồn kho trong kho sang tồn kho gửi bán — không ghi nhận doanh thu hay giá vốn.
+     *
+     * ẢNH HƯỞNG BCTC: Giảm TK 15x, tăng TK 157 (BC01), chưa ảnh hưởng BC02
+     *
+     * RỦI RO: Nếu ghi nhận doanh thu khi gửi bán → doanh thu ảo → sai BC02 + Thuế GTGT
+     *
+     * @param string $itemId ID mặt hàng
+     * @param float $qty Số lượng gửi bán
+     * @param string $consignee Tên bên nhận ký gửi
+     * @param string $reference Số chứng từ
+     * @param string $createdBy ID người tạo
+     * @return array
+     * @throws \InvalidArgumentException Nếu không tìm thấy mặt hàng hoặc tồn kho không đủ
+     */
     public function consignGoods(string $itemId, float $qty, string $consignee,
         string $reference, string $createdBy): array
     {
@@ -462,15 +507,25 @@ class InventoryService implements InventoryServiceInterface
         });
     }
 
-    // NGHIỆP VỤ: BÁN HÀNG KÝ GỬI
-    // Hạch toán:
-    //   Nợ 632 (Giá vốn hàng bán)
-    //   Có 157 (Hàng gửi đi bán)
-    //
-    // Khi bên nhận ký gửi thông báo đã bán được hàng, ghi nhận giá vốn.
-    // Lúc này hàng không còn thuộc sở hữu DN → xóa khỏi TK 157.
-    //
-    // ẢNH HƯỞNG BCTC: Tăng giá vốn (BC02 chỉ tiêu 24), giảm TK 157 (BC01)
+    /**
+     * NGHIỆP VỤ: BÁN HÀNG KÝ GỬI
+     *
+     * Hạch toán:
+     *   Nợ 632 (Giá vốn hàng bán)
+     *   Có 157 (Hàng gửi đi bán)
+     *
+     * Khi bên nhận ký gửi thông báo đã bán được hàng, ghi nhận giá vốn.
+     * Lúc này hàng không còn thuộc sở hữu DN → xóa khỏi TK 157.
+     *
+     * ẢNH HƯỞNG BCTC: Tăng giá vốn (BC02 chỉ tiêu 24), giảm TK 157 (BC01)
+     *
+     * @param string $consignmentId ID phiếu ký gửi
+     * @param float $qty Số lượng đã bán
+     * @param string $reference Số chứng từ
+     * @param string $createdBy ID người tạo
+     * @return array
+     * @throws \InvalidArgumentException Nếu không tìm thấy phiếu ký gửi hoặc số lượng không đủ
+     */
     public function sellConsigned(string $consignmentId, float $qty, string $reference, string $createdBy): array
     {
         return $this->wrapInTransaction(function () use ($consignmentId, $qty, $reference, $createdBy) {
@@ -503,15 +558,25 @@ class InventoryService implements InventoryServiceInterface
         });
     }
 
-    // NGHIỆP VỤ: NHẬN LẠI HÀNG KÝ GỬI (KHÔNG BÁN ĐƯỢC)
-    // Hạch toán:
-    //   Nợ 15x (Nhập lại kho)
-    //   Có 157 (Hàng gửi đi bán)
-    //
-    // Khi bên nhận ký gửi trả lại, hàng về kho với giá gốc ban đầu.
-    // Cost layer được tạo lại để phục hồi dấu vết giá gốc.
-    //
-    // ẢNH HƯỞNG BCTC: Tăng TK 15x, giảm TK 157 (BC01), không ảnh hưởng BC02
+    /**
+     * NGHIỆP VỤ: NHẬN LẠI HÀNG KÝ GỬI (KHÔNG BÁN ĐƯỢC)
+     *
+     * Hạch toán:
+     *   Nợ 15x (Nhập lại kho)
+     *   Có 157 (Hàng gửi đi bán)
+     *
+     * Khi bên nhận ký gửi trả lại, hàng về kho với giá gốc ban đầu.
+     * Cost layer được tạo lại để phục hồi dấu vết giá gốc.
+     *
+     * ẢNH HƯỞNG BCTC: Tăng TK 15x, giảm TK 157 (BC01), không ảnh hưởng BC02
+     *
+     * @param string $consignmentId ID phiếu ký gửi
+     * @param float $qty Số lượng trả lại
+     * @param string $reference Số chứng từ
+     * @param string $createdBy ID người tạo
+     * @return array
+     * @throws \InvalidArgumentException Nếu không tìm thấy phiếu ký gửi hoặc số lượng không đủ
+     */
     public function returnConsigned(string $consignmentId, float $qty, string $reference, string $createdBy): array
     {
         return $this->wrapInTransaction(function () use ($consignmentId, $qty, $reference, $createdBy) {
@@ -553,19 +618,28 @@ class InventoryService implements InventoryServiceInterface
         });
     }
 
-    // NGHIỆP VỤ: ĐIỀU CHỈNH TỒN KHO THEO KIỂM KÊ THỰC TẾ
-    //
-    // Thừa (actualQty > systemQty):
-    //   Nợ 15x, Có 711 (Thu nhập khác) — ghi nhận hàng thừa chờ xử lý
-    //
-    // Thiếu (actualQty < systemQty):
-    //   Nợ 632 (Giá vốn), Có 15x — ghi nhận hao hụt vào giá vốn
-    //
-    // Kiểm kê định kỳ là yêu cầu bắt buộc theo chuẩn mực kế toán.
-    // Chênh lệch > 10% phải có giải trình với cơ quan thuế.
-    //
-    // RỦI RO: Nếu không điều chỉnh kịp thời → BC01 sai số dư hàng tồn kho
-    // RỦI RO: Thiếu kho không ghi nhận → lãi ảo (giá vốn thấp hơn thực tế)
+    /**
+     * NGHIỆP VỤ: ĐIỀU CHỈNH TỒN KHO THEO KIỂM KÊ THỰC TẾ
+     *
+     * Thừa (actualQty > systemQty):
+     *   Nợ 15x, Có 711 (Thu nhập khác) — ghi nhận hàng thừa chờ xử lý
+     *
+     * Thiếu (actualQty < systemQty):
+     *   Nợ 632 (Giá vốn), Có 15x — ghi nhận hao hụt vào giá vốn
+     *
+     * Kiểm kê định kỳ là yêu cầu bắt buộc theo chuẩn mực kế toán.
+     * Chênh lệch > 10% phải có giải trình với cơ quan thuế.
+     *
+     * RỦI RO: Nếu không điều chỉnh kịp thời → BC01 sai số dư hàng tồn kho
+     * RỦI RO: Thiếu kho không ghi nhận → lãi ảo (giá vốn thấp hơn thực tế)
+     *
+     * @param string $itemId ID mặt hàng
+     * @param float $actualQty Số lượng thực tế kiểm kê
+     * @param string $reference Số chứng từ
+     * @param string $createdBy ID người tạo
+     * @return array
+     * @throws \InvalidArgumentException Nếu không tìm thấy mặt hàng
+     */
     public function adjustPhysicalCount(string $itemId, float $actualQty, string $reference, string $createdBy): array
     {
         return $this->wrapInTransaction(function () use ($itemId, $actualQty, $reference, $createdBy) {
@@ -631,14 +705,22 @@ class InventoryService implements InventoryServiceInterface
         });
     }
 
-    // NGHIỆP VỤ: TẠO PHIÊN KIỂM KÊ (DRAFT)
-    //
-    // Ghi nhận danh sách kiểm kê ở trạng thái 'draft' để đối chiếu sau.
-    // Mỗi dòng ghi nhận: số lượng hệ thống, số lượng thực tế, chênh lệch, giá trị chênh lệch.
-    //
-    // Sau khi kiểm kê xong, gọi adjustPhysicalCount() cho từng item có chênh lệch.
-    //
-    // Audit trail: Lưu toàn bộ phiên kiểm kê — ai kiểm, ngày nào, lệch bao nhiêu.
+    /**
+     * NGHIỆP VỤ: TẠO PHIÊN KIỂM KÊ (DRAFT)
+     *
+     * Ghi nhận danh sách kiểm kê ở trạng thái 'draft' để đối chiếu sau.
+     * Mỗi dòng ghi nhận: số lượng hệ thống, số lượng thực tế, chênh lệch, giá trị chênh lệch.
+     *
+     * Sau khi kiểm kê xong, gọi adjustPhysicalCount() cho từng item có chênh lệch.
+     *
+     * Audit trail: Lưu toàn bộ phiên kiểm kê — ai kiểm, ngày nào, lệch bao nhiêu.
+     *
+     * @param array $lines Danh sách các dòng kiểm kê [['item_id'=>'','actual_qty'=>float],...]
+     * @param string $reference Số chứng từ
+     * @param string $notes Ghi chú phiên kiểm kê
+     * @param string $createdBy ID người tạo
+     * @return array
+     */
     public function createCountSession(array $lines, string $reference, string $notes, string $createdBy): array
     {
         return $this->wrapInTransaction(function () use ($lines, $reference, $notes, $createdBy) {
@@ -674,17 +756,28 @@ class InventoryService implements InventoryServiceInterface
         });
     }
 
-    // NGHIỆP VỤ: TRÍCH LẬP DỰ PHÒNG GIẢM GIÁ HÀNG TỒN KHO
-    // Hạch toán:
-    //   Nợ 632 (Giá vốn hàng bán)
-    //   Có 2294 (Dự phòng giảm giá hàng tồn kho)
-    //
-    // Khi giá trị thuần có thể thực hiện được (NRV) thấp hơn giá gốc,
-    // DN phải trích lập dự phòng theo chuẩn mực kế toán VAS 02 và TT 48/2019/TT-BTC.
-    //
-    // ẢNH HƯỞNG BCTC: Tăng giá vốn (giảm lợi nhuận), số dư TK 2294 tăng (BC01)
-    //
-    // RỦI RO: Nếu không trích lập → tài sản và lợi nhuận cao hơn thực tế → sai BC01/BC02
+    /**
+     * NGHIỆP VỤ: TRÍCH LẬP DỰ PHÒNG GIẢM GIÁ HÀNG TỒN KHO
+     *
+     * Hạch toán:
+     *   Nợ 632 (Giá vốn hàng bán)
+     *   Có 2294 (Dự phòng giảm giá hàng tồn kho)
+     *
+     * Khi giá trị thuần có thể thực hiện được (NRV) thấp hơn giá gốc,
+     * DN phải trích lập dự phòng theo chuẩn mực kế toán VAS 02 và TT 48/2019/TT-BTC.
+     *
+     * ẢNH HƯỞNG BCTC: Tăng giá vốn (giảm lợi nhuận), số dư TK 2294 tăng (BC01)
+     *
+     * RỦI RO: Nếu không trích lập → tài sản và lợi nhuận cao hơn thực tế → sai BC01/BC02
+     *
+     * @param string $itemId ID mặt hàng
+     * @param float $amount Số tiền dự phòng
+     * @param string $reference Số chứng từ
+     * @param string $notes Ghi chú lý do trích lập
+     * @param string $createdBy ID người tạo
+     * @return array
+     * @throws \InvalidArgumentException Nếu không tìm thấy mặt hàng hoặc số tiền không hợp lệ
+     */
     public function recordImpairment(string $itemId, float $amount, string $reference, string $notes, string $createdBy): array
     {
         return $this->wrapInTransaction(function () use ($itemId, $amount, $reference, $notes, $createdBy) {
@@ -707,17 +800,27 @@ class InventoryService implements InventoryServiceInterface
         });
     }
 
-    // NGHIỆP VỤ: HOÀN NHẬP DỰ PHÒNG GIẢM GIÁ HÀNG TỒN KHO
-    // Hạch toán:
-    //   Nợ 2294 (Dự phòng giảm giá hàng tồn kho)
-    //   Có 632 (Giá vốn hàng bán)
-    //
-    // Khi giá trị thị trường phục hồi hoặc hàng đã được bán/xuất khỏi kho,
-    // phần dự phòng tương ứng được hoàn nhập để phản ánh đúng thực tế.
-    //
-    // ẢNH HƯỞNG BCTC: Giảm giá vốn (tăng lợi nhuận), giảm số dư TK 2294 (BC01)
-    //
-    // RỦI RO: Hoàn nhập quá mức → lãi ảo → sai BC02 + Thuế TNDN
+    /**
+     * NGHIỆP VỤ: HOÀN NHẬP DỰ PHÒNG GIẢM GIÁ HÀNG TỒN KHO
+     *
+     * Hạch toán:
+     *   Nợ 2294 (Dự phòng giảm giá hàng tồn kho)
+     *   Có 632 (Giá vốn hàng bán)
+     *
+     * Khi giá trị thị trường phục hồi hoặc hàng đã được bán/xuất khỏi kho,
+     * phần dự phòng tương ứng được hoàn nhập để phản ánh đúng thực tế.
+     *
+     * ẢNH HƯỞNG BCTC: Giảm giá vốn (tăng lợi nhuận), giảm số dư TK 2294 (BC01)
+     *
+     * RỦI RO: Hoàn nhập quá mức → lãi ảo → sai BC02 + Thuế TNDN
+     *
+     * @param string $impairmentId ID phiếu dự phòng
+     * @param float $amount Số tiền hoàn nhập
+     * @param string $reference Số chứng từ
+     * @param string $createdBy ID người tạo
+     * @return array
+     * @throws \InvalidArgumentException Nếu không tìm thấy phiếu dự phòng hoặc số dư không đủ
+     */
     public function reverseImpairment(string $impairmentId, float $amount, string $reference, string $createdBy): array
     {
         return $this->wrapInTransaction(function () use ($impairmentId, $amount, $reference, $createdBy) {
@@ -747,20 +850,32 @@ class InventoryService implements InventoryServiceInterface
         });
     }
 
-    // NGHIỆP VỤ: XUẤT HÀNG KHUYẾN MẠI (tặng kèm, khuyến mãi)
-    // Hạch toán:
-    //   Nợ 641 (Chi phí bán hàng) — giá vốn hàng khuyến mại
-    //   Có 15x (Hàng tồn kho)
-    //
-    // Nếu có deemedSaleValue (giá tính thuế TTĐB hoặc GTGT):
-    //   Nợ 641, Có 33311 (Thuế GTGT đầu ra phải nộp) — theo VAS 02
-    //
-    // Hàng khuyến mại không ghi nhận doanh thu nhưng vẫn phải nộp thuế GTGT
-    // trên giá trị tính thuế theo quy định.
-    //
-    // ẢNH HƯỞNG BCTC: Tăng chi phí bán hàng (BC02), giảm tồn kho (BC01)
-    //
-    // RỦI RO: Quên thuế GTGT đầu ra cho hàng KM → bị phạt thuế
+    /**
+     * NGHIỆP VỤ: XUẤT HÀNG KHUYẾN MẠI (tặng kèm, khuyến mãi)
+     *
+     * Hạch toán:
+     *   Nợ 641 (Chi phí bán hàng) — giá vốn hàng khuyến mại
+     *   Có 15x (Hàng tồn kho)
+     *
+     * Nếu có deemedSaleValue (giá tính thuế TTĐB hoặc GTGT):
+     *   Nợ 641, Có 33311 (Thuế GTGT đầu ra phải nộp) — theo VAS 02
+     *
+     * Hàng khuyến mại không ghi nhận doanh thu nhưng vẫn phải nộp thuế GTGT
+     * trên giá trị tính thuế theo quy định.
+     *
+     * ẢNH HƯỞNG BCTC: Tăng chi phí bán hàng (BC02), giảm tồn kho (BC01)
+     *
+     * RỦI RO: Quên thuế GTGT đầu ra cho hàng KM → bị phạt thuế
+     *
+     * @param string $itemId ID mặt hàng
+     * @param float $qty Số lượng xuất khuyến mại
+     * @param string $reference Số chứng từ
+     * @param string $createdBy ID người tạo
+     * @param float|null $deemedSaleValue Giá tính thuế GTGT (nếu có)
+     * @param float $vatRate Thuế suất GTGT (%)
+     * @return array
+     * @throws \InvalidArgumentException Nếu không tìm thấy mặt hàng hoặc tồn kho không đủ
+     */
     public function issuePromotional(string $itemId, float $qty, string $reference, string $createdBy,
         ?float $deemedSaleValue = null, float $vatRate = 0): array
     {
@@ -797,14 +912,25 @@ class InventoryService implements InventoryServiceInterface
         });
     }
 
-    // NGHIỆP VỤ: XUẤT KHO THEO LÔ (Batch)
-    //
-    // Giống issueGoods() nhưng bắt buộc xuất từ một lô cụ thể.
-    // Sử dụng khi hàng hóa yêu cầu trace theo lô (dược phẩm, thực phẩm, hóa chất).
-    //
-    // Phương pháp tính giá: Specific ID — lấy đúng đơn giá của lô đó.
-    //
-    // RỦI RO: Nếu không theo dõi lô → không trace được hàng hư hỏng/ thu hồi → rủi ro pháp lý
+    /**
+     * NGHIỆP VỤ: XUẤT KHO THEO LÔ (Batch)
+     *
+     * Giống issueGoods() nhưng bắt buộc xuất từ một lô cụ thể.
+     * Sử dụng khi hàng hóa yêu cầu trace theo lô (dược phẩm, thực phẩm, hóa chất).
+     *
+     * Phương pháp tính giá: Specific ID — lấy đúng đơn giá của lô đó.
+     *
+     * RỦI RO: Nếu không theo dõi lô → không trace được hàng hư hỏng/ thu hồi → rủi ro pháp lý
+     *
+     * @param string $itemId ID mặt hàng
+     * @param float $qty Số lượng xuất
+     * @param string $batchCode Mã lô cần xuất
+     * @param string $issueType Loại xuất: production|construction|sale
+     * @param string $reference Số chứng từ
+     * @param string $createdBy ID người tạo
+     * @return array
+     * @throws \InvalidArgumentException Nếu không tìm thấy mặt hàng hoặc tồn kho lô không đủ
+     */
     public function issueFromBatch(string $itemId, float $qty, string $batchCode, string $issueType,
         string $reference, string $createdBy): array
     {
@@ -854,10 +980,17 @@ class InventoryService implements InventoryServiceInterface
         });
     }
 
-    // LẤY TỶ GIÁ NGOẠI TỆ: Tra cứu tỷ giá mới nhất cho giao dịch nhập kho ngoại tệ.
-    // Tỷ giá sử dụng là tỷ giá ghi sổ (theo Thông tư 200/2014/TT-BTC).
-    //
-    // RỦI RO: Nếu dùng sai tỷ giá → sai giá gốc hàng nhập → sai giá vốn khi xuất
+    /**
+     * LẤY TỶ GIÁ NGOẠI TỆ: Tra cứu tỷ giá mới nhất cho giao dịch nhập kho ngoại tệ.
+     *
+     * Tỷ giá sử dụng là tỷ giá ghi sổ (theo Thông tư 200/2014/TT-BTC).
+     *
+     * RỦI RO: Nếu dùng sai tỷ giá → sai giá gốc hàng nhập → sai giá vốn khi xuất
+     *
+     * @param string $currencyCode Mã ngoại tệ (ví dụ: USD, EUR)
+     * @return float Tỷ giá mới nhất
+     * @throws \InvalidArgumentException Nếu không tìm thấy tỷ giá
+     */
     public function getExchangeRate(string $currencyCode): float
     {
         $pdo = $this->getPdo();
@@ -868,14 +1001,27 @@ class InventoryService implements InventoryServiceInterface
         return (float)$row['rate'];
     }
 
-    // NGHIỆP VỤ: NHẬP KHO NGOẠI TỆ
-    //
-    // Hạch toán giống receiveGoods() nhưng quy đổi từ ngoại tệ sang VND theo tỷ giá tại ngày nhập.
-    // Ghi nhận song song:
-    //   - Giá trị VND hạch toán vào TK 15x
-    //   - Thông tin ngoại tệ ghi vào fc_transactions để quản lý chênh lệch tỷ giá
-    //
-    // RỦI RO: Chênh lệch tỷ giá sau này nếu chưa thanh toán → ảnh hưởng BC02 (chi phí tài chính TK 635)
+    /**
+     * NGHIỆP VỤ: NHẬP KHO NGOẠI TỆ
+     *
+     * Hạch toán giống receiveGoods() nhưng quy đổi từ ngoại tệ sang VND theo tỷ giá tại ngày nhập.
+     * Ghi nhận song song:
+     *   - Giá trị VND hạch toán vào TK 15x
+     *   - Thông tin ngoại tệ ghi vào fc_transactions để quản lý chênh lệch tỷ giá
+     *
+     * RỦI RO: Chênh lệch tỷ giá sau này nếu chưa thanh toán → ảnh hưởng BC02 (chi phí tài chính TK 635)
+     *
+     * @param string $itemId ID mặt hàng
+     * @param float $qty Số lượng nhập
+     * @param float $unitPriceFC Đơn giá ngoại tệ
+     * @param array $addonCosts Chi phí mua kèm (ngoại tệ)
+     * @param string $currencyCode Mã ngoại tệ
+     * @param float|null $exchangeRate Tỷ giá (null = tự tra cứu)
+     * @param string $reference Số chứng từ
+     * @param string $createdBy ID người tạo
+     * @return array
+     * @throws \InvalidArgumentException Nếu không tìm thấy mặt hàng hoặc tỷ giá
+     */
     public function receiveGoodsFC(string $itemId, float $qty, float $unitPriceFC,
         array $addonCosts, string $currencyCode, ?float $exchangeRate,
         string $reference, string $createdBy): array
@@ -915,17 +1061,27 @@ class InventoryService implements InventoryServiceInterface
         });
     }
 
-    // NGHIỆP VỤ: KHÁCH HÀNG TRẢ LẠI HÀNG (NHẬP LẠI KHO)
-    // Hạch toán:
-    //   Nợ 15x (Nhập lại kho)
-    //   Có 632 (Giá vốn hàng bán) — giảm giá vốn tương ứng
-    //
-    // Giá nhập lại = giá bình quân hiện tại trong kho tại thời điểm trả lại.
-    // Cost layer được tạo với đơn giá đó để theo dõi sau này.
-    //
-    // ẢNH HƯỞNG BCTC: Tăng tồn kho, giảm giá vốn (tăng lợi nhuận BC02)
-    //
-    // RỦI RO: Nếu dùng sai giá nhập lại → sai giá vốn kỳ sau → sai BC02
+    /**
+     * NGHIỆP VỤ: KHÁCH HÀNG TRẢ LẠI HÀNG (NHẬP LẠI KHO)
+     *
+     * Hạch toán:
+     *   Nợ 15x (Nhập lại kho)
+     *   Có 632 (Giá vốn hàng bán) — giảm giá vốn tương ứng
+     *
+     * Giá nhập lại = giá bình quân hiện tại trong kho tại thời điểm trả lại.
+     * Cost layer được tạo với đơn giá đó để theo dõi sau này.
+     *
+     * ẢNH HƯỞNG BCTC: Tăng tồn kho, giảm giá vốn (tăng lợi nhuận BC02)
+     *
+     * RỦI RO: Nếu dùng sai giá nhập lại → sai giá vốn kỳ sau → sai BC02
+     *
+     * @param string $itemId ID mặt hàng
+     * @param float $qty Số lượng trả lại
+     * @param string $reference Số chứng từ
+     * @param string $createdBy ID người tạo
+     * @return array
+     * @throws \InvalidArgumentException Nếu không tìm thấy mặt hàng hoặc số lượng không hợp lệ
+     */
     public function returnFromCustomer(string $itemId, float $qty, string $reference, string $createdBy): array
     {
         return $this->wrapInTransaction(function () use ($itemId, $qty, $reference, $createdBy) {
@@ -957,17 +1113,27 @@ class InventoryService implements InventoryServiceInterface
         });
     }
 
-    // NGHIỆP VỤ: TRẢ LẠI HÀNG CHO NHÀ CUNG CẤP
-    // Hạch toán:
-    //   Nợ 331 (Phải trả người bán — giảm công nợ)
-    //   Có 15x (Hàng tồn kho — xuất trả)
-    //
-    // Cost layer được xuất theo FIFO để giảm số lượng tồn kho tương ứng.
-    // Giá trị hàng trả = giá bình quân hiện tại (không nhất thiết bằng giá mua ban đầu).
-    //
-    // ẢNH HƯỞNG BCTC: Giảm hàng tồn kho (BC01), giảm công nợ phải trả (BC01)
-    //
-    // RỦI RO: Nếu giá trả khác giá mua → chênh lệch ảnh hưởng giá vốn sau này
+    /**
+     * NGHIỆP VỤ: TRẢ LẠI HÀNG CHO NHÀ CUNG CẤP
+     *
+     * Hạch toán:
+     *   Nợ 331 (Phải trả người bán — giảm công nợ)
+     *   Có 15x (Hàng tồn kho — xuất trả)
+     *
+     * Cost layer được xuất theo FIFO để giảm số lượng tồn kho tương ứng.
+     * Giá trị hàng trả = giá bình quân hiện tại (không nhất thiết bằng giá mua ban đầu).
+     *
+     * ẢNH HƯỞNG BCTC: Giảm hàng tồn kho (BC01), giảm công nợ phải trả (BC01)
+     *
+     * RỦI RO: Nếu giá trả khác giá mua → chênh lệch ảnh hưởng giá vốn sau này
+     *
+     * @param string $itemId ID mặt hàng
+     * @param float $qty Số lượng trả lại
+     * @param string $reference Số chứng từ
+     * @param string $createdBy ID người tạo
+     * @return array
+     * @throws \InvalidArgumentException Nếu không tìm thấy mặt hàng hoặc tồn kho không đủ
+     */
     public function returnToSupplier(string $itemId, float $qty, string $reference, string $createdBy): array
     {
         return $this->wrapInTransaction(function () use ($itemId, $qty, $reference, $createdBy) {
@@ -1016,18 +1182,31 @@ class InventoryService implements InventoryServiceInterface
         });
     }
 
-    // NGHIỆP VỤ: XÓA SỔ HÀNG TỒN KHO (hỏng, hết hạn, lỗi thời, mất, khác)
-    // Hạch toán:
-    //   Nợ TK chi phí (theo expenseAccount)
-    //   Có 15x (Hàng tồn kho)
-    //
-    // Lý do xóa sổ được kiểm soát chặt (validReasons) để đảm bảo audit trail.
-    // Chi phí xóa sổ có thể hạch toán vào 632 (giá vốn), 641 (bán hàng), 642 (QLDN) tùy bản chất.
-    //
-    // ẢNH HƯỞNG BCTC: Tăng chi phí (BC02), giảm hàng tồn kho (BC01)
-    //
-    // RỦI RO: Xóa sổ không đúng lý do → thuế không chấp nhận chi phí → tăng thuế TNDN
-    // RỦI RO: Cần hóa đơn/chứng từ cho hàng hỏng/hết hạn để được khấu trừ thuế
+    /**
+     * NGHIỆP VỤ: XÓA SỔ HÀNG TỒN KHO (hỏng, hết hạn, lỗi thời, mất, khác)
+     *
+     * Hạch toán:
+     *   Nợ TK chi phí (theo expenseAccount)
+     *   Có 15x (Hàng tồn kho)
+     *
+     * Lý do xóa sổ được kiểm soát chặt (validReasons) để đảm bảo audit trail.
+     * Chi phí xóa sổ có thể hạch toán vào 632 (giá vốn), 641 (bán hàng), 642 (QLDN) tùy bản chất.
+     *
+     * ẢNH HƯỞNG BCTC: Tăng chi phí (BC02), giảm hàng tồn kho (BC01)
+     *
+     * RỦI RO: Xóa sổ không đúng lý do → thuế không chấp nhận chi phí → tăng thuế TNDN
+     * RỦI RO: Cần hóa đơn/chứng từ cho hàng hỏng/hết hạn để được khấu trừ thuế
+     *
+     * @param string $itemId ID mặt hàng
+     * @param float $qty Số lượng xóa sổ
+     * @param string $reason Lý do: damaged|expired|obsolete|lost|other
+     * @param string $expenseAccount Tài khoản chi phí (632, 641, 642)
+     * @param string $reference Số chứng từ
+     * @param string $createdBy ID người tạo
+     * @param string $notes Ghi chú bổ sung
+     * @return array
+     * @throws \InvalidArgumentException Nếu lý do không hợp lệ, không tìm thấy mặt hàng, hoặc tồn kho không đủ
+     */
     public function writeOffGoods(string $itemId, float $qty, string $reason, string $expenseAccount, string $reference, string $createdBy, string $notes = ''): array
     {
         $validReasons = ['damaged', 'expired', 'obsolete', 'lost', 'other'];
@@ -1065,19 +1244,29 @@ class InventoryService implements InventoryServiceInterface
         });
     }
 
-    // NGHIỆP VỤ: KẾT CHUYỂN TỒN KHO CUỐI KỲ (Phương pháp kiểm kê định kỳ)
-    //
-    // Với phương pháp kiểm kê định kỳ, giá trị hàng tồn cuối kỳ được xác định bằng kiểm kê thực tế.
-    // Giá vốn = Giá trị tồn đầu kỳ + Nhập trong kỳ - Giá trị tồn cuối kỳ (theo kiểm kê).
-    //
-    // Hạch toán:
-    //   Nợ 632 (Giá vốn hàng bán), Có 15x (Giá trị hàng đã tiêu thụ)
-    //
-    // Xóa toàn bộ cost layer cũ và tạo layer mới với số lượng tồn cuối kỳ.
-    //
-    // ẢNH HƯỞNG BCTC: Ghi nhận giá vốn toàn bộ hàng đã bán trong kỳ (BC02 chỉ tiêu 24)
-    //
-    // RỦI RO: Kiểm kê sai → giá vốn sai → BC02 sai → Thuế TNDN sai
+    /**
+     * NGHIỆP VỤ: KẾT CHUYỂN TỒN KHO CUỐI KỲ (Phương pháp kiểm kê định kỳ)
+     *
+     * Với phương pháp kiểm kê định kỳ, giá trị hàng tồn cuối kỳ được xác định bằng kiểm kê thực tế.
+     * Giá vốn = Giá trị tồn đầu kỳ + Nhập trong kỳ - Giá trị tồn cuối kỳ (theo kiểm kê).
+     *
+     * Hạch toán:
+     *   Nợ 632 (Giá vốn hàng bán), Có 15x (Giá trị hàng đã tiêu thụ)
+     *
+     * Xóa toàn bộ cost layer cũ và tạo layer mới với số lượng tồn cuối kỳ.
+     *
+     * ẢNH HƯỞNG BCTC: Ghi nhận giá vốn toàn bộ hàng đã bán trong kỳ (BC02 chỉ tiêu 24)
+     *
+     * RỦI RO: Kiểm kê sai → giá vốn sai → BC02 sai → Thuế TNDN sai
+     *
+     * @param string $itemId ID mặt hàng
+     * @param float $closingQty Số lượng tồn cuối kỳ (theo kiểm kê)
+     * @param float $closingUnitCost Đơn giá tồn cuối kỳ
+     * @param string $reference Số chứng từ
+     * @param string $createdBy ID người tạo
+     * @return array
+     * @throws \InvalidArgumentException Nếu không tìm thấy mặt hàng
+     */
     public function closePeriodicInventory(string $itemId, float $closingQty, float $closingUnitCost, string $reference, string $createdBy): array
     {
         return $this->wrapInTransaction(function () use ($itemId, $closingQty, $closingUnitCost, $reference, $createdBy) {
@@ -1135,17 +1324,26 @@ class InventoryService implements InventoryServiceInterface
         });
     }
 
-    // NGHIỆP VỤ: CHỐT TỒN KHO CUỐI KỲ + ĐỐI CHIẾU SỔ CHI TIẾT VỚI TỔNG HỢP
-    //
-    // Bước 1: Snapshot toàn bộ cost layer để lưu trữ (audit trail không thể xóa).
-    // Bước 2: Đối chiếu số dư sub-ledger (tổng giá trị cost layer) với số dư GL (ledger_entries).
-    //
-    // Nếu sub-ledger ≠ GL và chênh lệch > 10 VND → cảnh báo trong báo cáo reconciliation.
-    // Chênh lệch thường do:
-    //   - Bút toán tay sửa trực tiếp vào GL mà không qua InventoryService
-    //   - Lỗi trong quá trình nhập/xuất trước đó
-    //
-    // RỦI RO: Chênh lệch SL ≠ GL không được phát hiện → sai BC01 và BC02
+    /**
+     * NGHIỆP VỤ: CHỐT TỒN KHO CUỐI KỲ + ĐỐI CHIẾU SỔ CHI TIẾT VỚI TỔNG HỢP
+     *
+     * Bước 1: Snapshot toàn bộ cost layer để lưu trữ (audit trail không thể xóa).
+     * Bước 2: Đối chiếu số dư sub-ledger (tổng giá trị cost layer) với số dư GL (ledger_entries).
+     *
+     * Nếu sub-ledger ≠ GL và chênh lệch > 10 VND → cảnh báo trong báo cáo reconciliation.
+     * Chênh lệch thường do:
+     *   - Bút toán tay sửa trực tiếp vào GL mà không qua InventoryService
+     *   - Lỗi trong quá trình nhập/xuất trước đó
+     *
+     * RỦI RO: Chênh lệch SL ≠ GL không được phát hiện → sai BC01 và BC02
+     *
+     * @param int $periodId ID kỳ kế toán
+     * @param string $periodCode Mã kỳ kế toán
+     * @param string $startDate Ngày bắt đầu kỳ
+     * @param string $endDate Ngày kết thúc kỳ
+     * @param string $closedBy ID người chốt
+     * @return array
+     */
     public function closeInventoryForPeriod(int $periodId, string $periodCode, string $startDate, string $endDate, string $closedBy): array
     {
         $pdo = $this->getPdo();
@@ -1190,13 +1388,20 @@ class InventoryService implements InventoryServiceInterface
         ];
     }
 
-    // NGHIỆP VỤ: KHÔI PHỤC TỒN KHO TỪ SNAPSHOT (Rollback)
-    //
-    // Xóa toàn bộ cost layer hiện tại và khôi phục từ snapshot đã lưu khi chốt kỳ.
-    // Việc này chỉ nên thực hiện khi phát hiện sai sót nghiêm trọng trong kỳ hiện tại.
-    //
-    // RỦI RO: Rollback sẽ mất toàn bộ thay đổi tồn kho sau snapshot
-    // Biện pháp: Chỉ kế toán trưởng mới được thực hiện, phải có audit trail
+    /**
+     * NGHIỆP VỤ: KHÔI PHỤC TỒN KHO TỪ SNAPSHOT (Rollback)
+     *
+     * Xóa toàn bộ cost layer hiện tại và khôi phục từ snapshot đã lưu khi chốt kỳ.
+     * Việc này chỉ nên thực hiện khi phát hiện sai sót nghiêm trọng trong kỳ hiện tại.
+     *
+     * RỦI RO: Rollback sẽ mất toàn bộ thay đổi tồn kho sau snapshot
+     * Biện pháp: Chỉ kế toán trưởng mới được thực hiện, phải có audit trail
+     *
+     * @param int $periodId ID kỳ kế toán cần rollback
+     * @param string $rolledBackBy ID người thực hiện rollback
+     * @return array
+     * @throws \InvalidArgumentException Nếu không tìm thấy snapshot hoặc dữ liệu snapshot lỗi
+     */
     public function rollbackInventoryForPeriod(int $periodId, string $rolledBackBy): array
     {
         $pdo = $this->getPdo();
@@ -1243,15 +1448,20 @@ class InventoryService implements InventoryServiceInterface
         return ['message' => 'Inventory rolled back', 'items_restored' => count($layers)];
     }
 
-    // TÍNH GIÁ BÌNH QUÂN GIA QUYỀN: Cập nhật đơn giá cho item sau mỗi lần nhập.
-    //
-    // Công thức: ĐGBQ = (Tổng giá trị cost layer) / (Tổng số lượng cost layer)
-    //
-    // Nếu phương pháp định giá là 'weighted_avg', toàn bộ cost layer của item
-    // được cập nhật về cùng một đơn giá bình quân (revalue remaining layers).
-    // Với phương pháp FIFO, chỉ cập nhật purchasePrice item — không thay đổi layer.
-    //
-    // RỦI RO: Nếu tính sai giá bình quân → sai định giá tồn kho → sai BC01
+    /**
+     * TÍNH GIÁ BÌNH QUÂN GIA QUYỀN: Cập nhật đơn giá cho item sau mỗi lần nhập.
+     *
+     * Công thức: ĐGBQ = (Tổng giá trị cost layer) / (Tổng số lượng cost layer)
+     *
+     * Nếu phương pháp định giá là 'weighted_avg', toàn bộ cost layer của item
+     * được cập nhật về cùng một đơn giá bình quân (revalue remaining layers).
+     * Với phương pháp FIFO, chỉ cập nhật purchasePrice item — không thay đổi layer.
+     *
+     * RỦI RO: Nếu tính sai giá bình quân → sai định giá tồn kho → sai BC01
+     *
+     * @param string $itemId ID mặt hàng
+     * @return void
+     */
     public function calculateAndUpdateUnitCost(string $itemId): void
     {
         $pdo = $this->getPdo();
@@ -1277,9 +1487,20 @@ class InventoryService implements InventoryServiceInterface
         }
     }
 
-    // CAP NHAT TON KHO + COST LAYER CHO MOT MAT HANG
-    // Duoc goi tu GoodsReceiptService khi ghi so phieu nhap kho
-    // Khong wrap transaction — caller dam bao transaction
+    /**
+     * CẬP NHẬT TỒN KHO + COST LAYER CHO MỘT MẶT HÀNG
+     *
+     * Được gọi từ GoodsReceiptService khi ghi sổ phiếu nhập kho.
+     * Không wrap transaction — caller đảm bảo transaction.
+     *
+     * @param string $itemId ID mặt hàng
+     * @param float $qty Số lượng nhập
+     * @param float $unitPrice Đơn giá nhập
+     * @param string|null $batchCode Mã lô (FIFO tracking)
+     * @param string|null $expiryDate Hạn sử dụng
+     * @return void
+     * @throws \InvalidArgumentException Nếu không tìm thấy mặt hàng
+     */
     public function updateStockAndCostLayer(string $itemId, float $qty, float $unitPrice, ?string $batchCode = null, ?string $expiryDate = null): void
     {
         $item = $this->itemRepo->findById($itemId);
@@ -1292,15 +1513,21 @@ class InventoryService implements InventoryServiceInterface
         $this->calculateAndUpdateUnitCost($itemId);
     }
 
-    // BÁO CÁO: PHÂN TÍCH TUỔI TỒN KHO
-    //
-    // Phân loại hàng tồn kho theo thời gian lưu kho (0-30, 31-60, 61-90, 91-180, 180+ ngày).
-    // Hữu ích để xác định hàng chậm luân chuyển, hàng có nguy cơ giảm giá hoặc hết hạn.
-    //
-    // Kế toán quản trị sử dụng báo cáo này để:
-    //   - Đánh giá hiệu quả quản lý kho
-    //   - Trích lập dự phòng cho hàng tồn lâu
-    //   - Đề xuất thanh lý hàng chậm luân chuyển
+    /**
+     * BÁO CÁO: PHÂN TÍCH TUỔI TỒN KHO
+     *
+     * Phân loại hàng tồn kho theo thời gian lưu kho (0-30, 31-60, 61-90, 91-180, 180+ ngày).
+     * Hữu ích để xác định hàng chậm luân chuyển, hàng có nguy cơ giảm giá hoặc hết hạn.
+     *
+     * Kế toán quản trị sử dụng báo cáo này để:
+     *   - Đánh giá hiệu quả quản lý kho
+     *   - Trích lập dự phòng cho hàng tồn lâu
+     *   - Đề xuất thanh lý hàng chậm luân chuyển
+     *
+     * @param string|null $itemId Lọc theo mặt hàng (null = tất cả)
+     * @param string|null $warehouseId Lọc theo kho (null = tất cả)
+     * @return array
+     */
     public function getAgingReport(?string $itemId = null, ?string $warehouseId = null): array
     {
         $pdo = $this->getPdo();
@@ -1337,19 +1564,26 @@ class InventoryService implements InventoryServiceInterface
         return ['buckets' => array_keys($buckets), 'items' => array_values($report)];
     }
 
-    // BÁO CÁO: VÒNG QUAY HÀNG TỒN KHO (Inventory Turnover Ratio)
-    //
-    // Công thức: Vòng quay HTK = Giá vốn hàng bán / Giá trị HTK bình quân
-    // Số ngày tồn kho = 365 / Vòng quay HTK
-    //
-    // Giá vốn (COGS) lấy từ TK 632 trong kỳ.
-    // Giá trị HTK bình quân = (Đầu kỳ + Cuối kỳ) / 2 từ cost layer.
-    //
-    // Chỉ số này giúp đánh giá hiệu quả quản lý kho:
-    //   - Cao: Hàng bán nhanh, quản lý tốt
-    //   - Thấp: Hàng tồn đọng, cần xem xét trích lập dự phòng
-    //
-    // RỦI RO: Nếu tính sai COGS → vòng quay sai → quyết định quản trị sai
+    /**
+     * BÁO CÁO: VÒNG QUAY HÀNG TỒN KHO (Inventory Turnover Ratio)
+     *
+     * Công thức: Vòng quay HTK = Giá vốn hàng bán / Giá trị HTK bình quân
+     * Số ngày tồn kho = 365 / Vòng quay HTK
+     *
+     * Giá vốn (COGS) lấy từ TK 632 trong kỳ.
+     * Giá trị HTK bình quân = (Đầu kỳ + Cuối kỳ) / 2 từ cost layer.
+     *
+     * Chỉ số này giúp đánh giá hiệu quả quản lý kho:
+     *   - Cao: Hàng bán nhanh, quản lý tốt
+     *   - Thấp: Hàng tồn đọng, cần xem xét trích lập dự phòng
+     *
+     * RỦI RO: Nếu tính sai COGS → vòng quay sai → quyết định quản trị sai
+     *
+     * @param string $periodStart Ngày bắt đầu kỳ (Y-m-d)
+     * @param string $periodEnd Ngày kết thúc kỳ (Y-m-d)
+     * @param string|null $itemId Lọc theo mặt hàng (null = tất cả)
+     * @return array
+     */
     public function getTurnoverRatio(string $periodStart, string $periodEnd, ?string $itemId = null): array
     {
         $pdo = $this->getPdo();
@@ -1398,16 +1632,24 @@ class InventoryService implements InventoryServiceInterface
         ];
     }
 
-    // BÁO CÁO: ĐỊNH GIÁ HÀNG TỒN KHO THEO PHƯƠNG PHÁP TÍNH GIÁ
-    //
-    // Hiển thị chi tiết tồn kho theo:
-    //   - Phương pháp định giá (FIFO, Bình quân, Specific ID)
-    //   - Số lượng và giá trị đầu kỳ, nhập trong kỳ, cuối kỳ
-    //
-    // Dữ liệu lấy từ cost layer, phân kỳ dựa trên created_at của layer.
-    //
-    // Hữu ích cho kiểm toán viên đối chiếu số dư tồn kho cuối kỳ (BC01)
-    // và kiểm tra tính nhất quán của phương pháp tính giá.
+    /**
+     * BÁO CÁO: ĐỊNH GIÁ HÀNG TỒN KHO THEO PHƯƠNG PHÁP TÍNH GIÁ
+     *
+     * Hiển thị chi tiết tồn kho theo:
+     *   - Phương pháp định giá (FIFO, Bình quân, Specific ID)
+     *   - Số lượng và giá trị đầu kỳ, nhập trong kỳ, cuối kỳ
+     *
+     * Dữ liệu lấy từ cost layer, phân kỳ dựa trên created_at của layer.
+     *
+     * Hữu ích cho kiểm toán viên đối chiếu số dư tồn kho cuối kỳ (BC01)
+     * và kiểm tra tính nhất quán của phương pháp tính giá.
+     *
+     * @param string|null $itemId Lọc theo mặt hàng (null = tất cả)
+     * @param string|null $warehouseId Lọc theo kho (null = tất cả)
+     * @param string|null $periodStart Ngày bắt đầu kỳ (Y-m-d)
+     * @param string|null $periodEnd Ngày kết thúc kỳ (Y-m-d)
+     * @return array
+     */
     public function getValuationReport(?string $itemId = null, ?string $warehouseId = null,
         ?string $periodStart = null, ?string $periodEnd = null): array
     {
@@ -1457,17 +1699,28 @@ class InventoryService implements InventoryServiceInterface
             'items' => array_values($items)];
     }
 
-    // GHI NHẬN COST LAYER: Lưu một lớp giá trị cho lô hàng nhập kho.
-    //
-    // Mỗi lần nhập kho → tạo một cost layer mới với đơn giá riêng.
-    // Khi xuất kho, consumeCostLayers() sẽ lấy từ các layer cũ nhất trước (FIFO).
-    //
-    // Thông số lưu trữ:
-    //   - unit_cost: Đơn giá mua (chưa gồm chi phí mua)
-    //   - addon_per_unit: Chi phí mua phân bổ cho mỗi đơn vị
-    //   - batch_code / expiry_date: Theo dõi lô và hạn dùng (nếu có)
-    //
-    // RỦI RO: Nếu không lưu chi phí mua riêng → giá vốn xuất kho thấp hơn thực tế
+    /**
+     * GHI NHẬN COST LAYER: Lưu một lớp giá trị cho lô hàng nhập kho.
+     *
+     * Mỗi lần nhập kho → tạo một cost layer mới với đơn giá riêng.
+     * Khi xuất kho, consumeCostLayers() sẽ lấy từ các layer cũ nhất trước (FIFO).
+     *
+     * Thông số lưu trữ:
+     *   - unit_cost: Đơn giá mua (chưa gồm chi phí mua)
+     *   - addon_per_unit: Chi phí mua phân bổ cho mỗi đơn vị
+     *   - batch_code / expiry_date: Theo dõi lô và hạn dùng (nếu có)
+     *
+     * RỦI RO: Nếu không lưu chi phí mua riêng → giá vốn xuất kho thấp hơn thực tế
+     *
+     * @param string $itemId ID mặt hàng
+     * @param float $qty Số lượng nhập
+     * @param float $unitCost Đơn giá mua (chưa gồm chi phí mua)
+     * @param float $addonPerUnit Chi phí mua phân bổ cho mỗi đơn vị
+     * @param string|null $warehouseId ID kho (null = kho tổng hợp)
+     * @param string|null $batchCode Mã lô (FIFO tracking)
+     * @param string|null $expiryDate Hạn sử dụng
+     * @return void
+     */
     private function saveCostLayer(string $itemId, float $qty, float $unitCost, float $addonPerUnit, ?string $warehouseId,
         ?string $batchCode = null, ?string $expiryDate = null): void
     {
@@ -1478,18 +1731,27 @@ class InventoryService implements InventoryServiceInterface
         $stmt->execute([uniqid('cst_'), $itemId, $warehouseId, $batchCode, $expiryDate, $qty, $unitCost, $addonPerUnit]);
     }
 
-    // XUẤT COST LAYER: Xác định giá vốn khi xuất kho theo phương pháp định giá.
-    //
-    // Hỗ trợ 3 phương pháp:
-    //   1. Specific ID: Xuất đúng lô chỉ định (batchCode bắt buộc)
-    //   2. Weighted Average: Tính tổng giá trị / tổng số lượng → đơn giá bình quân
-    //   3. FIFO (mặc định): Xuất từ layer cũ nhất trước — created_at ASC
-    //
-    // Với FIFO, mỗi layer giảm dần số lượng cho đến hết, giữ nguyên đơn giá gốc của layer đó.
-    // Với Weighted Average, chỉ giảm số lượng layer, giá trị = số lượng × giá bình quân.
-    //
-    // RỦI RO: Nếu âm kho (qty > available) → sai giá vốn do không đủ layer để xuất
-    // RỦI RO: Đổi phương pháp tính giá giữa kỳ → sai số liệu so sánh BC02
+    /**
+     * XUẤT COST LAYER: Xác định giá vốn khi xuất kho theo phương pháp định giá.
+     *
+     * Hỗ trợ 3 phương pháp:
+     *   1. Specific ID: Xuất đúng lô chỉ định (batchCode bắt buộc)
+     *   2. Weighted Average: Tính tổng giá trị / tổng số lượng → đơn giá bình quân
+     *   3. FIFO (mặc định): Xuất từ layer cũ nhất trước — created_at ASC
+     *
+     * Với FIFO, mỗi layer giảm dần số lượng cho đến hết, giữ nguyên đơn giá gốc của layer đó.
+     * Với Weighted Average, chỉ giảm số lượng layer, giá trị = số lượng × giá bình quân.
+     *
+     * RỦI RO: Nếu âm kho (qty > available) → sai giá vốn do không đủ layer để xuất
+     * RỦI RO: Đổi phương pháp tính giá giữa kỳ → sai số liệu so sánh BC02
+     *
+     * @param string $itemId ID mặt hàng
+     * @param float $qty Số lượng xuất
+     * @param string|null $warehouseId ID kho (null = kho tổng hợp)
+     * @param string|null $batchCode Mã lô (cho Specific ID)
+     * @return array ['total_cost' => float, 'remaining' => float]
+     * @throws \InvalidArgumentException Nếu Specific ID yêu cầu batchCode nhưng không có
+     */
     private function consumeCostLayers(string $itemId, float $qty, ?string $warehouseId, ?string $batchCode = null): array
     {
         $pdo = $this->getPdo();
@@ -1578,6 +1840,11 @@ class InventoryService implements InventoryServiceInterface
         return ['total_cost' => $totalCost, 'remaining' => $remaining];
     }
 
+    /**
+     * Lấy PDO connection dùng trong class.
+     *
+     * @return \PDO
+     */
     private function getPdo(): \PDO
     {
         return $this->pdo;
