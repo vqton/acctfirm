@@ -8,18 +8,23 @@ use Accounting\Domain\Model\Transaction;
 use Accounting\Domain\Repository\AccountRepositoryInterface;
 use Accounting\Domain\Repository\TransactionRepositoryInterface;
 
-// NGHIỆP VỤ: JournalService là GL Posting Engine — trung tâm xử lý mọi bút toán kế toán.
-// Tất cả nghiệp vụ (tiền mặt, ngân hàng, mua hàng, bán hàng, kho, TSCĐ, kết chuyển...)
-// đều đi qua service này. Đảm bảo các nguyên tắc bất biến của kế toán:
-//   - Tổng Nợ = Tổng Có (Dr = Cr)
-//   - Không post vào tài khoản tổng hợp (control account) — chỉ post vào TK con
-//   - Posting rules kiểm tra cặp Dr-Cr theo từng module nghiệp vụ
-//   - Audit trail cho mọi thay đổi (bắt buộc kiểm toán)
-//   - Kỳ kế toán đã đóng là read-only
-//   - Số chứng từ tự động tăng, chống trùng dưới concurrent access
-//
-// TÍCH HỢP: Được gọi từ CashService, ApService, ArService, InventoryService,
-// FixedAssetService, PeriodService (kết chuyển cuối kỳ).
+/**
+ * GL Posting Engine — trung tâm xử lý mọi bút toán kế toán.
+ *
+ * Tất cả nghiệp vụ (tiền mặt, ngân hàng, mua hàng, bán hàng, kho, TSCĐ, kết chuyển...)
+ * đều đi qua service này. Đảm bảo các nguyên tắc bất biến của kế toán:
+ *   - Tổng Nợ = Tổng Có (Dr = Cr)
+ *   - Không post vào tài khoản tổng hợp (control account) — chỉ post vào TK con
+ *   - Posting rules kiểm tra cặp Dr-Cr theo từng module nghiệp vụ
+ *   - Audit trail cho mọi thay đổi (bắt buộc kiểm toán)
+ *   - Kỳ kế toán đã đóng là read-only
+ *   - Số chứng từ tự động tăng, chống trùng dưới concurrent access
+ *
+ * TÍCH HỢP: Được gọi từ CashService, ApService, ArService, InventoryService,
+ * FixedAssetService, PeriodService (kết chuyển cuối kỳ).
+ *
+ * @package Accounting\Domain\Service
+ */
 class JournalService implements JournalServiceInterface
 {
     private AccountRepositoryInterface $accountRepo;
@@ -70,15 +75,29 @@ class JournalService implements JournalServiceInterface
         }
     }
 
-    // NGHIỆP VỤ: Tạo bút toán nháp — ghi nhận nghiệp vụ nhưng chưa ảnh hưởng số dư tài khoản.
-    // Luồng điển hình: Kế toán nhập liệu → lưu nháp → submit → approve → post (cập nhật balance).
-    // Cố ý không kiểm tra kỳ kế toán ở bước này — chỉ kiểm tra khi post thực tế (approveDraft / postEntry).
-    // Điều này cho phép nhập liệu cho kỳ sau trong khi chờ mở kỳ.
-    //
-    // RỦI RO: Số dư cuối kỳ có thể thiếu nếu draft tồn đọng không được duyệt kịp.
-    // Kiểm soát: Báo cáo "Draft chưa duyệt" cuối kỳ — kế toán trưởng phải review.
     /**
-     * Create a draft journal entry: validates Dr=Cr, saves as 'pending' without balance changes.
+     * Tạo bút toán nháp — ghi nhận nghiệp vụ nhưng chưa ảnh hưởng số dư tài khoản.
+     *
+     * Luồng điển hình: Kế toán nhập liệu → lưu nháp → submit → approve → post (cập nhật balance).
+     * Cố ý không kiểm tra kỳ kế toán ở bước này — chỉ kiểm tra khi post thực tế (approveDraft / postEntry).
+     * Điều này cho phép nhập liệu cho kỳ sau trong khi chờ mở kỳ.
+     *
+     * RỦI RO: Số dư cuối kỳ có thể thiếu nếu draft tồn đọng không được duyệt kịp.
+     * Kiểm soát: Báo cáo "Draft chưa duyệt" cuối kỳ — kế toán trưởng phải review.
+     *
+     * @param string $description Nội dung bút toán
+     * @param string $reference Số tham chiếu (để trống → VoucherService tự sinh)
+     * @param array $lines Mảng dòng bút toán: [{account_code, amount, is_debit}]
+     * @param string $createdBy ID người tạo
+     * @param bool $allowControl Cho phép hạch toán vào tài khoản tổng hợp (default: false)
+     * @param string|null $module Module nghiệp vụ (vd: 'purchase', 'sale')
+     * @param string|null $date Ngày hạch toán (format Y-m-d, default: hôm nay)
+     * @param string|null $voucherType Loại chứng từ (PC, PT, JV, ...)
+     * @param string|null $sourceModule Module nguồn (vd: 'ap', 'ar')
+     * @param string $currency Mã tiền tệ (default: 'VND')
+     * @param float $exchangeRate Tỷ giá quy đổi (default: 1.0)
+     * @return Transaction
+     * @throws \InvalidArgumentException Nếu thiếu dòng, amount ≤ 0, tk không tồn tại, Dr ≠ Cr, posting rule block
      */
     public function createDraft(
         string $description,
@@ -146,9 +165,18 @@ class JournalService implements JournalServiceInterface
         return $txn;
     }
 
-    // KIỂM SOÁT: Ghi nhật ký duyệt — ai duyệt, hành động gì, ý kiến gì, thời gian nào.
-    // Bắt buộc theo yêu cầu Kiểm toán độc lập: phải trace được toàn bộ vòng đời phê duyệt.
-    // Dữ liệu này không được xóa — phục vụ đối chiếu sau này.
+    /**
+     * Ghi nhật ký duyệt — ai duyệt, hành động gì, ý kiến gì, thời gian nào.
+     *
+     * Bắt buộc theo yêu cầu Kiểm toán độc lập: phải trace được toàn bộ vòng đời phê duyệt.
+     * Dữ liệu này không được xóa — phục vụ đối chiếu sau này.
+     *
+     * @param string $txnId ID giao dịch
+     * @param string $action Hành động (submit|approve|reject|return)
+     * @param string $actor ID người thực hiện
+     * @param string|null $comment Ý kiến/ghi chú
+     * @param int $level Cấp duyệt hiện tại (multi-level approval)
+     */
     private function recordApprovalAction(string $txnId, string $action, string $actor, ?string $comment = null, int $level = 1): void
     {
         if ($this->pdo === null) return;
@@ -158,8 +186,16 @@ class JournalService implements JournalServiceInterface
         $stmt->execute([$txnId, $action, $level, $actor, $comment]);
     }
 
-    // LUỒNG DUYỆT Bước 1: Người tạo gửi duyệt. pending → submitted.
-    // Sau bước này, người tạo không thể sửa bút toán — chỉ Kế toán trưởng mới duyệt/từ chối được.
+    /**
+     * LUỒNG DUYỆT Bước 1: Người tạo gửi duyệt. pending → submitted.
+     *
+     * Sau bước này, người tạo không thể sửa bút toán — chỉ Kế toán trưởng mới duyệt/từ chối được.
+     *
+     * @param string $txnId ID bút toán
+     * @param string $submittedBy ID người gửi duyệt
+     * @return Transaction
+     * @throws \InvalidArgumentException Nếu không tìm thấy bút toán
+     */
     public function submitEntry(string $txnId, string $submittedBy): Transaction
     {
         $txn = $this->txnRepo->findById($txnId);
@@ -178,13 +214,22 @@ class JournalService implements JournalServiceInterface
         return $txn;
     }
 
-    // LUỒNG DUYỆT Bước 2: Kế toán trưởng phê duyệt. submitted → approved.
-    // Lưu ý: approved ≠ posted — bút toán mới chỉ được duyệt, chưa ảnh hưởng số dư tài khoản.
-    // Cần gọi approveDraft để thực sự ghi nhận vào sổ cái.
-    //
-    // R-16 Multi-level: nếu giao dịch cần N cấp duyệt:
-    //   - Cấp hiện tại < N: ghi nhận approve, status vẫn là "submitted", chờ cấp tiếp theo
-    //   - Cấp hiện tại = N: set status = "approved", cho phép post
+    /**
+     * LUỒNG DUYỆT Bước 2: Kế toán trưởng phê duyệt. submitted → approved.
+     *
+     * Lưu ý: approved ≠ posted — bút toán mới chỉ được duyệt, chưa ảnh hưởng số dư tài khoản.
+     * Cần gọi approveDraft để thực sự ghi nhận vào sổ cái.
+     *
+     * R-16 Multi-level: nếu giao dịch cần N cấp duyệt:
+     *   - Cấp hiện tại < N: ghi nhận approve, status vẫn là "submitted", chờ cấp tiếp theo
+     *   - Cấp hiện tại = N: set status = "approved", cho phép post
+     *
+     * @param string $txnId ID bút toán
+     * @param string $approverId ID người duyệt
+     * @param string|null $comment Ý kiến duyệt
+     * @return Transaction
+     * @throws \InvalidArgumentException Nếu không tìm thấy bút toán
+     */
     public function approveEntry(string $txnId, string $approverId, ?string $comment = null): Transaction
     {
         $txn = $this->txnRepo->findById($txnId);
@@ -224,9 +269,18 @@ class JournalService implements JournalServiceInterface
         return $txn;
     }
 
-    // LUỒNG DUYỆT Bước 2 (từ chối): submitted → rejected.
-    // Bắt buộc có lý do từ chối (reason) — phục vụ kiểm soát nội bộ và đào tạo.
-    // Người tạo có thể sửa lại và gửi duyệt lại (returnEntry → submitEntry).
+    /**
+     * LUỒNG DUYỆT Bước 2 (từ chối): submitted → rejected.
+     *
+     * Bắt buộc có lý do từ chối (reason) — phục vụ kiểm soát nội bộ và đào tạo.
+     * Người tạo có thể sửa lại và gửi duyệt lại (returnEntry → submitEntry).
+     *
+     * @param string $txnId ID bút toán
+     * @param string $approverId ID người duyệt
+     * @param string $reason Lý do từ chối (bắt buộc)
+     * @return Transaction
+     * @throws \InvalidArgumentException Nếu không tìm thấy bút toán
+     */
     public function rejectEntry(string $txnId, string $approverId, string $reason): Transaction
     {
         $txn = $this->txnRepo->findById($txnId);
@@ -245,10 +299,20 @@ class JournalService implements JournalServiceInterface
         return $txn;
     }
 
-    // LUỒNG DUYỆT Bước 3 (trả lại): rejected → pending (về trạng thái nháp).
-    // Cho phép người tạo sửa lại nội dung dựa trên lý do từ chối, sau đó gửi duyệt lại.
-    // RỦI RO: Nếu không có cơ chế kiểm soát, bút toán có thể bị trả lại nhiều lần → delay xử lý.
-    // Kiểm soát: Giới hạn số lần trả lại (tùy chính sách từng công ty).
+    /**
+     * LUỒNG DUYỆT Bước 3 (trả lại): rejected → pending (về trạng thái nháp).
+     *
+     * Cho phép người tạo sửa lại nội dung dựa trên lý do từ chối, sau đó gửi duyệt lại.
+     *
+     * RỦI RO: Nếu không có cơ chế kiểm soát, bút toán có thể bị trả lại nhiều lần → delay xử lý.
+     * Kiểm soát: Giới hạn số lần trả lại (tùy chính sách từng công ty).
+     *
+     * @param string $txnId ID bút toán
+     * @param string $userId ID người trả lại
+     * @param string|null $comment Ghi chú
+     * @return Transaction
+     * @throws \InvalidArgumentException Nếu không tìm thấy bút toán
+     */
     public function returnEntry(string $txnId, string $userId, ?string $comment = null): Transaction
     {
         $txn = $this->txnRepo->findById($txnId);
@@ -263,16 +327,22 @@ class JournalService implements JournalServiceInterface
         return $txn;
     }
 
-    // NGHIỆP VỤ: Duyệt và post bút toán đã duyệt — thực sự cập nhật số dư tài khoản.
-    // Đây là bước không thể undo — nếu sai phải làm bút toán đảo (reversal entry).
-    // Atomic transaction: Nếu bất kỳ tài khoản nào cập nhật thất bại → rollback toàn bộ.
-    //
-    // KIỂM TRA khi post (không phải khi draft):
-    //   1. Kỳ kế toán còn mở? (PeriodService::isPeriodOpen)
-    //   2. Posting rules vẫn hiệu lực? (rules có thể thay đổi từ lúc tạo draft)
-    //   3. Draft còn ở trạng thái pending? (không post 2 lần)
     /**
-     * Approve and post a draft: applies balance changes atomically.
+     * Duyệt và post bút toán đã duyệt — thực sự cập nhật số dư tài khoản.
+     *
+     * Đây là bước không thể undo — nếu sai phải làm bút toán đảo (reversal entry).
+     * Atomic transaction: Nếu bất kỳ tài khoản nào cập nhật thất bại → rollback toàn bộ.
+     *
+     * KIỂM TRA khi post (không phải khi draft):
+     *   1. Kỳ kế toán còn mở? (PeriodService::isPeriodOpen)
+     *   2. Posting rules vẫn hiệu lực? (rules có thể thay đổi từ lúc tạo draft)
+     *   3. Draft còn ở trạng thái pending? (không post 2 lần)
+     *
+     * @param string $txnId ID bút toán
+     * @param string $approvedBy ID người duyệt
+     * @return Transaction
+     * @throws \RuntimeException Nếu kỳ kế toán đã đóng
+     * @throws \InvalidArgumentException Nếu bút toán không ở trạng thái pending
      */
     public function approveDraft(string $txnId, string $approvedBy): Transaction
     {
@@ -336,15 +406,18 @@ class JournalService implements JournalServiceInterface
         }
     }
 
-    // NGHIỆP VỤ: Sinh số chứng từ tự động theo format {PREFIX}{YYYY}-{000000}.
-    // Prefix convention: PC (Phiếu chi), PT (Phiếu thu), JV (Journal Voucher),
-    // PNK (Phiếu nhập kho), PXK (Phiếu xuất kho).
-    // CONCURRENCY: VoucherService sử dụng SELECT FOR UPDATE để chống trùng số.
-    // RỦI RO: Nếu không lock → trùng số chứng từ → mất audit trail → rủi ro pháp lý.
     /**
-     * Post a journal entry: validates Dr=Cr first, then applies balance changes atomically.
-     * Control accounts (Level 1 parent accounts with sub-accounts) are blocked.
-     * Set $allowControl to true for Chief Accountant override.
+     * Sinh số chứng từ tự động theo format {PREFIX}{YYYY}-{000000}.
+     *
+     * Prefix convention: PC (Phiếu chi), PT (Phiếu thu), JV (Journal Voucher),
+     * PNK (Phiếu nhập kho), PXK (Phiếu xuất kho).
+     * CONCURRENCY: VoucherService sử dụng SELECT FOR UPDATE để chống trùng số.
+     *
+     * RỦI RO: Nếu không lock → trùng số chứng từ → mất audit trail → rủi ro pháp lý.
+     *
+     * @param string $prefix Loại chứng từ (JV, PC, PT, PNK, PXK)
+     * @return string Số chứng từ đã sinh
+     * @throws \RuntimeException Nếu VoucherService chưa được cấu hình
      */
     public function generateVoucherNo(string $prefix = 'JV'): string
     {
@@ -354,6 +427,17 @@ class JournalService implements JournalServiceInterface
         return $this->voucherService->nextNumber($prefix);
     }
 
+    /**
+     * Tạo bút toán bổ sung — thêm chênh lệch cho bút toán gốc (không xóa bút toán cũ).
+     *
+     * @param string $originalTxnId ID bút toán gốc
+     * @param array $correctLines Mảng dòng điều chỉnh [{account_code, amount, is_debit}]
+     * @param string $reason Lý do bổ sung
+     * @param string $createdBy ID người tạo
+     * @param bool $allowControl Cho phép hạch toán vào TK tổng hợp
+     * @return Transaction
+     * @throws \InvalidArgumentException Nếu không tìm thấy bút toán gốc
+     */
     public function createSupplementaryEntry(string $originalTxnId, array $correctLines, string $reason, string $createdBy, bool $allowControl = false): Transaction
     {
         $original = $this->txnRepo->findById($originalTxnId);
@@ -386,6 +470,20 @@ class JournalService implements JournalServiceInterface
         return $txn;
     }
 
+    /**
+     * Tạo bút toán đảo (negative entry) — đảo ngược bút toán đã post.
+     *
+     * Dùng để sửa bút toán sai: đảo ngược hoàn toàn bút toán gốc (đảo Nợ/Có),
+     * status gốc chuyển thành 'reversed'. Yêu cầu cả 2 nằm trong 1 transaction.
+     * Chỉ cho phép nếu bút toán gốc đã posted.
+     *
+     * @param string $originalTxnId ID bút toán gốc
+     * @param string $reason Lý do đảo
+     * @param string $createdBy ID người tạo
+     * @param bool $allowControl Cho phép hạch toán vào TK tổng hợp
+     * @return Transaction Bút toán đảo đã post
+     * @throws \InvalidArgumentException Nếu không tìm thấy hoặc chưa posted
+     */
     public function createNegativeEntry(string $originalTxnId, string $reason, string $createdBy, bool $allowControl = false): Transaction
     {
         $original = $this->txnRepo->findById($originalTxnId);
@@ -442,6 +540,20 @@ class JournalService implements JournalServiceInterface
         }
     }
 
+    /**
+     * Tạo bút toán điều chỉnh — điều chỉnh số dư giữa các tài khoản.
+     *
+     * Khác với bút toán bổ sung (thêm giá trị mới), bút toán điều chỉnh chuyển
+     * một phần số dư từ TK này sang TK khác. Thường dùng cho hạch toán phân bổ.
+     *
+     * @param string $originalTxnId ID bút toán gốc
+     * @param array $movingLines Mảng dòng điều chỉnh [{account_code, amount, is_debit}]
+     * @param string $reason Lý do điều chỉnh
+     * @param string $createdBy ID người tạo
+     * @param bool $allowControl Cho phép hạch toán vào TK tổng hợp
+     * @return Transaction
+     * @throws \InvalidArgumentException Nếu không tìm thấy bút toán gốc
+     */
     public function createAdjustingEntry(string $originalTxnId, array $movingLines, string $reason, string $createdBy, bool $allowControl = false): Transaction
     {
         $original = $this->txnRepo->findById($originalTxnId);
@@ -474,22 +586,28 @@ class JournalService implements JournalServiceInterface
         return $txn;
     }
 
-    //
-    // R-9: SAO CHÉP BÚT TOÁN (Duplicate) — kế toán tiết kiệm 80% thời gian nhập liệu
-    //
-    // Nghiệp vụ: Kế toán thường xuyên nhập các bút toán tương tự nhau (vd: tiền điện hàng tháng).
-    // Tính năng này copy lines từ bút toán gốc → tạo draft mới, user chỉ cần sửa ngày/số tiền.
-    //
-    // Ràng buộc:
-    //   - Copy được cả posted và draft (không giới hạn status)
-    //   - Bút toán mới là DRAFT (status='draft', chưa posted)
-    //   - Reference reset = rỗng (VoucherService sẽ sinh số mới khi post)
-    //   - created_by = user hiện tại (audit trail)
-    //   - Giữ nguyên: account codes, amounts, currency, exchange rate
-    //
-    // Rủi ro: Copy sai số tiền/account → phải verify trước khi post. Form hiển thị
-    //   cho user review trước khi submit là bắt buộc.
-    //
+    /**
+     * R-9: SAO CHÉP BÚT TOÁN (Duplicate) — kế toán tiết kiệm 80% thời gian nhập liệu.
+     *
+     * Nghiệp vụ: Kế toán thường xuyên nhập các bút toán tương tự nhau (vd: tiền điện hàng tháng).
+     * Tính năng này copy lines từ bút toán gốc → tạo draft mới, user chỉ cần sửa ngày/số tiền.
+     *
+     * Ràng buộc:
+     *   - Copy được cả posted và draft (không giới hạn status)
+     *   - Bút toán mới là DRAFT (status='draft', chưa posted)
+     *   - Reference reset = rỗng (VoucherService sẽ sinh số mới khi post)
+     *   - created_by = user hiện tại (audit trail)
+     *   - Giữ nguyên: account codes, amounts, currency, exchange rate
+     *
+     * Rủi ro: Copy sai số tiền/account → phải verify trước khi post. Form hiển thị
+     *   cho user review trước khi submit là bắt buộc.
+     *
+     * @param string $originalTxnId ID bút toán nguồn
+     * @param string $createdBy ID người tạo bản sao
+     * @param string|null $newDate Ngày hạch toán mới (null = copy ngày gốc)
+     * @return Transaction Bút toán mới dạng draft
+     * @throws \InvalidArgumentException Nếu không tìm thấy bút toán gốc
+     */
     public function duplicateEntry(string $originalTxnId, string $createdBy, ?string $newDate = null): Transaction
     {
         $original = $this->txnRepo->findById($originalTxnId);
@@ -532,21 +650,25 @@ class JournalService implements JournalServiceInterface
         return $draft;
     }
 
-    //
-    // R-13: SOFT DELETE — xóa mềm bút toán (giữ data, ẩn khỏi list)
-    //
-    // Nghiệp vụ: Cho phép xóa bút toán NHẦM (draft hoặc posted đã reverse) mà không
-    // mất audit trail. Restore trong vòng 30 ngày.
-    //
-    // Ràng buộc:
-    //   - KHÔNG cho xóa bút toán posted (status='posted') — phải reverse trước
-    //     rồi mới delete (vì posted = ảnh hưởng BC)
-    //   - Bút toán đã reversed (status='reversed') cho xóa
-    //   - Draft (status='draft'|'pending'|'submitted') cho xóa bình thường
-    //   - Audit: ghi lại deleted_by, deleted_at + audit log
-    //
-    // Rủi ro: Xóa nhầm bút toán posted → sai BC. Code check bên dưới.
-    //
+    /**
+     * R-13: SOFT DELETE — xóa mềm bút toán (giữ data, ẩn khỏi list).
+     *
+     * Nghiệp vụ: Cho phép xóa bút toán NHẦM (draft hoặc posted đã reverse) mà không
+     * mất audit trail. Restore trong vòng 30 ngày.
+     *
+     * Ràng buộc:
+     *   - KHÔNG cho xóa bút toán posted (status='posted') — phải reverse trước
+     *   - Bút toán đã reversed (status='reversed') cho xóa
+     *   - Draft (status='draft'|'pending'|'submitted') cho xóa bình thường
+     *   - Audit: ghi lại deleted_by, deleted_at + audit log
+     *
+     * Rủi ro: Xóa nhầm bút toán posted → sai BC. Code check bên dưới.
+     *
+     * @param string $txnId ID bút toán cần xóa
+     * @param string $deletedBy ID người thực hiện xóa
+     * @param string $reason Lý do xóa (bắt buộc)
+     * @throws \InvalidArgumentException Nếu bút toán đã posted, không tồn tại hoặc đã xóa
+     */
     public function softDelete(string $txnId, string $deletedBy, string $reason): void
     {
         $txn = $this->txnRepo->findById($txnId);
@@ -572,12 +694,18 @@ class JournalService implements JournalServiceInterface
             $deletedBy);
     }
 
-    //
-    // R-13: RESTORE — khôi phục bút toán đã soft delete (trong 30 ngày)
-    //
-    // Ràng buộc: Chỉ restore trong 30 ngày (rollback window — config: import.rollback_window_hours
-    //   hoặc dedicated journal.restore_window_days). Sau 30 ngày, cần can thiệp thủ công.
-    //
+    /**
+     * R-13: RESTORE — khôi phục bút toán đã soft delete (trong 30 ngày).
+     *
+     * Ràng buộc: Chỉ restore trong 30 ngày (rollback window — config: import.rollback_window_hours
+     * hoặc dedicated journal.restore_window_days). Sau 30 ngày, cần can thiệp thủ công.
+     *
+     * @param string $txnId ID bút toán cần khôi phục
+     * @param string $restoredBy ID người khôi phục
+     * @param int $windowDays Số ngày cho phép restore (default 30)
+     * @return Transaction
+     * @throws \InvalidArgumentException Nếu không tìm thấy, chưa xóa, hoặc quá hạn
+     */
     public function restore(string $txnId, string $restoredBy, int $windowDays = 30): Transaction
     {
         $txn = $this->txnRepo->findById($txnId);
@@ -609,21 +737,27 @@ class JournalService implements JournalServiceInterface
         return $txn;
     }
 
-    //
-    // R-8: BULK POST — ghi sổ hàng loạt, transactional all-or-nothing
-    //
-    // Nghiệp vụ: Cuối tháng, kế toán chọn nhiều bút toán draft → ghi sổ cùng lúc.
-    // Quyết định BA: ALL-OR-NOTHING (user confirmed) — nếu 1 fail thì rollback tất cả.
-    //
-    // Ràng buộc:
-    //   - Tất cả txn phải ở status='draft' hoặc 'pending'
-    //   - Nếu 1 cái fail (period locked, posting rule block, validation) → rollback
-    //   - Audit: 1 log entry 'journal.bulk_post' với danh sách IDs thành công
-    //   - Trả về: { posted: [...], failed: [{id, error}] }
-    //
-    // Rủi ro: Bulk post 100 bút toán trong 1 transaction → lock DB → tốc độ.
-    //   Khuyến nghị: giới hạn batch ≤ 50 txn/lần.
-    //
+    /**
+     * R-8: BULK POST — ghi sổ hàng loạt, transactional all-or-nothing.
+     *
+     * Nghiệp vụ: Cuối tháng, kế toán chọn nhiều bút toán draft → ghi sổ cùng lúc.
+     * Quyết định BA: ALL-OR-NOTHING (user confirmed) — nếu 1 fail thì rollback tất cả.
+     *
+     * Ràng buộc:
+     *   - Tất cả txn phải ở status='draft' hoặc 'pending'
+     *   - Nếu 1 cái fail (period locked, posting rule block, validation) → rollback
+     *   - Audit: 1 log entry 'journal.bulk_post' với danh sách IDs thành công
+     *   - Trả về: { posted: [...], failed: [{id, error}] }
+     *
+     * Rủi ro: Bulk post 100 bút toán trong 1 transaction → lock DB → tốc độ.
+     *   Khuyến nghị: giới hạn batch ≤ 50 txn/lần.
+     *
+     * @param array $txnIds Danh sách ID bút toán cần post
+     * @param string $approverId ID người duyệt
+     * @param int $maxBatchSize Giới hạn batch (default 50)
+     * @return array{posted:array, failed:array, rolled_back:bool}
+     * @throws \InvalidArgumentException Nếu danh sách rỗng/batch quá lớn
+     */
     public function bulkPost(array $txnIds, string $approverId, int $maxBatchSize = 50): array
     {
         if (count($txnIds) === 0) {
@@ -686,6 +820,15 @@ class JournalService implements JournalServiceInterface
         return ['posted' => $posted, 'failed' => [], 'rolled_back' => false];
     }
 
+    /**
+     * Lấy lịch sử điều chỉnh của một bút toán.
+     *
+     * Trả về danh sách các bút toán điều chỉnh (bổ sung, đảo, điều chỉnh)
+     * liên quan đến bút toán gốc. Phục vụ kiểm toán và tra soát.
+     *
+     * @param string $transactionId ID bút toán gốc
+     * @return array Mảng các bản ghi điều chỉnh
+     */
     public function getCorrectionHistory(string $transactionId): array
     {
         $corrections = $this->txnRepo->getCorrectionsByOriginalId($transactionId);
@@ -705,21 +848,39 @@ class JournalService implements JournalServiceInterface
         return $result;
     }
 
-    // NGHIỆP VỤ: Post bút toán trực tiếp (không qua workflow draft → submit → approve).
-    // Dành cho: giao dịch tự động (kết chuyển cuối kỳ, khấu hao TSCĐ, phân bổ chi phí),
-    // hoặc nghiệp vụ đã được duyệt trước bên ngoài hệ thống.
-    //
-    // QUY TRÌNH 4 PHA TRONG MỘT TRANSACTION:
-    //   Phase 1: Validate tất cả dòng — tài khoản tồn tại? Control account? Amount > 0?
-    //   Phase 2: Kiểm tra Dr = Cr (tolerance ±10đ) + posting rules
-    //   Phase 3: Cập nhật số dư tài khoản (balance changes)
-    //   Phase 4: Tạo transaction record + commit
-    //
-    // RỦI RO: Nếu bất kỳ Phase 3 nào thất bại → rollback toàn bộ.
-    // Không có "post một nửa" — đảm bảo tính toàn vẹn dữ liệu.
-    //
-    // HARD DEADLINE: Kỳ kế toán có thể có hard deadline (ví dụ: hạn nộp thuế).
-    // Nếu đã quá hạn, chỉ Kế toán trưởng (allowControl=true) mới được bypass.
+    /**
+     * NGHIỆP VỤ: Post bút toán trực tiếp (không qua workflow draft → submit → approve).
+     *
+     * Dành cho: giao dịch tự động (kết chuyển cuối kỳ, khấu hao TSCĐ, phân bổ chi phí),
+     * hoặc nghiệp vụ đã được duyệt trước bên ngoài hệ thống.
+     *
+     * QUY TRÌNH 4 PHA TRONG MỘT TRANSACTION:
+     *   Phase 1: Validate tất cả dòng — tài khoản tồn tại? Control account? Amount > 0?
+     *   Phase 2: Kiểm tra Dr = Cr (tolerance ±10đ) + posting rules
+     *   Phase 3: Cập nhật số dư tài khoản (balance changes)
+     *   Phase 4: Tạo transaction record + commit
+     *
+     * RỦI RO: Nếu bất kỳ Phase 3 nào thất bại → rollback toàn bộ.
+     * Không có "post một nửa" — đảm bảo tính toàn vẹn dữ liệu.
+     *
+     * HARD DEADLINE: Kỳ kế toán có thể có hard deadline (ví dụ: hạn nộp thuế).
+     * Nếu đã quá hạn, chỉ Kế toán trưởng (allowControl=true) mới được bypass.
+     *
+     * @param string $description Nội dung bút toán
+     * @param string $reference Số tham chiếu (để trống → VoucherService tự sinh)
+     * @param array $lines Mảng dòng bút toán [{account_code, amount, is_debit}]
+     * @param string $createdBy ID người tạo
+     * @param bool $allowControl Cho phép hạch toán vào TK tổng hợp
+     * @param string|null $module Module nghiệp vụ (vd: 'purchase', 'sale', 'correction')
+     * @param string|null $date Ngày hạch toán (Y-m-d)
+     * @param string|null $voucherType Loại chứng từ (PC, PT, JV, ...)
+     * @param string|null $sourceModule Module nguồn
+     * @param string $currency Mã tiền tệ (default: 'VND')
+     * @param float $exchangeRate Tỷ giá (default 1.0)
+     * @return Transaction
+     * @throws \RuntimeException Nếu kỳ đã đóng hoặc deadline đã qua
+     * @throws \InvalidArgumentException Nếu Dr≠Cr, thiếu dòng, sai tài khoản, posting rule block
+     */
     public function postEntry(string $description, string $reference, array $lines, string $createdBy, bool $allowControl = false, ?string $module = null, ?string $date = null, ?string $voucherType = null, ?string $sourceModule = null, string $currency = 'VND', float $exchangeRate = 1.0): Transaction
     {
         if (count($lines) < 2) {
