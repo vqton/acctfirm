@@ -35,6 +35,7 @@ $fixedAssetService = new FixedAssetService($fixedAssetRepository, $accountReposi
 use Accounting\Domain\Service\DepreciationBatchService;
 $depreciationBatchService = new DepreciationBatchService($pdo, $fixedAssetRepository);
 $vatService = new VatService($pdo, $auditLogger);
+$vatRateService = new \Accounting\Domain\Service\VatRateService($pdo);
 $citService = new CitService($pdo, $auditLogger);
 $citDeclarationEngine = new \Accounting\Domain\Service\CitDeclarationEngine($pdo);
 $pitDeclarationService = new \Accounting\Domain\Service\PitDeclarationService($pdo, $auditLogger);

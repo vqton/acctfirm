@@ -1,69 +1,113 @@
 <?php
 namespace Accounting\Interfaces\HTTP\Financial;
 
-use Accounting\Domain\Service\CurrencyService;
+use Accounting\Domain\Service\CurrencyDisplayService;
 use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
 
 /**
- * MODULE: Ngoại tệ (Currency Management)
+ * MODULE: Ngoại tệ (Multi-Currency Display)
  *
  * Mục đích nghiệp vụ:
- *   - Quản lý giao dịch ngoại tệ
- *   - Theo dõi số dư ngoại tệ theo từng loại tiền
- *   - Đánh giá lại ngoại tệ cuối kỳ (VAS 10)
+ *   - Hiển thị danh sách ngoại tệ active
+ *   - Xem tỷ giá quy đổi
+ *   - Chuyển đổi ngoại tệ
+ *   - Thiết lập display_currency cho user
  *
  * API endpoints:
- *   GET /api/currency/balances — Số dư ngoại tệ
- *   GET /api/currency/transactions/{accountCode} — Giao dịch theo TK ngoại tệ
- *
- * Rủi ro:
- *   - Sai tỷ giá -> sai số dư quy đổi VND
- *   - Không đánh giá lại cuối kỳ -> BCTC sai
+ *   GET  /api/currencies                — Danh sách ngoại tệ active
+ *   GET  /api/currencies/rate/{code}    — Tỷ giá 1 ngoại tệ vs VND
+ *   POST /api/currencies/convert        — Quy đổi { amount, from, to, date? }
+ *   GET  /api/currencies/preference     — Display currency của user
+ *   POST /api/currencies/preference     — Set display currency
  *
  * Tích hợp:
- *   - CurrencyService đọc từ TransactionRepository
+ *   - CurrencyDisplayService
  *   - ExchangeRateController cung cấp tỷ giá
- *   - FxController xử lý đánh giá lại
+ *   - FxController xử lý đánh giá lại cuối kỳ
  */
 class CurrencyController
 {
-    private CurrencyService $currency;
-
-    public function __construct(CurrencyService $currency) { $this->currency = $currency; }
+    private CurrencyDisplayService $svc;
 
     /**
-     * Số dư các tài khoản ngoại tệ
-     *
-     * @return void
+     * @param CurrencyDisplayService $svc
      */
-    public function balances(): void
+    public function __construct(CurrencyDisplayService $svc)
     {
-        Auth::requirePermission('report', 'read');
-        JsonResponse::ok($this->currency->getFcBalances());
+        $this->svc = $svc;
     }
 
     /**
-     * Giao dịch ngoại tệ cho một tài khoản
+     * Danh sách ngoại tệ active
      *
-     * @param string $accountCode Mã tài khoản (1112, 1122, 131, 331)
      * @return void
      */
-    public function transactions(string $accountCode): void
+    public function listCurrencies(): void
     {
         Auth::requirePermission('report', 'read');
-        $from = $_GET['from'] ?? null;
-        $to = $_GET['to'] ?? null;
-        JsonResponse::ok($this->currency->getCurrencyTransactions($accountCode, $from, $to));
+        JsonResponse::ok(['currencies' => $this->svc->listCurrencies()]);
     }
 
     /**
-     * View ngoại tệ
+     * Tỷ giá của một ngoại tệ so với VND
+     *
+     * @param string $code Mã ngoại tệ (USD, EUR,...)
+     * @return void
+     */
+    public function getRate(string $code): void
+    {
+        Auth::requirePermission('report', 'read');
+        $rate = $this->svc->getRate($code);
+        if ($rate === null) { JsonResponse::error('Không tìm thấy tỷ giá', 404); return; }
+        JsonResponse::ok(['code' => $code, 'rate' => $rate]);
+    }
+
+    /**
+     * Quy đổi tiền tệ
      *
      * @return void
      */
-    public function view(): void
+    public function convert(): void
     {
-        require __DIR__ . '/../../../../../public/views/currency.php';
+        Auth::requirePermission('report', 'read');
+        $data = json_decode(file_get_contents('php://input'), true);
+        if (!$data || !isset($data['amount'], $data['from'], $data['to'])) {
+            JsonResponse::error('Vui lòng nhập số tiền, ngoại tệ nguồn và đích', 400);
+            return;
+        }
+        try {
+            $result = $this->svc->convert((float)$data['amount'], $data['from'], $data['to'], $data['date'] ?? null);
+            JsonResponse::ok($result);
+        } catch (\InvalidArgumentException $e) {
+            JsonResponse::error($e->getMessage(), 400);
+        }
+    }
+
+    /**
+     * Lấy display_currency của user hiện tại
+     *
+     * @return void
+     */
+    public function getPreference(): void
+    {
+        Auth::requirePermission('report', 'read');
+        $userId = $_SESSION['user_id'] ?? '0';
+        JsonResponse::ok(['currency' => $this->svc->getUserCurrency($userId)]);
+    }
+
+    /**
+     * Thiết lập display_currency cho user
+     *
+     * @return void
+     */
+    public function setPreference(): void
+    {
+        Auth::requirePermission('report', 'read');
+        $data = json_decode(file_get_contents('php://input'), true);
+        if (!$data || !isset($data['currency'])) { JsonResponse::error('Vui lòng nhập mã ngoại tệ', 400); return; }
+        $userId = $_SESSION['user_id'] ?? '0';
+        $this->svc->setUserCurrency($userId, $data['currency']);
+        JsonResponse::ok(['currency' => $data['currency']]);
     }
 }

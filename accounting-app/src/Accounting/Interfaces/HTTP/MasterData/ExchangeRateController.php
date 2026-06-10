@@ -3,6 +3,7 @@ namespace Accounting\Interfaces\HTTP\MasterData;
 
 use Accounting\Infrastructure\JsonResponse;
 use Accounting\Infrastructure\Auth;
+use Accounting\Domain\Model\ExchangeRate;
 use Accounting\Domain\Repository\ExchangeRateRepositoryInterface;
 use Accounting\Interfaces\HTTP\CrudControllerTrait;
 
@@ -34,5 +35,34 @@ class ExchangeRateController
     {
         $this->repository = $repository;
         $this->module = 'exchange_rates';
+    }
+
+    protected function repo()
+    {
+        return $this->repository;
+    }
+
+    protected function idPrefix(): string
+    {
+        return 'fx_';
+    }
+
+    protected function createEntity(array $data): object
+    {
+        return new ExchangeRate(
+            id: $data['id'] ?? uniqid('fx_'),
+            currencyCode: $data['currency_code'] ?? '',
+            currencyName: $data['currency_name'] ?? '',
+            rate: (float)($data['rate'] ?? 0),
+            rateDate: $data['rate_date'] ?? date('Y-m-d')
+        );
+    }
+
+    protected function updateEntity(object $entity, array $data): void
+    {
+        if (isset($data['currency_code'])) $entity->setCurrencyCode($data['currency_code']);
+        if (isset($data['currency_name'])) $entity->setCurrencyName($data['currency_name']);
+        if (isset($data['rate'])) $entity->setRate((float)$data['rate']);
+        if (isset($data['rate_date'])) $entity->setRateDate($data['rate_date']);
     }
 }

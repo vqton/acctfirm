@@ -1,37 +1,72 @@
 <?php
 namespace Accounting\Interfaces\HTTP\MasterData;
 
+use Accounting\Domain\Service\CcdcAllocationService;
 use Accounting\Infrastructure\JsonResponse;
 use Accounting\Infrastructure\Auth;
-use Accounting\Domain\Repository\CcdcAllocationRepositoryInterface;
-use Accounting\Interfaces\HTTP\CrudControllerTrait;
 
 /**
  * MODULE: Phân bổ CCDC (Công cụ dụng cụ)
  *
  * Mục đích nghiệp vụ:
- *   - Phân bổ giá trị CCDC vào nhiều kỳ
- *   - Theo dõi giá trị hao mòn CCDC
+ *   - Chạy phân bổ giá trị CCDC vào nhiều kỳ
+ *   - Xem lịch sử phân bổ
  *
  * API endpoints:
- *   GET    /api/ccdc-allocations — Danh sách
- *   POST   /api/ccdc-allocations — Tạo mới
- *   PUT    /api/ccdc-allocations/{id} — Cập nhật
- *   DELETE /api/ccdc-allocations/{id} — Xoá
+ *   POST   /api/ccdc-allocations/run — Chạy phân bổ
+ *   GET    /api/ccdc-allocations/history — Lịch sử phân bổ
+ *   GET    /api/ccdc-allocations — View HTML
  *
  * Tích hợp:
- *   - CcdcController quản lý CCDC đầu vào
+ *   - CcdcAllocationService xử lý nghiệp vụ phân bổ
  */
 class CcdcAllocationController
 {
-    use CrudControllerTrait;
+    private CcdcAllocationService $allocationService;
 
     /**
-     * @param CcdcAllocationRepositoryInterface $repository
+     * @param CcdcAllocationService $allocationService
      */
-    public function __construct(CcdcAllocationRepositoryInterface $repository)
+    public function __construct(CcdcAllocationService $allocationService)
     {
-        $this->repository = $repository;
-        $this->module = 'ccdc_allocations';
+        $this->allocationService = $allocationService;
+    }
+
+    /**
+     * Chạy phân bổ CCDC hàng tháng
+     *
+     * @return void
+     */
+    public function run(): void
+    {
+        Auth::checkCsrf();
+        Auth::requirePermission('inventory', 'post');
+        $data = json_decode(file_get_contents('php://input'), true);
+        $period = $data['period'] ?? date('Y-m');
+        $results = $this->allocationService->runMonthlyAllocation($period, $_SESSION['user_id'] ?? 'system');
+        $success = count(array_filter($results, fn($r) => !isset($r['error'])));
+        JsonResponse::ok(['total' => count($results), 'success' => $success, 'results' => $results]);
+    }
+
+    /**
+     * Lịch sử phân bổ
+     *
+     * @return void
+     */
+    public function history(): void
+    {
+        Auth::requirePermission('inventory', 'read');
+        $ccdcId = $_GET['ccdc_id'] ?? null;
+        JsonResponse::ok($this->allocationService->getAllocationHistory($ccdcId));
+    }
+
+    /**
+     * View HTML phân bổ CCDC
+     *
+     * @return void
+     */
+    public function view(): void
+    {
+        require __DIR__ . '/../../../../../public/views/ccdc_allocations.php';
     }
 }

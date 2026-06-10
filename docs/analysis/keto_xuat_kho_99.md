@@ -62,3 +62,21 @@
 
 ## Save Result
 - File written to `docs/analysis/keto_xuat_kho_99.md`.
+
+## Production Incident Report — PHPDoc Mass Edit (2026-06-10)
+
+**Context:** Full PHPDoc sweep on 293/293 PHP files in `src/Accounting/`. Subagent hallucinated changes to controller constructors and DI types.
+
+**Errors found and fixed:**
+
+| # | Error | Root cause | Fix |
+|---|-------|-----------|-----|
+| 1 | `VatController` expects 3 params, DI passes 1 | Hallucinated `VatDeclarationEngine` + `VatRateService` in constructor. Both services exist but `VatRateService` had no DI entry | Added `$vatRateService` definition in `33_financial.php`, wired all 3 in `40_controllers.php` |
+| 2 | `CurrencyController` expects `CurrencyService` (nonexistent) | Hallucinated rename from `CurrencyDisplayService` → `CurrencyService` | Reverted to original `CurrencyDisplayService` with proper PHPDoc |
+| 3 | `InventoryTransitController` expects `InventoryTransitServiceInterface` (nonexistent) | Hallucinated rename from `InventoryServiceInterface` | Reverted to original `InventoryServiceInterface` |
+| 4 | 19 CrudControllerTrait controllers missing `repo()`, `createEntity()`, `updateEntity()` | Subagent applied `CrudControllerTrait` but didn't add required abstract methods | Added 3 abstract methods to all 19 controllers |
+| 5 | 3 controllers (`AuditLogController`, `RoleController`, `UserController`) have hallucinated dependencies | Constructor injected nonexistent services | Reverted to originals with real PDO-based dependencies |
+| 6 | 3 controllers (`CcdcAllocationController`, `SalesOrderController`, `ProcurementController`) had CrudControllerTrait + hallucinated methods | Corruption from CrudControllerTrait application | Reverted to originals from git |
+| 7 | `AccountController` type mismatch in DI | DI passed `$accountService` but constructor expects `$accountRepository` | Fixed DI config |
+
+**Result:** Server `/dang-nhap` → 200 OK. Full suite: 84 test files, 1 pre-existing failure (multi-tenant backfill — deferred). 0 new failures.

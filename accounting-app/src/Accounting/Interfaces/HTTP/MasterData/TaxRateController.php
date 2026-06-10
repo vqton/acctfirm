@@ -3,6 +3,7 @@ namespace Accounting\Interfaces\HTTP\MasterData;
 
 use Accounting\Infrastructure\JsonResponse;
 use Accounting\Infrastructure\Auth;
+use Accounting\Domain\Model\TaxRate;
 use Accounting\Domain\Repository\TaxRateRepositoryInterface;
 use Accounting\Interfaces\HTTP\CrudControllerTrait;
 
@@ -35,5 +36,35 @@ class TaxRateController
     {
         $this->repository = $repository;
         $this->module = 'tax_rates';
+    }
+
+    protected function repo()
+    {
+        return $this->repository;
+    }
+
+    protected function idPrefix(): string
+    {
+        return 'tax_';
+    }
+
+    protected function createEntity(array $data): object
+    {
+        return new TaxRate(
+            id: $data['id'] ?? uniqid('tax_'),
+            code: $data['code'] ?? '',
+            name: $data['name'] ?? '',
+            rate: (float)($data['rate'] ?? 0),
+            taxType: $data['tax_type'] ?? 'vat'
+        );
+    }
+
+    protected function updateEntity(object $entity, array $data): void
+    {
+        if (isset($data['code'])) $entity->setCode($data['code']);
+        if (isset($data['name'])) $entity->setName($data['name']);
+        if (isset($data['rate'])) $entity->setRate((float)$data['rate']);
+        if (isset($data['tax_type'])) $entity->setTaxType($data['tax_type']);
+        if (isset($data['status'])) $entity->setStatus((bool)$data['status']);
     }
 }

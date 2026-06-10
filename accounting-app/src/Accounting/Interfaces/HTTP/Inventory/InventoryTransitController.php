@@ -1,7 +1,7 @@
 <?php
 namespace Accounting\Interfaces\HTTP\Inventory;
 
-use Accounting\Domain\Contract\InventoryTransitServiceInterface;
+use Accounting\Domain\Contract\InventoryServiceInterface;
 use Accounting\Infrastructure\Auth;
 use Accounting\Infrastructure\JsonResponse;
 
@@ -28,9 +28,9 @@ use Accounting\Infrastructure\JsonResponse;
  */
 class InventoryTransitController
 {
-    private InventoryTransitServiceInterface $transit;
+    private InventoryServiceInterface $inventory;
 
-    public function __construct(InventoryTransitServiceInterface $transit) { $this->transit = $transit; }
+    public function __construct(InventoryServiceInterface $inventory) { $this->inventory = $inventory; }
 
     /**
      * Danh sách hàng đang đi đường
@@ -40,7 +40,7 @@ class InventoryTransitController
     public function list(): void
     {
         Auth::requirePermission('inventory', 'read');
-        JsonResponse::ok($this->transit->getTransitList());
+        JsonResponse::ok($this->inventory->getTransitList());
     }
 
     /**
@@ -58,7 +58,7 @@ class InventoryTransitController
             return;
         }
         try {
-            $result = $this->transit->recordTransit($data, $_SESSION['user_id'] ?? 'system');
+            $result = $this->inventory->recordTransit($data, $_SESSION['user_id'] ?? 'system');
             JsonResponse::ok($result, 201);
         } catch (\InvalidArgumentException $e) {
             JsonResponse::error($e->getMessage(), 400);
@@ -76,7 +76,7 @@ class InventoryTransitController
         Auth::requirePermission('inventory', 'create');
         Auth::checkCsrf();
         try {
-            $result = $this->transit->receiveTransit($id, $_SESSION['user_id'] ?? 'system');
+            $result = $this->inventory->receiveTransit($id, $_SESSION['user_id'] ?? 'system');
             JsonResponse::ok($result);
         } catch (\InvalidArgumentException $e) {
             JsonResponse::error($e->getMessage(), 400);

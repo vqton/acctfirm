@@ -3,6 +3,7 @@ namespace Accounting\Interfaces\HTTP\MasterData;
 
 use Accounting\Infrastructure\JsonResponse;
 use Accounting\Infrastructure\Auth;
+use Accounting\Domain\Model\ValuationMethod;
 use Accounting\Domain\Repository\ValuationMethodRepositoryInterface;
 use Accounting\Interfaces\HTTP\CrudControllerTrait;
 
@@ -34,5 +35,33 @@ class ValuationMethodController
     {
         $this->repository = $repository;
         $this->module = 'valuation_methods';
+    }
+
+    protected function repo()
+    {
+        return $this->repository;
+    }
+
+    protected function idPrefix(): string
+    {
+        return 'val_';
+    }
+
+    protected function createEntity(array $data): object
+    {
+        return new ValuationMethod(
+            id: $data['id'] ?? uniqid('val_'),
+            code: $data['code'] ?? '',
+            name: $data['name'] ?? '',
+            description: $data['description'] ?? null
+        );
+    }
+
+    protected function updateEntity(object $entity, array $data): void
+    {
+        if (isset($data['code'])) $entity->setCode($data['code']);
+        if (isset($data['name'])) $entity->setName($data['name']);
+        if (isset($data['description'])) $entity->setDescription($data['description']);
+        if (isset($data['status'])) $entity->setStatus((bool)$data['status']);
     }
 }

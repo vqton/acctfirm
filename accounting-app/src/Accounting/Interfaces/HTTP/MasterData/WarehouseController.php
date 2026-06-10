@@ -3,6 +3,7 @@ namespace Accounting\Interfaces\HTTP\MasterData;
 
 use Accounting\Infrastructure\JsonResponse;
 use Accounting\Infrastructure\Auth;
+use Accounting\Domain\Model\Warehouse;
 use Accounting\Domain\Repository\WarehouseRepositoryInterface;
 use Accounting\Interfaces\HTTP\CrudControllerTrait;
 
@@ -34,5 +35,33 @@ class WarehouseController
     {
         $this->repository = $repository;
         $this->module = 'warehouses';
+    }
+
+    protected function repo()
+    {
+        return $this->repository;
+    }
+
+    protected function idPrefix(): string
+    {
+        return 'wh_';
+    }
+
+    protected function createEntity(array $data): object
+    {
+        return new Warehouse(
+            id: $data['id'] ?? uniqid('wh_'),
+            code: $data['code'] ?? '',
+            name: $data['name'] ?? '',
+            address: $data['address'] ?? null
+        );
+    }
+
+    protected function updateEntity(object $entity, array $data): void
+    {
+        if (isset($data['code'])) $entity->setCode($data['code']);
+        if (isset($data['name'])) $entity->setName($data['name']);
+        if (isset($data['address'])) $entity->setAddress($data['address']);
+        if (isset($data['status'])) $entity->setStatus((bool)$data['status']);
     }
 }

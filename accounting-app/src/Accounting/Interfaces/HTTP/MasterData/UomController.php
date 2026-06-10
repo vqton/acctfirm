@@ -3,6 +3,7 @@ namespace Accounting\Interfaces\HTTP\MasterData;
 
 use Accounting\Infrastructure\JsonResponse;
 use Accounting\Infrastructure\Auth;
+use Accounting\Domain\Model\Uom;
 use Accounting\Domain\Repository\UomRepositoryInterface;
 use Accounting\Interfaces\HTTP\CrudControllerTrait;
 
@@ -34,5 +35,31 @@ class UomController
     {
         $this->repository = $repository;
         $this->module = 'uoms';
+    }
+
+    protected function repo()
+    {
+        return $this->repository;
+    }
+
+    protected function idPrefix(): string
+    {
+        return 'uom_';
+    }
+
+    protected function createEntity(array $data): object
+    {
+        return new Uom(
+            id: $data['id'] ?? uniqid('uom_'),
+            code: $data['code'] ?? '',
+            name: $data['name'] ?? ''
+        );
+    }
+
+    protected function updateEntity(object $entity, array $data): void
+    {
+        if (isset($data['code'])) $entity->setCode($data['code']);
+        if (isset($data['name'])) $entity->setName($data['name']);
+        if (isset($data['status'])) $entity->setStatus((bool)$data['status']);
     }
 }
