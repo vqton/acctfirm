@@ -4,13 +4,13 @@ namespace Accounting\Domain\Service;
 use Accounting\Domain\Contract\AuditLoggerInterface;
 use Accounting\Domain\Repository\AccountRepositoryInterface;
 
-//
-// BÁO CÁO TÀI CHÍNH: Service sinh số liệu BC01 (Cân đối kế toán), BC02 (KQKD), BC03 (Lưu chuyển tiền tệ)
-// Tuân thủ Thông tư 99/2025/TT-BTC về chỉ tiêu báo cáo tài chính doanh nghiệp
-// Mỗi BC có danh sách chỉ tiêu với mã số, công thức tính, dấu hiệu — cấu hình qua bảng fs_line_items
-// BC01 = số dư TK tại thời điểm cuối kỳ, BC02 = số phát sinh lũy kế trong kỳ, BC03 = chênh lệch số dư
-// Rủi ro: Sai số liệu → ảnh hưởng BC01/02/03 → sai tờ khai thuế TNDN và báo cáo kiểm toán
-//
+/**
+ * BÁO CÁO TÀI CHÍNH: Service sinh số liệu BC01 (Cân đối kế toán), BC02 (KQKD), BC03 (Lưu chuyển tiền tệ)
+ * Tuân thủ Thông tư 99/2025/TT-BTC về chỉ tiêu báo cáo tài chính doanh nghiệp
+ * Mỗi BC có danh sách chỉ tiêu với mã số, công thức tính, dấu hiệu — cấu hình qua bảng fs_line_items
+ * BC01 = số dư TK tại thời điểm cuối kỳ, BC02 = số phát sinh lũy kế trong kỳ, BC03 = chênh lệch số dư
+ * Rủi ro: Sai số liệu → ảnh hưởng BC01/02/03 → sai tờ khai thuế TNDN và báo cáo kiểm toán
+ */
 class FsService
 {
     private \PDO $pdo;
@@ -24,10 +24,14 @@ class FsService
         $this->auditLogger = $auditLogger;
     }
 
-    //
-    // Lấy danh mục chỉ tiết của một báo cáo tài chính (BC01/BC02/BC03)
-    // Dữ liệu từ bảng fs_line_items — có thể thêm/sửa chỉ tiêu mà không cần sửa code backend
-    //
+    /**
+     * Lấy danh mục chỉ tiêu của một báo cáo tài chính (BC01/BC02/BC03)
+     * Dữ liệu từ bảng fs_line_items — có thể thêm/sửa chỉ tiêu mà không cần sửa code backend
+     * Thiết kế data-driven: thêm chỉ tiêu mới chỉ cần INSERT vào fs_line_items, không cần sửa code
+     *
+     * @param string $statement Mã báo cáo ('BC01', 'BC02', 'BC03', 'BC03D')
+     * @return array Danh sách chỉ tiêu đã sắp xếp theo display_order
+     */
     public function getLineItems(string $statement): array
     {
         $stmt = $this->pdo->prepare('SELECT * FROM fs_line_items WHERE statement = ? ORDER BY display_order');
@@ -35,40 +39,53 @@ class FsService
         return $stmt->fetchAll(\PDO::FETCH_ASSOC);
     }
 
-    //
-    // BC01 — Bảng Cân đối kế toán
-    // Phản ánh toàn bộ tài sản (MS 100-280) và nguồn hình thành tài sản (MS 300-440) tại thời điểm cuối kỳ
-    // Nguyên tắc nền tảng: TỔNG TÀI SẢN (MS 280) = NỢ PHẢI TRẢ (MS 330) + VỐN CHỦ SỞ HỮU (MS 440)
-    // Số liệu = số dư các tài khoản tại ngày kết thúc kỳ kế toán, sign convention đảo dấu cho TK nguồn vốn
-    //
+    /**
+     * BC01 — Bảng Cân đối kế toán
+     * Phản ánh toàn bộ tài sản (MS 100-280) và nguồn hình thành tài sản (MS 300-440) tại thời điểm cuối kỳ
+     * Nguyên tắc nền tảng: TỔNG TÀI SẢN (MS 280) = NỢ PHẢI TRẢ (MS 330) + VỐN CHỦ SỞ HỮU (MS 440)
+     * Số liệu = số dư các tài khoản tại ngày kết thúc kỳ kế toán, sign convention đảo dấu cho TK nguồn vốn
+     * Rủi ro: Mất cân đối BC01 → sai toàn bộ BCTC → audit fail
+     *
+     * @param string|null $periodCode Mã kỳ (VD: '2026' cho năm, '2026-06' cho tháng). Mặc định = năm hiện tại
+     * @return array Danh sách chỉ tiêu BC01 với giá trị đã tính
+     */
     public function generateBC01(?string $periodCode = null): array
     {
         return $this->generateStatement('BC01', $periodCode);
     }
 
-    //
-    // BC02 — Báo cáo Kết quả hoạt động kinh doanh
-    // Phản ánh doanh thu, chi phí và kết quả kinh doanh phát sinh trong kỳ
-    // Cấu trúc: MS 01-20 (Doanh thu/Giá vốn → LN gộp), MS 21 (Lãi/lỗ BĐS ĐT),
-    //   MS 22-26 (Doanh thu TC, Chi phí TC, CP đi vay, CP BH, CP QLDN),
-    //   MS 30 (LN thuần từ HĐKD), MS 31-40 (Thu nhập/Chi phí khác → LN khác),
-    //   MS 50 (LN trước thuế), MS 51-52 (Thuế TNDN), MS 60 (LN sau thuế),
-    //   MS 70-71 (EPS)
-    // Số liệu = số phát sinh lũy kế từ đầu kỳ đến ngày kết thúc kỳ (không phải số dư)
-    //
+    /**
+     * BC02 — Báo cáo Kết quả hoạt động kinh doanh
+     * Phản ánh doanh thu, chi phí và kết quả kinh doanh phát sinh trong kỳ
+     * Cấu trúc: MS 01-20 (Doanh thu/Giá vốn → LN gộp), MS 21 (Lãi/lỗ BĐS ĐT),
+     *   MS 22-26 (Doanh thu TC, Chi phí TC, CP đi vay, CP BH, CP QLDN),
+     *   MS 30 (LN thuần từ HĐKD), MS 31-40 (Thu nhập/Chi phí khác → LN khác),
+     *   MS 50 (LN trước thuế), MS 51-52 (Thuế TNDN), MS 60 (LN sau thuế),
+     *   MS 70-71 (EPS)
+     * Số liệu = số phát sinh lũy kế từ đầu kỳ đến ngày kết thúc kỳ (không phải số dư)
+     * Rủi ro: Nhầm số dư với số phát sinh → sai LN sau thuế → sai thuế TNDN
+     *
+     * @param string|null $periodCode Mã kỳ (VD: '2026'). Mặc định = năm hiện tại
+     * @param array $manualValues Giá trị nhập tay cho các chỉ tiêu formula_type='manual' (VD: ['21' => 500000])
+     * @return array Danh sách chỉ tiêu BC02 với giá trị đã tính
+     */
     public function generateBC02(?string $periodCode = null, array $manualValues = []): array
     {
         return $this->generateStatement('BC02', $periodCode, $manualValues);
     }
 
-    //
-    // BC03 — Báo cáo Lưu chuyển tiền tệ (phương pháp gián tiếp)
-    // Phản ánh dòng tiền thuần từ 3 hoạt động: Kinh doanh (MS 01-30), Đầu tư (MS 31-50), Tài chính (MS 51-60)
-    // Nguyên tắc: MS 70 (Tiền cuối kỳ) = MS 20 (Tiền đầu kỳ) + MS 30 + MS 50 + MS 60 (Lưu chuyển thuần)
-    // Phương pháp gián tiếp: Bắt đầu từ LN trước thuế (BC02 MS 50) rồi điều chỉnh các khoản không phải tiền
-    // Công thức cốt lõi: account_delta = chênh lệch số dư cuối kỳ - đầu kỳ của TK liên quan
-    // Rủi ro: Nếu thiếu chỉ tiêu → BC03 không khớp với BC01 MS 110 (Tiền cuối kỳ)
-    //
+    /**
+     * BC03 — Báo cáo Lưu chuyển tiền tệ (phương pháp gián tiếp)
+     * Phản ánh dòng tiền thuần từ 3 hoạt động: Kinh doanh (MS 01-30), Đầu tư (MS 31-50), Tài chính (MS 51-60)
+     * Nguyên tắc: MS 70 (Tiền cuối kỳ) = MS 20 (Tiền đầu kỳ) + MS 30 + MS 50 + MS 60 (Lưu chuyển thuần)
+     * Phương pháp gián tiếp: Bắt đầu từ LN trước thuế (BC02 MS 50) rồi điều chỉnh các khoản không phải tiền
+     * Công thức cốt lõi: account_delta = chênh lệch số dư cuối kỳ - đầu kỳ của TK liên quan
+     * Rủi ro: Nếu thiếu chỉ tiêu → BC03 không khớp với BC01 MS 110 (Tiền cuối kỳ)
+     *
+     * @param string|null $periodCode Mã kỳ (VD: '2026'). Mặc định = năm hiện tại
+     * @param array $manualValues Giá trị nhập tay override cho các chỉ tiêu manual
+     * @return array Danh sách chỉ tiêu BC03 với giá trị đã tính
+     */
     public function generateBC03(?string $periodCode = null, array $manualValues = []): array
     {
         $periodCode = $periodCode ?? date('Y');
@@ -258,6 +275,14 @@ class FsService
         return $result;
     }
 
+    /**
+     * Kiểm tra tính cân đối nội bộ của BC03 (phương pháp gián tiếp)
+     * Nguyên tắc: MS 70 (Tiền cuối kỳ) = MS 50 (LCTT từ HĐ Đầu tư) + MS 60 (LCTT từ HĐ Tài chính) + MS 61 (Chênh lệch TGNH)
+     * Sai lệch > 1 → dữ liệu BC03 không hợp lệ, cần rà soát lại công thức tính
+     *
+     * @param array $bc03Data Mảng chỉ tiêu BC03 (từ generateBC03)
+     * @return array Danh sách lỗi (mảng rỗng nếu hợp lệ)
+     */
     public function validateBC03(array $bc03Data): array
     {
         $values = [];
@@ -275,14 +300,19 @@ class FsService
         return $errors;
     }
 
-    //
-    // BC03 — PHƯƠNG PHÁP TRỰC TIẾP (Direct Method)
-    // Phân loại dòng tiền thu/chi từ tài khoản 111, 112 theo tài khoản đối ứng
-    // Định lượng: mỗi khoản thu/chi được xác định bằng đối ứng của bút toán tiền
-    //
-    // Ràng buộc: Kết quả MS 70 (Tiền cuối kỳ) phải khớp với BC01 MS 110
-    // và khớp với BC03 phương pháp gián tiếp MS 70
-    //
+    /**
+     * BC03 — PHƯƠNG PHÁP TRỰC TIẾP (Direct Method)
+     * Phân loại dòng tiền thu/chi từ tài khoản 111, 112 theo tài khoản đối ứng
+     * Định lượng: mỗi khoản thu/chi được xác định bằng đối ứng của bút toán tiền
+     * Không cần BC02 làm đầu vào, dữ liệu thuần từ bút toán tiền mặt/tiền gửi
+     * Ràng buộc: Kết quả MS 70 (Tiền cuối kỳ) phải khớp với BC01 MS 110
+     * và khớp với BC03 phương pháp gián tiếp MS 70
+     * Rủi ro: Thiếu line items formula_type='direct_receipt' / 'direct_payment' → dòng tiền không được phân loại
+     *
+     * @param string|null $periodCode Mã kỳ (VD: '2026'). Mặc định = năm hiện tại
+     * @return array Danh sách chỉ tiêu BC03 phương pháp trực tiếp
+     * @throws \RuntimeException Nếu chưa seed line items BC03D (chạy migration 080)
+     */
     public function generateBC03Direct(?string $periodCode = null): array
     {
         $periodCode = $periodCode ?? date('Y');
@@ -459,6 +489,14 @@ class FsService
         return $result;
     }
 
+    /**
+     * Kiểm tra tính cân đối nội bộ của BC03 phương pháp trực tiếp
+     * Nguyên tắc: MS 70 (Tiền cuối kỳ) = MS 50 (LCTT từ HĐ Đầu tư) + MS 60 (Tiền đầu kỳ + LCTT từ HĐKD + HĐTC)
+     * Sai lệch > 1 → dữ liệu BC03 trực tiếp không hợp lệ
+     *
+     * @param array $bc03Data Mảng chỉ tiêu BC03 trực tiếp (từ generateBC03Direct)
+     * @return array Danh sách lỗi (mảng rỗng nếu hợp lệ)
+     */
     public function validateBC03Direct(array $bc03Data): array
     {
         $values = [];
@@ -471,6 +509,22 @@ class FsService
         return $errors;
     }
 
+    /**
+     * Core method — tính toán chung cho BC01 và BC02
+     * Duyệt danh sách chỉ tiêu từ fs_line_items, áp dụng công thức theo từng formula_type:
+     *   - account: lấy số dư/số phát sinh từ tài khoản (sign_convention quyết định dấu)
+     *   - account_tree: lấy tổng số dư cây tài khoản (bao gồm TK con)
+     *   - sum: tổng các chỉ tiêu con đã tính
+     *   - calculated: biểu thức số học tùy chỉnh
+     *   - manual: giá trị nhập tay từ giao diện
+     * Snapshot tự động lưu vào fs_snapshots sau khi tính xong
+     * Rủi ro: Sinh BC trước khi kết chuyển cuối kỳ → số liệu snapshot sai
+     *
+     * @param string $statement Mã báo cáo ('BC01', 'BC02')
+     * @param string|null $periodCode Mã kỳ. Mặc định = năm hiện tại
+     * @param array $manualValues Giá trị nhập tay [ma_so => value]
+     * @return array Danh sách chỉ tiêu với giá trị đã tính
+     */
     private function generateStatement(string $statement, ?string $periodCode = null, array $manualValues = []): array
     {
         $periodCode = $periodCode ?? date('Y');
@@ -566,11 +620,16 @@ class FsService
         return $result;
     }
 
-    //
-    // Lưu giá trị nhập tay cho chỉ tiêu BC (VD: MS 21, 70, 71 của BC02)
-    // Dùng business_config table với key = {statement}.manual.{periodCode}
-    // Trả về mảng [ma_so => value] hoặc mảng rỗng nếu chưa có
-    //
+    /**
+     * Lấy giá trị nhập tay cho chỉ tiêu BC (VD: MS 21, 70, 71 của BC02)
+     * Dùng business_config table với key = {statement}.manual.{periodCode}
+     * Thiết kế: Dùng bảng cấu hình thay vì tạo bảng riêng để giảm số lượng table
+     * Rủi ro: business_config không có foreign key → dễ nhập sai statement/periodCode
+     *
+     * @param string $statement Mã báo cáo ('BC01', 'BC02', 'BC03')
+     * @param string $periodCode Mã kỳ (VD: '2026')
+     * @return array Mảng [ma_so => value] hoặc mảng rỗng nếu chưa có
+     */
     public function getManualValues(string $statement, string $periodCode): array
     {
         $stmt = $this->pdo->prepare("SELECT config_value FROM business_config WHERE config_key = ?");
@@ -579,11 +638,17 @@ class FsService
         return $row ? json_decode($row, true) : [];
     }
 
-    //
-    // Lưu giá trị nhập tay cho chỉ tiêu BC
-    // $values = [ma_so => value] (VD: ['21' => 500000, '70' => 2000])
-    // Idempotent: INSERT ON DUPLICATE KEY UPDATE
-    //
+    /**
+     * Lưu giá trị nhập tay cho chỉ tiêu BC
+     * Idempotent: INSERT ON DUPLICATE KEY UPDATE — chạy nhiều lần không gây lỗi
+     * Dùng trong trường hợp kế toán nhập tay các chỉ tiêu đặc thù (VD: EPS, lãi/lỗ BĐS đầu tư)
+     * Audit: Không ghi audit trail riêng — dựa vào updated_at + updated_by trong business_config
+     *
+     * @param string $statement Mã báo cáo ('BC01', 'BC02', 'BC03')
+     * @param string $periodCode Mã kỳ (VD: '2026')
+     * @param array $values Mảng [ma_so => value] (VD: ['21' => 500000, '70' => 2000])
+     * @param string $updatedBy Username người cập nhật
+     */
     public function saveManualValues(string $statement, string $periodCode, array $values, string $updatedBy): void
     {
         $this->pdo->prepare(
@@ -598,6 +663,16 @@ class FsService
         ]);
     }
 
+    /**
+     * Lấy số liệu kỳ trước từ fs_snapshots để phục vụ tính toán BC03 (chênh lệch số dư) và BC01 kỳ này
+     * Dùng snapshot thay vì query trực tiếp ledger → đảm bảo số liệu nhất quán với thời điểm đóng kỳ
+     * Nếu không có snapshot kỳ trước → log cảnh báo vào audit trail, trả về null
+     * Rủi ro: Nếu snapshot kỳ trước bị ghi đè bởi dữ liệu sai → BC03 sai theo
+     *
+     * @param string $statement Mã báo cáo ('BC01', 'BC02', 'BC03')
+     * @param string $currentPeriodCode Mã kỳ hiện tại
+     * @return array|null Mảng [account_code => balance] hoặc null nếu không có snapshot
+     */
     public function getPriorPeriodValues(string $statement, string $currentPeriodCode): ?array
     {
         $priorCode = $this->_computePriorPeriodCode($currentPeriodCode);
@@ -616,10 +691,17 @@ class FsService
         return json_decode($row['data'], true);
     }
 
-    // Xác định mã kỳ trước dựa trên định dạng period code:
-    //   '2026'     → '2025'  (năm)
-    //   '2026-05'  → '2026-04'  (tháng, lùi 1 tháng)
-    //   '2026-Q1'  → '2025-Q4'  (quý, lùi 1 quý)
+    /**
+     * Xác định mã kỳ trước dựa trên định dạng period code:
+     *   '2026'     → '2025'  (năm)
+     *   '2026-05'  → '2026-04'  (tháng, lùi 1 tháng)
+     *   '2026-Q1'  → '2025-Q4'  (quý, lùi 1 quý)
+     * Định dạng không hợp lệ → trả về null (không có kỳ trước)
+     * Rủi ro: Đầu năm (tháng 01, Q1) → lùi về năm trước, cần đảm bảo tồn tại snapshot năm trước
+     *
+     * @param string $code Mã kỳ hiện tại
+     * @return string|null Mã kỳ trước, hoặc null nếu không xác định được
+     */
     private function _computePriorPeriodCode(string $code): ?string
     {
         if (preg_match('/^(\d{4})-(\d{2})$/', $code, $m)) {
@@ -641,16 +723,18 @@ class FsService
         return null;
     }
 
-    //
-    // Kiểm tra cân đối BC01: TỔNG TÀI SẢN (MS 280) phải bằng NỢ PHẢI TRẢ + VCSH (MS 440)
-    // Đây là nguyên tắc kế toán cơ bản nhất — nếu sai → toàn bộ sổ sách mất cân đối
-    // Sai lệch cho phép ±1 (do làm tròn số). Sai > 1 → audit fail, phải kiểm tra lại tất cả bút toán
-    //
-    // TOLERANCE ±1: Sai số làm tròn từ việc tính toán số lẻ trên nhiều chỉ tiêu con.
-    // Nếu tolerance = 0, các BC có thể không bao giờ cân đối được do rounding error
-    // (VD: 1.000.000/3 = 333.333,33 → 3×333.333,33 = 999.999,99, chênh lệch 0,01đ).
-    // Nếu lệch > 1đ, đó là lỗi ghi nhận → phải truy tìm bút toán sai.
-    //
+    /**
+     * Kiểm tra cân đối BC01: TỔNG TÀI SẢN (MS 280) phải bằng NỢ PHẢI TRẢ + VCSH (MS 440)
+     * Đây là nguyên tắc kế toán cơ bản nhất — nếu sai → toàn bộ sổ sách mất cân đối
+     * Sai lệch cho phép ±1 (do làm tròn số). Sai > 1 → audit fail, phải kiểm tra lại tất cả bút toán
+     * TOLERANCE ±1: Sai số làm tròn từ việc tính toán số lẻ trên nhiều chỉ tiêu con.
+     * Nếu tolerance = 0, các BC có thể không bao giờ cân đối được do rounding error
+     * (VD: 1.000.000/3 = 333.333,33 → 3×333.333,33 = 999.999,99, chênh lệch 0,01đ).
+     * Nếu lệch > 1đ, đó là lỗi ghi nhận → phải truy tìm bút toán sai.
+     *
+     * @param array $bc01Data Mảng chỉ tiêu BC01 (từ generateBC01)
+     * @return array Danh sách lỗi (mảng rỗng nếu cân đối)
+     */
     public function validateBC01(array $bc01Data): array
     {
         $values = [];
@@ -663,13 +747,17 @@ class FsService
         return $errors;
     }
 
-    //
-    // Kiểm tra cấu trúc BC02 theo Thông tư 99:
-    // MS 30 (LN thuần từ HĐKD) = MS 20 (LN gộp) + MS 21 (Lãi/lỗ BĐS ĐT) + MS 22 (DT TC) - (MS 23 (CP TC) + MS 25 (CP BH) + MS 26 (CP QLDN))
-    // MS 50 (LN trước thuế) = MS 30 (LN từ HĐKD) + MS 40 (LN khác)
-    // MS 60 (LN sau thuế) = MS 50 - MS 51 (Thuế TNDN hiện hành) - MS 52 (Thuế TNDN hoãn lại)
-    // Sai lệch > 1 → rà soát lại số phát sinh các TK doanh thu, chi phí, thuế
-    //
+    /**
+     * Kiểm tra cấu trúc BC02 theo Thông tư 99:
+     * MS 30 (LN thuần từ HĐKD) = MS 20 (LN gộp) + MS 21 (Lãi/lỗ BĐS ĐT) + MS 22 (DT TC) - (MS 23 + MS 25 + MS 26)
+     * MS 50 (LN trước thuế) = MS 30 (LN từ HĐKD) + MS 40 (LN khác)
+     * MS 60 (LN sau thuế) = MS 50 - MS 51 (Thuế TNDN hiện hành) - MS 52 (Thuế TNDN hoãn lại)
+     * Sai lệch > 1 → rà soát lại số phát sinh các TK doanh thu, chi phí, thuế
+     * Rủi ro: Chỉ kiểm tra cấu trúc, không kiểm tra tính đúng đắn của số liệu gốc
+     *
+     * @param array $bc02Data Mảng chỉ tiêu BC02 (từ generateBC02)
+     * @return array Danh sách lỗi (mảng rỗng nếu hợp lệ)
+     */
     public function validateBC02(array $bc02Data): array
     {
         $values = [];
@@ -689,11 +777,17 @@ class FsService
         return $errors;
     }
 
-    //
-    // Kiểm tra các cảnh báo nghiệp vụ BC02:
-    // BR18: Nếu có doanh thu (MS 01 > 0) nhưng giá vốn > doanh thu (MS 11 > MS 01) → cảnh báo lỗ gộp
-    // BR19: Nếu MS 50 (LN trước thuế) < 0 → cảnh báo lỗ
-    //
+    /**
+     * Kiểm tra các cảnh báo nghiệp vụ BC02:
+     * BR18: Nếu có doanh thu (MS 01 > 0) nhưng giá vốn > doanh thu (MS 11 > MS 01) → cảnh báo lỗ gộp
+     *       Ảnh hưởng: Doanh nghiệp bán hàng dưới giá vốn → cần rà soát chính sách giá và giá vốn
+     * BR19: Nếu MS 50 (LN trước thuế) < 0 → cảnh báo lỗ
+     *       Ảnh hưởng: Doanh nghiệp đang lỗ, cần theo dõi khả năng hoạt động liên tục (going concern)
+     *       Thuế TNDN = 0 nếu lỗ (Luật thuế TNDN 14/2008/QH12 sửa đổi)
+     *
+     * @param array $bc02Data Mảng chỉ tiêu BC02 (từ generateBC02)
+     * @return array Danh sách cảnh báo (mảng rỗng nếu không có)
+     */
     public function getBC02Warnings(array $bc02Data): array
     {
         $values = [];
@@ -713,6 +807,17 @@ class FsService
         return $warnings;
     }
 
+    /**
+     * Thay thế biến trong biểu thức bằng giá trị từ mảng values, sau đó tính kết quả số học
+     * Hỗ trợ các phép tính: +, -, *, /, (), số thập phân
+     * Rủi ro: Nếu key trong values trùng với một phần của số khác → thay thế sai
+     * (VD: values['1'] = 100, expr = '11' → thay thành '100100' thay vì '11')
+     * Biện pháp: Chỉ thay thế exact word boundary bằng regex \b
+     *
+     * @param string $expr Biểu thức chứa mã chỉ tiêu (VD: '50 - 51 - 52')
+     * @param array $values Mảng [ma_so => giá_trị] để thay thế
+     * @return float Kết quả tính toán
+     */
     private function evaluateExpression(string $expr, array $values): float
     {
         $evalStr = $expr;
@@ -722,12 +827,18 @@ class FsService
         return $this->safeEval($evalStr);
     }
 
-    // AN TOÀN BIỂU THỨC: safeEval chỉ cho phép ký tự số, +, *, ., /, (, ), -, space.
-    // Regex lọc bỏ mọi ký tự nguy hiểm (letter, $, #, @, `, v.v.) để chống injection.
-    // RỦI RO: Nếu regex không cover được tất cả ký tự nguy hiểm (VD: %00 null byte,
-    // Unicode normalization bypass), attacker có thể inject mã độc.
-    // Biện pháp: Dữ liệu formula_detail đến từ DB (fs_line_items), chỉ admin mới sửa được.
-    // Nếu formula_detail cho phép user nhập, cần tăng cường bảo mật (VD: không dùng eval).
+    /**
+     * AN TOÀN BIỂU THỨC: safeEval chỉ cho phép ký tự số, +, *, ., /, (, ), -, space.
+     * Regex lọc bỏ mọi ký tự nguy hiểm (letter, $, #, @, `, v.v.) để chống injection.
+     * RỦI RO: Nếu regex không cover được tất cả ký tự nguy hiểm (VD: %00 null byte,
+     * Unicode normalization bypass), attacker có thể inject mã độc.
+     * Biện pháp: Dữ liệu formula_detail đến từ DB (fs_line_items), chỉ admin mới sửa được.
+     * Nếu formula_detail cho phép user nhập, cần tăng cường bảo mật (VD: không dùng eval).
+     * Kiểm tra: Phát hiện biểu thức rỗng, toán tử đầu/cuối, ngoặc không cân bằng, số có 2 dấu chấm
+     *
+     * @param string $expression Biểu thức số học đã thay thế biến
+     * @return float Kết quả (0 nếu biểu thức không hợp lệ)
+     */
     private function safeEval(string $expression): float
     {
         $expression = preg_replace('/[^0-9+*.\/( )-]/', '', $expression);
@@ -743,6 +854,14 @@ class FsService
         return round($result, 2);
     }
 
+    /**
+     * Phân tích biểu thức ở mức cộng/trừ (thứ tự ưu tiên thấp nhất)
+     * Duyệt qua các hạng tử nối với nhau bằng + hoặc -
+     * Hỗ trợ ưu tiên toán tử: nhân/chia tính trước nhờ parseTerm gọi parseFactor
+     *
+     * @param string &$expr Biểu thức còn lại (passed by reference, được rút ngắn dần)
+     * @return float Kết quả tính toán
+     */
     private function parseExpression(string &$expr): float
     {
         $result = $this->parseTerm($expr);
@@ -757,6 +876,14 @@ class FsService
         return $result;
     }
 
+    /**
+     * Phân tích hạng tử ở mức nhân/chia (thứ tự ưu tiên trung bình)
+     * Duyệt qua các thừa số nối với nhau bằng * hoặc /
+     * An toàn: Chia cho 0 → trả về 0 thay vì NAN hoặc exception
+     *
+     * @param string &$expr Biểu thức còn lại (passed by reference, được rút ngắn dần)
+     * @return float Kết quả tính toán
+     */
     private function parseTerm(string &$expr): float
     {
         $result = $this->parseFactor($expr);
@@ -772,6 +899,15 @@ class FsService
         return $result;
     }
 
+    /**
+     * Phân tích thừa số: số thực hoặc biểu thức trong ngoặc
+     * Nếu gặp '(' → đệ quy gọi parseExpression cho biểu thức trong ngoặc
+     * Nếu gặp chữ số → đọc số thực (hỗ trợ dấu chấm thập phân)
+     * Rủi ro: Số có nhiều hơn 1 dấu chấm → parse sai (đã được safeEval chặn từ trước)
+     *
+     * @param string &$expr Biểu thức còn lại (passed by reference, được rút ngắn dần)
+     * @return float Kết quả thừa số
+     */
     private function parseFactor(string &$expr): float
     {
         $expr = ltrim($expr);
@@ -793,17 +929,21 @@ class FsService
         return $numStr === '' ? 0 : (float)$numStr;
     }
 
-    //
-    // BC09 — Thuyết minh Báo cáo tài chính
-    // Tuân thủ Thông tư 99/2025/TT-BTC — Mẫu B09-DN
-    // Cung cấp thông tin bổ sung cho BC01, BC02, BC03:
-    //   - Chính sách kế toán áp dụng
-    //   - Doanh thu theo tháng
-    //   - Chi phí theo yếu tố
-    //   - Tình hình tăng giảm TSCĐ
-    //   - Giao dịch bên liên quan (placeholder)
-    //   - Nợ tiềm tàng (placeholder)
-    //
+    /**
+     * BC09 — Thuyết minh Báo cáo tài chính
+     * Tuân thủ Thông tư 99/2025/TT-BTC — Mẫu B09-DN
+     * Cung cấp thông tin bổ sung cho BC01, BC02, BC03:
+     *   - Chính sách kế toán áp dụng
+     *   - Doanh thu theo tháng (TK 511)
+     *   - Chi phí theo yếu tố (TK 632, 641, 642, 635)
+     *   - Tình hình tăng giảm TSCĐ (từ bảng fixed_assets)
+     *   - Giao dịch bên liên quan (placeholder — chưa implement)
+     *   - Nợ tiềm tàng (placeholder — chưa implement)
+     * Rủi ro: fixed_assets table có thể chưa tồn tại (module khác chưa implement) → catch exception
+     *
+     * @param array $params Chứa year, period, fromDate, toDate
+     * @return array Thông tin thuyết minh BCTC
+     */
     public function tt99(array $params): array
     {
         $year = $params['year'] ?? date('Y');
@@ -905,6 +1045,13 @@ class FsService
         ];
     }
 
+    /**
+     * Lấy danh sách các kỳ đã có snapshot BC01 để hiển thị trên giao diện BC
+     * Dùng làm nguồn dữ liệu cho dropdown chọn kỳ trên các form BC01/BC02/BC03
+     * Chỉ lấy từ snapshot BC01 vì BC01 được sinh đầu tiên trong chu trình BCTC
+     *
+     * @return array Danh sách kỳ [['period_code' => ..., 'period_end_date' => ...]]
+     */
     public function getPeriods(): array
     {
         $rows = $this->pdo->query(
@@ -913,16 +1060,19 @@ class FsService
         return $rows;
     }
 
-    //
-    // KIỂM TRA TÍNH HỢP LỆ CỦA LINE ITEMS: Rà soát tất cả công thức `account` và `account_tree`
-    // để phát hiện tài khoản không tồn tại hoặc control account bị dùng sai loại công thức.
-    // Đây là lớp phòng vệ chống lại lỗi class BC01-tax-line-items (control account balance = 0).
-    //
-    // Chiến lược phát hiện:
-    // 1. Mã tài khoản không tồn tại → ERROR (sửa formula_detail)
-    // 2. Control account dùng formula_type = 'account' → WARN (nên dùng account_tree để auto sum)
-    // 3. Mã tài khoản không tồn tại có dấu hiệu là control account (viết hoa, 3 số) → WARN + gợi ý account_tree
-    //
+    /**
+     * KIỂM TRA TÍNH HỢP LỆ CỦA LINE ITEMS: Rà soát tất cả công thức `account` và `account_tree`
+     * để phát hiện tài khoản không tồn tại hoặc control account bị dùng sai loại công thức.
+     * Đây là lớp phòng vệ chống lại lỗi (control account balance = 0 do dùng sai formula_type).
+     * Chiến lược phát hiện:
+     * 1. Mã tài khoản không tồn tại → ERROR (sửa formula_detail)
+     * 2. Control account dùng formula_type = 'account' → WARN (nên dùng account_tree để auto sum các TK con)
+     * 3. Mã tài khoản không tồn tại có dấu hiệu là control account → WARN + gợi ý account_tree
+     * Rủi ro: Nếu tài khoản bị xóa sau khi cấu hình line items → BC ra số 0 → sai BCTC
+     *
+     * @param string $statement Mã báo cáo ('BC01', 'BC02', 'BC03')
+     * @return array ['errors' => [...], 'warnings' => [...]]
+     */
     public function validateLineItems(string $statement): array
     {
         $items = $this->getLineItems($statement);
