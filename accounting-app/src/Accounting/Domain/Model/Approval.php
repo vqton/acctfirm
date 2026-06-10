@@ -1,6 +1,19 @@
 <?php
 namespace Accounting\Domain\Model;
 
+/**
+ * Phê duyệt — Quy trình phê duyệt nhiều cấp cho các yêu cầu trong hàng đợi.
+ *
+ * Mỗi Approval có thể có tối đa 3 cấp phê duyệt, mỗi cấp có
+ * approver, status và note riêng. Overall status là tổng hợp
+ * của tất cả các cấp.
+ *
+ * NGHIỆP VỤ:
+ * - $approvalType: 'settlement', 'credit_limit', 'discount', 'write_off'
+ * - Mỗi cấp có thể: 'pending', 'approved', 'rejected'
+ * - Overall: 'pending' (nếu có cấp nào pending), 'approved' (all approved),
+ *   'rejected' (nếu có cấp nào rejected)
+ */
 class Approval
 {
     private ?int $id;
@@ -23,6 +36,18 @@ class Approval
     private string $overallStatus;
     private ?string $resolvedAt;
 
+    /**
+     * Khởi tạo phê duyệt.
+     *
+     * @param int $queueId ID hàng đợi đòi nợ
+     * @param string $approvalType Loại phê duyệt
+     * @param string $requestedBy Người yêu cầu
+     * @param float $amount Số tiền
+     * @param string $requestNote Ghi chú yêu cầu
+     * @param float|null $settlementPercent Tỷ lệ thanh lý (%)
+     * @param float|null $settlementAmount Số tiền thanh lý
+     * @param int|null $id Định danh
+     */
     public function __construct(
         int $queueId,
         string $approvalType,
@@ -47,38 +72,101 @@ class Approval
         $this->overallStatus = 'pending';
     }
 
+    /** @return int|null Định danh phê duyệt */
     public function getId(): ?int { return $this->id; }
+
+    /** @return int ID hàng đợi đòi nợ */
     public function getQueueId(): int { return $this->queueId; }
+
+    /** @return string Loại phê duyệt */
     public function getApprovalType(): string { return $this->approvalType; }
+
+    /** @return string Người yêu cầu */
     public function getRequestedBy(): string { return $this->requestedBy; }
+
+    /** @return float Số tiền */
     public function getAmount(): float { return $this->amount; }
+
+    /** @return string Ghi chú yêu cầu */
     public function getRequestNote(): string { return $this->requestNote; }
+
+    /** @return float|null Tỷ lệ thanh lý (%) */
     public function getSettlementPercent(): ?float { return $this->settlementPercent; }
+
+    /** @return float|null Số tiền thanh lý */
     public function getSettlementAmount(): ?float { return $this->settlementAmount; }
+
+    /** @return string|null Người phê duyệt cấp 1 */
     public function getLevel1Approver(): ?string { return $this->level1Approver; }
+
+    /** @return string Trạng thái phê duyệt cấp 1 */
     public function getLevel1Status(): string { return $this->level1Status; }
+
+    /** @return string|null Ghi chú cấp 1 */
     public function getLevel1Note(): ?string { return $this->level1Note; }
+
+    /** @return string|null Người phê duyệt cấp 2 */
     public function getLevel2Approver(): ?string { return $this->level2Approver; }
+
+    /** @return string Trạng thái phê duyệt cấp 2 */
     public function getLevel2Status(): string { return $this->level2Status; }
+
+    /** @return string|null Ghi chú cấp 2 */
     public function getLevel2Note(): ?string { return $this->level2Note; }
+
+    /** @return string|null Người phê duyệt cấp 3 */
     public function getLevel3Approver(): ?string { return $this->level3Approver; }
+
+    /** @return string Trạng thái phê duyệt cấp 3 */
     public function getLevel3Status(): string { return $this->level3Status; }
+
+    /** @return string|null Ghi chú cấp 3 */
     public function getLevel3Note(): ?string { return $this->level3Note; }
+
+    /** @return string Trạng thái tổng thể */
     public function getOverallStatus(): string { return $this->overallStatus; }
+
+    /** @return string|null Thời điểm giải quyết */
     public function getResolvedAt(): ?string { return $this->resolvedAt; }
 
+    /** @param string|null $v Người phê duyệt cấp 1 */
     public function setLevel1Approver(?string $v): void { $this->level1Approver = $v; }
+
+    /** @param string $v Trạng thái cấp 1 */
     public function setLevel1Status(string $v): void { $this->level1Status = $v; }
+
+    /** @param string|null $v Ghi chú cấp 1 */
     public function setLevel1Note(?string $v): void { $this->level1Note = $v; }
+
+    /** @param string|null $v Người phê duyệt cấp 2 */
     public function setLevel2Approver(?string $v): void { $this->level2Approver = $v; }
+
+    /** @param string $v Trạng thái cấp 2 */
     public function setLevel2Status(string $v): void { $this->level2Status = $v; }
+
+    /** @param string|null $v Ghi chú cấp 2 */
     public function setLevel2Note(?string $v): void { $this->level2Note = $v; }
+
+    /** @param string|null $v Người phê duyệt cấp 3 */
     public function setLevel3Approver(?string $v): void { $this->level3Approver = $v; }
+
+    /** @param string $v Trạng thái cấp 3 */
     public function setLevel3Status(string $v): void { $this->level3Status = $v; }
+
+    /** @param string|null $v Ghi chú cấp 3 */
     public function setLevel3Note(?string $v): void { $this->level3Note = $v; }
+
+    /** @param string $v Trạng thái tổng thể */
     public function setOverallStatus(string $v): void { $this->overallStatus = $v; }
+
+    /** @param string|null $v Thời điểm giải quyết */
     public function setResolvedAt(?string $v): void { $this->resolvedAt = $v; }
 
+    /**
+     * Chuyển đổi model thành mảng để response API.
+     *
+     * @return array Dữ liệu phê duyệt dạng mảng
+     */
     public function toArray(): array
     {
         return [
@@ -104,6 +192,12 @@ class Approval
         ];
     }
 
+    /**
+     * Tạo Approval từ một dòng dữ liệu database.
+     *
+     * @param array $row Dữ liệu từ database
+     * @return self
+     */
     public static function fromRow(array $row): self
     {
         $a = new self(

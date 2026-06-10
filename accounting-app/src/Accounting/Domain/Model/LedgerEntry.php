@@ -1,6 +1,4 @@
 <?php
-// src/Accounting/Domain/Model/LedgerEntry.php
-
 namespace Accounting\Domain\Model;
 
 /**
@@ -33,9 +31,19 @@ class LedgerEntry
     private float $fcAmount;
     private int $lineOrder;
 
-    // Constructor yêu cầu $amount >= 0 vì: số tiền âm làm sai bản chất Nợ/Có.
-    // Nghiệp vụ điều chỉnh giảm phải dùng bút toán đảo (reverse) thay vì âm.
-    // $isDebit = true là ghi Nợ, false là ghi Có — không thay đổi dấu của amount.
+    /**
+     * Khởi tạo dòng bút toán.
+     *
+     * @param string $id Định danh dòng
+     * @param string $accountId ID tài khoản
+     * @param float $amount Số tiền (phải >= 0)
+     * @param bool $isDebit true = Nợ, false = Có
+     * @param string|null $note Diễn giải dòng
+     * @param string $currency Loại tiền (mặc định VND)
+     * @param float $exchangeRate Tỷ giá quy đổi
+     * @param float $fcAmount Số tiền nguyên tệ
+     * @param int $lineOrder Thứ tự dòng
+     */
     public function __construct(
         string $id,
         string $accountId,
@@ -61,14 +69,33 @@ class LedgerEntry
         $this->lineOrder = $lineOrder;
     }
 
+    /** @return string Định danh dòng */
     public function getId(): string { return $this->id; }
+
+    /** @return string ID tài khoản */
     public function getAccountId(): string { return $this->accountId; }
+
+    /** @return float Số tiền */
     public function getAmount(): float { return $this->amount; }
+
+    /** @return bool true = Nợ */
     public function isDebit(): bool { return $this->isDebit; }
+
+    /** @return bool true = Có (ngược lại của isDebit) */
     public function isCredit(): bool { return !$this->isDebit; }
+
+    /** @return string|null Diễn giải */
     public function getNote(): ?string { return $this->note; }
+
+    /** @return string Loại tiền */
     public function getCurrency(): string { return $this->currency; }
+
+    /** @return float Tỷ giá quy đổi */
     public function getExchangeRate(): float { return $this->exchangeRate; }
+
+    /** @return float Số tiền nguyên tệ */
     public function getFcAmount(): float { return $this->fcAmount; }
+
+    /** @return int Thứ tự dòng */
     public function getLineOrder(): int { return $this->lineOrder; }
 }

@@ -2,17 +2,17 @@
 namespace Accounting\Domain\Model;
 
 /**
- * Bang luong tong hop — tong hop toan bo bang luong cua mot ky.
+ * Bảng lương tổng hợp — Tổng hợp toàn bộ bảng lương của một kỳ.
  *
- * NGHIEP VU:
- * - status: draft (nhap), approved (da duyet), posted (da ghi so)
- * - total_employees: tong so nhan vien trong bang luong
- * - total_gross: tong luong gross (truoc BH va thue)
- * - total_net: tong luong net (sau BH va thue) = tien thuc nhan
- * - total_cost: tong chi phi luong doanh nghiep (gross + BH er)
- * - Khi posted, he thong tu dong ghi but toan vao JournalService
+ * NGHIỆP VỤ:
+ * - status: draft (nháp), approved (đã duyệt), posted (đã ghi sổ)
+ * - total_employees: tổng số nhân viên trong bảng lương
+ * - total_gross: tổng lương gross (trước BH và thuế)
+ * - total_net: tổng lương net (sau BH và thuế) = tiền thực nhận
+ * - total_cost: tổng chi phí lương doanh nghiệp (gross + BH er)
+ * - Khi posted, hệ thống tự động ghi bút toán vào JournalService
  *
- * QUAN HE: 1 bang luong -> N chi tiet (payroll_details)
+ * QUAN HỆ: 1 bảng lương -> N chi tiết (payroll_details)
  */
 class PayrollEntry
 {
@@ -32,6 +32,24 @@ class PayrollEntry
     private ?string $createdBy;
     private \DateTimeImmutable $createdAt;
 
+    /**
+     * Khởi tạo bảng lương.
+     *
+     * @param string $id Định danh
+     * @param string $periodId ID kỳ lương
+     * @param string $status Trạng thái: 'draft', 'approved', 'posted'
+     * @param int $totalEmployees Tổng số nhân viên
+     * @param float $totalGross Tổng lương gross
+     * @param float $totalAllowances Tổng phụ cấp
+     * @param float $totalDeductions Tổng khấu trừ
+     * @param float $totalInsuranceEe Tổng BH người lao động
+     * @param float $totalInsuranceEr Tổng BH doanh nghiệp
+     * @param float $totalTax Tổng thuế TNCN
+     * @param float $totalNet Tổng lương thực nhận
+     * @param float $totalCost Tổng chi phí doanh nghiệp
+     * @param \DateTimeImmutable|null $postedAt Thời điểm ghi sổ
+     * @param string|null $createdBy Người tạo
+     */
     public function __construct(
         string $id,
         string $periodId,
@@ -65,35 +83,92 @@ class PayrollEntry
         $this->createdAt = new \DateTimeImmutable();
     }
 
+    /** @return string Định danh */
     public function getId(): string { return $this->id; }
+
+    /** @return string ID kỳ lương */
     public function getPeriodId(): string { return $this->periodId; }
+
+    /** @return string Trạng thái */
     public function getStatus(): string { return $this->status; }
+
+    /** @return int Tổng số nhân viên */
     public function getTotalEmployees(): int { return $this->totalEmployees; }
+
+    /** @return float Tổng lương gross */
     public function getTotalGross(): float { return $this->totalGross; }
+
+    /** @return float Tổng phụ cấp */
     public function getTotalAllowances(): float { return $this->totalAllowances; }
+
+    /** @return float Tổng khấu trừ */
     public function getTotalDeductions(): float { return $this->totalDeductions; }
+
+    /** @return float Tổng BH người lao động */
     public function getTotalInsuranceEe(): float { return $this->totalInsuranceEe; }
+
+    /** @return float Tổng BH doanh nghiệp */
     public function getTotalInsuranceEr(): float { return $this->totalInsuranceEr; }
+
+    /** @return float Tổng thuế TNCN */
     public function getTotalTax(): float { return $this->totalTax; }
+
+    /** @return float Tổng lương thực nhận */
     public function getTotalNet(): float { return $this->totalNet; }
+
+    /** @return float Tổng chi phí doanh nghiệp */
     public function getTotalCost(): float { return $this->totalCost; }
+
+    /** @return \DateTimeImmutable|null Thời điểm ghi sổ */
     public function getPostedAt(): ?\DateTimeImmutable { return $this->postedAt; }
+
+    /** @return string|null Người tạo */
     public function getCreatedBy(): ?string { return $this->createdBy; }
+
+    /** @return \DateTimeImmutable Thời điểm tạo */
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 
+    /** @param string $v Trạng thái mới */
     public function setStatus(string $v): void { $this->status = $v; }
+
+    /** @param \DateTimeImmutable|null $v Thời điểm ghi sổ mới */
     public function setPostedAt(?\DateTimeImmutable $v): void { $this->postedAt = $v; }
+
+    /** @param int $v Tổng số nhân viên mới */
     public function setTotalEmployees(int $v): void { $this->totalEmployees = $v; }
+
+    /** @param float $v Tổng lương gross mới */
     public function setTotalGross(float $v): void { $this->totalGross = $v; }
+
+    /** @param float $v Tổng phụ cấp mới */
     public function setTotalAllowances(float $v): void { $this->totalAllowances = $v; }
+
+    /** @param float $v Tổng khấu trừ mới */
     public function setTotalDeductions(float $v): void { $this->totalDeductions = $v; }
+
+    /** @param float $v Tổng BH người lao động mới */
     public function setTotalInsuranceEe(float $v): void { $this->totalInsuranceEe = $v; }
+
+    /** @param float $v Tổng BH doanh nghiệp mới */
     public function setTotalInsuranceEr(float $v): void { $this->totalInsuranceEr = $v; }
+
+    /** @param float $v Tổng thuế mới */
     public function setTotalTax(float $v): void { $this->totalTax = $v; }
+
+    /** @param float $v Tổng lương thực nhận mới */
     public function setTotalNet(float $v): void { $this->totalNet = $v; }
+
+    /** @param float $v Tổng chi phí mới */
     public function setTotalCost(float $v): void { $this->totalCost = $v; }
+
+    /** @param string|null $v Người tạo mới */
     public function setCreatedBy(?string $v): void { $this->createdBy = $v; }
 
+    /**
+     * Chuyển đổi model thành mảng để response API.
+     *
+     * @return array Dữ liệu bảng lương dạng mảng
+     */
     public function toArray(): array
     {
         return [

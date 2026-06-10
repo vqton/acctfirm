@@ -1,9 +1,19 @@
 <?php
-
 declare(strict_types=1);
-
 namespace Accounting\Domain\Model;
 
+/**
+ * Đơn đặt hàng (Purchase Order) — Yêu cầu mua hàng chính thức gửi nhà cung cấp.
+ *
+ * PO là chứng từ pháp lý cho việc mua hàng, làm cơ sở cho nhập kho,
+ * đối chiếu hóa đơn và thanh toán.
+ *
+ * NGHIỆP VỤ:
+ * - $status: 'draft', 'approved', 'sent', 'partially_received', 'received', 'cancelled'
+ * - $totalAmount: tổng giá trị hàng (chưa thuế)
+ * - $taxAmount: tổng thuế GTGT
+ * - Liên kết với PurchaseRequisition và Contract
+ */
 class PurchaseOrder
 {
     private ?string $id;
@@ -21,6 +31,24 @@ class PurchaseOrder
     private ?string $createdAt;
     private ?string $updatedAt;
 
+    /**
+     * Khởi tạo đơn đặt hàng.
+     *
+     * @param string|null $id Định danh
+     * @param string|null $poNumber Số PO
+     * @param string $status Trạng thái
+     * @param string|null $supplierId ID nhà cung cấp
+     * @param string|null $contractId ID hợp đồng
+     * @param string|null $buyerId ID người mua
+     * @param string|null $paymentTerms Điều khoản thanh toán
+     * @param string|null $deliveryTerms Điều khoản giao hàng
+     * @param float|null $totalAmount Tổng giá trị
+     * @param float|null $taxAmount Tổng thuế
+     * @param string|null $expectedDelivery Ngày giao dự kiến
+     * @param string|null $note Ghi chú
+     * @param string|null $createdAt Thời điểm tạo
+     * @param string|null $updatedAt Thời điểm cập nhật
+     */
     public function __construct(
         ?string $id = null,
         ?string $poNumber = null,
@@ -53,146 +81,95 @@ class PurchaseOrder
         $this->updatedAt = $updatedAt;
     }
 
-    public function getId(): ?string
-    {
-        return $this->id;
-    }
+    /** @return string|null Định danh */
+    public function getId(): ?string { return $this->id; }
 
-    public function setId(?string $id): void
-    {
-        $this->id = $id;
-    }
+    /** @param string|null $id Định danh mới */
+    public function setId(?string $id): void { $this->id = $id; }
 
-    public function getPoNumber(): ?string
-    {
-        return $this->poNumber;
-    }
+    /** @return string|null Số PO */
+    public function getPoNumber(): ?string { return $this->poNumber; }
 
-    public function setPoNumber(?string $poNumber): void
-    {
-        $this->poNumber = $poNumber;
-    }
+    /** @param string|null $poNumber Số PO mới */
+    public function setPoNumber(?string $poNumber): void { $this->poNumber = $poNumber; }
 
-    public function getStatus(): string
-    {
-        return $this->status;
-    }
+    /** @return string Trạng thái */
+    public function getStatus(): string { return $this->status; }
 
-    public function setStatus(string $status): void
-    {
-        $this->status = $status;
-    }
+    /** @param string $status Trạng thái mới */
+    public function setStatus(string $status): void { $this->status = $status; }
 
-    public function getSupplierId(): ?string
-    {
-        return $this->supplierId;
-    }
+    /** @return string|null ID nhà cung cấp */
+    public function getSupplierId(): ?string { return $this->supplierId; }
 
-    public function setSupplierId(?string $supplierId): void
-    {
-        $this->supplierId = $supplierId;
-    }
+    /** @param string|null $supplierId ID nhà cung cấp mới */
+    public function setSupplierId(?string $supplierId): void { $this->supplierId = $supplierId; }
 
-    public function getContractId(): ?string
-    {
-        return $this->contractId;
-    }
+    /** @return string|null ID hợp đồng */
+    public function getContractId(): ?string { return $this->contractId; }
 
-    public function setContractId(?string $contractId): void
-    {
-        $this->contractId = $contractId;
-    }
+    /** @param string|null $contractId ID hợp đồng mới */
+    public function setContractId(?string $contractId): void { $this->contractId = $contractId; }
 
-    public function getBuyerId(): ?string
-    {
-        return $this->buyerId;
-    }
+    /** @return string|null ID người mua */
+    public function getBuyerId(): ?string { return $this->buyerId; }
 
-    public function setBuyerId(?string $buyerId): void
-    {
-        $this->buyerId = $buyerId;
-    }
+    /** @param string|null $buyerId ID người mua mới */
+    public function setBuyerId(?string $buyerId): void { $this->buyerId = $buyerId; }
 
-    public function getPaymentTerms(): ?string
-    {
-        return $this->paymentTerms;
-    }
+    /** @return string|null Điều khoản thanh toán */
+    public function getPaymentTerms(): ?string { return $this->paymentTerms; }
 
-    public function setPaymentTerms(?string $paymentTerms): void
-    {
-        $this->paymentTerms = $paymentTerms;
-    }
+    /** @param string|null $paymentTerms Điều khoản thanh toán mới */
+    public function setPaymentTerms(?string $paymentTerms): void { $this->paymentTerms = $paymentTerms; }
 
-    public function getDeliveryTerms(): ?string
-    {
-        return $this->deliveryTerms;
-    }
+    /** @return string|null Điều khoản giao hàng */
+    public function getDeliveryTerms(): ?string { return $this->deliveryTerms; }
 
-    public function setDeliveryTerms(?string $deliveryTerms): void
-    {
-        $this->deliveryTerms = $deliveryTerms;
-    }
+    /** @param string|null $deliveryTerms Điều khoản giao hàng mới */
+    public function setDeliveryTerms(?string $deliveryTerms): void { $this->deliveryTerms = $deliveryTerms; }
 
-    public function getTotalAmount(): ?float
-    {
-        return $this->totalAmount;
-    }
+    /** @return float|null Tổng giá trị */
+    public function getTotalAmount(): ?float { return $this->totalAmount; }
 
-    public function setTotalAmount(?float $totalAmount): void
-    {
-        $this->totalAmount = $totalAmount;
-    }
+    /** @param float|null $totalAmount Tổng giá trị mới */
+    public function setTotalAmount(?float $totalAmount): void { $this->totalAmount = $totalAmount; }
 
-    public function getTaxAmount(): ?float
-    {
-        return $this->taxAmount;
-    }
+    /** @return float|null Tổng thuế */
+    public function getTaxAmount(): ?float { return $this->taxAmount; }
 
-    public function setTaxAmount(?float $taxAmount): void
-    {
-        $this->taxAmount = $taxAmount;
-    }
+    /** @param float|null $taxAmount Tổng thuế mới */
+    public function setTaxAmount(?float $taxAmount): void { $this->taxAmount = $taxAmount; }
 
-    public function getExpectedDelivery(): ?string
-    {
-        return $this->expectedDelivery;
-    }
+    /** @return string|null Ngày giao dự kiến */
+    public function getExpectedDelivery(): ?string { return $this->expectedDelivery; }
 
-    public function setExpectedDelivery(?string $expectedDelivery): void
-    {
-        $this->expectedDelivery = $expectedDelivery;
-    }
+    /** @param string|null $expectedDelivery Ngày giao dự kiến mới */
+    public function setExpectedDelivery(?string $expectedDelivery): void { $this->expectedDelivery = $expectedDelivery; }
 
-    public function getNote(): ?string
-    {
-        return $this->note;
-    }
+    /** @return string|null Ghi chú */
+    public function getNote(): ?string { return $this->note; }
 
-    public function setNote(?string $note): void
-    {
-        $this->note = $note;
-    }
+    /** @param string|null $note Ghi chú mới */
+    public function setNote(?string $note): void { $this->note = $note; }
 
-    public function getCreatedAt(): ?string
-    {
-        return $this->createdAt;
-    }
+    /** @return string|null Thời điểm tạo */
+    public function getCreatedAt(): ?string { return $this->createdAt; }
 
-    public function setCreatedAt(?string $createdAt): void
-    {
-        $this->createdAt = $createdAt;
-    }
+    /** @param string|null $createdAt Thời điểm tạo mới */
+    public function setCreatedAt(?string $createdAt): void { $this->createdAt = $createdAt; }
 
-    public function getUpdatedAt(): ?string
-    {
-        return $this->updatedAt;
-    }
+    /** @return string|null Thời điểm cập nhật */
+    public function getUpdatedAt(): ?string { return $this->updatedAt; }
 
-    public function setUpdatedAt(?string $updatedAt): void
-    {
-        $this->updatedAt = $updatedAt;
-    }
+    /** @param string|null $updatedAt Thời điểm cập nhật mới */
+    public function setUpdatedAt(?string $updatedAt): void { $this->updatedAt = $updatedAt; }
 
+    /**
+     * Chuyển đổi model thành mảng để response API.
+     *
+     * @return array Dữ liệu PO dạng mảng
+     */
     public function toArray(): array
     {
         return [

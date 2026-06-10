@@ -31,6 +31,15 @@ class ExchangeRate
     private string $rateDate;
     private \DateTimeImmutable $createdAt;
 
+    /**
+     * Khởi tạo tỷ giá.
+     *
+     * @param string $id Định danh
+     * @param string $currencyCode Mã tiền tệ (VD: "USD", "EUR")
+     * @param string $currencyName Tên tiền tệ
+     * @param float $rate Tỷ giá quy đổi (1 ngoại tệ = ? VND)
+     * @param string $rateDate Ngày áp dụng
+     */
     public function __construct(
         string $id, string $currencyCode, string $currencyName, float $rate, string $rateDate
     ) {
@@ -42,22 +51,41 @@ class ExchangeRate
         $this->createdAt = new \DateTimeImmutable();
     }
 
+    /** @return string Định danh */
     public function getId(): string { return $this->id; }
+
+    /** @return string Mã tiền tệ */
     public function getCurrencyCode(): string { return $this->currencyCode; }
+
+    /** @return string Tên tiền tệ */
     public function getCurrencyName(): string { return $this->currencyName; }
+
+    /** @return float Tỷ giá quy đổi */
     public function getRate(): float { return $this->rate; }
+
+    /** @return string Ngày áp dụng */
     public function getRateDate(): string { return $this->rateDate; }
+
+    /** @return \DateTimeImmutable Thời điểm tạo */
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 
+    /** @param string $code Mã tiền tệ mới */
     public function setCurrencyCode(string $code): void { $this->currencyCode = $code; }
+
+    /** @param string $name Tên tiền tệ mới */
     public function setCurrencyName(string $name): void { $this->currencyName = $name; }
+
+    /** @param float $rate Tỷ giá mới */
     public function setRate(float $rate): void { $this->rate = $rate; }
+
+    /** @param string $date Ngày áp dụng mới */
     public function setRateDate(string $date): void { $this->rateDate = $date; }
 
-    // Chuyển đổi model thành mảng để response API.
-    // 'rate': 1 ngoại tệ = ? VND — sử dụng để quy đổi fcAmount trong LedgerEntry.
-    // 'rate_date': ngày áp dụng — mỗi giao dịch dùng tỷ giá tại ngày giao dịch.
-    // RỦI RO: Chênh lệch tỷ giá cuối kỳ (TK 413/635/515) phải được hạch toán đầy đủ.
+    /**
+     * Chuyển đổi model thành mảng để response API.
+     *
+     * @return array Dữ liệu tỷ giá dạng mảng
+     */
     public function toArray(): array
     {
         return [

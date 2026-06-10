@@ -37,6 +37,22 @@ class Item
     private bool $status;
     private \DateTimeImmutable $createdAt;
 
+    /**
+     * Khởi tạo mặt hàng.
+     *
+     * @param string $id Định danh
+     * @param string $code Mã mặt hàng
+     * @param string $name Tên mặt hàng
+     * @param string $itemType Loại: 'material', 'tool', 'product', 'goods'
+     * @param string $unit Đơn vị tính
+     * @param float $purchasePrice Giá mua
+     * @param float $salePrice Giá bán
+     * @param float $stockQty Số lượng tồn kho
+     * @param float $minStock Tồn tối thiểu
+     * @param string|null $description Mô tả
+     * @param string|null $valuationMethodId ID phương pháp tính giá
+     * @param bool $allowNegativeStock Cho phép âm kho
+     */
     public function __construct(
         string $id, string $code, string $name, string $itemType = 'material',
         string $unit = 'cai', float $purchasePrice = 0, float $salePrice = 0,
@@ -59,38 +75,89 @@ class Item
         $this->createdAt = new \DateTimeImmutable();
     }
 
+    /** @return string Định danh mặt hàng */
     public function getId(): string { return $this->id; }
+
+    /** @return string Mã mặt hàng */
     public function getCode(): string { return $this->code; }
+
+    /** @return string Tên mặt hàng */
     public function getName(): string { return $this->name; }
+
+    /** @return string Loại mặt hàng */
     public function getItemType(): string { return $this->itemType; }
+
+    /** @return string Đơn vị tính */
     public function getUnit(): string { return $this->unit; }
+
+    /** @return float Giá mua */
     public function getPurchasePrice(): float { return $this->purchasePrice; }
+
+    /** @return float Giá bán */
     public function getSalePrice(): float { return $this->salePrice; }
+
+    /** @return float Số lượng tồn kho */
     public function getStockQty(): float { return $this->stockQty; }
+
+    /** @return float Tồn tối thiểu */
     public function getMinStock(): float { return $this->minStock; }
+
+    /** @return string|null Mô tả */
     public function getDescription(): ?string { return $this->description; }
+
+    /** @return string|null ID phương pháp tính giá */
     public function getValuationMethodId(): ?string { return $this->valuationMethodId; }
+
+    /** @return bool Cho phép âm kho */
     public function getAllowNegativeStock(): bool { return $this->allowNegativeStock; }
+
+    /** @return bool Trạng thái hoạt động */
     public function isStatus(): bool { return $this->status; }
+
+    /** @return \DateTimeImmutable Thời điểm tạo */
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 
+    /** @param string $v Mã mặt hàng mới */
     public function setCode(string $v): void { $this->code = $v; }
+
+    /** @param string $v Tên mặt hàng mới */
     public function setName(string $v): void { $this->name = $v; }
+
+    /** @param string $v Loại mặt hàng mới */
     public function setItemType(string $v): void { $this->itemType = $v; }
+
+    /** @param string $v Đơn vị tính mới */
     public function setUnit(string $v): void { $this->unit = $v; }
+
+    /** @param float $v Giá mua mới */
     public function setPurchasePrice(float $v): void { $this->purchasePrice = $v; }
+
+    /** @param float $v Giá bán mới */
     public function setSalePrice(float $v): void { $this->salePrice = $v; }
+
+    /** @param float $v Số lượng tồn mới */
     public function setStockQty(float $v): void { $this->stockQty = $v; }
+
+    /** @param float $v Tồn tối thiểu mới */
     public function setMinStock(float $v): void { $this->minStock = $v; }
+
+    /** @param string|null $v Mô tả mới */
     public function setDescription(?string $v): void { $this->description = $v; }
+
+    /** @param string|null $v Phương pháp tính giá mới */
     public function setValuationMethodId(?string $v): void { $this->valuationMethodId = $v; }
+
+    /** @param bool $v Cho phép âm kho mới */
     public function setAllowNegativeStock(bool $v): void { $this->allowNegativeStock = $v; }
+
+    /** @param bool $v Trạng thái mới */
     public function setStatus(bool $v): void { $this->status = $v; }
 
-    // Chuyển đổi model thành mảng để response API.
-    // 'item_type': 'material' (152), 'tool' (153), 'product' (155), 'goods' (156).
-    // 'stock_qty' là số dư trong bộ nhớ; số dư thực tế phải tính từ inventory_layers.
-    // 'valuation_method_id' xác định đơn giá xuất kho (FIFO/bình quân).
+    /**
+     * Chuyển đổi model thành mảng để response API.
+     *
+     * @return array Dữ liệu mặt hàng dạng mảng
+     */
     public function toArray(): array
     {
         return [

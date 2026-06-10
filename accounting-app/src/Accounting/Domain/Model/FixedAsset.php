@@ -53,6 +53,31 @@ class FixedAsset
     private ?string $notes;
     private \DateTimeImmutable $createdAt;
 
+    /**
+     * Khởi tạo TSCĐ.
+     *
+     * @param string $id Định danh TSCĐ
+     * @param string $code Mã TSCĐ
+     * @param string $name Tên TSCĐ
+     * @param string $purchaseDate Ngày mua
+     * @param float $originalCost Nguyên giá
+     * @param string $depreciationMethod Phương pháp khấu hao
+     * @param int $usefulLife Thời gian sử dụng (tháng)
+     * @param float $salvageValue Giá trị thu hồi
+     * @param float $monthlyDepreciation Mức khấu hao tháng
+     * @param float $accumulatedDepreciation Khấu hao lũy kế
+     * @param float $netBookValue Giá trị còn lại
+     * @param string $faCategory Loại TSCĐ: 'tangible', 'intangible', 'finance_lease'
+     * @param string|null $faType Phân loại chi tiết
+     * @param float|null $totalEstimatedUnits Tổng sản lượng ước tính
+     * @param float $purchaseCost Chi phí mua
+     * @param string|null $departmentId ID phòng ban quản lý
+     * @param string|null $employeeId ID nhân viên quản lý
+     * @param string|null $location Địa điểm
+     * @param string $status Trạng thái: 'in_use', 'idle', 'liquidated'
+     * @param string|null $lastDepreciationDate Lần khấu hao cuối
+     * @param string|null $notes Ghi chú
+     */
     public function __construct(
         string $id, string $code, string $name, string $purchaseDate,
         float $originalCost, string $depreciationMethod = 'straight_line', int $usefulLife = 0,
@@ -87,56 +112,137 @@ class FixedAsset
         $this->createdAt = new \DateTimeImmutable();
     }
 
+    /** @return string Định danh TSCĐ */
     public function getId(): string { return $this->id; }
+
+    /** @return string Mã TSCĐ */
     public function getCode(): string { return $this->code; }
+
+    /** @return string Tên TSCĐ */
     public function getName(): string { return $this->name; }
+
+    /** @return string Ngày mua */
     public function getPurchaseDate(): string { return $this->purchaseDate; }
+
+    /** @return float Nguyên giá */
     public function getOriginalCost(): float { return $this->originalCost; }
+
+    /** @return float Chi phí mua */
     public function getPurchaseCost(): float { return $this->purchaseCost; }
+
+    /** @return string Phương pháp khấu hao */
     public function getDepreciationMethod(): string { return $this->depreciationMethod; }
+
+    /** @return int Thời gian sử dụng (tháng) */
     public function getUsefulLife(): int { return $this->usefulLife; }
+
+    /** @return float Giá trị thu hồi */
     public function getSalvageValue(): float { return $this->salvageValue; }
+
+    /** @return float|null Tổng sản lượng ước tính */
     public function getTotalEstimatedUnits(): ?float { return $this->totalEstimatedUnits; }
+
+    /** @return float Mức khấu hao tháng */
     public function getMonthlyDepreciation(): float { return $this->monthlyDepreciation; }
+
+    /** @return float Khấu hao lũy kế (TK 214) */
     public function getAccumulatedDepreciation(): float { return $this->accumulatedDepreciation; }
+
+    /** @return float Giá trị còn lại */
     public function getNetBookValue(): float { return $this->netBookValue; }
+
+    /** @return string Loại TSCĐ */
     public function getFaCategory(): string { return $this->faCategory; }
+
+    /** @return string|null Phân loại chi tiết */
     public function getFaType(): ?string { return $this->faType; }
+
+    /** @return string|null ID phòng ban quản lý */
     public function getDepartmentId(): ?string { return $this->departmentId; }
+
+    /** @return string|null ID nhân viên quản lý */
     public function getEmployeeId(): ?string { return $this->employeeId; }
+
+    /** @return string|null Địa điểm */
     public function getLocation(): ?string { return $this->location; }
+
+    /** @return string Trạng thái: 'in_use', 'idle', 'liquidated' */
     public function getStatus(): string { return $this->status; }
+
+    /** @return string|null Lần khấu hao cuối */
     public function getLastDepreciationDate(): ?string { return $this->lastDepreciationDate; }
+
+    /** @return string|null Ghi chú */
     public function getNotes(): ?string { return $this->notes; }
+
+    /** @return \DateTimeImmutable Thời điểm tạo */
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 
+    /** @param string $code Mã TSCĐ mới */
     public function setCode(string $code): void { $this->code = $code; }
+
+    /** @param string $name Tên TSCĐ mới */
     public function setName(string $name): void { $this->name = $name; }
+
+    /** @param string $date Ngày mua mới */
     public function setPurchaseDate(string $date): void { $this->purchaseDate = $date; }
+
+    /** @param float $cost Nguyên giá mới */
     public function setOriginalCost(float $cost): void { $this->originalCost = $cost; }
+
+    /** @param float $cost Chi phí mua mới */
     public function setPurchaseCost(float $cost): void { $this->purchaseCost = $cost; }
+
+    /** @param string $method Phương pháp khấu hao mới */
     public function setDepreciationMethod(string $method): void { $this->depreciationMethod = $method; }
+
+    /** @param int $life Thời gian sử dụng mới */
     public function setUsefulLife(int $life): void { $this->usefulLife = $life; }
+
+    /** @param float $value Giá trị thu hồi mới */
     public function setSalvageValue(float $value): void { $this->salvageValue = $value; }
+
+    /** @param float|null $units Tổng sản lượng ước tính mới */
     public function setTotalEstimatedUnits(?float $units): void { $this->totalEstimatedUnits = $units; }
+
+    /** @param float $dep Mức khấu hao tháng mới */
     public function setMonthlyDepreciation(float $dep): void { $this->monthlyDepreciation = $dep; }
+
+    /** @param float $dep Khấu hao lũy kế mới */
     public function setAccumulatedDepreciation(float $dep): void { $this->accumulatedDepreciation = $dep; }
+
+    /** @param float $value Giá trị còn lại mới */
     public function setNetBookValue(float $value): void { $this->netBookValue = $value; }
+
+    /** @param string $category Loại TSCĐ mới */
     public function setFaCategory(string $category): void { $this->faCategory = $category; }
+
+    /** @param string|null $type Phân loại chi tiết mới */
     public function setFaType(?string $type): void { $this->faType = $type; }
+
+    /** @param string|null $id ID phòng ban mới */
     public function setDepartmentId(?string $id): void { $this->departmentId = $id; }
+
+    /** @param string|null $id ID nhân viên mới */
     public function setEmployeeId(?string $id): void { $this->employeeId = $id; }
+
+    /** @param string|null $location Địa điểm mới */
     public function setLocation(?string $location): void { $this->location = $location; }
+
+    /** @param string $status Trạng thái mới */
     public function setStatus(string $status): void { $this->status = $status; }
+
+    /** @param string|null $date Lần khấu hao cuối mới */
     public function setLastDepreciationDate(?string $date): void { $this->lastDepreciationDate = $date; }
+
+    /** @param string|null $notes Ghi chú mới */
     public function setNotes(?string $notes): void { $this->notes = $notes; }
 
-    // Chuyển đổi model thành mảng để response API.
-    // 'original_cost': nguyên giá — trình bày trên BC01 chỉ tiêu "Nguyên giá TSCĐ".
-    // 'accumulated_depreciation': hao mòn lũy kế (TK 214) — giảm trừ trên BC01.
-    // 'net_book_value' = original_cost - accumulated_depreciation: giá trị còn lại.
-    // 'monthly_depreciation': mức khấu hao tháng — ảnh hưởng BC02 chỉ tiêu chi phí.
-    // 'status': 'in_use' (đang sử dụng), 'idle' (chờ thanh lý), 'liquidated' (đã thanh lý).
+    /**
+     * Chuyển đổi model thành mảng để response API.
+     *
+     * @return array Dữ liệu TSCĐ dạng mảng
+     */
     public function toArray(): array
     {
         return [

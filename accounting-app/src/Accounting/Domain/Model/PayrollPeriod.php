@@ -2,15 +2,15 @@
 namespace Accounting\Domain\Model;
 
 /**
- * Ky luong — dai dien cho mot thang/ky tinh luong.
+ * Kỳ lương — Đại diện cho một tháng/kỳ tính lương.
  *
- * NGHIEP VU:
- * - Moi thang mo mot ky luong, co start_date va end_date
- * - status: open (dang mo), processing (dang tinh), closed (da dong/khoa so)
- * - period_code: dinh dang YYYYMM (VD: 202605)
- * - Khi ky luong closed, khong duoc them/sua bang luong
+ * NGHIỆP VỤ:
+ * - Mỗi tháng mở một kỳ lương, có start_date và end_date
+ * - status: open (đang mở), processing (đang tính), closed (đã đóng/khóa sổ)
+ * - period_code: định dạng YYYYMM (VD: 202605)
+ * - Khi kỳ lương closed, không được thêm/sửa bảng lương
  *
- * QUAN HE: 1 ky luong -> N bang luong (payroll_entries)
+ * QUAN HỆ: 1 kỳ lương -> N bảng lương (payroll_entries)
  */
 class PayrollPeriod
 {
@@ -23,6 +23,17 @@ class PayrollPeriod
     private ?string $createdBy;
     private \DateTimeImmutable $createdAt;
 
+    /**
+     * Khởi tạo kỳ lương.
+     *
+     * @param string $id Định danh
+     * @param string $periodCode Mã kỳ (YYYYMM)
+     * @param string $name Tên kỳ lương
+     * @param \DateTimeImmutable $startDate Ngày bắt đầu
+     * @param \DateTimeImmutable $endDate Ngày kết thúc
+     * @param string $status Trạng thái: 'open', 'processing', 'closed'
+     * @param string|null $createdBy Người tạo
+     */
     public function __construct(
         string $id,
         string $periodCode,
@@ -42,20 +53,47 @@ class PayrollPeriod
         $this->createdAt = new \DateTimeImmutable();
     }
 
+    /** @return string Định danh */
     public function getId(): string { return $this->id; }
+
+    /** @return string Mã kỳ (YYYYMM) */
     public function getPeriodCode(): string { return $this->periodCode; }
+
+    /** @return string Tên kỳ lương */
     public function getName(): string { return $this->name; }
+
+    /** @return \DateTimeImmutable Ngày bắt đầu */
     public function getStartDate(): \DateTimeImmutable { return $this->startDate; }
+
+    /** @return \DateTimeImmutable Ngày kết thúc */
     public function getEndDate(): \DateTimeImmutable { return $this->endDate; }
+
+    /** @return string Trạng thái */
     public function getStatus(): string { return $this->status; }
+
+    /** @return string|null Người tạo */
     public function getCreatedBy(): ?string { return $this->createdBy; }
+
+    /** @return \DateTimeImmutable Thời điểm tạo */
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 
+    /** @param string $v Tên kỳ mới */
     public function setName(string $v): void { $this->name = $v; }
+
+    /** @param string $v Trạng thái mới */
     public function setStatus(string $v): void { $this->status = $v; }
+
+    /** @param \DateTimeImmutable $v Ngày bắt đầu mới */
     public function setStartDate(\DateTimeImmutable $v): void { $this->startDate = $v; }
+
+    /** @param \DateTimeImmutable $v Ngày kết thúc mới */
     public function setEndDate(\DateTimeImmutable $v): void { $this->endDate = $v; }
 
+    /**
+     * Chuyển đổi model thành mảng để response API.
+     *
+     * @return array Dữ liệu kỳ lương dạng mảng
+     */
     public function toArray(): array
     {
         return [

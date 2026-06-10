@@ -39,6 +39,20 @@ class Contract
     private ?string $notes;
     private \DateTimeImmutable $createdAt;
 
+    /**
+     * Khởi tạo hợp đồng.
+     *
+     * @param string $id Định danh hợp đồng
+     * @param string $code Mã hợp đồng
+     * @param string $name Tên hợp đồng
+     * @param string $contractType Loại hợp đồng: 'sale', 'purchase', 'service', 'construction', 'lease'
+     * @param string $partyId ID đối tác
+     * @param string $partyName Tên đối tác
+     * @param string $contractDate Ngày ký hợp đồng
+     * @param float $totalAmount Tổng giá trị hợp đồng
+     * @param string $currency Loại tiền tệ
+     * @param string|null $notes Ghi chú
+     */
     public function __construct(
         string $id, string $code, string $name, string $contractType, string $partyId,
         string $partyName, string $contractDate, float $totalAmount = 0, string $currency = 'VND',
@@ -58,35 +72,77 @@ class Contract
         $this->createdAt = new \DateTimeImmutable();
     }
 
+    /** @return string Định danh hợp đồng */
     public function getId(): string { return $this->id; }
+
+    /** @return string Mã hợp đồng */
     public function getCode(): string { return $this->code; }
+
+    /** @return string Tên hợp đồng */
     public function getName(): string { return $this->name; }
+
+    /** @return string Loại hợp đồng */
     public function getContractType(): string { return $this->contractType; }
+
+    /** @return string ID đối tác */
     public function getPartyId(): string { return $this->partyId; }
+
+    /** @return string Tên đối tác */
     public function getPartyName(): string { return $this->partyName; }
+
+    /** @return string Ngày ký hợp đồng */
     public function getContractDate(): string { return $this->contractDate; }
+
+    /** @return float Tổng giá trị hợp đồng */
     public function getTotalAmount(): float { return $this->totalAmount; }
+
+    /** @return string Loại tiền tệ */
     public function getCurrency(): string { return $this->currency; }
+
+    /** @return bool Trạng thái hoạt động */
     public function isStatus(): bool { return $this->status; }
+
+    /** @return string|null Ghi chú */
     public function getNotes(): ?string { return $this->notes; }
+
+    /** @return \DateTimeImmutable Thời điểm tạo */
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 
+    /** @param string $code Mã hợp đồng mới */
     public function setCode(string $code): void { $this->code = $code; }
+
+    /** @param string $name Tên hợp đồng mới */
     public function setName(string $name): void { $this->name = $name; }
+
+    /** @param string $type Loại hợp đồng mới */
     public function setContractType(string $type): void { $this->contractType = $type; }
+
+    /** @param string $id ID đối tác mới */
     public function setPartyId(string $id): void { $this->partyId = $id; }
+
+    /** @param string $name Tên đối tác mới */
     public function setPartyName(string $name): void { $this->partyName = $name; }
+
+    /** @param string $date Ngày ký mới */
     public function setContractDate(string $date): void { $this->contractDate = $date; }
+
+    /** @param float $amount Tổng giá trị mới */
     public function setTotalAmount(float $amount): void { $this->totalAmount = $amount; }
+
+    /** @param string $currency Loại tiền tệ mới */
     public function setCurrency(string $currency): void { $this->currency = $currency; }
+
+    /** @param bool $status Trạng thái mới */
     public function setStatus(bool $status): void { $this->status = $status; }
+
+    /** @param string|null $notes Ghi chú mới */
     public function setNotes(?string $notes): void { $this->notes = $notes; }
 
-    // Chuyển đổi model thành mảng để response API.
-    // 'contract_type': 'sale' (doanh thu), 'purchase' (chi phí), 'construction' (dở dang).
-    // 'total_amount': tổng giá trị — ảnh hưởng doanh thu/chi phí theo tiến độ thực hiện.
-    // RỦI RO: Hợp đồng ngoại tệ phải theo dõi chênh lệch tỷ giá cuối kỳ.
-    // Thanh lý hợp đồng có thể phát sinh phạt vi phạm (thu nhập khác TK 711).
+    /**
+     * Chuyển đổi model thành mảng để response API.
+     *
+     * @return array Dữ liệu hợp đồng dạng mảng
+     */
     public function toArray(): array
     {
         return [

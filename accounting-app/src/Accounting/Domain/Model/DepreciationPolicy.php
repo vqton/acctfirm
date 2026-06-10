@@ -36,6 +36,16 @@ class DepreciationPolicy
     private bool $status;
     private \DateTimeImmutable $createdAt;
 
+    /**
+     * Khởi tạo chính sách khấu hao.
+     *
+     * @param string $id Định danh
+     * @param string $code Mã chính sách
+     * @param string $name Tên chính sách
+     * @param string $method Phương pháp: 'straight_line', 'declining_balance', 'unit_of_production'
+     * @param int $defaultLife Thời gian sử dụng mặc định (tháng)
+     * @param float $defaultSalvageRate Tỷ lệ giá trị thu hồi mặc định (%)
+     */
     public function __construct(
         string $id, string $code, string $name, string $method = 'straight_line',
         int $defaultLife = 0, float $defaultSalvageRate = 0
@@ -50,27 +60,53 @@ class DepreciationPolicy
         $this->createdAt = new \DateTimeImmutable();
     }
 
+    /** @return string Định danh */
     public function getId(): string { return $this->id; }
+
+    /** @return string Mã chính sách */
     public function getCode(): string { return $this->code; }
+
+    /** @return string Tên chính sách */
     public function getName(): string { return $this->name; }
+
+    /** @return string Phương pháp khấu hao */
     public function getMethod(): string { return $this->method; }
+
+    /** @return int Thời gian sử dụng mặc định (tháng) */
     public function getDefaultLife(): int { return $this->defaultLife; }
+
+    /** @return float Tỷ lệ giá trị thu hồi mặc định (%) */
     public function getDefaultSalvageRate(): float { return $this->defaultSalvageRate; }
+
+    /** @return bool Trạng thái hoạt động */
     public function isStatus(): bool { return $this->status; }
+
+    /** @return \DateTimeImmutable Thời điểm tạo */
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 
+    /** @param string $code Mã chính sách mới */
     public function setCode(string $code): void { $this->code = $code; }
+
+    /** @param string $name Tên chính sách mới */
     public function setName(string $name): void { $this->name = $name; }
+
+    /** @param string $method Phương pháp mới */
     public function setMethod(string $method): void { $this->method = $method; }
+
+    /** @param int $life Thời gian sử dụng mới */
     public function setDefaultLife(int $life): void { $this->defaultLife = $life; }
+
+    /** @param float $rate Tỷ lệ thu hồi mới */
     public function setDefaultSalvageRate(float $rate): void { $this->defaultSalvageRate = $rate; }
+
+    /** @param bool $status Trạng thái mới */
     public function setStatus(bool $status): void { $this->status = $status; }
 
-    // Chuyển đổi model thành mảng để response API.
-    // Chính sách khấu hao là khuôn mẫu khi ghi nhận TSCĐ mới.
-    // 'method': 'straight_line' (đường thẳng), 'declining_balance' (số dư giảm dần).
-    // 'default_salvage_rate': tỷ lệ giá trị thu hồi (%) — ảnh hưởng mức khấu hao hàng tháng.
-    // RỦI RO: Khấu hao nhanh cho lợi ích thuế nhưng phải thỏa mãn điều kiện Luật TNDN.
+    /**
+     * Chuyển đổi model thành mảng để response API.
+     *
+     * @return array Dữ liệu chính sách khấu hao dạng mảng
+     */
     public function toArray(): array
     {
         return [

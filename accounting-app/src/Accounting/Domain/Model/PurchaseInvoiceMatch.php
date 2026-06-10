@@ -1,9 +1,18 @@
 <?php
-
 declare(strict_types=1);
-
 namespace Accounting\Domain\Model;
 
+/**
+ * Đối chiếu hóa đơn mua hàng — So khớp hóa đơn nhà cung cấp với PO và phiếu nhập kho.
+ *
+ * Quy trình 3-way matching: PO ⇔ GR ⇔ Invoice.
+ * Đảm bảo chỉ thanh toán khi hàng đã nhập và giá khớp với PO.
+ *
+ * NGHIỆP VỤ:
+ * - $matchStatus: 'draft', 'matched', 'partially_matched', 'unmatched', 'cancelled'
+ * - $invoiceAmount: số tiền trên hóa đơn NCC
+ * - $vatAmount: số thuế GTGT trên hóa đơn
+ */
 class PurchaseInvoiceMatch
 {
     private ?string $id;
@@ -19,6 +28,22 @@ class PurchaseInvoiceMatch
     private ?string $note;
     private ?string $createdAt;
 
+    /**
+     * Khởi tạo đối chiếu hóa đơn mua hàng.
+     *
+     * @param string|null $id Định danh
+     * @param string|null $poId ID đơn đặt hàng
+     * @param string|null $grId ID phiếu nhập kho
+     * @param string|null $supplierInvoiceNo Số hóa đơn NCC
+     * @param string|null $invoiceDate Ngày hóa đơn
+     * @param float|null $invoiceAmount Số tiền hóa đơn
+     * @param float|null $vatAmount Số thuế GTGT
+     * @param string $matchStatus Trạng thái đối chiếu
+     * @param string|null $matchedBy Người đối chiếu
+     * @param string|null $matchedAt Thời điểm đối chiếu
+     * @param string|null $note Ghi chú
+     * @param string|null $createdAt Thời điểm tạo
+     */
     public function __construct(
         ?string $id = null,
         ?string $poId = null,
@@ -47,126 +72,83 @@ class PurchaseInvoiceMatch
         $this->createdAt = $createdAt;
     }
 
-    public function getId(): ?string
-    {
-        return $this->id;
-    }
+    /** @return string|null Định danh */
+    public function getId(): ?string { return $this->id; }
 
-    public function setId(?string $id): void
-    {
-        $this->id = $id;
-    }
+    /** @param string|null $id Định danh mới */
+    public function setId(?string $id): void { $this->id = $id; }
 
-    public function getPoId(): ?string
-    {
-        return $this->poId;
-    }
+    /** @return string|null ID đơn đặt hàng */
+    public function getPoId(): ?string { return $this->poId; }
 
-    public function setPoId(?string $poId): void
-    {
-        $this->poId = $poId;
-    }
+    /** @param string|null $poId ID đơn hàng mới */
+    public function setPoId(?string $poId): void { $this->poId = $poId; }
 
-    public function getGrId(): ?string
-    {
-        return $this->grId;
-    }
+    /** @return string|null ID phiếu nhập kho */
+    public function getGrId(): ?string { return $this->grId; }
 
-    public function setGrId(?string $grId): void
-    {
-        $this->grId = $grId;
-    }
+    /** @param string|null $grId ID phiếu nhập mới */
+    public function setGrId(?string $grId): void { $this->grId = $grId; }
 
-    public function getSupplierInvoiceNo(): ?string
-    {
-        return $this->supplierInvoiceNo;
-    }
+    /** @return string|null Số hóa đơn NCC */
+    public function getSupplierInvoiceNo(): ?string { return $this->supplierInvoiceNo; }
 
-    public function setSupplierInvoiceNo(?string $supplierInvoiceNo): void
-    {
-        $this->supplierInvoiceNo = $supplierInvoiceNo;
-    }
+    /** @param string|null $supplierInvoiceNo Số hóa đơn mới */
+    public function setSupplierInvoiceNo(?string $supplierInvoiceNo): void { $this->supplierInvoiceNo = $supplierInvoiceNo; }
 
-    public function getInvoiceDate(): ?string
-    {
-        return $this->invoiceDate;
-    }
+    /** @return string|null Ngày hóa đơn */
+    public function getInvoiceDate(): ?string { return $this->invoiceDate; }
 
-    public function setInvoiceDate(?string $invoiceDate): void
-    {
-        $this->invoiceDate = $invoiceDate;
-    }
+    /** @param string|null $invoiceDate Ngày hóa đơn mới */
+    public function setInvoiceDate(?string $invoiceDate): void { $this->invoiceDate = $invoiceDate; }
 
-    public function getInvoiceAmount(): ?float
-    {
-        return $this->invoiceAmount;
-    }
+    /** @return float|null Số tiền hóa đơn */
+    public function getInvoiceAmount(): ?float { return $this->invoiceAmount; }
 
-    public function setInvoiceAmount(?float $invoiceAmount): void
-    {
-        $this->invoiceAmount = $invoiceAmount;
-    }
+    /** @param float|null $invoiceAmount Số tiền hóa đơn mới */
+    public function setInvoiceAmount(?float $invoiceAmount): void { $this->invoiceAmount = $invoiceAmount; }
 
-    public function getVatAmount(): ?float
-    {
-        return $this->vatAmount;
-    }
+    /** @return float|null Số thuế GTGT */
+    public function getVatAmount(): ?float { return $this->vatAmount; }
 
-    public function setVatAmount(?float $vatAmount): void
-    {
-        $this->vatAmount = $vatAmount;
-    }
+    /** @param float|null $vatAmount Số thuế GTGT mới */
+    public function setVatAmount(?float $vatAmount): void { $this->vatAmount = $vatAmount; }
 
-    public function getMatchStatus(): string
-    {
-        return $this->matchStatus;
-    }
+    /** @return string Trạng thái đối chiếu */
+    public function getMatchStatus(): string { return $this->matchStatus; }
 
-    public function setMatchStatus(string $matchStatus): void
-    {
-        $this->matchStatus = $matchStatus;
-    }
+    /** @param string $matchStatus Trạng thái mới */
+    public function setMatchStatus(string $matchStatus): void { $this->matchStatus = $matchStatus; }
 
-    public function getMatchedBy(): ?string
-    {
-        return $this->matchedBy;
-    }
+    /** @return string|null Người đối chiếu */
+    public function getMatchedBy(): ?string { return $this->matchedBy; }
 
-    public function setMatchedBy(?string $matchedBy): void
-    {
-        $this->matchedBy = $matchedBy;
-    }
+    /** @param string|null $matchedBy Người đối chiếu mới */
+    public function setMatchedBy(?string $matchedBy): void { $this->matchedBy = $matchedBy; }
 
-    public function getMatchedAt(): ?string
-    {
-        return $this->matchedAt;
-    }
+    /** @return string|null Thời điểm đối chiếu */
+    public function getMatchedAt(): ?string { return $this->matchedAt; }
 
-    public function setMatchedAt(?string $matchedAt): void
-    {
-        $this->matchedAt = $matchedAt;
-    }
+    /** @param string|null $matchedAt Thời điểm đối chiếu mới */
+    public function setMatchedAt(?string $matchedAt): void { $this->matchedAt = $matchedAt; }
 
-    public function getNote(): ?string
-    {
-        return $this->note;
-    }
+    /** @return string|null Ghi chú */
+    public function getNote(): ?string { return $this->note; }
 
-    public function setNote(?string $note): void
-    {
-        $this->note = $note;
-    }
+    /** @param string|null $note Ghi chú mới */
+    public function setNote(?string $note): void { $this->note = $note; }
 
-    public function getCreatedAt(): ?string
-    {
-        return $this->createdAt;
-    }
+    /** @return string|null Thời điểm tạo */
+    public function getCreatedAt(): ?string { return $this->createdAt; }
 
-    public function setCreatedAt(?string $createdAt): void
-    {
-        $this->createdAt = $createdAt;
-    }
+    /** @param string|null $createdAt Thời điểm tạo mới */
+    public function setCreatedAt(?string $createdAt): void { $this->createdAt = $createdAt; }
 
+    /**
+     * Chuyển đổi model thành mảng để response API.
+     *
+     * @return array Dữ liệu đối chiếu hóa đơn dạng mảng
+     */
     public function toArray(): array
     {
         return [

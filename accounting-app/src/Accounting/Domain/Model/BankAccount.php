@@ -36,6 +36,18 @@ class BankAccount
     private bool $status;
     private \DateTimeImmutable $createdAt;
 
+    /**
+     * Khởi tạo tài khoản ngân hàng.
+     *
+     * @param string $id Định danh tài khoản ngân hàng
+     * @param string $code Mã tài khoản (VD: "1121-VCB")
+     * @param string $bankName Tên ngân hàng
+     * @param string $accountNumber Số tài khoản tại ngân hàng
+     * @param string $accountHolder Chủ tài khoản
+     * @param string $branch Chi nhánh ngân hàng
+     * @param string $currency Loại tiền (VND, USD, EUR...)
+     * @param float $openingBalance Số dư đầu kỳ khi thiết lập
+     */
     public function __construct(
         string $id, string $code, string $bankName, string $accountNumber,
         string $accountHolder, string $branch = '', string $currency = 'VND',
@@ -53,30 +65,65 @@ class BankAccount
         $this->createdAt = new \DateTimeImmutable();
     }
 
+    /** @return string Định danh tài khoản ngân hàng */
     public function getId(): string { return $this->id; }
+
+    /** @return string Mã tài khoản ngân hàng */
     public function getCode(): string { return $this->code; }
+
+    /** @return string Tên ngân hàng */
     public function getBankName(): string { return $this->bankName; }
+
+    /** @return string Số tài khoản tại ngân hàng */
     public function getAccountNumber(): string { return $this->accountNumber; }
+
+    /** @return string Chủ tài khoản */
     public function getAccountHolder(): string { return $this->accountHolder; }
+
+    /** @return string Chi nhánh ngân hàng */
     public function getBranch(): string { return $this->branch; }
+
+    /** @return string Loại tiền tệ */
     public function getCurrency(): string { return $this->currency; }
+
+    /** @return float Số dư đầu kỳ khi thiết lập */
     public function getOpeningBalance(): float { return $this->openingBalance; }
+
+    /** @return bool Trạng thái hoạt động */
     public function isStatus(): bool { return $this->status; }
+
+    /** @return \DateTimeImmutable Thời điểm tạo */
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 
+    /** @param string $code Mã tài khoản mới */
     public function setCode(string $code): void { $this->code = $code; }
+
+    /** @param string $name Tên ngân hàng mới */
     public function setBankName(string $name): void { $this->bankName = $name; }
+
+    /** @param string $num Số tài khoản mới */
     public function setAccountNumber(string $num): void { $this->accountNumber = $num; }
+
+    /** @param string $holder Chủ tài khoản mới */
     public function setAccountHolder(string $holder): void { $this->accountHolder = $holder; }
+
+    /** @param string $branch Chi nhánh mới */
     public function setBranch(string $branch): void { $this->branch = $branch; }
+
+    /** @param string $currency Loại tiền mới */
     public function setCurrency(string $currency): void { $this->currency = $currency; }
+
+    /** @param float $balance Số dư đầu kỳ mới */
     public function setOpeningBalance(float $balance): void { $this->openingBalance = $balance; }
+
+    /** @param bool $status Trạng thái mới */
     public function setStatus(bool $status): void { $this->status = $status; }
 
-    // Chuyển đổi model thành mảng để response API.
-    // Mỗi BankAccount tương ứng một TK con của TK 112 (VD: 1121-VCB, 1121-CTG).
-    // 'currency': mỗi tài khoản chỉ quản lý một loại tiền — ảnh hưởng đánh giá chênh lệch tỷ giá.
-    // 'opening_balance': số dư đầu kỳ khi thiết lập, khớp với sao kê ngân hàng.
+    /**
+     * Chuyển đổi model thành mảng để response API.
+     *
+     * @return array Dữ liệu tài khoản ngân hàng dạng mảng
+     */
     public function toArray(): array
     {
         return [
