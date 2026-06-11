@@ -219,6 +219,9 @@ ob_start(); ?>
 </div>
 
 <p class="footer-note">Ngày in: <?= date('d/m/Y H:i') ?> • Hệ thống kế toán BookWise</p>
+<?php if ($txn['signature'] ?? ''): ?>
+<p style="font-size:11px;color:#080;text-align:center;margin:4px 0;">✓ Đã ký số bởi <?= esc($txn['signed_by'] ?? '') ?> lúc <?= esc($txn['signed_at'] ?? '') ?></p>
+<?php endif; ?>
 </body></html>
 <?php
 $content = ob_get_clean();

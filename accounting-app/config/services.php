@@ -261,6 +261,7 @@ function createContainer(): array
         'goodsIssueService' => $goodsIssueService,
         'cashService' => $cashService,
         'pettyCashService' => $pettyCashService,
+        'DigitalSignatureService' => $digitalSignatureService,
         'bankReconciliationService' => $bankReconciliationService,
         'cashReportService' => $cashReportService,
         'periodService' => $periodService,

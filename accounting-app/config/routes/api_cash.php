@@ -23,6 +23,30 @@ $router->get('/api/payers/search', function() {
 $router->get('/api/cash/receipts', function() use ($c) { $c['CashController']->receipts(); });
 $router->get('/api/cash/receipts/:id', function($id) use ($c) { $c['CashController']->getReceipt($id); });
 $router->post('/api/cash/receipts', function() use ($c) { $c['CashController']->createReceipt(); });
+// Ký số phiếu thu — tạo chữ ký số cho chứng từ kế toán
+$router->post('/api/cash/receipts/:id/sign', function($id) use ($c) {
+    \Accounting\Infrastructure\Auth::checkCsrf();
+    \Accounting\Infrastructure\Auth::requirePermission('cash', 'update');
+    $pdo = $c['pdo'];
+    $stmt = $pdo->prepare("SELECT * FROM transactions WHERE id = ? AND description LIKE 'Cash receipt:%'");
+    $stmt->execute([$id]);
+    $txn = $stmt->fetch(\PDO::FETCH_ASSOC);
+    if (!$txn) { \Accounting\Infrastructure\JsonResponse::error('Không tìm thấy phiếu thu', 404); return; }
+    if ($txn['signature']) { \Accounting\Infrastructure\JsonResponse::error('Phiếu thu này đã được ký số', 409); return; }
+    // Tạo dữ liệu ký từ thông tin phiếu thu
+    $signData = "PHIEUTHU\n"
+        . "So:" . ($txn['reference'] ?? $id) . "\n"
+        . "Ngay:" . ($txn['transaction_date'] ?? '') . "\n"
+        . "NguoiNop:" . ($txn['payer_name'] ?? '') . "\n"
+        . "SoTien:" . ($txn['amount'] ?? 0) . "\n"
+        . "DienGiai:" . ($txn['description'] ?? '');
+    $signedXml = $c['DigitalSignatureService']->signXml('<Receipt>' . \Accounting\Infrastructure\Helpers::esc($signData) . '</Receipt>');
+    $userId = $_SESSION['user_id'] ?? 'system';
+    $stmt = $pdo->prepare("UPDATE transactions SET signature = ?, signed_by = ?, signed_at = NOW() WHERE id = ?");
+    $stmt->execute([$signedXml, $userId, $id]);
+    \Accounting\Infrastructure\AuditLogger::log('cash.sign', 'transaction', $id, null, ['signed_by' => $userId], $userId);
+    \Accounting\Infrastructure\JsonResponse::ok(['signed' => true, 'signed_by' => $userId, 'signed_at' => date('Y-m-d H:i:s')]);
+});
 $router->get('/api/cash/payments', function() use ($c) { $c['CashController']->payments(); });
 $router->get('/api/cash/payments/:id', function($id) use ($c) { $c['CashController']->getPayment($id); });
 $router->post('/api/cash/payments', function() use ($c) { $c['CashController']->createPayment(); });

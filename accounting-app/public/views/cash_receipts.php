@@ -63,7 +63,9 @@ function loadData(){
         data.forEach(function(r){
             var payer=esc(r.payer_name||'');
             var date=esc((r.transaction_date||r.created_at||'').substring(0,10));
-            tbody.append('<tr><td>'+esc(r.reference)+'</td><td>'+payer+'</td><td>'+esc(r.description)+'</td><td class="text-end font-monospace">'+fmtZero(r.amount)+'</td><td>'+esc(r.credit_account||'')+'</td><td style="font-size:12px">'+date+'</td><td>'+statusBadge(r.status)+'</td><td><a href="/print/cash-receipt/'+esc(r.id)+'" target="_blank" class="btn-action me-1" title="In phiếu thu"><i class="bi bi-printer"></i></a></td></tr>');
+            var signedBadge=r.signature?' <span class="badge bg-success" title="Đã ký số">✓</span>':'';
+            var signBtn=r.signature?'':' <a href="#" class="btn-action me-1" onclick="signReceipt(\''+esc(r.id)+'\',this)" title="Ký số"><i class="bi bi-pencil-square"></i></a>';
+            tbody.append('<tr><td>'+esc(r.reference)+''+signedBadge+'</td><td>'+payer+'</td><td>'+esc(r.description)+'</td><td class="text-end font-monospace">'+fmtZero(r.amount)+'</td><td>'+esc(r.credit_account||'')+'</td><td style="font-size:12px">'+date+'</td><td>'+statusBadge(r.status)+'</td><td><a href="/print/cash-receipt/'+esc(r.id)+'" target="_blank" class="btn-action me-1" title="In phiếu thu"><i class="bi bi-printer"></i></a>'+signBtn+'</td></tr>');
         });
     }});
 }
@@ -159,6 +161,14 @@ $('#receiptForm').submit(function(e){e.preventDefault();
         error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}FormToast.error(m);}
     });
 });
+// Ký số phiếu thu
+function signReceipt(id,btn){
+    if(!confirm('Xác nhận ký số cho phiếu thu này?'))return;
+    $.ajax({url:'/api/cash/receipts/'+id+'/sign',method:'POST',headers:{'X-CSRF-Token':csrf},
+        success:function(){showToast('Đã ký số thành công.','success');loadData();},
+        error:function(x){var m='Lỗi ký số';try{m=JSON.parse(x.responseText).error;}catch(e){}showToast(m,'error');}
+    });
+}
 // Load currencies cho ngoại tệ
 $.get('/api/currencies',function(r){
     var cur=r.currencies||[];
