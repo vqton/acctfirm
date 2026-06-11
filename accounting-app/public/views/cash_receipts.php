@@ -44,6 +44,7 @@ $title = 'Phiếu thu'; $activeMenu = 'cash_receipts'; ob_start(); ?>
         <input type="hidden" id="payerType" value="">
     </div>
     <div class="mb-2" id="payerAddressGroup" style="display:none"><label>Địa chỉ</label><input class="form-control" id="payerAddress" placeholder="Địa chỉ người nộp"></div>
+    <div class="mb-2"><label>Kèm theo (số chứng từ gốc)</label><input type="number" class="form-control" id="documentCount" min="0" step="1" value="0" placeholder="Số lượng chứng từ gốc kèm theo"></div>
     <div class="mb-2"><label>Diễn giải</label><input class="form-control" id="description" placeholder="Thu tiền..."></div>
 </div>
 <div class="modal-footer"><button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Hủy</button><button type="submit" class="btn btn-sm btn-primary">Ghi nhận</button></div>
@@ -143,6 +144,7 @@ $('#receiptForm').submit(function(e){e.preventDefault();
         payer_type: $('#payerType').val()||null,
         payer_id: $('#payerId').val()||null,
         payer_address: $('#payerAddress').val()||null,
+        document_count: parseInt($('#documentCount').val())||null,
         vat_amount: $('#vatRateGroup').is(':visible')?parseInt($('#vatAmount').val())||0:0,
         vat_rate: $('#vatRateGroup').is(':visible')?parseInt($('#vatRate').val())||0:0,
     };

@@ -47,6 +47,7 @@ $title = 'Phiếu chi'; $activeMenu = 'cash_payments'; ob_start(); ?>
         <input type="hidden" id="payerType" value="">
     </div>
     <div class="mb-2"><label>Địa chỉ</label><input class="form-control" id="payerAddress" placeholder="Địa chỉ người nhận..."></div>
+    <div class="mb-2"><label>Kèm theo (số chứng từ gốc)</label><input type="number" class="form-control" id="documentCount" min="0" step="1" value="0" placeholder="Số lượng chứng từ gốc kèm theo"></div>
     <div class="mb-2"><label>Diễn giải</label><input class="form-control" id="description" placeholder="Chi tiền..."></div>
 </div>
 <div class="modal-footer"><button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Hủy</button><button type="submit" class="btn btn-sm btn-primary">Ghi nhận</button></div>
@@ -137,7 +138,7 @@ $('#payerSearch').on('input',function(){
             var html='';
             data.forEach(function(p){
                 var icon={'customer':'🏢','supplier':'🏭','employee':'👤'}[p.type]||'📄';
-                html+='<div class="payer-item" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid #eee" data-id="'+esc(p.id)+'" data-type="'+esc(p.type)+'" data-name="'+esc(p.name)+'">'+icon+' '+esc(p.name)+' <span style="color:#999;font-size:11px">('+esc(p.type)+')</span></div>';
+                html+='<div class="payer-item" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid #eee" data-id="'+esc(p.id)+'" data-type="'+esc(p.type)+'" data-name="'+esc(p.name)+'" data-address="'+esc(p.address||'')+'">'+icon+' '+esc(p.name)+' <span style="color:#999;font-size:11px">('+esc(p.type)+')</span></div>';
             });
             $('#payerResults').html(html).show();
         });
@@ -147,6 +148,7 @@ $(document).on('click','.payer-item',function(){
     $('#payerSearch').val($(this).data('name'));
     $('#payerId').val($(this).data('id'));
     $('#payerType').val($(this).data('type'));
+    $('#payerAddress').val($(this).data('address')||'');
     $('#payerResults').hide();
 });
 $(document).on('click',function(e){if(!$(e.target).closest('#payerSearch,#payerResults').length)$('#payerResults').hide();});
@@ -168,6 +170,7 @@ $('#paymentForm').submit(function(e){e.preventDefault();
         payer_type: $('#payerType').val()||null,
         payer_id: $('#payerId').val()||null,
         payer_address: $('#payerAddress').val()||null,
+        document_count: parseInt($('#documentCount').val())||null,
         book_number: $('#bookNumber').val()||null,
         vat_amount: $('#vatRateGroup').is(':visible')?parseInt($('#vatAmount').val())||0:0,
         vat_rate: $('#vatRateGroup').is(':visible')?parseInt($('#vatRate').val())||0:0,

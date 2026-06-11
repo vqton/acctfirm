@@ -162,7 +162,7 @@ ob_start(); ?>
 <?php endif; ?>
 <p style="font-size:12px;margin:4px 0 16px;">Bằng chữ: <em><?= esc($amountWords) ?></em></p>
 
-<p style="font-size:12px;margin:4px 0;">Kèm theo: ................................ chứng từ gốc</p>
+<p style="font-size:12px;margin:4px 0;">Kèm theo: <?= ($txn['document_count'] ?? '') ? (int)$txn['document_count'] . ' chứng từ gốc' : '................................ chứng từ gốc' ?></p>
 <p style="font-size:12px;margin:4px 0;">Có: <?= esc($creditCode ?: '1111') ?></p>
 
 <div class="signatures">
