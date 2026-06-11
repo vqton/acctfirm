@@ -372,7 +372,8 @@ function printForm(title, bodyHtml) {
 // linesField: tên field chứa mảng dòng chi tiết
 // lineFields: map cho từng dòng { key: 'Nhãn' }
 // partnerField: tên field chứa đối tác (nếu có)
-function printTransaction(title, apiUrl, fieldMap, linesField, lineFields, partnerField) {
+// formCode: mã mẫu (VD: '01-TT', '02-TT') — mặc định lấy từ title
+function printTransaction(title, apiUrl, fieldMap, linesField, lineFields, partnerField, formCode) {
     showToast('Đang tải dữ liệu in...', 'info');
     fetch(apiUrl).then(function(r){
         if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -380,8 +381,8 @@ function printTransaction(title, apiUrl, fieldMap, linesField, lineFields, partn
     }).then(function(d){
         var data = d.data || d;
         var h = '<div class="print-header"><h3>' + esc(title) + '</h3>';
-        h += '<div class="sub">Mẫu số: ' + esc(title) + '</div>';
-        h += '<div class="sub">Ban hành theo TT 99/2025/TT-BTC</div></div>';
+        h += '<div class="sub">Mẫu số: ' + esc(formCode || title) + '</div>';
+        h += '<div class="sub">(Ban hành theo TT 99/2025/TT-BTC)</div></div>';
 
         // Key fields
         h += '<table><tbody>';
@@ -448,9 +449,10 @@ function printTransaction(title, apiUrl, fieldMap, linesField, lineFields, partn
 }
 
 // In từ dữ liệu đã có sẵn (từ modal/form hiện tại)
-function printFromData(title, data, fieldMap, linesField, lineFields) {
+function printFromData(title, data, fieldMap, linesField, lineFields, formCode) {
     var h = '<div class="print-header"><h3>' + esc(title) + '</h3>';
-    h += '<div class="sub">Ban hành theo TT 99/2025/TT-BTC</div></div>';
+    h += '<div class="sub">Mẫu số: ' + esc(formCode || title) + '</div>';
+    h += '<div class="sub">(Ban hành theo TT 99/2025/TT-BTC)</div></div>';
     h += '<table><tbody>';
     for (var key in fieldMap) {
         var val = data[key];

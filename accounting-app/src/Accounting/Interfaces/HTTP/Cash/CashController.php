@@ -70,6 +70,37 @@ class CashController
     }
 
     /**
+     * Chi tiết phiếu thu — dùng cho in Mẫu 01-TT
+     *
+     * @param string $id ID phiếu thu
+     * @return void
+     */
+    public function getReceipt(string $id): void
+    {
+        Auth::requirePermission('cash', 'view');
+        $stmt = $this->pdo->prepare(
+            "SELECT t.*,
+                (SELECT SUM(le.amount) FROM ledger_entries le WHERE le.transaction_id = t.id AND le.is_debit = 1) as amount,
+                (SELECT a.code FROM ledger_entries le JOIN accounts a ON a.id = le.account_id WHERE le.transaction_id = t.id AND le.is_debit = 0 LIMIT 1) as credit_account
+             FROM transactions t WHERE t.id = ? AND t.description LIKE 'Cash receipt:%'"
+        );
+        $stmt->execute([$id]);
+        $txn = $stmt->fetch(\PDO::FETCH_ASSOC);
+        if (!$txn) {
+            JsonResponse::error('Không tìm thấy phiếu thu', 404);
+            return;
+        }
+        $stmt = $this->pdo->prepare(
+            "SELECT le.*, a.code AS account_code, a.name AS account_name
+             FROM ledger_entries le JOIN accounts a ON a.id = le.account_id
+             WHERE le.transaction_id = ? ORDER BY le.line_order"
+        );
+        $stmt->execute([$id]);
+        $txn['lines'] = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+        JsonResponse::ok($txn);
+    }
+
+    /**
      * Ghi nhận phiếu thu tiền mặt (PT) — Nợ 111 / Có (đối ứng)
      *
      * @return void

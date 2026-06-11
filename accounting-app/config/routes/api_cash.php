@@ -21,6 +21,7 @@ $router->get('/api/payers/search', function() {
 
 // === CASH (TK 111) & BANK (TK 112) ===
 $router->get('/api/cash/receipts', function() use ($c) { $c['CashController']->receipts(); });
+$router->get('/api/cash/receipts/:id', function($id) use ($c) { $c['CashController']->getReceipt($id); });
 $router->post('/api/cash/receipts', function() use ($c) { $c['CashController']->createReceipt(); });
 $router->get('/api/cash/payments', function() use ($c) { $c['CashController']->payments(); });
 $router->get('/api/cash/payments/:id', function($id) use ($c) { $c['CashController']->getPayment($id); });

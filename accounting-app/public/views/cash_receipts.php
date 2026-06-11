@@ -1,17 +1,18 @@
-<?php // Màn hình: Lập và quản lý phiếu thu tiền mặt
-// API: GET /api/cash/receipts, GET /api/cash/templates?type=receipt, GET /api/cash/accounts?for=receipt, POST /api/cash/receipts, GET /api/payers/search, GET /api/utils/to-words
-// Nghiệp vụ: Thu tiền mặt — Nợ 1111/Có TK đối ứng (131, 511, 338...)
-// Tuân thủ: Chỉ post vào TK con 1111 (không post vào TK tổng hợp 111)
+<?php // Màn hình: Lập và quản lý phiếu thu tiền mặt (Mẫu số 01-TT)
+// API: GET /api/cash/receipts, GET /api/cash/receipts/:id, GET /api/cash/templates?type=receipt, GET /api/cash/accounts?for=receipt, POST /api/cash/receipts, GET /api/payers/search, GET /api/utils/to-words
+// Nghiệp vụ: Thu tiền mặt — Nợ 1111/Có TK đối ứng
+// Tuân thủ: TT 99/2025/TT-BTC Mẫu số 01-TT — Chỉ post vào TK con 1111 (không post vào TK tổng hợp 111)
 // Rủi ro: Chọn sai TK Có sẽ ảnh hưởng đến doanh thu/công nợ — kiểm tra loại thu trước khi ghi nhận
 header('Cache-Control: no-cache, no-store, must-revalidate'); header('Pragma: no-cache'); header('Expires: 0');
 $title = 'Phiếu thu'; $activeMenu = 'cash_receipts'; ob_start(); ?>
 <div class="toolbar">
-    <h5>Phiếu thu tiền mặt <span class="stats">(TK 111)</span></h5>
+    <h5>Phiếu thu tiền mặt <span class="stats">(TK 111)</span><span style="font-weight:normal;font-size:12px;color:#888;margin-left:8px;">Mẫu số 01-TT</span></h5>
     <div>
         <span id="loadStatus" class="badge bg-secondary">Đang tải...</span>
         <button class="btn btn-outline-success btn-sm me-1" onclick="exportCSV('#dataBody', 'phieu-thu')"><i class="bi bi-file-earmark-excel"></i> Xuất Excel</button>
         <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#receiptModal"><i class="bi bi-plus-lg"></i> Phiếu thu</button>
     </div>
+</div>
 </div>
 <div class="card-table"><table class="table table-hover">
     <thead><tr><th>Số CT</th><th>Người nộp</th><th>Diễn giải</th><th class="text-end">Số tiền</th><th>TK Có</th><th>Ngày</th><th>Trạng thái</th><th></th></tr></thead>
@@ -20,7 +21,7 @@ $title = 'Phiếu thu'; $activeMenu = 'cash_receipts'; ob_start(); ?>
 
 <div class="modal fade" id="receiptModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
 <form id="receiptForm">
-<div class="modal-header"><h5 class="modal-title">Phiếu thu tiền mặt</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+<div class="modal-header"><h5 class="modal-title">Phiếu thu tiền mặt <span style="font-weight:normal;font-size:11px;color:#888;">(Mẫu số 01-TT)</span></h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
 <div class="modal-body">
     <div class="row g-2">
         <div class="col-4 mb-2"><label>Ngày</label><input type="date" class="form-control" id="txnDate" data-v-required="Ngày" data-v-date="Ngày chứng từ"></div>
@@ -57,7 +58,7 @@ function loadData(){
         data.forEach(function(r){
             var payer=esc(r.payer_name||'');
             var date=esc((r.transaction_date||r.created_at||'').substring(0,10));
-            tbody.append('<tr><td>'+esc(r.reference)+'</td><td>'+payer+'</td><td>'+esc(r.description)+'</td><td class="text-end font-monospace">'+fmtZero(r.amount)+'</td><td>'+esc(r.credit_account||'')+'</td><td style="font-size:12px">'+date+'</td><td>'+statusBadge(r.status)+'</td><td><a href="#" class="btn-action me-1" onclick="printTransaction(\'Phiếu thu\',\'/api/cash/receipts/\'+r.id,{reference:\'Số CT\',transaction_date:\'Ngày\',description:\'Diễn giải\',amount:\'Số tiền\',status:\'Trạng thái\'})" title="In chứng từ"><i class="bi bi-printer"></i></a></td></tr>');
+            tbody.append('<tr><td>'+esc(r.reference)+'</td><td>'+payer+'</td><td>'+esc(r.description)+'</td><td class="text-end font-monospace">'+fmtZero(r.amount)+'</td><td>'+esc(r.credit_account||'')+'</td><td style="font-size:12px">'+date+'</td><td>'+statusBadge(r.status)+'</td><td><a href="#" class="btn-action me-1" onclick="printTransaction(\'Phiếu thu\',\'/api/cash/receipts/\'+r.id,{reference:\'Số CT\',transaction_date:\'Ngày\',payer_name:\'Người nộp\',credit_account:\'TK Có\',amount:\'Số tiền\'},null,null,null,\'01-TT\')" title="In chứng từ"><i class="bi bi-printer"></i></a></td></tr>');
         });
     }});
 }
