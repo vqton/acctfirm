@@ -160,10 +160,30 @@ ob_start(); ?>
 </table>
 
 <p class="amount-row">Tổng số tiền: <u><?= number_format($amount, 0, ',', '.') ?></u> VNĐ</p>
-<?php if (($txn['currency'] ?? 'VND') !== 'VND' && ($txn['exchange_rate'] ?? 0) > 0): ?>
-<p style="font-size:12px;margin:4px 0;">Tương đương: <?= number_format($amount / (float)$txn['exchange_rate'], 2, ',', '.') ?> <?= esc($txn['currency']) ?> (tỷ giá: <?= number_format((float)$txn['exchange_rate'], 2, ',', '.') ?>)</p>
-<?php endif; ?>
 <p style="font-size:12px;margin:4px 0 16px;">Bằng chữ: <em><?= esc($amountWords) ?></em></p>
+
+<?php if (($txn['currency'] ?? 'VND') !== 'VND' && ($txn['exchange_rate'] ?? 0) > 0):
+    $fcAmount = $amount / (float)$txn['exchange_rate'];
+?>
+<div style="border:1px solid #333;padding:8px;margin:12px 0;">
+    <h4 style="text-align:center;margin:0 0 8px;font-size:13px;">Bảng kê ngoại tệ kèm theo<br><span style="font-weight:normal;font-size:11px;">Mẫu số 07-TT (TT 99/2025/TT-BTC)</span></h4>
+    <table class="detail" style="border:1px solid #333;">
+        <tr style="background:#f0f0f0;font-weight:bold;">
+            <td style="text-align:center;">Loại tiền</td>
+            <td style="text-align:center;">Số ngoại tệ</td>
+            <td style="text-align:center;">Tỷ giá</td>
+            <td style="text-align:center;">Quy đổi VND</td>
+        </tr>
+        <tr>
+            <td style="text-align:center;"><?= esc($txn['currency']) ?></td>
+            <td style="text-align:right;"><?= number_format($fcAmount, 2, ',', '.') ?></td>
+            <td style="text-align:right;"><?= number_format((float)$txn['exchange_rate'], 2, ',', '.') ?></td>
+            <td style="text-align:right;"><?= number_format($amount, 0, ',', '.') ?></td>
+        </tr>
+    </table>
+    <p style="font-size:11px;color:#555;text-align:center;margin:4px 0 0;">Tổng số ngoại tệ: <?= number_format($fcAmount, 2, ',', '.') ?> <?= esc($txn['currency']) ?></p>
+</div>
+<?php endif; ?>
 
 <p style="font-size:12px;margin:4px 0;">Kèm theo: <?= $documentCount ? (int)$documentCount . ' chứng từ gốc' : '................................ chứng từ gốc' ?></p>
 <p style="font-size:12px;margin:4px 0;">Nợ: <?= esc($debitCode ?: '1111') ?></p>
