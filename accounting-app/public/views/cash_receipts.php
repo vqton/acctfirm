@@ -59,7 +59,7 @@ function loadData(){
         data.forEach(function(r){
             var payer=esc(r.payer_name||'');
             var date=esc((r.transaction_date||r.created_at||'').substring(0,10));
-            tbody.append('<tr><td>'+esc(r.reference)+'</td><td>'+payer+'</td><td>'+esc(r.description)+'</td><td class="text-end font-monospace">'+fmtZero(r.amount)+'</td><td>'+esc(r.credit_account||'')+'</td><td style="font-size:12px">'+date+'</td><td>'+statusBadge(r.status)+'</td><td><a href="#" class="btn-action me-1" onclick="printTransaction(\'Phiếu thu\',\'/api/cash/receipts/\'+r.id,{reference:\'Số CT\',transaction_date:\'Ngày\',payer_name:\'Người nộp\',credit_account:\'TK Có\',amount:\'Số tiền\'},null,null,null,\'01-TT\')" title="In chứng từ"><i class="bi bi-printer"></i></a></td></tr>');
+            tbody.append('<tr><td>'+esc(r.reference)+'</td><td>'+payer+'</td><td>'+esc(r.description)+'</td><td class="text-end font-monospace">'+fmtZero(r.amount)+'</td><td>'+esc(r.credit_account||'')+'</td><td style="font-size:12px">'+date+'</td><td>'+statusBadge(r.status)+'</td><td><a href="/print/cash-receipt/'+esc(r.id)+'" target="_blank" class="btn-action me-1" title="In phiếu thu"><i class="bi bi-printer"></i></a></td></tr>');
         });
     }});
 }

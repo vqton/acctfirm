@@ -27,6 +27,10 @@ $router->get('/print/cash-payment/:id', function($id) {
     $_GET['id'] = $id;
     require __DIR__ . '/../../../public/views/print_cash_payment.php';
 });
+$router->get('/print/cash-receipt/:id', function($id) {
+    $_GET['id'] = $id;
+    require __DIR__ . '/../../../public/views/print_cash_receipt.php';
+});
 
 // === APPROVALS ===
 $router->get('/api/approvals/pending', function() use ($c) { $c['ApprovalController']->getPending(); });
