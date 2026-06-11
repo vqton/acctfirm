@@ -128,7 +128,7 @@ class CashController
                 $pdo = $this->getPdo();
                 $fields = [];
                 $params = [];
-                foreach (['transaction_date', 'payer_name', 'payer_type', 'payer_id', 'payer_address', 'document_count'] as $f) {
+                foreach (['transaction_date', 'payer_name', 'payer_type', 'payer_id', 'payer_address', 'document_count', 'currency', 'exchange_rate'] as $f) {
                     if (isset($data[$f]) && $data[$f] !== '') {
                         $fields[] = "$f = ?";
                         $params[] = $data[$f];

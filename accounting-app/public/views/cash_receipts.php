@@ -29,7 +29,10 @@ $title = 'Phiếu thu'; $activeMenu = 'cash_receipts'; ob_start(); ?>
         <div class="col-4 mb-2"><label>TK Có (đối ứng)</label><select class="form-select" id="creditAccount" data-v-required="TK Có" required></select></div>
     </div>
     <div class="row g-2">
-        <div class="col-4 mb-2"><label>Số tiền</label><input type="number" class="form-control" id="amount" step="1" min="1" data-v-required="Số tiền" data-v-number="Số tiền" required></div>
+        <div class="col-3 mb-2"><label>Số tiền</label><input type="number" class="form-control" id="amount" step="1" min="1" data-v-required="Số tiền" data-v-number="Số tiền" required></div>
+        <div class="col-2 mb-2"><label>Loại tiền</label><select class="form-select" id="currency"></select></div>
+        <div class="col-2 mb-2" id="fxRateGroup" style="display:none"><label>Tỷ giá</label><input type="number" class="form-control" id="exchangeRate" step="any" min="0" value="1"></div>
+        <div class="col-3 mb-2" id="vndAmountGroup" style="display:none"><label>Quy đổi VND</label><input type="number" class="form-control" id="vndAmount" readonly step="1" style="background:#f5f5f5"></div>
         <div class="col-2 mb-2" id="vatRateGroup" style="display:none"><label>VAT %</label><select class="form-select" id="vatRate"></select></div>
         <div class="col-2 mb-2" id="vatAmountGroup" style="display:none"><label>Tiền VAT</label><input type="number" class="form-control" id="vatAmount" readonly step="1" style="background:#f5f5f5"></div>
         <div class="col-4 mb-2" id="netAmountGroup" style="display:none"><label>Tiền chưa thuế</label><input type="number" class="form-control" id="netAmount" readonly step="1" style="background:#f5f5f5"></div>
@@ -135,8 +138,11 @@ $(document).on('click',function(e){if(!$(e.target).closest('#payerSearch,#payerR
 $('#receiptForm').submit(function(e){e.preventDefault();
     var v=FormValidation.validate('#receiptForm');
     if(!v.valid)return;
+    var isFc=$('#currency').val()!=='VND';
     var data={
-        amount: parseFloat($('#amount').val()),
+        amount: isFc?Math.round(parseFloat($('#vndAmount').val())||0):parseFloat($('#amount').val()),
+        currency: $('#currency').val()||null,
+        exchange_rate: isFc?parseFloat($('#exchangeRate').val())||null:null,
         credit_account_code: $('#creditAccount').val(),
         description: $('#description').val(),
         transaction_date: $('#txnDate').val()||null,
@@ -153,6 +159,30 @@ $('#receiptForm').submit(function(e){e.preventDefault();
         error:function(x){var m='Lỗi';try{m=JSON.parse(x.responseText).error;}catch(e){}FormToast.error(m);}
     });
 });
+// Load currencies cho ngoại tệ
+$.get('/api/currencies',function(r){
+    var cur=r.currencies||[];
+    var o='<option value="VND" data-rate="1">VND (Việt Nam Đồng)</option>';
+    cur.forEach(function(c){if(c.code!=='VND')o+='<option value="'+esc(c.code)+'" data-rate="'+c.rate+'">'+esc(c.code)+' - '+esc(c.name||'')+' ('+c.rate+')</option>';});
+    $('#currency').html(o);
+});
+// FX: khi đổi loại tiền
+$('#currency').on('change',function(){
+    var opt=$(this).find(':selected');
+    var rate=parseFloat(opt.data('rate'))||1;
+    var isFc=opt.val()!=='VND';
+    $('#fxRateGroup,#vndAmountGroup').toggle(isFc);
+    if(isFc){$('#exchangeRate').val(rate);calcFx();}
+});
+$('#amount,#exchangeRate').on('input',function(){
+    if($('#currency').val()!=='VND')calcFx();
+});
+function calcFx(){
+    var fc=parseFloat($('#amount').val())||0;
+    var rate=parseFloat($('#exchangeRate').val())||1;
+    $('#vndAmount').val(Math.round(fc*rate));
+}
+
 $(document).ready(function(){loadTemplates();loadData();$('#txnDate').val(new Date().toISOString().substring(0,10));loadVatRates('#vatRate',10);FormValidation.setup('#receiptForm');});
 </script>
 <?php $content = ob_get_clean(); require __DIR__ . '/layout.php'; ?>
