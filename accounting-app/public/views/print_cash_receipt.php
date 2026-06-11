@@ -109,6 +109,13 @@ ob_start(); ?>
 </style>
 </head><body>
 <div class="no-print">
+    <label style="font-size:13px;margin-right:8px;">Liên:
+        <select id="copySelect" onchange="var cp=this.value;window.location.href=window.location.pathname+'?copy='+cp">
+            <option value="1" <?= ($_GET['copy'] ?? '1') === '1' ? 'selected' : '' ?>>1 - Lưu tại quỹ</option>
+            <option value="2" <?= ($_GET['copy'] ?? '') === '2' ? 'selected' : '' ?>>2 - Giao người nộp tiền</option>
+            <option value="3" <?= ($_GET['copy'] ?? '') === '3' ? 'selected' : '' ?>>3 - Lưu kế toán</option>
+        </select>
+    </label>
     <button onclick="window.print()"><i class="bi bi-printer"></i> In</button>
     <button onclick="window.close()">Đóng</button>
 </div>
@@ -132,6 +139,10 @@ ob_start(); ?>
     <?php if ($txn['book_number'] ?? ''): ?>
     <div style="font-size:12px;color:#555;">Quyển số: <?= esc($txn['book_number']) ?></div>
     <?php endif; ?>
+    <div style="font-size:12px;color:#c00;margin-top:4px;font-weight:bold;">
+        Liên <?= (int)($_GET['copy'] ?? 1) ?>:
+        <?php $copies = [1 => 'Lưu tại quỹ', 2 => 'Giao người nộp tiền', 3 => 'Lưu kế toán']; echo $copies[(int)($_GET['copy'] ?? 1)] ?? 'Lưu tại quỹ'; ?>
+    </div>
 </div>
 
 <p class="meta">Ngày <?= $txnDay ?> tháng <?= $txnMonth ?> năm <?= $txnYear ?></p>
@@ -215,6 +226,7 @@ ob_start(); ?>
         <p class="title">Giám đốc</p>
         <p class="sub">(Ký, họ tên, đóng dấu)</p>
         <div class="name">&nbsp;</div>
+        <div style="border:2px dashed #999;width:80px;height:80px;margin:8px auto;font-size:9px;color:#999;display:flex;align-items:center;justify-content:center;">ĐÓNG DẤU</div>
     </div>
 </div>
 
