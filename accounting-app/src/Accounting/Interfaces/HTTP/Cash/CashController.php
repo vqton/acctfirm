@@ -124,19 +124,21 @@ class CashController
                 $vatAmount, $vatRate
             );
             $txnId = $result['transaction_id'] ?? null;
-            if ($txnId && ($data['payer_name'] ?? null)) {
+            if ($txnId) {
                 $pdo = $this->getPdo();
-                $pdo->prepare('UPDATE transactions SET
-                    transaction_date = COALESCE(?, transaction_date),
-                    payer_name = ?, payer_type = ?, payer_id = ?
-                    WHERE id = ?')
-                    ->execute([
-                        $data['transaction_date'] ?? null,
-                        $data['payer_name'] ?? null,
-                        $data['payer_type'] ?? null,
-                        $data['payer_id'] ?? null,
-                        $txnId
-                    ]);
+                $fields = [];
+                $params = [];
+                foreach (['transaction_date', 'payer_name', 'payer_type', 'payer_id', 'payer_address'] as $f) {
+                    if (isset($data[$f]) && $data[$f] !== '') {
+                        $fields[] = "$f = ?";
+                        $params[] = $data[$f];
+                    }
+                }
+                if ($fields) {
+                    $params[] = $txnId;
+                    $pdo->prepare('UPDATE transactions SET ' . implode(', ', $fields) . ' WHERE id = ?')
+                        ->execute($params);
+                }
             }
             JsonResponse::ok($result, 201);
         } catch (\InvalidArgumentException $e) {

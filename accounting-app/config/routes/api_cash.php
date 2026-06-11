@@ -9,11 +9,11 @@ $router->get('/api/payers/search', function() {
     $results = [];
     if (strlen($q) >= 1) {
         $like = '%' . $q . '%';
-        $stmt = $pdo->prepare("SELECT id, code, name, 'customer' as type FROM customers WHERE name LIKE ? OR code LIKE ? LIMIT 10");
+        $stmt = $pdo->prepare("SELECT id, code, name, 'customer' as type, address FROM customers WHERE name LIKE ? OR code LIKE ? LIMIT 10");
         $stmt->execute([$like, $like]); $results = array_merge($results, $stmt->fetchAll(\PDO::FETCH_ASSOC));
-        $stmt = $pdo->prepare("SELECT id, code, name, 'supplier' as type FROM suppliers WHERE name LIKE ? OR code LIKE ? LIMIT 10");
+        $stmt = $pdo->prepare("SELECT id, code, name, 'supplier' as type, address FROM suppliers WHERE name LIKE ? OR code LIKE ? LIMIT 10");
         $stmt->execute([$like, $like]); $results = array_merge($results, $stmt->fetchAll(\PDO::FETCH_ASSOC));
-        $stmt = $pdo->prepare("SELECT id, code, name, 'employee' as type FROM employees WHERE name LIKE ? OR code LIKE ? LIMIT 10");
+        $stmt = $pdo->prepare("SELECT id, code, name, 'employee' as type, '' as address FROM employees WHERE name LIKE ? OR code LIKE ? LIMIT 10");
         $stmt->execute([$like, $like]); $results = array_merge($results, $stmt->fetchAll(\PDO::FETCH_ASSOC));
     }
     JsonResponse::ok($results);
